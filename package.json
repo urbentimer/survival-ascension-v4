@@ -1,0 +1,10 @@
+{
+  "name": "survival-ascension-coop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "8-player private-room zombie survival RPG using Colyseus and Node.js",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "start:server": "npm --prefix server start"
+  }
+}
