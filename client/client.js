@@ -228,9 +228,15 @@ function renderState() {
   } else if (state.phase === "defeat") {
     showOverlay("TEAM DEFEATED", "The radio tower was destroyed or the entire team was downed." + (host ? "" : " Waiting for the host to start a new match."));
     $("restartGame").classList.toggle("hidden", !host);
-  } else if (me && !me.alive) {
-    showOverlay(me.bledOut ? "YOU BLED OUT" : "YOU ARE DOWN", me.bledOut ? "You're out until the next wave starts. Cheer your team on!" : `Bleed-out in ${Math.ceil(me.bleedout || 0)} seconds. A teammate can come close and press F to revive you.`);
   } else hideOverlay();
+  // downed / bled out: no dark screen, the camera follows a teammate instead (spectate bar at the bottom)
+  const watching = me && !me.alive && state.phase === "playing", tgt = watching ? viewTarget() : null;
+  $("spectate").classList.toggle("hidden", !watching);
+  if (watching) {
+    $("specTitle").textContent = me.bledOut ? "YOU BLED OUT · back next wave" : `YOU ARE DOWN · bleed-out in ${Math.ceil(me.bleedout || 0)}s · a teammate can press F next to you`;
+    $("specWho").textContent = tgt && tgt !== me ? `Watching ${tgt.isBot ? "🤖 " : ""}${tgt.name}` : "Nobody left standing";
+    $("specHint").classList.toggle("hidden", aliveMates().length < 2);
+  }
 }
 
 const pct = (v, max) => Math.max(0, Math.min(100, (v / (max || 1)) * 100)) + "%";
@@ -472,6 +478,7 @@ function selectSlot(n, cycle = true) { if (room && inMatch()) room.send("slot", 
 // mouse: left = use, right (hold) = build wheel, wheel = cycle slots
 canvas.addEventListener("mousedown", e => {
   if (!inMatch()) return;
+  if (e.button === 0 && me_() && !me_().alive) { switchSpectate(1); return; }
   if (e.button === 0) {
     e.preventDefault(); if (wheel) return;
     if (squadWheel) return;
@@ -512,6 +519,7 @@ window.addEventListener("keydown", e => {
   if (k === "escape") { e.preventDefault(); if (anyPanelOpen()) closePanels(); else togglePanel("menu"); return; }
   if (k === "tab") { e.preventDefault(); scoreboardOpen = !scoreboardOpen; return; }
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+  if (me_() && !me_().alive && [" ", "arrowleft", "arrowright"].includes(k) && !e.repeat) { switchSpectate(k === "arrowleft" ? -1 : 1); return; }
   if (!$("levelUp").classList.contains("hidden") && /^[1-5]$/.test(k)) { pickUpgrade(upgrades[Number(k) - 1][0]); return; }
   if (e.repeat && !"wasd ".includes(k) && !k.startsWith("arrow")) return;
   keys[k === " " ? "space" : k] = true;
@@ -1694,11 +1702,20 @@ function updateSmooth() {
 }
 // V(entity) = the same entity, but with its smoothed on-screen position.
 function V(e) { if (!e) return e; return smooth.get(e.sessionId !== undefined ? "p" + e.sessionId : "z" + e.id)?.proxy || e; }
+// Spectating: while you're down, the camera follows a living teammate (Space / arrows / click to switch).
+let specIdx = 0;
+const aliveMates = () => state ? [...state.players.values()].filter(p => p.alive && p.sessionId !== myId).sort((a, b) => a.sessionId < b.sessionId ? -1 : 1) : [];
+function viewTarget() {
+  const me = me_(); if (!me || me.alive || state.phase !== "playing") return me;
+  const mates = aliveMates(); if (!mates.length) return me;
+  specIdx = ((specIdx % mates.length) + mates.length) % mates.length; return mates[specIdx];
+}
+function switchSpectate(d) { specIdx += d; }
 function updateCamera(t) {
   cam.last = t;
   if (!state) { cam.ready = false; return; }
   updateSmooth();
-  const me = V(me_());
+  const me = V(viewTarget());
   const fx_ = me ? me.x : worldW() / 2, fy_ = me ? me.y : worldH() / 2;
   cam.x = Math.max(0, Math.min(worldW() - W, fx_ - W / 2));
   cam.y = Math.max(0, Math.min(worldH() - H, fy_ - H / 2));
@@ -1867,8 +1884,9 @@ function drawNight() {
     if (d.kind !== "streetlight" || !inView(d.x, d.y, NIGHT.lightR)) continue;
     lightHole(d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, d.y - 24 - cam.y, NIGHT.lightR, NIGHT.lightAlpha);
   }
-  const me = V(me_());
+  const me = V(me_()), view = V(viewTarget());
   if (me) lightHole(me.x - cam.x, me.y - 10 - cam.y, me.alive ? NIGHT.playerR : NIGHT.playerR * .5, me.alive ? 1 : .8);   // only YOUR light (smaller while downed)
+  if (view && view !== me) lightHole(view.x - cam.x, view.y - 10 - cam.y, NIGHT.playerR, 1);   // spectating: see around the teammate you're watching
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
   ctx.drawImage(darkCv, 0, 0);
   // zombies out in the dark: only a faint pair of glowing eyes gives them away

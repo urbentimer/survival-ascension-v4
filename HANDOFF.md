@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Host can skip to the Butcher fight online")
+Last updated: 2026-11-03 (latest commit: "Spectate teammates while down")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
@@ -42,6 +42,9 @@ Last updated: 2026-11-03 (latest commit: "Host can skip to the Butcher fight onl
   - Q Demo Ripple: Q places crate (arms 1s), Q again detonates (auto after 30s or if Dante goes down): 300 core blast, then scattered grenades 4 / 8 / 16 (every 3rd of the last ring big). 60s cooldown. Bosses take half.
   - Rockets/grenades leave scorch craters (hot → cool, gone after 7s).
 - Others (Briggs juggernaut, Elena medic, Sienna sniper, Hayes commander): old side-view art, old simple skills, no ultimate yet.
+
+## Downed / spectating
+- When you're down or bled out there is no dark screen: a small bar shows the bleed-out timer and the camera follows a living teammate (bots too). Space / ← → / click switches who you watch. Night light follows the watched teammate.
 
 ## Zombies & bosses
 - Runners only attack the tower; walker/brute/spitter/mutant hunt the nearest visible player (and Viktor's machines if closer).
