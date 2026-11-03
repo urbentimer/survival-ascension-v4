@@ -44,6 +44,7 @@ const HIVE = {
   spawn: { every: 8, first: 5, max: 4 },
 };
 const isHiveWave = stage => stage % 4 === 2;
+const PATH_CELL = 40;   // boss path-finding grid
 const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
 // ---------- VIKTOR (Engineer) ----------
 // E (skill): ROBOT. Summons ONE robot (assault / support / hunter) where Viktor aims; 25s cooldown. Up to 3 alive:
@@ -290,6 +291,7 @@ export class SurvivalRoom extends Room {
     this.onCreateRest(options);
   }
   loadSite(i) {   // build the chosen map and its collision grid
+    this.pathGrids = new Map(); this.flowCache = new Map();
     this.state.mapSite = i;
     const layout = buildMapLayout(ARENA.width, ARENA.height, SITES[i].seed);
     this.state.mapLayout = packLayout(layout);
@@ -1994,7 +1996,7 @@ export class SurvivalRoom extends Room {
     }
     if (!players.length) {   // nobody reachable: crawl toward the radio tower instead of freezing
       const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x); z.aim = ta; z.targetId = "";
-      if (distance(z, tw) > z.radius + TOWER_HALF + 20) this.steerMove(z, z.id, ta, z.speed * dt, e => this.solveZombie(e));
+      if (distance(z, tw) > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
       return;
     }
     const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
@@ -2007,7 +2009,7 @@ export class SurvivalRoom extends Room {
       if (this.blockedByMap(m.jx1, m.jy1, z.radius * .6)) m.jumpReady = now + 1500;
       else { this.startAct(z, "jump", H.jump.total, a); m.jumpReady = now + H.jump.cd * 1000; this.broadcast("hive", { k: "jump", id: z.id, x0: Math.round(m.jx0), y0: Math.round(m.jy0), x1: Math.round(m.jx1), y1: Math.round(m.jy1) }); return; }
     }
-    if (d > z.radius + 40) this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));
+    if (d > z.radius + 40) this.bossMove(z, near, z.speed * dt);
   }
   butcherThink(z, dt, now, players) {
     const B = BUTCHER, m = this.bmem(z, now);
@@ -2023,7 +2025,7 @@ export class SurvivalRoom extends Room {
     }
     if (!players.length) {   // nobody he can reach (Sofea flying, Raven hidden, everyone in a safehouse): he goes for the radio tower instead of standing still
       const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x), td = distance(z, tw); z.aim = ta; z.targetId = "";
-      if (td > z.radius + TOWER_HALF + 20) this.steerMove(z, z.id, ta, z.speed * dt, e => this.solveZombie(e));
+      if (td > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
       else if (now >= m.chopReady) { m.chopReady = now + BUTCHER.chop.cd * 1000; this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2); this.broadcast("chop", { x: Math.round(z.x + Math.cos(ta) * 55), y: Math.round(z.y + Math.sin(ta) * 55), r: BUTCHER.chop.rings, d: BUTCHER.chop.ringDelay });
         if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } }
       return;
@@ -2042,7 +2044,7 @@ export class SurvivalRoom extends Room {
       }
     }
     z.aim = a;
-    if (d > z.radius + 30) this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));
+    if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);   // walks around buildings and cars instead of getting wedged
   }
   butcher_chop(z, t0, t1, dt, m, now) {
     const C = BUTCHER.chop, W = m.chopW || C.windup;
@@ -2148,7 +2150,7 @@ export class SurvivalRoom extends Room {
     const S = BUTCHER.spin;
     if (players.length) {
       const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), a = Math.atan2(near.y - z.y, near.x - z.x);
-      z.aim = a; if (distance(z, near) > 20) this.steerMove(z, z.id, a, z.speed * S.speedMult * dt, e => this.solveZombie(e));
+      z.aim = a; if (distance(z, near) > 20) this.bossMove(z, near, z.speed * S.speedMult * dt);
     }
     m.spinTick -= dt;
     if (m.spinTick <= 0 && t1 > .3) {
@@ -2182,6 +2184,68 @@ export class SurvivalRoom extends Room {
     this.broadcast("slam", { x: Math.round(z.x), y: Math.round(z.y), r: SLAM.radius });
   }
   solveZombie(z) { const b = this.mapBoxesNear(z.x, z.y); this.pushOut(z, this.safeBoxes.length ? [...b, ...this.safeBoxes] : b, Math.min(z.radius, 34) * 0.8); }   // + Astra's safehouse walls
+  // ---------- boss path-finding: a 40px grid over the map, flow field toward the target (walks AROUND buildings) ----------
+  wideClear(a, b, r) {   // can a body of radius r walk straight from a to b?
+    const d = distance(a, b); if (d < 1) return true; const nx = -(b.y - a.y) / d * r, ny = (b.x - a.x) / d * r;
+    return [[0, 0], [nx, ny], [-nx, -ny]].every(([ox, oy]) => this.lineClear({ x: a.x + ox, y: a.y + oy }, { x: b.x + ox, y: b.y + oy }))
+      && !this.safeBoxes.some(bx => this.boxRayDist(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), d, [{ ...bx, hw: bx.hw + r, hh: bx.hh + r }]) < d);
+  }
+  pathGrid(r) {   // which 40px cells a body of radius r can't stand in (map pieces, tower, generator); cached per map
+    const k = Math.round(r); let g = this.pathGrids?.get(k); if (g) return g;
+    const C = PATH_CELL, GW = Math.ceil(ARENA.width / C), GH = Math.ceil(ARENA.height / C), blocked = new Uint8Array(GW * GH), X = ARENA.width / 2, Y = ARENA.height / 2;
+    for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+      const x = (gx + .5) * C, y = (gy + .5) * C;
+      blocked[gy * GW + gx] = this.blockedByMap(x, y, r * .85) || (Math.abs(x - X) < TOWER_HALF + r && Math.abs(y - Y) < TOWER_HALF + r) || (Math.abs(x - X - GEN_OFF.x) < GEN_OFF.h + r && Math.abs(y - Y - GEN_OFF.y) < GEN_OFF.h + r) ? 1 : 0;
+    }
+    g = { GW, GH, blocked }; (this.pathGrids || (this.pathGrids = new Map())).set(k, g); return g;
+  }
+  flowField(t, r) {   // steps-to-target for every cell (BFS from the target's cell), rebuilt at most every 0.4s per target
+    const C = PATH_CELL, g = this.pathGrid(r), { GW, GH } = g, tx = clamp(Math.floor(t.x / C), 0, GW - 1), ty = clamp(Math.floor(t.y / C), 0, GH - 1);
+    const key = tx + "," + ty + "," + Math.round(r), now = Date.now(), hit = this.flowCache?.get(key);
+    if (hit && now - hit.at < 400) return hit;
+    const safe = this.safeBoxes.map(b => ({ ...b, hw: b.hw + r, hh: b.hh + r }));
+    const bad = k => g.blocked[k] || (safe.length && safe.some(b => Math.abs((k % GW + .5) * C - b.x) < b.hw && Math.abs((Math.floor(k / GW) + .5) * C - b.y) < b.hh));
+    const dist = new Float32Array(GW * GH).fill(Infinity), q = new Int32Array(GW * GH); let qh = 0, qt = 0;
+    const start = ty * GW + tx; dist[start] = 0; q[qt++] = start;
+    while (qh < qt) {
+      const k = q[qh++], x = k % GW, y = (k - x) / GW, d0 = dist[k];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+        const nk = ny * GW + nx; if (bad(nk)) continue;
+        if (dx && dy && (bad(y * GW + nx) || bad(ny * GW + x))) continue;   // no cutting corners
+        const nd = d0 + (dx && dy ? 1.414 : 1); if (nd < dist[nk]) { dist[nk] = nd; q[qt++] = nk; }
+      }
+    }
+    const f = { at: now, dist, GW, GH }; (this.flowCache || (this.flowCache = new Map())).set(key, f);
+    if (this.flowCache.size > 40) this.flowCache.delete(this.flowCache.keys().next().value);
+    return f;
+  }
+  nextWaypoint(z, t, r) {   // down the flow field from z: the furthest of the next 8 steps that z can walk to in a straight line
+    const C = PATH_CELL, f = this.flowField(t, r), { GW, GH, dist } = f;
+    let x = clamp(Math.floor(z.x / C), 0, GW - 1), y = clamp(Math.floor(z.y / C), 0, GH - 1), pick = null;
+    for (let step = 0; step < 8; step++) {
+      let best = null, bd = dist[y * GW + x];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy; if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+        const d = dist[ny * GW + nx]; if (d < bd) { bd = d; best = [nx, ny]; }
+      }
+      if (!best) break; [x, y] = best; const wp = { x: (x + .5) * C, y: (y + .5) * C };
+      if (!pick || this.wideClear(z, wp, r)) pick = wp; else break;
+    }
+    return pick;
+  }
+  // Boss walking: straight at the target when the way is clear; otherwise toward a waypoint on the flow field, kept until reached
+  // (so he commits to one way round a building instead of flip-flopping), sliding along walls.
+  bossMove(z, t, dist) {
+    const r = Math.min(z.radius || 14, 34) * .8, now = Date.now(); let m = this.bossPath?.get(z.id);
+    if (!m) { m = { wp: null, until: 0 }; (this.bossPath || (this.bossPath = new Map())).set(z.id, m); }
+    if (this.wideClear(z, t, r)) { m.wp = null; this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
+    if (!m.wp || distance(z, m.wp) < 14 || now > m.until) { m.wp = this.nextWaypoint(z, t, r); m.until = now + 1500; }
+    if (!m.wp) { this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
+    const a = Math.atan2(m.wp.y - z.y, m.wp.x - z.x), x0 = z.x, y0 = z.y, step = Math.min(dist, distance(z, m.wp));
+    z.x = clamp(z.x + Math.cos(a) * step, 5, ARENA.width - 5); z.y = clamp(z.y + Math.sin(a) * step, 5, ARENA.height - 5); this.solveZombie(z);
+    if (Math.hypot(z.x - x0, z.y - y0) < step * .3) m.wp = null;   // blocked (another zombie, a new structure): plan again next tick
+  }
   // Walk toward angle `ang`; if something solid is in the way, slide around it (keeps going round the same side for a while).
   steerMove(e, key, ang, dist, solve) {
     const st = this.steer.get(key) || { side: Math.random() < .5 ? 1 : -1, until: 0, off: 0 }; this.steer.set(key, st);
