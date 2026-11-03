@@ -421,6 +421,10 @@ export class SurvivalRoom extends Room {
       if (!this.solo || !p || !z) return;
       if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
     });
+    this.onMessage("clientError", (client, data) => {   // drawing errors from players' browsers, so they show up in the Render logs
+      const n = (this.errCount = (this.errCount || 0) + 1); if (n > 200) return;
+      const p = this.state.players.get(client.sessionId); console.log(`[client error] ${p?.name || client.sessionId} (${p?.characterClass || "?"}, wave ${this.state.stage}): ${String(data?.m || "").slice(0, 600)}`);
+    });
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });

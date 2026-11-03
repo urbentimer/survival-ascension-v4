@@ -1,9 +1,9 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Sofea sprites brightened")
+Last updated: 2026-11-03 (latest commit: "Freeze-proof frame loop + client error reports")
 
 ## Where things are
-- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
+- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
 - Claude's workspace copy: `/home/claude/sa` (git, branch `master`, ~72 commits). Exists only in the chat session it was made in.
 - **Backup on GitHub: branch `claude/game-backup`** of urbentimer/survival-ascension-v4 (everything except raw ChatGPT sheets in tools/art). `main` = what's live; don't touch it until the user says to go live.
 - Push routine: work in `/home/claude/sa`, then copy the tree (minus .git, node_modules, tools/dist, tools/art) into the clone `/home/claude/survival-ascension-v4` on `claude/game-backup`, commit, push. A new chat: clone the repo, check out `claude/game-backup`.
@@ -14,6 +14,10 @@ Last updated: 2026-11-03 (latest commit: "Sofea sprites brightened")
 
 - Connectors linked: Render (workspace tea-dbjk0fk9v7es73ab4tp0, service srv-dbkkpufb9u1s73fmj99g Singapore) and Netlify (site 3d671c3a-862a-48d6-8db6-42e536b9c8a8). Use them to check deploys/logs instead of asking for screenshots.
 - Free Render server sleeps after ~15 min idle; the client retries create/join for ~90s ("Waking up the server…").
+
+## Debugging
+- Client drawing errors no longer freeze the game (frame loop + each sprite draw is try/caught) and are sent to the server: search Render logs (service srv-dbkkpufb9u1s73fmj99g) for `[client error]`.
+- Every push restarts the game server (kicks rooms): batch pushes when the user is mid-game.
 
 ## How we work
 - User designs; often says "dont code yet" → discuss only. Code when told ("u can code now", "code it", "lets go").

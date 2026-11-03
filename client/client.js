@@ -93,7 +93,7 @@ function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   $("invite").classList.remove("hidden"); $("codeDisplay").textContent = room.roomId; $("roomCount").textContent = "Room connected";
   message("Connected. Share the invitation code with your friends.");
-  room.onStateChange(s => { state = s; recordSnapshots(); renderState(); });
+  room.onStateChange(s => { state = s; try { recordSnapshots(); renderState(); } catch (e) { reportError(e, "ui"); } });
   room.onMessage("shot", m => { fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
@@ -1917,7 +1917,7 @@ function drawWorldObjects(extra) {
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) items.push({ y: p.y + 12, draw: () => drawSurvivor(p) }); }
-  items.sort((a, b) => a.y - b.y).forEach(it => it.draw());
+  items.sort((a, b) => a.y - b.y).forEach(it => { ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } ctx.restore(); });   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
   if (leader && leader.kills > 0) { ctx.save(); ctx.font = 'bold 22px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 12; ctx.fillStyle = '#ffd84d'; ctx.fillText('♛', leader.x, leader.y - 60); ctx.restore(); }
@@ -2023,14 +2023,25 @@ function drawScreen() {
   m.strokeStyle = '#ffffffaa'; m.lineWidth = 1; m.strokeRect(cam.x * sx + .5, cam.y * sy + .5, W * sx, H * sy);
 }
 
+// A drawing bug must never freeze the game: errors are caught, sent to the server log (Render), and the next frame still runs.
+const reportedErrors = new Set();
+function reportError(e, where) {
+  const msg = `${where}: ${e?.message || e} | ${String(e?.stack || "").split("\n").slice(1, 4).map(s => s.trim()).join(" < ")}`;
+  if (reportedErrors.has(msg) || reportedErrors.size > 20) return; reportedErrors.add(msg);
+  console.error("[game]", msg); try { room?.send("clientError", { m: msg.slice(0, 600) }); } catch { /* not connected */ }
+}
+addEventListener("error", e => reportError(e.error || e.message, "window"));
 function frame(t){
   if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
-  sendControls(t); updateFeel(); updateCamera(t);
-  ctx.clearRect(0, 0, W, H);
-  const off = shakeOffset();
-  ctx.save(); ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore();
-  drawScreen(); drawBuildWheel(); drawSquadWheel(); drawHurt();
-  if (performance.now() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - performance.now()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
   requestAnimationFrame(frame);
+  let saved = 0;
+  try {
+    sendControls(t); updateFeel(); updateCamera(t);
+    ctx.clearRect(0, 0, W, H);
+    const off = shakeOffset();
+    ctx.save(); saved = 1; ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore(); saved = 0;
+    drawScreen(); drawBuildWheel(); drawSquadWheel(); drawHurt();
+    if (performance.now() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - performance.now()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
+  } catch (e) { if (saved) ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
 }
 requestAnimationFrame(frame);
