@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Sofea the Operator")
+Last updated: 2026-11-03 (latest commit: "Sofea sprites brightened")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
@@ -41,7 +41,7 @@ Last updated: 2026-11-03 (latest commit: "Sofea the Operator")
   - E Sky Barrage: 3 rockets up one by one (0.15s apart), land at random spots within 80px of the mouse, 90 dmg each, 8s cooldown.
   - Q Demo Ripple: Q places crate (arms 1s), Q again detonates (auto after 30s or if Dante goes down): 300 core blast, then scattered grenades 4 / 8 / 16 (every 3rd of the last ring big). 60s cooldown. Bosses take half.
   - Rockets/grenades leave scorch craters (hot → cool, gone after 7s).
-- **Sofea (operator)** — made by the user's cousin with the character kit (source art in tools/art/sofea, cut by tools/extract-sofea.py + `PINK_HAIR=1 extract-directions.py operator gun=...%148 knife= bat= axe= radio=...!4`). 115 HP, speed 180, rifle + pistol + knife; art for knife/bat/axe/rifle + radio call.
+- **Sofea (operator)** — made by the user's cousin with the character kit (source art in tools/art/sofea, cut by tools/extract-sofea.py + `PINK_HAIR=1 SPRITE_H=60 ENHANCE=1.25,1.2,1.12,1 extract-directions.py operator gun=...%148 knife= bat= axe= radio=...!4` (her source art is realistic/slim and dark, unlike the chunky chibi survivors: brightened, sharpened and 10% taller to read in game; the real fix is chibi-style redraws)). 115 HP, speed 180, rifle + pistol + knife; art for knife/bat/axe/rifle + radio call.
   - E Steel Convoy: 0.8s radio call, tank arrives (needs a clear spot within 160px, else no cooldown used), she drives it 30s. WASD drives (140 px/s), turret follows the mouse, click = cannon shell every 1.5s (65 → 30 at the 110px edge, flies 600 px/s to the click). Driving into zombies runs them over (55, 10 on bosses, once per 0.75s each, 30px push). Takes 35% less damage. Then she gets out beside it (0.75s protection) and E cools down 30s.
   - Q Sky Reign: radio call, helicopter, flies 30s at 230 px/s over zombies (ground zombies can't reach her). Click = 2 rockets every 1.5s (65 → 25 at 100px, 700 px/s, range 800). 60s cooldown after landing.
   - While riding: no dash / melee / medkit / build / repair / revive. Vehicles: state.vehicles (VehicleState, id = her sessionId, phase call/ride). Vehicle damage grows with the wave like Dante's skills. Everyone gets out when the wave ends.
@@ -59,7 +59,8 @@ Last updated: 2026-11-03 (latest commit: "Sofea the Operator")
 - **Boss waves** 4, 8, 12...: horde → intro card (all players ack) → boss + walkers. Wave 4 = **The Butcher** (armoured front, cleaver quake rings, hook every 10–15s at 2600 px/s with lead aim, axe deflect, enraged spin, +60% HP per extra player). Other bosses: placeholders, no art.
 - **Mini boss: The Hivemind** on waves 2, 6, 10, 14...: arrives at 40s with a warning card; wave can't end until it dies. ~760 HP at wave 2 solo (scales with wave + players). Bite (close), slam (red zone, damage + 0.8s stun), jump at far players (320–760px), spawns walkers every 8s. Death: +40 gold each + 4 gold piles. No dedicated death sheet yet.
 
-## Online host button (Esc menu)
+## Online host buttons (Esc menu)
+- **Test: ultimates with no cooldown** (ON by default while testing): ultimates unlocked at once and ready again as soon as they end. Turn OFF for real games (state.noCd).
 - **Skip to Butcher fight (host)**: host only, online rooms. Jumps to wave 4, clears zombies, revives everyone, goes to the Butcher intro.
 
 ## Solo preview test panel (Esc menu)

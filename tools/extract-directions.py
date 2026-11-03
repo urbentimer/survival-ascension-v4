@@ -17,7 +17,8 @@ from PIL import Image
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__))
 COLS = 6
-TARGET_H = 54                       # body height in game pixels
+TARGET_H = int(os.environ.get('SPRITE_H', 54))   # body height in game pixels (SPRITE_H=60 for a slim, tall character)
+ENHANCE = os.environ.get('ENHANCE', '')
 CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside a cell (room below for slash arcs)
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
 TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
@@ -115,6 +116,13 @@ def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
 
 def place(sheet, img, bc, feet, scale, row, col, flip=False):
     if flip: img = img.transpose(Image.FLIP_LEFT_RIGHT); bc = img.width - bc
+    if ENHANCE:   # e.g. ENHANCE=1.3,1.15,1.1,1  saturation, contrast, brightness, sharpen-before-shrink (for art that reads too dark/flat in game)
+        from PIL import ImageEnhance, ImageFilter
+        sat, con, bri, shp = (list(map(float, ENHANCE.split(','))) + [1, 1, 1, 0])[:4]
+        a = img.getchannel('A'); rgb = img.convert('RGB')
+        rgb = ImageEnhance.Brightness(ImageEnhance.Contrast(ImageEnhance.Color(rgb).enhance(sat)).enhance(con)).enhance(bri)
+        if shp: rgb = rgb.filter(ImageFilter.UnsharpMask(radius=2 / max(scale, .05) * .5, percent=int(120 * shp), threshold=2))
+        img = rgb.convert('RGBA'); img.putalpha(a)
     sw, sh = max(1, round(img.width * scale)), max(1, round(img.height * scale))
     small = img.resize((sw, sh), Image.LANCZOS)
     arr = np.array(small); al = arr[..., 3] > 110; arr[..., 3] = al * 255
