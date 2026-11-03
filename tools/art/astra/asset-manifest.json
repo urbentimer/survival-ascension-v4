@@ -1,0 +1,5877 @@
+{
+  "character": "Astra",
+  "version": "1.0-design-art",
+  "runtime_implemented": false,
+  "directions": [
+    "down",
+    "down-right",
+    "right",
+    "up-right",
+    "up",
+    "up-left",
+    "left",
+    "down-left"
+  ],
+  "movement_columns": [
+    "idle",
+    "walk1",
+    "walk2",
+    "walk3",
+    "action1",
+    "action2"
+  ],
+  "radio_columns": [
+    "raise",
+    "dispatch",
+    "lower"
+  ],
+  "effect_columns": "See character.txt; wall columns are foundation/building/complete/dismantling",
+  "background_key": {
+    "target_hex": "#FF00FF",
+    "source_is_exact_uniform_color": false,
+    "suggested_import_threshold": {
+      "red_min": 220,
+      "blue_min": 220,
+      "green_max": 60
+    },
+    "applies_to": [
+      "sprites/",
+      "effects/"
+    ]
+  },
+  "crop_coordinate_system": "pixels, top-left origin, x/y/width/height. Frames use measured empty gutters near the intended grid. Rectangles may have different dimensions; pad/alignment needed on import.",
+  "assets": [
+    {
+      "file": "portrait.png",
+      "width": 1254,
+      "height": 1254,
+      "rows": 1,
+      "columns": 1,
+      "sha256": "1add643fe246f556a5a2bc55a04a63c0c7ab02141869b7e7b4bb8471f3791797"
+    },
+    {
+      "file": "sprites/astra-rifle.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "c81028b86931773360c98f4bb3fdc13b7828129d9e7bed25b47aaf6d47a364db",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            45,
+            14,
+            116,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            41,
+            14,
+            116,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            36,
+            14,
+            114,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            28,
+            14,
+            114,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            28,
+            14,
+            108,
+            163
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 190,
+          "foreground_bounds_within_cell": [
+            24,
+            14,
+            105,
+            175
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            44,
+            6,
+            114,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            39,
+            6,
+            114,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            35,
+            6,
+            111,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            28,
+            6,
+            116,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            24,
+            6,
+            116,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 190,
+          "width": 181,
+          "height": 172,
+          "foreground_bounds_within_cell": [
+            20,
+            6,
+            122,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            49,
+            12,
+            109,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            12,
+            105,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            41,
+            13,
+            100,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            34,
+            14,
+            105,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            19,
+            14,
+            134,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            16,
+            14,
+            157,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            49,
+            12,
+            112,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            45,
+            12,
+            113,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            43,
+            12,
+            109,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            34,
+            12,
+            112,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 724,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            22,
+            14,
+            123,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            17,
+            15,
+            140,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 6
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            45,
+            21,
+            110,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            43,
+            21,
+            107,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            37,
+            21,
+            109,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            27,
+            21,
+            110,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            25,
+            15,
+            109,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            22,
+            0,
+            107,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 6
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            10,
+            117,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            33,
+            10,
+            117,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            10,
+            113,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            20,
+            10,
+            118,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 724,
+          "y": 905,
+          "width": 170,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            12,
+            17,
+            127,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 894,
+          "y": 905,
+          "width": 192,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            15,
+            146,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            7,
+            109,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            41,
+            7,
+            108,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            33,
+            7,
+            108,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1086,
+          "width": 178,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            27,
+            7,
+            108,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 721,
+          "y": 1086,
+          "width": 154,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            7,
+            133,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 875,
+          "y": 1086,
+          "width": 211,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            7,
+            161,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            5,
+            102,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            5,
+            103,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            5,
+            104,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            27,
+            5,
+            111,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            16,
+            5,
+            115,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 905,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            5,
+            5,
+            127,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": [
+        [
+          4,
+          6,
+          6
+        ],
+        [
+          5,
+          6,
+          6
+        ]
+      ]
+    },
+    {
+      "file": "sprites/astra-knife.png",
+      "width": 887,
+      "height": 1774,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "c4bf075ddefed5d9874b58d30b4c5690a2bc43b77d89a0cd434ec433056c5d34",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            16,
+            48,
+            127,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 148,
+          "y": 0,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            18,
+            48,
+            121,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 296,
+          "y": 0,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            22,
+            48,
+            110,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 444,
+          "y": 0,
+          "width": 145,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            13,
+            48,
+            113,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 589,
+          "y": 0,
+          "width": 150,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            1,
+            52,
+            132,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 739,
+          "y": 0,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            13,
+            52,
+            116,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 222,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            22,
+            45,
+            112,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 148,
+          "y": 222,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            25,
+            45,
+            110,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 296,
+          "y": 222,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            28,
+            44,
+            101,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 444,
+          "y": 222,
+          "width": 145,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            19,
+            44,
+            102,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 589,
+          "y": 222,
+          "width": 150,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            1,
+            49,
+            131,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 739,
+          "y": 222,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            8,
+            48,
+            129,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 444,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            31,
+            40,
+            90,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 148,
+          "y": 444,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            33,
+            40,
+            89,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 296,
+          "y": 444,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            34,
+            40,
+            81,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 444,
+          "y": 444,
+          "width": 147,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            29,
+            40,
+            83,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 591,
+          "y": 444,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            1,
+            45,
+            126,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 739,
+          "y": 444,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            12,
+            45,
+            131,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 665,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            33,
+            39,
+            89,
+            163
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 148,
+          "y": 665,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            29,
+            39,
+            94,
+            163
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 296,
+          "y": 665,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            28,
+            39,
+            91,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 444,
+          "y": 665,
+          "width": 147,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            19,
+            39,
+            97,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 591,
+          "y": 665,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            3,
+            45,
+            123,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 739,
+          "y": 665,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            16,
+            45,
+            127,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 887,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            23,
+            41,
+            111,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 148,
+          "y": 887,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            22,
+            38,
+            111,
+            166
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 296,
+          "y": 887,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            21,
+            38,
+            109,
+            166
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 444,
+          "y": 887,
+          "width": 147,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            19,
+            38,
+            107,
+            166
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 591,
+          "y": 887,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            3,
+            43,
+            126,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 739,
+          "y": 887,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            15,
+            43,
+            133,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 1
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 1109,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            29,
+            40,
+            102,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 148,
+          "y": 1109,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            27,
+            39,
+            100,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 296,
+          "y": 1109,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            21,
+            38,
+            102,
+            165
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 444,
+          "y": 1109,
+          "width": 144,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            15,
+            38,
+            106,
+            165
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 588,
+          "y": 1109,
+          "width": 151,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            1,
+            44,
+            128,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 739,
+          "y": 1109,
+          "width": 148,
+          "height": 221,
+          "foreground_bounds_within_cell": [
+            4,
+            46,
+            122,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1330,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            38,
+            37,
+            87,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 148,
+          "y": 1330,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            29,
+            37,
+            98,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 296,
+          "y": 1330,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            35,
+            37,
+            86,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 444,
+          "y": 1330,
+          "width": 144,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            26,
+            37,
+            91,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 588,
+          "y": 1330,
+          "width": 143,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            1,
+            42,
+            128,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 731,
+          "y": 1330,
+          "width": 156,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            1,
+            42,
+            138,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1552,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            25,
+            38,
+            107,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 148,
+          "y": 1552,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            27,
+            39,
+            100,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 296,
+          "y": 1552,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            23,
+            39,
+            107,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 444,
+          "y": 1552,
+          "width": 145,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            17,
+            39,
+            104,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 589,
+          "y": 1552,
+          "width": 150,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            1,
+            43,
+            130,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 739,
+          "y": 1552,
+          "width": 148,
+          "height": 222,
+          "foreground_bounds_within_cell": [
+            4,
+            43,
+            125,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": [
+        [
+          5,
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "file": "sprites/astra-bat.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "923cca267109a943130d1010ed68838c6169a92d460e0947e80f2e8604cd094e",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            44,
+            22,
+            122,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            42,
+            22,
+            120,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            37,
+            22,
+            116,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            29,
+            22,
+            118,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            20,
+            22,
+            119,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 184,
+          "foreground_bounds_within_cell": [
+            14,
+            28,
+            146,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            46,
+            18,
+            119,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            44,
+            18,
+            118,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            43,
+            20,
+            110,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            37,
+            22,
+            110,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            15,
+            20,
+            116,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 184,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            9,
+            30,
+            154,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            58,
+            19,
+            115,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            49,
+            19,
+            116,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            48,
+            19,
+            108,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            21,
+            111,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            7,
+            19,
+            118,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 363,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            8,
+            31,
+            155,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 544,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            54,
+            20,
+            106,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 544,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            45,
+            19,
+            111,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 544,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            42,
+            20,
+            111,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 544,
+          "width": 178,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            29,
+            20,
+            116,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 721,
+          "y": 544,
+          "width": 184,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            1,
+            18,
+            127,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 544,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            1,
+            30,
+            166,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            18,
+            115,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            18,
+            115,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            18,
+            116,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            27,
+            18,
+            120,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            22,
+            17,
+            119,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            8,
+            23,
+            137,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            18,
+            104,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            16,
+            102,
+            160
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            17,
+            102,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 905,
+          "width": 179,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            28,
+            17,
+            103,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 722,
+          "y": 905,
+          "width": 183,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            16,
+            126,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 905,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            14,
+            25,
+            145,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            45,
+            15,
+            99,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            41,
+            15,
+            103,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            15,
+            93,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            32,
+            15,
+            102,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 724,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            15,
+            16,
+            110,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 905,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            3,
+            22,
+            155,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            12,
+            107,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            12,
+            105,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            12,
+            101,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            13,
+            105,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            21,
+            16,
+            112,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 905,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            5,
+            21,
+            154,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "sprites/astra-fire-axe.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "ec31b765da2d3d1c462599ca14904f90f1caa1c5263cc59a5a13101830af7a1e",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            36,
+            17,
+            120,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            38,
+            17,
+            121,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            17,
+            105,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            18,
+            108,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            35,
+            12,
+            127,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            18,
+            23,
+            149,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            36,
+            15,
+            120,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            38,
+            16,
+            115,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            38,
+            17,
+            104,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            35,
+            19,
+            108,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            28,
+            11,
+            134,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            15,
+            23,
+            151,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            15,
+            109,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            16,
+            112,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            43,
+            16,
+            97,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            33,
+            19,
+            106,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            26,
+            15,
+            130,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            12,
+            23,
+            155,
+            146
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            47,
+            15,
+            114,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            15,
+            110,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            47,
+            15,
+            99,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            17,
+            107,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 724,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            11,
+            130,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            18,
+            22,
+            149,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            13,
+            121,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            13,
+            120,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            13,
+            108,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            39,
+            13,
+            108,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            24,
+            4,
+            131,
+            167
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            17,
+            20,
+            153,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            13,
+            109,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            15,
+            111,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            45,
+            15,
+            108,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            16,
+            107,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 724,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            23,
+            12,
+            128,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 905,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            17,
+            20,
+            151,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            34,
+            14,
+            111,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            17,
+            113,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            36,
+            17,
+            104,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            24,
+            19,
+            111,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 724,
+          "y": 1086,
+          "width": 163,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            24,
+            15,
+            129,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 887,
+          "y": 1086,
+          "width": 199,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            21,
+            163,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            34,
+            12,
+            118,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            14,
+            113,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            47,
+            16,
+            98,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            17,
+            101,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1267,
+          "width": 169,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            22,
+            12,
+            132,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 893,
+          "y": 1267,
+          "width": 193,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            21,
+            154,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "sprites/astra-radio-call.png",
+      "width": 1024,
+      "height": 1536,
+      "rows": 8,
+      "columns": 3,
+      "sha256": "583d3d22e453bfb0bd5e2efc3ec796e7aba83b16dd7ffbdef1606db138eb1f38",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            175,
+            12,
+            132,
+            175
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 341,
+          "y": 0,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            107,
+            13,
+            129,
+            174
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 683,
+          "y": 0,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            33,
+            13,
+            130,
+            174
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 192,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            175,
+            7,
+            137,
+            176
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 341,
+          "y": 192,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            107,
+            7,
+            134,
+            176
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 683,
+          "y": 192,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            34,
+            7,
+            134,
+            176
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 384,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            182,
+            4,
+            113,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 341,
+          "y": 384,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            112,
+            4,
+            111,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 683,
+          "y": 384,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            40,
+            4,
+            109,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 576,
+          "width": 341,
+          "height": 191,
+          "foreground_bounds_within_cell": [
+            176,
+            3,
+            136,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 341,
+          "y": 576,
+          "width": 342,
+          "height": 191,
+          "foreground_bounds_within_cell": [
+            107,
+            3,
+            129,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 683,
+          "y": 576,
+          "width": 341,
+          "height": 191,
+          "foreground_bounds_within_cell": [
+            34,
+            3,
+            133,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 767,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            169,
+            2,
+            143,
+            178
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 341,
+          "y": 767,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            99,
+            2,
+            137,
+            178
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 683,
+          "y": 767,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            28,
+            1,
+            140,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 959,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            165,
+            1,
+            134,
+            180
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 341,
+          "y": 959,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            99,
+            1,
+            129,
+            180
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 683,
+          "y": 959,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            29,
+            1,
+            132,
+            180
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1151,
+          "width": 341,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            175,
+            1,
+            120,
+            181
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 341,
+          "y": 1151,
+          "width": 342,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            112,
+            1,
+            113,
+            181
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 683,
+          "y": 1151,
+          "width": 341,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            40,
+            1,
+            114,
+            181
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1344,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            165,
+            1,
+            141,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 341,
+          "y": 1344,
+          "width": 342,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            100,
+            1,
+            139,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 683,
+          "y": 1344,
+          "width": 341,
+          "height": 192,
+          "foreground_bounds_within_cell": [
+            33,
+            1,
+            134,
+            179
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "sprites/police-officer.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "9482ccf699088acacc2cee744ebdc16245224f88a17bdb0c7d06b36508eac57f",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            44,
+            24,
+            117,
+            146
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            39,
+            24,
+            118,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            35,
+            24,
+            115,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            28,
+            24,
+            115,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            29,
+            25,
+            107,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 189,
+          "foreground_bounds_within_cell": [
+            27,
+            24,
+            106,
+            164
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            44,
+            12,
+            113,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            42,
+            12,
+            112,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            37,
+            12,
+            110,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            33,
+            12,
+            110,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            27,
+            13,
+            114,
+            146
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 189,
+          "width": 181,
+          "height": 173,
+          "foreground_bounds_within_cell": [
+            24,
+            13,
+            121,
+            146
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            16,
+            107,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            45,
+            16,
+            104,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            18,
+            103,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            34,
+            18,
+            109,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            21,
+            19,
+            133,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            17,
+            19,
+            157,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            50,
+            15,
+            111,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            46,
+            16,
+            111,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            42,
+            14,
+            109,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            33,
+            14,
+            111,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 724,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            17,
+            19,
+            127,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 543,
+          "width": 181,
+          "height": 169,
+          "foreground_bounds_within_cell": [
+            15,
+            19,
+            143,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 6
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            43,
+            27,
+            114,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            42,
+            27,
+            112,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            35,
+            27,
+            112,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            27,
+            27,
+            112,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            29,
+            20,
+            108,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 712,
+          "width": 181,
+          "height": 193,
+          "foreground_bounds_within_cell": [
+            27,
+            0,
+            107,
+            177
+          ],
+          "foreground_pixels_on_crop_border": 7
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            12,
+            116,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            38,
+            13,
+            112,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            34,
+            12,
+            109,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            27,
+            13,
+            111,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 724,
+          "y": 905,
+          "width": 174,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            15,
+            20,
+            129,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 898,
+          "y": 905,
+          "width": 188,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            17,
+            146,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            12,
+            105,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            13,
+            111,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            35,
+            14,
+            104,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            14,
+            103,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 724,
+          "y": 1086,
+          "width": 153,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            13,
+            129,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 877,
+          "y": 1086,
+          "width": 209,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            1,
+            13,
+            156,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            16,
+            107,
+            147
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            45,
+            16,
+            109,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            38,
+            13,
+            109,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            16,
+            112,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            18,
+            15,
+            119,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 905,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            8,
+            15,
+            126,
+            148
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": [
+        [
+          4,
+          6,
+          6
+        ],
+        [
+          5,
+          6,
+          7
+        ]
+      ]
+    },
+    {
+      "file": "sprites/doctor.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "ae7aa027ed129a629428f155a25a51470d16911799144a266f3cb7e54f904924",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            54,
+            16,
+            116,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            48,
+            19,
+            117,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            19,
+            115,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            35,
+            18,
+            116,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            24,
+            17,
+            119,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            28,
+            26,
+            110,
+            143
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            54,
+            19,
+            111,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            53,
+            19,
+            106,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            20,
+            106,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            20,
+            108,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            29,
+            19,
+            107,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            19,
+            26,
+            122,
+            144
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            54,
+            19,
+            97,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            48,
+            19,
+            100,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            53,
+            20,
+            88,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            19,
+            95,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            28,
+            19,
+            108,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 362,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            11,
+            27,
+            129,
+            144
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            55,
+            18,
+            105,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            51,
+            18,
+            105,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            19,
+            103,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            44,
+            19,
+            96,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 724,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            31,
+            19,
+            113,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 543,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            15,
+            26,
+            128,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            17,
+            113,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            18,
+            109,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            46,
+            18,
+            107,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            36,
+            19,
+            107,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            31,
+            18,
+            113,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 724,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            26,
+            22,
+            110,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            56,
+            19,
+            105,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            53,
+            19,
+            101,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            54,
+            22,
+            93,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            43,
+            23,
+            95,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 724,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            21,
+            22,
+            114,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 905,
+          "y": 905,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            14,
+            27,
+            122,
+            146
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            61,
+            18,
+            95,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            58,
+            19,
+            97,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            53,
+            19,
+            90,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            43,
+            20,
+            98,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 724,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            21,
+            19,
+            110,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 905,
+          "y": 1086,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            16,
+            27,
+            124,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            50,
+            17,
+            115,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            49,
+            19,
+            111,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            20,
+            110,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            37,
+            19,
+            103,
+            149
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            13,
+            18,
+            129,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 905,
+          "y": 1267,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            14,
+            26,
+            127,
+            142
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "sprites/construction-worker.png",
+      "width": 1086,
+      "height": 1448,
+      "rows": 8,
+      "columns": 6,
+      "sha256": "8ae97740d68003bc0d58a723e94238c08e44fb8ffbaf0868a08c9e522d9b454c",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            57,
+            13,
+            116,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 181,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            51,
+            13,
+            117,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 362,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            40,
+            13,
+            116,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 543,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            26,
+            13,
+            117,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "x": 724,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            4,
+            10,
+            120,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "x": 905,
+          "y": 0,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            9,
+            36,
+            114,
+            135
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "x": 0,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            58,
+            11,
+            116,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "x": 181,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            53,
+            9,
+            112,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "x": 362,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            42,
+            9,
+            113,
+            153
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "x": 543,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            30,
+            8,
+            112,
+            151
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "x": 724,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            8,
+            7,
+            116,
+            150
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "x": 905,
+          "y": 181,
+          "width": 181,
+          "height": 181,
+          "foreground_bounds_within_cell": [
+            9,
+            27,
+            106,
+            142
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "x": 0,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            70,
+            6,
+            100,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "x": 181,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            62,
+            6,
+            98,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "x": 362,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            51,
+            6,
+            90,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "x": 543,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            37,
+            6,
+            104,
+            154
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "x": 724,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            5,
+            5,
+            122,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "x": 905,
+          "y": 362,
+          "width": 181,
+          "height": 177,
+          "foreground_bounds_within_cell": [
+            7,
+            22,
+            117,
+            145
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "x": 0,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            58,
+            7,
+            118,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "x": 181,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            56,
+            6,
+            112,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "x": 362,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            46,
+            6,
+            111,
+            159
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "x": 543,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            35,
+            6,
+            116,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "x": 724,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            9,
+            1,
+            119,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "x": 905,
+          "y": 539,
+          "width": 181,
+          "height": 180,
+          "foreground_bounds_within_cell": [
+            6,
+            27,
+            128,
+            141
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "x": 0,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            55,
+            7,
+            121,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "x": 181,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            50,
+            7,
+            118,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "x": 362,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            40,
+            7,
+            116,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "x": 543,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            26,
+            7,
+            117,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "x": 724,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            4,
+            1,
+            125,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "x": 905,
+          "y": 719,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            9,
+            31,
+            114,
+            137
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 1,
+          "x": 0,
+          "y": 901,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            53,
+            6,
+            117,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 2,
+          "x": 181,
+          "y": 901,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            49,
+            5,
+            114,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 3,
+          "x": 362,
+          "y": 901,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            40,
+            5,
+            111,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 4,
+          "x": 543,
+          "y": 901,
+          "width": 181,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            25,
+            5,
+            113,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 5,
+          "x": 724,
+          "y": 901,
+          "width": 179,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            14,
+            1,
+            113,
+            161
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 6,
+          "column": 6,
+          "x": 903,
+          "y": 901,
+          "width": 183,
+          "height": 179,
+          "foreground_bounds_within_cell": [
+            1,
+            29,
+            127,
+            137
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 1,
+          "x": 0,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            57,
+            6,
+            101,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 2,
+          "x": 181,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            56,
+            6,
+            111,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 3,
+          "x": 362,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            54,
+            6,
+            87,
+            158
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 4,
+          "x": 543,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            37,
+            6,
+            103,
+            157
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 5,
+          "x": 724,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            4,
+            1,
+            115,
+            162
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 7,
+          "column": 6,
+          "x": 905,
+          "y": 1080,
+          "width": 181,
+          "height": 186,
+          "foreground_bounds_within_cell": [
+            5,
+            31,
+            116,
+            139
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 1,
+          "x": 0,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            55,
+            4,
+            117,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "x": 181,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            52,
+            3,
+            114,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 3,
+          "x": 362,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            40,
+            2,
+            113,
+            156
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "x": 543,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            25,
+            3,
+            114,
+            152
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 5,
+          "x": 724,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            7,
+            1,
+            117,
+            155
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "x": 905,
+          "y": 1266,
+          "width": 181,
+          "height": 182,
+          "foreground_bounds_within_cell": [
+            11,
+            25,
+            112,
+            139
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "effects/deploy-beacon.png",
+      "width": 2172,
+      "height": 724,
+      "rows": 1,
+      "columns": 4,
+      "sha256": "75b144b3538ae4185d49bafd476fc00118fca3d2663e61e41e5915fde1d23ea8",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            157,
+            322,
+            232,
+            136
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 543,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            76,
+            252,
+            378,
+            266
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 1086,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            42,
+            185,
+            462,
+            397
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 1629,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            108,
+            268,
+            339,
+            243
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "effects/healing-pulse.png",
+      "width": 2172,
+      "height": 724,
+      "rows": 1,
+      "columns": 4,
+      "sha256": "d16db210e44cdfdbba170a8af0750119599859fd565a0fcc6c7389f6cff80c97",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            139,
+            256,
+            266,
+            221
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 543,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            89,
+            238,
+            368,
+            265
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 1086,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            47,
+            219,
+            449,
+            304
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 1629,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            88,
+            239,
+            368,
+            264
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "effects/wall-horizontal.png",
+      "width": 2172,
+      "height": 724,
+      "rows": 1,
+      "columns": 4,
+      "sha256": "c2f4812b64cb788234d67e7af77470ecc25e6dbc2323e207772750712402c243",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            46,
+            399,
+            453,
+            89
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 543,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            47,
+            269,
+            452,
+            219
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 1086,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            46,
+            269,
+            452,
+            219
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 1629,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            47,
+            269,
+            452,
+            219
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "effects/wall-vertical.png",
+      "width": 2172,
+      "height": 724,
+      "rows": 1,
+      "columns": 4,
+      "sha256": "b312a4b8dccaac6fa7748fb6a4e6259cc253c14bf526f21ec135e3d25cf34096",
+      "frames": [
+        {
+          "row": 1,
+          "column": 1,
+          "x": 0,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            170,
+            88,
+            203,
+            534
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "x": 543,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            171,
+            88,
+            202,
+            534
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "x": 1086,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            171,
+            88,
+            202,
+            534
+          ],
+          "foreground_pixels_on_crop_border": 0
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "x": 1629,
+          "y": 0,
+          "width": 543,
+          "height": 724,
+          "foreground_bounds_within_cell": [
+            171,
+            88,
+            202,
+            534
+          ],
+          "foreground_pixels_on_crop_border": 0
+        }
+      ],
+      "cells_with_border_pixels": []
+    },
+    {
+      "file": "skill-cards/card-E.png",
+      "width": 1254,
+      "height": 1254,
+      "rows": 1,
+      "columns": 1,
+      "sha256": "cdb204947a0b6c512f02bf393fc22fa24414ff2dec61bf4381c88ea31c47b88a"
+    },
+    {
+      "file": "skill-cards/card-Q.png",
+      "width": 1254,
+      "height": 1254,
+      "rows": 1,
+      "columns": 1,
+      "sha256": "a14d01e936dd8e4b57c2680d2e696f9c6319f18170905d0ec4e3a716a5ac08ee"
+    },
+    {
+      "file": "skill-cards/card-R.png",
+      "width": 1254,
+      "height": 1254,
+      "rows": 1,
+      "columns": 1,
+      "sha256": "686024b6b5c526ceef81d90701f1989a12f209ecfc907cc9158f78449fdbe551"
+    }
+  ]
+}

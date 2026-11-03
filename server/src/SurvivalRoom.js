@@ -121,7 +121,8 @@ const CLASS_STATS = {
   sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
   commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 },
   operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
-  slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
+  slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
+  dispatcher:    { hp: 120, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
 };
 // Weapons are balanced around ~20 damage/second on a single zombie; each has a different strength.
 const WEAPONS = {
@@ -186,6 +187,14 @@ const BRIGGS = {
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
+// Astra (dispatcher): E = 3 doctors (25 HP/s each, one per patient), Q = 7 police, R = safehouse (4 walls zombies can't cross).
+const ASTRA = {
+  call: 0.45,   // the shared radio call before anyone arrives
+  medic: { n: 3, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },
+  police: { n: 7, life: 30, cd: 60, hp: 110, speed: 195, dmg: 10, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
+  safe: { cd: 90, build: 2, life: 45, half: 184, wall: 24, search: 120, worker: 200 },   // 368x368 outside, 320x320 inside, 24px walls
+};
+const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
   hook: { wind: 0.15, speed: 1400, range: 1100, hitR: 10, dmg: 70, pull: 900, stop: 20, wallStop: 24, maxT: 3, cd: 12, missCd: 4 },
   spin: { wind: 0.6, life: 12, cd: 60, r: 260, dmg: 24, every: 0.25, speed: 130 },
@@ -265,7 +274,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = [];
     this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -372,7 +381,7 @@ export class SurvivalRoom extends Room {
 
     this.onMessage("chooseClass", (client,data) => {
       const p=this.state.players.get(client.sessionId); const id=String(data?.id||"");
-      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher"];
+      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher","dispatcher"];
       if(!p || this.state.phase!=="lobby" || !classes.includes(id)) return;
       p.characterClass=id;
       applyClassBase(p); p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
@@ -455,6 +464,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
+    this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (p?.alive && this.state.phase === "playing" && p.characterClass === "dispatcher") this.astraCast(p, "R"); });   // Astra's R: safehouse
     this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
     this.onMessage("useItem", client => { const p = playing(client.sessionId); if (p) this.useQuickItem(p); });
     this.onMessage("upgrade", (client, data) => {
@@ -591,7 +601,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
@@ -886,6 +896,7 @@ export class SurvivalRoom extends Room {
   useAbility(p, data) {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
+      if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts when the doctors arrive
       if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
@@ -956,7 +967,7 @@ export class SurvivalRoom extends Room {
   }
   acidLand(s) {
     if (s.atTower) { this.state.towerHp = Math.max(0, this.state.towerHp - s.dmg * 1.5); if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } return; }
-    for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if ((this.state.robots.has(m.id) || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
+    for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
     for (const p of this.state.players.values()) {   // direct hit
       if (!p.alive || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
       const dealt = Math.max(1, Math.round(s.dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
@@ -1010,6 +1021,7 @@ export class SurvivalRoom extends Room {
   ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd) r.left = r.alive ? r.active : 0; return r; }
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+    if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: alive ? active + ASTRA.police.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
@@ -1023,7 +1035,11 @@ export class SurvivalRoom extends Room {
     return { info, alive, left, active };
   }
   useUlt(p) {
-    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "dispatcher") {   // police: Q is blocked while the squad is out; the 60s cooldown starts when the last officer leaves
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
+      if (this.astraCast(p, "Q")) { info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); } return;
+    }
     if (p.characterClass === "slasher") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || this.arshanBusy(p)) return;
       info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startCyclone(p, now); return;
@@ -1422,6 +1438,253 @@ export class SurvivalRoom extends Room {
       if (fixed > 0) p.hp = fixed;
     }
   }
+
+  // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
+  amemOf(p) { let m = this.astra.get(p.sessionId); if (!m) { m = { cast: null, safeReady: 0, medUntil: 0, polUntil: 0, polOut: false }; this.astra.set(p.sessionId, m); } return m; }
+  unitsOf(id, kind) { const out = []; for (const r of this.state.robots.values()) if (r.ownerId === id && r.kind === kind) out.push(r); return out; }
+  safeOf(p) { for (const st of this.state.structures.values()) if (st.kind === "safehouse" && st.ownerId === p.sessionId) return st; return null; }
+  sheltered(q) { for (const b of this.safeBoxes) if (Math.abs(q.x - b.x) <= b.hw && Math.abs(q.y - b.y) <= b.hh) return true; return false; }
+  astraNo(p, msg) { if (!p.isBot) this.state.message = `${p.name}: ${msg}`; return false; }
+  // n separate free spots near (cx, cy) for summoned people, or null (then the cast is refused and no cooldown is used)
+  freeSpots(cx, cy, n) {
+    const out = [];
+    for (let d = 46; d <= 226 && out.length < n; d += 30) for (let i = 0; i < 12 && out.length < n; i++) {
+      const a = (i + d / 60) / 12 * Math.PI * 2, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+      if (!this.vehicleFits(x, y, ROBOT_R + 2) || out.some(o => Math.hypot(o.x - x, o.y - y) < 30)) continue;
+      out.push({ x, y });
+    }
+    return out.length >= n ? out : null;
+  }
+  safeWalls(cx, cy) {   // the 4 collision rectangles: north/south 368x24, east/west 24x320
+    const H = ASTRA.safe.half, t = ASTRA.safe.wall / 2;
+    return [{ x: cx, y: cy - H + t, hw: H, hh: t }, { x: cx, y: cy + H - t, hw: H, hh: t }, { x: cx - H + t, y: cy, hw: t, hh: H - 2 * t }, { x: cx + H - t, y: cy, hw: t, hh: H - 2 * t }];
+  }
+  safeFits(cx, cy, self = null) {
+    const H = ASTRA.safe.half, X = ARENA.width / 2, Y = ARENA.height / 2, over = (b, pad = 0) => Math.abs(b.x - cx) < b.hw + H + pad && Math.abs(b.y - cy) < b.hh + H + pad;
+    if (cx - H < 12 || cy - H < 12 || cx + H > ARENA.width - 12 || cy + H > ARENA.height - 12) return false;
+    if (over({ x: X, y: Y, hw: TOWER_HALF, hh: TOWER_HALF }) || over({ x: X + GEN_OFF.x, y: Y + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h })) return false;
+    for (const st of this.state.structures.values()) {
+      if (st === self) continue;
+      if (st.kind === "safehouse" ? over({ x: st.x, y: st.y, hw: H, hh: H }) : over({ x: st.x, y: st.y, hw: 16, hh: 16 })) return false;
+    }
+    for (const z of this.state.zombies.values()) if (z.boss && over({ x: z.x, y: z.y, hw: z.radius, hh: z.radius })) return false;
+    // scenery (houses, cars, trees) may sit under the walls: the map is busy and a strict rule refused half the spots. Zombies are still blocked.
+    return true;
+  }
+  safeSite(p) {   // centred on Astra; else the nearest centre within 120px that still has him inside the yard
+    const S = ASTRA.safe, inner = S.half - S.wall - BODY_R, c = [];
+    for (let dx = -S.search; dx <= S.search; dx += 20) for (let dy = -S.search; dy <= S.search; dy += 20) if (Math.hypot(dx, dy) <= S.search) c.push([dx, dy]);
+    c.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+    for (const [dx, dy] of c) { const cx = p.x + dx, cy = p.y + dy; if (Math.abs(dx) < inner && Math.abs(dy) < inner && this.safeFits(cx, cy)) return { x: cx, y: cy }; }
+    return null;
+  }
+  // E / Q / R: check there's room, then the 0.45s radio call; the people arrive in updateAstra. false = refused, no cooldown used.
+  astraCast(p, k) {
+    const m = this.amemOf(p), now = Date.now();
+    if (m.cast || p.stunned > 0 || !p.alive) return false;   // one radio call at a time: repeated key presses can't double up
+    if (k === "E") { if (this.unitsOf(p.sessionId, "doctor").length) return this.astraNo(p, "the medics are still on duty"); if (!this.freeSpots(p.x, p.y, ASTRA.medic.n)) return this.astraNo(p, "no room for the medics here"); }
+    if (k === "Q" && !this.freeSpots(p.x, p.y, ASTRA.police.n)) return this.astraNo(p, "no room for the police here");
+    let site = null;
+    if (k === "R") {
+      if (this.safeOf(p)) return this.astraNo(p, "your safehouse is still up");
+      if (now < m.safeReady && !this.state.noCd) return false;
+      site = this.safeSite(p); if (!site) return this.astraNo(p, "no room for a safehouse here");
+    }
+    m.cast = { k, at: now + ASTRA.call * 1000, site };
+    this.broadcast("astra", { k: "call", id: p.sessionId, s: k });
+    return true;
+  }
+  spawnUnit(p, kind, at, extra = {}) {
+    const r = new RobotState(); r.id = `a${++this.robotSeq}`; r.kind = kind; r.ownerId = p.sessionId;
+    r.x = at.x; r.y = at.y; r.hx = at.x; r.hy = at.y; r.hp = r.maxHp = extra.hp || 9999; r.aim = Math.atan2(at.y - p.y, at.x - p.x); r.face = r.aim; r.act = ""; r.tgt = ""; r.uses = 0;
+    this.state.robots.set(r.id, r); this.unitMem.set(r.id, { ...extra, born: Date.now() });
+    this.broadcast("astra", { k: "arrive", kind, x: Math.round(r.x), y: Math.round(r.y) });
+    return r;
+  }
+  removeUnit(r) {
+    if (!this.state.robots.has(r.id)) return;
+    this.state.robots.delete(r.id);
+    for (const [pid, did] of this.docRes) if (did === r.id) this.docRes.delete(pid);
+    this.unitMem.delete(r.id);
+    this.broadcast("astra", { k: "leave", kind: r.kind, x: Math.round(r.x), y: Math.round(r.y) });
+  }
+  finishCast(p, m, now) {
+    const c = m.cast; m.cast = null;
+    if (!p.alive) { this.broadcast("astra", { k: "cancel", id: p.sessionId }); if (c.k === "Q") { const info = this.ultInfo.get(p.sessionId); if (info) { info.summonedAt = 0; info.readyAt = 0; } } return; }   // downed mid-call: nothing spent
+    if (c.k === "E") {
+      const spots = this.freeSpots(p.x, p.y, ASTRA.medic.n); if (!spots) return this.astraNo(p, "no room for the medics here");
+      spots.forEach((s, i) => this.spawnUnit(p, "doctor", s, { hp: ASTRA.medic.hp, until: now + ASTRA.medic.life * 1000, idx: i }));
+      m.medUntil = now + ASTRA.medic.life * 1000; p.abilityCooldown = ASTRA.medic.cd;
+      this.state.message = `${p.name} called in the EMERGENCY MEDICS!`;
+    } else if (c.k === "Q") {
+      const spots = this.freeSpots(p.x, p.y, ASTRA.police.n), info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+      if (!spots) { info.summonedAt = 0; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return this.astraNo(p, "no room for the police here"); }
+      spots.forEach((s, i) => this.spawnUnit(p, "police", s, { hp: ASTRA.police.hp, until: now + ASTRA.police.life * 1000, slot: i, nextBurst: now + rand(100, 1500), burstLeft: 0, nextShot: 0, think: 0 }));
+      for (const r of this.unitsOf(p.sessionId, "police")) r.hp = r.maxHp = ASTRA.police.hp * this.summonScale();
+      m.polUntil = now + ASTRA.police.life * 1000; m.polOut = true; info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info);
+      this.state.message = `${p.name} called POLICE BACKUP!`;
+    } else if (c.k === "R") {
+      let site = c.site && this.safeFits(c.site.x, c.site.y) ? c.site : this.safeSite(p);   // check again: things move during the call
+      if (!site) return this.astraNo(p, "no room for a safehouse here");
+      const st = new StructureState(); st.id = `sh${++this.robotSeq}`; st.kind = "safehouse"; st.x = Math.round(site.x); st.y = Math.round(site.y); st.ownerId = p.sessionId;
+      st.deploy = ASTRA.safe.build; st.hp = st.maxHp = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
+      const H = ASTRA.safe.half - 30, spots = this.freeSpots(p.x, p.y, 2) || [{ x: p.x - 20, y: p.y }, { x: p.x + 20, y: p.y }];
+      this.spawnUnit(p, "worker", spots[0], { site: st.id, goal: { x: st.x + H, y: st.y - H } });   // worker A: north + east walls
+      this.spawnUnit(p, "worker", spots[1], { site: st.id, goal: { x: st.x - H, y: st.y + H } });   // worker B: south + west walls
+      m.safeReady = now + ASTRA.safe.cd * 1000;
+      this.state.message = `${p.name} is building a SAFEHOUSE!`;
+    }
+  }
+  summonScale() { return 1 + (this.state.stage - 1) * 0.06; }   // same wave scaling as Viktor's machines
+  cancelSafe(st, refund) {
+    for (const r of [...this.state.robots.values()]) if (r.kind === "worker" && this.unitMem.get(r.id)?.site === st.id) this.removeUnit(r);
+    this.state.structures.delete(st.id); this.broadcast("astra", { k: "safeCancel", x: st.x, y: st.y });
+    const m = this.astra.get(st.ownerId); if (refund && m) m.safeReady = 0;
+  }
+  updateSafehouses(dt, now) {
+    const H = ASTRA.safe.half;
+    for (const st of [...this.state.structures.values()]) {
+      if (st.kind !== "safehouse") continue;
+      const owner = this.state.players.get(st.ownerId);
+      if (st.deploy > 0) {
+        if (!owner || owner.bledOut) { this.cancelSafe(st, false); continue; }   // owner gone: pending build cancelled
+        if (!this.safeFits(st.x, st.y, st)) { this.cancelSafe(st, true); this.astraNo(owner, "safehouse blocked (refunded)"); continue; }   // a boss walked in: cancel + refund
+        st.deploy = Math.max(0, st.deploy - dt);
+        if (st.deploy > 0) continue;
+        for (const z of this.state.zombies.values()) {   // finished: small zombies inside are moved outside (no damage)
+          const r = Math.min(z.radius, 34) * .8;
+          if (Math.abs(z.x - st.x) < H + r && Math.abs(z.y - st.y) < H + r) { this.pushOut(z, [{ x: st.x, y: st.y, hw: H, hh: H }], r); this.pushOut(z, this.mapBoxesNear(z.x, z.y), r); }
+        }
+        this.broadcast("astra", { k: "built", x: st.x, y: st.y });
+        continue;
+      }
+      st.hp = Math.max(0, st.hp - dt);
+      if (st.hp <= 0) { this.state.structures.delete(st.id); this.broadcast("astra", { k: "safeDown", x: st.x, y: st.y }); }
+    }
+    this.safeBoxes = [];
+    for (const st of this.state.structures.values()) if (st.kind === "safehouse" && st.deploy <= 0) this.safeBoxes.push({ x: st.x, y: st.y, hw: H, hh: H });
+  }
+  keepOutOfSafehouses() {   // bosses jump / get pulled too: nothing hostile ends a tick inside a finished safehouse
+    if (!this.safeBoxes.length) return;
+    for (const z of this.state.zombies.values()) for (const b of this.safeBoxes) {
+      const r = Math.min(z.radius, 34) * .8;
+      if (Math.abs(z.x - b.x) < b.hw + r && Math.abs(z.y - b.y) < b.hh + r) this.pushOut(z, [b], r);
+    }
+  }
+  shelterGuard() {
+    const g = [];
+    if (this.safeBoxes.length) for (const p of this.state.players.values()) if (p.alive && this.sheltered(p)) g.push({ p, hp: p.hp, x: p.x, y: p.y, st: p.stunned, sl: p.slowed });
+    return g;
+  }
+  applyShelter(g) {   // undo anything a zombie did this tick to a sheltered survivor (hits, slams, hook drags, stuns)
+    for (const { p, hp, x, y, st, sl } of g) {
+      p.x = x; p.y = y; p.stunned = Math.min(p.stunned, st); p.slowed = Math.min(p.slowed, sl);
+      if (!p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; }
+      if (p.hp < hp) p.hp = hp;
+    }
+  }
+  leaderOf(owner) {   // police follow Astra; while he's down, the nearest living teammate
+    if (owner.alive) return owner;
+    let best = null, bd = Infinity;
+    for (const q of this.state.players.values()) if (q.alive) { const d = distance(q, owner); if (d < bd) { bd = d; best = q; } }
+    return best || owner;
+  }
+  updateDoctor(r, mem, owner, now, dt) {
+    const M = ASTRA.medic, ok = q => q && q.alive && q.hp < q.maxHp;
+    let pt = mem.patient ? this.state.players.get(mem.patient) : null;
+    if (mem.patient && !ok(pt)) { if (this.docRes.get(mem.patient) === r.id) this.docRes.delete(mem.patient); mem.patient = ""; pt = null; }
+    if (!pt) {   // nearest injured teammate nobody else is treating; Astra himself only if nobody else needs it (8 players max: cheap every tick)
+      mem.skip = mem.skip || {};
+      const c = [...this.state.players.values()].filter(q => ok(q) && !this.docRes.has(q.sessionId) && !(mem.skip[q.sessionId] > now));
+      c.sort((a, b) => (a.sessionId === r.ownerId) - (b.sessionId === r.ownerId) || distance(r, a) - distance(r, b) || (a.sessionId < b.sessionId ? -1 : 1));
+      pt = c[0] || null;
+      if (pt) { this.docRes.set(pt.sessionId, r.id); mem.patient = pt.sessionId; mem.best = distance(r, pt); mem.progAt = now; }
+    }
+    r.act = ""; r.tgt = "";
+    let goal;
+    if (pt) {
+      const d = distance(r, pt);
+      if (d < mem.best - 8) { mem.best = d; mem.progAt = now; }
+      if (d > M.range && now - mem.progAt > M.stuck * 1000) { this.docRes.delete(pt.sessionId); mem.skip[pt.sessionId] = now + 2000; mem.patient = ""; return; }   // can't get there: let someone else try
+      r.aim = Math.atan2(pt.y - r.y, pt.x - r.x);
+      if (d <= M.range && this.lineClear(r, pt)) { pt.hp = Math.min(pt.maxHp, pt.hp + M.heal * dt); r.act = "heal"; r.tgt = pt.sessionId; mem.progAt = now; }
+      goal = d > 46 ? pt : r;
+    } else {   // nobody to treat: stay near Astra
+      const a = (mem.idx || 0) * 2.1 + 1, lead = this.leaderOf(owner);
+      goal = { x: lead.x + Math.cos(a) * 60, y: lead.y + Math.sin(a) * 45 };
+    }
+    this.unitStep(r, goal, M.speed, dt);
+  }
+  unitStep(r, goal, speed, dt) {
+    const gd = distance(r, goal); if (gd <= 8) return;
+    const a = Math.atan2(goal.y - r.y, goal.x - r.x); this.steerMove(r, r.id, a, Math.min(gd, speed * dt), e => this.solveRobot(e));
+    if (!r.act) r.aim = a;
+  }
+  updatePolice(r, mem, owner, now, dt) {
+    const P = ASTRA.police, lead = this.leaderOf(owner);
+    let z = mem.target ? this.state.zombies.get(mem.target) : null;
+    if (z && (distance(r, z) > P.range || distance(z, lead) > P.leash || !this.lineClear(r, z))) z = null;
+    if (!z || now >= mem.think) {   // pick: zombies threatening a teammate first, then the nearest one in sight
+      mem.think = now + 230 + Math.random() * 60;
+      const mates = [...this.state.players.values()].filter(q => q.alive && distance(q, lead) < P.leash);
+      let best = null, bd = Infinity, threat = false;
+      for (const c of this.state.zombies.values()) {
+        const d = distance(r, c); if (d > P.range || distance(c, lead) > P.leash) continue;
+        const t = mates.some(q => distance(q, c) < P.threat);
+        if ((t && !threat) || ((t === threat) && d < bd)) { if (!this.lineClear(r, c)) continue; best = c; bd = d; threat = t; }
+      }
+      z = best; mem.target = z?.id || "";
+    }
+    r.act = now - (mem.shotAt || 0) < 200 ? "shoot" : "";
+    if (z) {
+      r.aim = Math.atan2(z.y - r.y, z.x - r.x);
+      if (now >= mem.nextBurst) { mem.burstLeft = P.burst; mem.nextShot = now; mem.nextBurst = now + P.every * 1000; }
+      if (mem.burstLeft > 0 && now >= mem.nextShot) {
+        mem.burstLeft--; mem.nextShot = now + P.gap * 1000; mem.shotAt = now; r.act = "shoot";
+        const a = r.aim + rand(-.04, .04), len = this.machineShot(r.x, r.y - 12, a, P.range, P.dmg * this.summonScale(), 1, owner);
+        this.broadcast("shot", { id: r.id, x: Math.round(r.x + Math.cos(a) * 16), y: Math.round(r.y - 14), a: [a], len: [Math.round(len)], w: "rifle" });
+      }
+    } else mem.burstLeft = 0;
+    const sa = mem.slot / P.n * Math.PI * 2 + .3, sr = 85 + (mem.slot % 2) * 60;   // loose ring 70-160px around the leader
+    this.unitStep(r, { x: lead.x + Math.cos(sa) * sr, y: lead.y + Math.sin(sa) * sr * .8 }, P.speed, dt);
+  }
+  updateWorker(r, mem, now, dt) {
+    const st = this.state.structures.get(mem.site);
+    if (!st || st.deploy <= 0) {   // done (or cancelled): walk off and go home
+      mem.leaveAt = mem.leaveAt || now + 900; if (now >= mem.leaveAt) return this.removeUnit(r);
+      r.act = ""; const a = Math.atan2(r.y - (st?.y ?? r.y + 1), r.x - (st?.x ?? r.x)); this.unitStep(r, { x: r.x + Math.cos(a) * 40, y: r.y + Math.sin(a) * 40 }, ASTRA.safe.worker, dt); return;
+    }
+    const d = distance(r, mem.goal);
+    if (d > 14) { r.act = ""; this.unitStep(r, mem.goal, ASTRA.safe.worker * 1.6, dt); }   // they hurry: building only takes 2 seconds
+    else { r.act = "build"; r.aim = Math.atan2(st.y - r.y, st.x - r.x); }
+  }
+  updateAstra(dt, now) {
+    this.updateSafehouses(dt, now);
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "dispatcher") continue;
+      const m = this.amemOf(p);
+      if (m.cast && now >= m.cast.at) this.finishCast(p, m, now);
+      else if (m.cast && !p.alive) { m.cast = null; this.broadcast("astra", { k: "cancel", id: p.sessionId }); }
+    }
+    for (const r of [...this.state.robots.values()]) {
+      if (!ASTRA_UNITS.has(r.kind)) continue;
+      const owner = this.state.players.get(r.ownerId), mem = this.unitMem.get(r.id);
+      if (!mem) { this.state.robots.delete(r.id); continue; }
+      if (r.kind === "worker") { this.updateWorker(r, mem, now, dt); continue; }
+      if (!owner || owner.bledOut || now >= mem.until) { this.removeUnit(r); continue; }   // time's up / Astra fully out: they go home
+      if (r.kind === "doctor") this.updateDoctor(r, mem, owner, now, dt); else this.updatePolice(r, mem, owner, now, dt);
+    }
+    for (const p of this.state.players.values()) {   // HUD: skillT = medics' time left, chargeCd = safehouse cooldown, ult = police
+      if (p.characterClass !== "dispatcher") continue;
+      const m = this.amemOf(p), docs = this.unitsOf(p.sessionId, "doctor").length;
+      p.skillT = docs ? Math.ceil(Math.max(0, m.medUntil - now) / 100) / 10 : 0;
+      p.chargeCd = this.state.noCd ? 0 : Math.ceil(Math.max(0, m.safeReady - now) / 100) / 10;
+      if (m.polOut && !this.unitsOf(p.sessionId, "police").length) {   // last officer gone: the 60s cooldown starts now
+        m.polOut = false; const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + ASTRA.police.cd * 1000; this.ultInfo.set(p.sessionId, info);
+      }
+      const { left, active, alive } = this.ultState(p, now); p.ultCd = alive ? ASTRA.police.cd : Math.ceil(left / 100) / 10; p.ultActive = Math.ceil(active / 100) / 10; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
   // ---------- RAVEN ----------
   startShadowPass(p) {
     const a = p.aim || 0, len = Math.max(0, Math.min(RAVEN.dash.dist, this.wallDist(p.x, p.y, a, RAVEN.dash.dist + BODY_R + 2) - BODY_R - 2));
@@ -1508,6 +1771,7 @@ export class SurvivalRoom extends Room {
   solveRobot(r) { this.pushOut(r, this.mapBoxesNear(r.x, r.y), ROBOT_R); }
   // A turret or robot breaks: wreck animation, and robots start the owner's ult timer when the last one goes.
   destroyMachine(m, type) {
+    if (ASTRA_UNITS.has(m.kind)) { this.removeUnit(m); return; }
     if (type === "turret") this.state.structures.delete(m.id); else this.state.robots.delete(m.id);
     this.broadcast("wreck", { kind: type === "turret" ? "turret" : m.kind, x: Math.round(m.x), y: Math.round(m.y) });
     if (type === "turret") { const info = this.ultInfo.get(m.ownerId) || { summonedAt: 0 }; info.readyAt = Date.now() + ULT_CD * 1000; this.ultInfo.set(m.ownerId, info); }
@@ -1548,6 +1812,7 @@ export class SurvivalRoom extends Room {
     for (const r of [...this.state.robots.values()]) {
       const owner = this.state.players.get(r.ownerId);
       if (!owner) { this.state.robots.delete(r.id); continue; }
+      if (ASTRA_UNITS.has(r.kind)) continue;   // Astra's people have their own brains (updateAstra)
       const R = ROBOT[r.kind], home = { x: r.hx, y: r.hy };
       let goal = home; r.act = "";
       if (r.kind === "assault") {
@@ -1850,7 +2115,7 @@ export class SurvivalRoom extends Room {
     }
     this.broadcast("slam", { x: Math.round(z.x), y: Math.round(z.y), r: SLAM.radius });
   }
-  solveZombie(z) { this.pushOut(z, this.mapBoxesNear(z.x, z.y), Math.min(z.radius, 34) * 0.8); }
+  solveZombie(z) { const b = this.mapBoxesNear(z.x, z.y); this.pushOut(z, this.safeBoxes.length ? [...b, ...this.safeBoxes] : b, Math.min(z.radius, 34) * 0.8); }   // + Astra's safehouse walls
   // Walk toward angle `ang`; if something solid is in the way, slide around it (keeps going round the same side for a while).
   steerMove(e, key, ang, dist, solve) {
     const st = this.steer.get(key) || { side: Math.random() < .5 ? 1 : -1, until: 0, off: 0 }; this.steer.set(key, st);
@@ -1970,11 +2235,17 @@ export class SurvivalRoom extends Room {
       if (b.ultReady && crowd >= 4) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && !(b.skillT > 0) && nearD < 170 && (b.hp < b.maxHp * 0.75 || crowd >= 3)) this.useAbility(b);
     }
+    if (b.characterClass === "dispatcher") {   // Astra bot: medics when someone's hurt, police in a crowd, safehouse when it gets bad
+      const crowd = zs.filter(z => distance(b, z) < 450).length, m = this.amemOf(b);
+      if (b.ultReady && crowd >= 5) this.useUlt(b);
+      else if (b.abilityCooldown <= 0 && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .7)) this.useAbility(b);
+      else if (!this.safeOf(b) && (this.state.noCd || Date.now() >= m.safeReady) && b.hp < b.maxHp * .5 && zs.filter(z => distance(b, z) < 250).length >= 4) this.astraCast(b, "R");
+    }
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
     }
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -2156,6 +2427,7 @@ export class SurvivalRoom extends Room {
     this.updateSofea(dt, now);
     this.updateBriggs(dt, now);
     this.updateArshan(dt, now);
+    this.updateAstra(dt, now);
     this.separateZombies();
     for(const p of this.state.players.values()) if(p.reloadLeft>0){p.reloadLeft=Math.max(0,p.reloadLeft-dt);if(p.reloadLeft===0)this.finishReload(p);}
     for(const b of this.state.players.values()) if(b.isBot&&b.alive) this.botThink(b, dt, now);
@@ -2201,9 +2473,10 @@ export class SurvivalRoom extends Room {
     }
 
     const players = [...this.state.players.values()].filter(p => p.alive);
-    const machines = [...this.state.robots.values(), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
+    const machines = [...[...this.state.robots.values()].filter(r => r.kind !== "worker"), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
     const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
     const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId));   // invisible Raven / Sofea up in her helicopter: zombies can't get her
+    const shelter = this.shelterGuard();   // survivors inside a finished safehouse: zombies outside can't touch them
     for (const z of [...this.state.zombies.values()]) {
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
@@ -2269,10 +2542,11 @@ export class SurvivalRoom extends Room {
         }
         z.attackCooldown = z.boss ? 0.8 : 1.0;
       }
-      if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target)) {
+      if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target) && !(target.sessionId && this.sheltered(target))) {
         this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
       }
     }
+    this.keepOutOfSafehouses(); this.applyShelter(shelter);
     this.applyVehicleGuard(guard);
     const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
     if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }

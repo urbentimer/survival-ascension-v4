@@ -675,7 +675,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   v.left = 0.05; tick(2); ok(!room.state.vehicles.has("A") && p.abilityCooldown > 29, `after 30s she gets out and E cools down 30s (${p.abilityCooldown.toFixed(1)}s)`);
   ok(!room.blockedByMap(p.x, p.y, 10) && p.alive, "...on clear ground");
   // helicopter
-  p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
+  q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
   send(A, "ult", { a: 0 }); const h = room.state.vehicles.get("A"); ok(h && h.kind === "heli", "Q: radio call for the helicopter"); tick(18);
   ok(h.phase === "ride", "...she flies it");
   const zz = placeZombie(room, p.x + 30, p.y, 500); zz.attackCooldown = 0; zz.role = "hunter"; zz.damage = 20; const hpH = p.hp; tick(3);
@@ -718,7 +718,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const zhp = z.hp; p.skillT = 0.01; tick(2); ok(p.skillT === 0 && p.abilityCooldown > 29 && z.hp < zhp && events.some(e => e.type === "briggs" && e.k === "shatter"), `the dome shatters (hits + pushes zombies) and E cools down 30s (${p.abilityCooldown.toFixed(0)}s)`);
   room.state.zombies.clear();
   // War Cry
-  p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
+  q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
   q.x = p.x + 200; q.y = p.y; const far = placeZombie(room, p.x + 300, p.y, 500); far.role = "tower"; const near = placeZombie(room, p.x + 100, p.y, 500); near.role = "tower"; const nx = near.x;
   send(A, "ult", {}); tick(1);
   ok(far.targetId === "A" && near.targetId === "A", "Q: War Cry: zombies within 350px (even tower runners) charge Briggs");
@@ -763,5 +763,50 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(z1.hp < 1e4 && z2.hp === 1e4, `...hits everything within 260px every 0.25s (${Math.round(1e4 - z1.hp)} dmg), not beyond`);
   send(A, "ability", { a: 0 }); ok(!room.hooks.has("A"), "...E can't be used while spinning");
   sp.until = Date.now() - 1; tick(1); ok(!room.spins.has("A") && p.ultCd > 59, `after 12s the 60s cooldown starts (${p.ultCd}s)`);
+  room._dispose(); }
+// 38. ASTRA (dispatcher): E = 3 doctors (25 HP/s, never stacked), Q = 7 police, R = safehouse (walls zombies can't cross)
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();   // open ground for this test
+  const call = () => { const m = room.amemOf(p); if (m.cast) m.cast.at = 0; tick(1); };
+  room.state.phase = "lobby"; send(A, "chooseClass", { id: "dispatcher" }); send(A, "start", {}); room.state.phase = "playing"; room.spawnClock = 9999; room.state.zombies.clear();
+  ok(p.maxHp === 120 && p.speed === 180 && p.primary === "rifle", "Astra: 120 HP, speed 180, rifle");
+  p.x = 1000; p.y = 700; q.x = 1060; q.y = 700; events.length = 0;
+  send(A, "ability", {}); ok(events.some(e => e.type === "astra" && e.k === "call" && e.s === "E") && !room.unitsOf("A", "doctor").length, "E: 0.45s radio call first");
+  call(); const docs = room.unitsOf("A", "doctor"); ok(docs.length === 3 && p.abilityCooldown === 30, `...then exactly 3 doctors, E cooldown 30s (${docs.length})`);
+  send(A, "ability", {}); p.abilityCooldown = 0; send(A, "ability", {}); call(); ok(room.unitsOf("A", "doctor").length === 3, "...can't call a second team while they're on duty");
+  q.hp = 10; p.hp = 10; tick(14); const h0 = q.hp, a0 = p.hp; tick(20);
+  ok(Math.abs((q.hp - h0) - 25) < 1.5 && Math.abs((p.hp - a0) - 25) < 1.5, `two patients, 25 HP/s each (${(q.hp - h0).toFixed(1)}, ${(p.hp - a0).toFixed(1)})`);
+  ok(room.docRes.size === 2, "...one doctor per patient (reservations)");
+  p.hp = 120; q.hp = 60; tick(10); const h1 = q.hp; tick(20); ok(q.hp - h1 <= 25.5, `one patient never gets more than 25 HP/s (${(q.hp - h1).toFixed(1)})`);
+  tick(40); ok(q.hp === q.maxHp, "...and healing stops at max HP");
+  q.hp = 50; q.alive = false; tick(10); ok(q.hp === 50, "...doctors can't revive a downed player"); q.alive = true;
+  for (const r of room.unitsOf("A", "doctor")) room.unitMem.get(r.id).until = 0; tick(1); ok(!room.unitsOf("A", "doctor").length, "doctors leave after 20s");
+  // Q
+  q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
+  send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); ok(cops.length === 7, `Q: exactly 7 police (${cops.length})`);
+  send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 7, "...no second squad while they're out");
+  const z = placeZombie(room, p.x + 300, p.y, 400); const k0 = p.kills; for (let i = 0; i < 40; i++) { for (const r of room.unitsOf("A", "police")) { const m = room.unitMem.get(r.id); m.nextBurst = Math.min(m.nextBurst, Date.now()); m.nextShot = 0; } tick(1); }
+  ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (10 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
+  ok(q.hp === q.maxHp, "...they never shoot teammates");
+  for (const r of room.unitsOf("A", "police")) room.unitMem.get(r.id).until = 0; tick(1); tick(1);
+  ok(!room.unitsOf("A", "police").length && !p.ultReady && p.ultCd > 59, `after 30s they go home and the 60s cooldown starts (${p.ultCd}s)`);
+  // R
+  room.state.zombies.clear(); p.x = 1000; p.y = 700; const inside = placeZombie(room, p.x + 90, p.y + 40, 300);
+  send(A, "skill2", {}); call(); const st = room.safeOf(p); const wk = room.unitsOf("A", "worker");
+  ok(st && st.deploy > 1.9 && wk.length === 2, "R: safehouse construction, 2 workers");
+  ok(p.chargeCd > 89, `...90s cooldown starts at deployment (${p.chargeCd}s)`);
+  tick(45); ok(st.deploy === 0 && room.safeBoxes.length === 1, "...all 4 walls finish together after 2s");
+  ok(Math.abs(inside.x - st.x) >= 184 || Math.abs(inside.y - st.y) >= 184, "...a zombie caught inside is moved outside (no damage)");
+  ok(inside.hp === 300, "...unhurt");
+  tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...the workers leave");
+  const out = placeZombie(room, st.x + 184 + 20, p.y, 1e4); out.role = "hunter"; out.damage = 40; out.speed = 200; out.attackCooldown = 0;
+  p.x = st.x + 150; p.y = st.y; const hp0 = p.hp; tick(40);
+  ok(Math.abs(out.x - st.x) >= 184 && p.hp === hp0, `zombies can't get in or hurt him inside (zombie stuck at the wall, ${hp0 - p.hp} dmg)`);
+  q.x = st.x + 300; q.y = st.y; room.moveWithCollision(q, -200, 0); ok(Math.abs(q.x - (st.x + 100)) < 2, "teammates walk straight through the walls");
+  p.reloadLeft = 0; p.mag = 30; p.lastShot = 0; p.activeSlot = 2; p.weapon = "rifle"; const ohp = out.hp; room.fireWeapon(p, Math.atan2(out.y - p.y, out.x - p.x), 100); ok(out.hp < ohp, "...and shoot out through them");
+  st.hp = 0.01; tick(1); ok(!room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together");
+  // no room: boss in the way -> refused, no cooldown
+  const m = room.amemOf(p); m.safeReady = 0; room.state.zombies.clear(); const boss = placeZombie(room, p.x + 60, p.y, 1e5); boss.boss = true; boss.radius = 40;
+  send(A, "skill2", {}); call(); ok(!room.safeOf(p) && m.safeReady === 0, "R with a boss in the way: refused, no cooldown used");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

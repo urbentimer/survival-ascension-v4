@@ -59,7 +59,7 @@ def foreground(src):
 def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
     H, W, _ = src.shape
     fg = foreground(src)
-    cols = [[i * col_pitch, min(W, (i + 1) * col_pitch)] for i in range(COLS)] if col_pitch else squeeze(runs_of(fg.sum(0) > 2, 14, 12), COLS)
+    cols = [[round(i * col_pitch), min(W, round((i + 1) * col_pitch))] for i in range(COLS)] if col_pitch else squeeze(runs_of(fg.sum(0) > 2, 14, 12), COLS)
     rows = [[round(i * row_pitch), min(H, round((i + 1) * row_pitch))] for i in range(round(H / row_pitch))] if row_pitch else runs_of(fg.sum(1) > 2, 10, 20)
     nrows = want_rows or (8 if len(rows) >= 7 else 5)
     if len(rows) > nrows: rows = squeeze(rows, nrows)
@@ -156,7 +156,7 @@ if __name__ == '__main__':
             parts = [stack]
         full = np.array(parts[0]).astype(int)
         if box: x0, y0, x1, y1 = map(int, box.split(',')); full = full[y0:y1, x0:x1]
-        frames, nrows = cut_sheet(full, None, int(pitch) if pitch else None, float(rpitch) if rpitch else None)
+        frames, nrows = cut_sheet(full, None, float(pitch) if pitch else None, float(rpitch) if rpitch else None)
         idle_h = np.median([frames[(r, 0)][3] for r in range(nrows) if (r, 0) in frames])
         scale = TARGET_H / idle_h
         remap = [4, 3, 2, 1, 0, 7, 6, 5] if order == 'U' else list(range(8))

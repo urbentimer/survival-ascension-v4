@@ -1,0 +1,240 @@
+==============================================================================
+ SURVIVAL ASCENSION - SURVIVOR SHEET   (playable characters)
+ ASTRA - EMERGENCY COMMANDER
+==============================================================================
+
+------------------------------------------------------------------------------
+ 1. BASICS
+------------------------------------------------------------------------------
+Name:                          Astra
+Class / role:                  Emergency Commander / Support Summoner
+One-line description:          Calls police to fight, doctors to heal, and builders to create a safe enclosure.
+Look (for the artist):         Adult male, medium tan skin, short swept silver-white hair with dark roots,
+                               clean-shaven face, focused expression. Navy short split-hem command coat,
+                               white shoulder panels, cyan collar and sleeve bands, gold star chest badge.
+                               Black gloves and boots, navy trousers, headset, radio and belt-mounted tablet.
+                               In sprites: chunky chibi body, head about one third of total height.
+Bright accent colour:          Cyan collar and cuffs, broad white shoulders, gold chest star.
+Personality / vibe:            Calm, dependable field leader; always has backup on the way.
+Playstyle in one line:         Fight with a rifle, protect the team, and deploy the right support at the right time.
+
+------------------------------------------------------------------------------
+ 2. STATS
+------------------------------------------------------------------------------
+Health:                        120 HP.
+Speed:                         180 world pixels per second.
+Damage:                        Normal; uses standard weapon damage and upgrades.
+Defence / armour:              No passive damage reduction. Relies on positioning and summoned support.
+
+------------------------------------------------------------------------------
+ 3. WEAPONS
+------------------------------------------------------------------------------
+Starting weapon(s):            Standard rifle + combat knife.
+Can buy other guns?            Yes; use existing compatible gun animations where no Astra sheet is supplied.
+Weapon special rules:          Normal game weapon rules. Summoning works with any equipped weapon.
+Melee weapons with own art:    Knife, baseball bat, fire axe.
+Upgrades over the game:        Standard shop weapon upgrades. Summon counts and healing rate remain fixed.
+                               Police damage/HP may scale with the normal friendly-summon system; see section 9.
+
+------------------------------------------------------------------------------
+ 4. E SKILL   (normal skill)
+------------------------------------------------------------------------------
+Name:                          Emergency Medical Team
+What happens, step by step:    1) Press E. Astra makes a 0.45-second radio call; deploy exactly THREE AI doctors
+                                  on free ground close to him. Their 20-second lifetime starts on deployment.
+                               2) Each doctor chooses the nearest reachable injured, living playable TEAMMATE
+                                  not already assigned a doctor. Measure path distance, not straight-line
+                                  distance through obstacles. Resolve ties by stable player ID.
+                               3) Doctors run to their patients. Within 70px and clear line of sight, each
+                                  doctor channels exactly 25 HP PER SECOND, capped at the patient's maximum HP.
+                                  The doctor follows a moving patient and pauses healing if range/LOS is lost.
+                               4) Retarget when a patient is full, downed, dead, disconnected or unreachable.
+                                  Prefer other teammates. If no injured teammate is available, one doctor may
+                                  heal Astra; others follow nearby until another patient needs help.
+Damage:                        None. Doctors do not attack.
+Range / area:                  Select patients anywhere reachable in the active battlefield; healing range 70px.
+Aim:                           No mouse aim. Automatic friendly target selection.
+Cooldown:                      30 seconds from successful deployment. Recast blocked while this team is active.
+Lasts:                         20 seconds, or until each doctor is defeated. Each has 100 HP and speed 205.
+Status effects:                Heal 25 HP/s per patient. No overheal, resurrection, status cleanse or tower repair.
+                               Multiple Astra doctors NEVER stack on one patient: maximum 25 HP/s from doctors.
+                               Three doctors can provide 75 HP/s total only when healing three different players.
+                               Other existing healing abilities retain their normal game rules.
+Needs a specific weapon?       No.
+Animation sheet(s):            sprites/astra-radio-call.png, sprites/doctor.png,
+                               effects/deploy-beacon.png, effects/healing-pulse.png, skill-cards/card-E.png.
+Sound (optional):              Radio chirp, short medical dispatch confirmation, soft healing pulse.
+
+------------------------------------------------------------------------------
+ 5. Q ULTIMATE
+------------------------------------------------------------------------------
+Name:                          Police Reinforcements
+Unlocks at:                    100 credited non-boss zombie kills, following the supplied kit's ultimate rule.
+What happens, step by step:    1) Press Q. After a 0.45-second radio call, deploy exactly SEVEN AI police officers
+                                  in separate free positions near Astra. No vehicles are required.
+                               2) Officers follow in a loose formation and shoot hostile zombies and bosses.
+                                  Prioritise enemies threatening nearby playable characters, then the nearest
+                                  visible hostile. Officers never attack players, teammates, doctors or workers.
+                               3) Each officer moves around obstacles, seeks line of sight and fires controlled
+                                  bursts. If a target leaves range or dies, choose another. Friendly fire is off.
+                               4) Regroup when no enemy is visible; do not chase beyond the squad leash. They
+                                  retreat/despawn when their lifetime ends, or disappear when their HP reaches 0.
+Damage:                        Base 10 per bullet, 3 bullets per burst, 0.12s between bullets, one burst every 1.5s.
+                               Base sustained maximum: 20 DPS per officer; 140 DPS for all seven before misses.
+                               Police HP: 110 each. Speed: 195. No ammunition or loot pickups.
+Range / area:                  Fire range 440px; formation 70-160px from Astra; chase leash 600px from Astra.
+                               Prioritise threats within 250px of any teammate inside that leash.
+Lasts:                         30 seconds from deployment, or until all seven officers are defeated.
+Cooldown after it ends:        60 seconds after the final officer is removed. No overlapping squads per Astra.
+Animation sheet(s):            sprites/astra-radio-call.png, sprites/police-officer.png,
+                               effects/deploy-beacon.png, skill-cards/card-Q.png.
+Sound (optional):              Radio dispatch, brief siren chirp on arrival, standard rifle reports.
+
+------------------------------------------------------------------------------
+ 6. STRENGTHS & WEAKNESSES
+------------------------------------------------------------------------------
+Good against:                  Hordes, sustained team damage, dangerous pushes that can be blocked by walls.
+Bad against:                   Long fights during cooldowns; enemies focusing fragile doctors; limited build space.
+Teamwork:                      Seven allied shooters cover the team; three doctors treat separate teammates;
+                               the R enclosure gives the squad a shared defensive position.
+                               Doctors and police can operate inside the enclosure and pass through its walls.
+
+------------------------------------------------------------------------------
+ 7. ANIMATION CHECKLIST   (every picture in sprites/, effects/, skill-cards/ - any file names are fine)
+    One image per sheet: movement 8 rows x max 6 columns, skills 8 rows x max 4 columns, flat #FF00FF background
+------------------------------------------------------------------------------
+File name                           | Directions | Frames | What it shows
+----------------------------------- | ---------- | ------ | -----------------------------
+sprites/astra-rifle.png              | 8          | 6      | idle, walk x3, aim, shoot
+sprites/astra-knife.png              | 8          | 6      | idle, walk x3, wind-up, slash
+sprites/astra-bat.png                | 8          | 6      | idle, walk x3, wind-up, swing
+sprites/astra-fire-axe.png           | 8          | 6      | idle, walk x3, wind-up, chop
+sprites/astra-radio-call.png         | 8          | 3      | raise radio, dispatch, lower; reused by E/Q/R
+sprites/police-officer.png           | 8          | 6      | idle, walk x3, aim, shoot; reused for all 7 officers
+sprites/doctor.png                   | 8          | 6      | idle, walk x3, treatment x2; reused for all 3 doctors
+sprites/construction-worker.png      | 8          | 6      | idle, walk x3, hammer x2; reused for both workers
+effects/deploy-beacon.png            | -          | 4      | small cyan arrival marker expands and collapses
+effects/healing-pulse.png            | -          | 4      | green healing ring pulse; drawn under the patient
+effects/wall-horizontal.png          | horizontal | 4      | foundation, half-built, complete, expiry segments
+effects/wall-vertical.png            | vertical   | 4      | foundation, half-built, complete, expiry segments
+skill-cards/card-E.png               | -          | 1      | EMERGENCY MEDICS, one square skill card
+skill-cards/card-Q.png               | -          | 1      | POLICE BACKUP, one square skill card
+skill-cards/card-R.png               | -          | 1      | SAFEHOUSE, one square skill card
+
+Frames above means columns per direction, or total frames for a single-row effect.
+Directions: DOWN, DOWN-RIGHT, RIGHT, UP-RIGHT, UP, UP-LEFT, LEFT, DOWN-LEFT, in that row order.
+Movement columns: IDLE, WALK 1, WALK 2, WALK 3, ACTION 1, ACTION 2.
+Use walk columns 2-4 as a loop; idle may use a subtle engine-side bob.
+All files in this checklist are supplied; these are source art sheets for integration, not game code.
+Use the accompanying asset-manifest.json for actual image dimensions and frame crop metadata.
+
+------------------------------------------------------------------------------
+ 8. PORTRAIT & SKILL CARDS
+------------------------------------------------------------------------------
+Portrait (portrait.png):       Detailed Astra character-select portrait on black, without text.
+Skill cards:                   One card each for E, Q and the additional R ability.
+                               Square, dark card, glowing orange/gold octagon frame, big italic white title with orange "//".
+                               E: EMERGENCY MEDICS. Q: POLICE BACKUP. R: SAFEHOUSE.
+                               English only. No text on sprite/effect sheets.
+
+------------------------------------------------------------------------------
+ 9. NOTES / IDEAS / NOT SURE ABOUT
+------------------------------------------------------------------------------
+
+--- R ABILITY (third active skill; added without changing the supplied template headings) ---
+Name:                          Safehouse Construction
+Key:                           R. Available from match start; independent of E and Q.
+What happens, step by step:    1) Validate an empty build footprint centred on Astra's position at key press.
+                                  Astra makes the shared 0.45-second radio call. Revalidate at call completion.
+                                  Spawn exactly TWO construction workers. The selected centre stays fixed.
+                               2) Each worker assembles TWO walls: worker A builds north/east; worker B builds
+                                  south/west. Both work simultaneously. Total construction time: 2 seconds.
+                                  Scaffold frames are visual only. All FOUR walls become solid together at completion.
+                               3) Four huge reinforced wall sides form a completely enclosed square. Interior is
+                                  320 x 320px, walls are 24px thick, exterior footprint is 368 x 368px.
+                                  North/south collision rectangles: 368 x 24px. East/west: 24 x 320px.
+                                  Corner edges touch with no enemy-sized gaps. Wall artwork may be tiled along sides.
+                               4) The completed walls stay for EXACTLY 45 seconds. They are indestructible during
+                                  that interval and block hostile movement, melee reach, bullets, venom, fireballs
+                                  and direct line-based laser attacks. Boss charges collide with the wall exterior.
+                                  Bosses may not tunnel through, teleport into or spawn inside the enclosure.
+                               5) Astra, all teammates and friendly summons may pass through the walls using
+                                  team-filtered collision. Friendly shots pass outward. This prevents trapping
+                                  teammates, and lets the doctors continue reaching patients.
+                               6) The two workers leave after building. At 5 seconds remaining the wall outline
+                                  flashes; at expiry all four collision sides disappear together, then a brief
+                                  harmless dismantle animation plays. No damaging collapse or debris.
+Damage:                        None. No crush damage; no construction-worker attacks or healing.
+Protection limits:             This is a barrier, not a heal or universal invulnerability buff. Existing damage-
+                               over-time and ground hazards already present inside keep their normal behaviour.
+                               Astra must stay inside the enclosure to benefit from its blocked attack paths.
+Aim:                           Centred on Astra at key press, not on the mouse. Does not follow him.
+Cooldown:                      90 seconds from successful worker deployment. No second enclosure while one is active.
+Workers:                       Speed 200; noncombat, untargetable, cannot body-block, carry no weapons or loot.
+                               They cannot be killed to interrupt construction. One shared worker sprite design.
+Animation sheet(s):            sprites/astra-radio-call.png, sprites/construction-worker.png,
+                               effects/deploy-beacon.png, effects/wall-horizontal.png,
+                               effects/wall-vertical.png, skill-cards/card-R.png.
+Sound (optional):              Radio confirmation, hammering, metal lock-in, warning beeps, harmless dismantle.
+
+--- PLACEMENT, AI AND MULTIPLAYER RULES ---
+- This kit is a design and art handoff. The attached template contains no runnable game source.
+  Engine integration and multiplayer testing are still required; do not advertise this ZIP as a playable patch.
+- R is an additional key beyond the source template. Add a third HUD slot and rebindable action.
+  If the game already uses R for reload, move reload to another key or expose remapping; never trigger both.
+- Initial balance values not supplied by the user (health, speed, damage, cooldowns, durations for E/Q,
+  build time, wall size) are designer defaults. Preserve 7 police, 3 doctors, 25 HP/s, 2 workers,
+  4 walls and 45-second wall lifetime unless the user explicitly changes those requirements.
+- Keep the template's Q unlock of 100 non-boss kills; after unlocking, Q is cooldown-based for that match.
+  Do not require another 100 kills for every activation. Show the unlock progress in the HUD.
+- E and Q must find free spawn positions for ALL required NPCs before committing. If placement fails,
+  reject the cast with a clear HUD message and do not consume cooldown. Do not spawn a smaller squad.
+- R must fit inside the map and avoid the radio tower, permanent scenery, existing player structures,
+  another active enclosure, and bosses intersecting its footprint. Search nearby candidate centres within
+  120px only if Astra remains inside the proposed interior; otherwise reject without starting cooldown.
+- Small zombies intersecting the interior/walls when R finishes are moved to the nearest free exterior
+  positions without damage. Reserve these positions before committing. If a boss or immovable obstacle
+  enters before completion, or safe displacement becomes impossible, cancel and refund R; do not crush,
+  trap or teleport a boss. Release the workers and remove scaffolds on cancellation.
+- Workers phase through allies and their own scaffolds. Police/doctors use obstacle-aware pathfinding,
+  local separation and no allied body blocking. They must not phase through permanent map geometry.
+- Doctors share a server-side patient reservation table across every Astra. Reconsider idle targets every
+  0.25s and on patient state changes. Break a reservation after 2s without a viable path. Healing uses
+  elapsed server time: min(maxHP, currentHP + 25 * dt). Deduplicate repeated network events.
+- Police use obstacle-aware paths and line of sight, switch to threats near friendly players, and never
+  fire through permanent scenery. Return toward Astra when beyond the 600px leash.
+- Summon kills/damage credit the owning Astra once; boss kills do not add to Q's unlock count.
+  Doctors' healing and walls built may be tracked separately. Workers are not playable teammates.
+- Optional wave scaling: use the SAME friendly-summon multiplier as existing allies for police damage
+  and police/doctor HP. If no such system exists, use the base values above until playtesting. Do not
+  independently multiply officer count, doctor count, healing rate, wall count or wall lifetime.
+- Caps PER ASTRA: 7 police, 3 doctors, 2 workers while building, 4 active wall sides. Multiple Astras may
+  coexist, but enclosures cannot overlap. Test the worst case of 8 Astras; keep AI server-authoritative.
+- A downed Astra's already deployed units/structure finish their normal lifetimes and can help teammates;
+  police follow the nearest living teammate until Astra revives. Fully dead or disconnected owner:
+  remove police/doctors, cancel pending casts/builds, but keep a COMPLETED enclosure until its original
+  45-second expiry. Match end removes everything immediately. No summons carry into the next match.
+- A cast reserves its own ability until completion; repeated key-down packets cannot duplicate summons.
+  One radio call at a time. Interrupt before deployment if Astra becomes downed/dead; do not spend cooldown.
+- Render footprint and countdown independently from sprite pixels. Wall images show modular visual segments;
+  collision is the exact four rectangles specified above, never inferred from decorative overhangs.
+- Preserve chunky pixels with nearest-neighbour scaling. Key out the magenta matte during sprite import.
+  The supplied manifest records actual crop regions; do not assume every sheet has the same pixel dimensions.
+- Shared radio animation: 0.15s raise, 0.15s hold, 0.15s lower. Reuse it for Q, E and R; three duplicate
+  body sheets would add no visual difference. Only the summoned unit/effect/card changes.
+
+--- IMPLEMENTATION ACCEPTANCE CHECKLIST (TO RUN IN THE GAME) ---
+[ ] Q spawns exactly 7 AI officers; they attack only hostiles and stop at obstacles.
+[ ] Q remains locked below 100 credited non-boss kills and then uses the stated cooldown.
+[ ] E spawns exactly 3 doctors; three injured teammates receive 25 HP/s each while in range.
+[ ] One patient never receives 50 or 75 HP/s from stacked doctors, even with multiple Astras.
+[ ] At 60/100 HP, 1 second of uninterrupted treatment yields 85 HP; 2 seconds caps at 100 HP.
+[ ] Doctors retarget on full health, downing, death, blocked path and disconnect; they cannot revive.
+[ ] R deploys exactly 2 workers; each builds 2 sides; all 4 walls close after 2 seconds.
+[ ] All four sides block every hostile approach including corners, charges and direct ranged attacks.
+[ ] Teammates and their shots pass as specified; hostile spawn/teleport cannot enter the safe interior.
+[ ] Walls remain active for 45 seconds measured from completion, then expire together.
+[ ] Invalid placement consumes no cooldown; a construction cancellation refunds R.
+[ ] Summons, timers and kill credit stay consistent across clients and repeated packets.
+[ ] Eight-player stress test, owner disconnect, match end, downed players and mobile controls verified.
+[ ] Inspect sliced animation loops and aim directions in the actual engine before release.

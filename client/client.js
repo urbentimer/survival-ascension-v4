@@ -27,6 +27,7 @@ const SKILLS = {
   assault: { name: "Combat Rush", cd: 25 }, medic: { name: "Team Heal", cd: 35 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
   sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_WHEEL = [
   { id: "barricade",  name: "Barricade",        cost: { scrap: 15 } },
@@ -116,7 +117,7 @@ function connected() {
   room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
-  room.onMessage("briggs", onBriggs);
+  room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
@@ -287,7 +288,7 @@ let hotbarHtml = "";
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
-  const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
+  const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
   const kk = me.katanaKills || 0, tier = Math.min(5, Math.floor(kk / 50));
   const cd = eng ? Math.ceil(ch < 1 ? me.chargeCd || 0 : me.abilityCooldown || 0) : Math.ceil(me.abilityCooldown || 0);
   const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / w.reload) * 100 : 0;
@@ -296,9 +297,9 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : "", name: skill.name, sub: jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? "in helicopter" : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? "in helicopter" : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -307,17 +308,22 @@ function renderHotbar(me) {
   if (eng) eS.frac = ch < 1 ? (me.chargeCd || 0) / 25 : (me.abilityCooldown || 0) / 3;
   if (dan) eS.frac = (me.abilityCooldown || 0) / 8;
   if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
+  if (ast) { eS.active = me.skillT > 0 ? me.skillT / 20 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (op) { eS.active = myV?.kind === "tank" ? (myV.phase === "call" ? 1 : myV.left / 30) : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (rav) { eS.active = me.shadow > 0 ? me.shadow / 20 : me.fire > 0 ? me.fire / 5 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 25; if (eS.active) eS.cd = 0; }
   const UL = ULT[me.characterClass] || {};
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
+  if (ast) {   // R: Safehouse, beside E
+    const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
+    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 2s; zombies can't get in for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `UP ${Math.ceil(sh.hp)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+  }
   if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { $("hotbar").innerHTML = hb; hotbarHtml = hb; }
   const dashLeft = Math.max(0, dashReadyAt - performance.now()) / 1000;
   $("dashChip").textContent = dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"; $("dashChip").classList.toggle("ready", dashLeft <= 0);
-  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? "  ·  press R" : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
+  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press T" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
 }
 
 function renderScoreboard(players) {
@@ -539,7 +545,8 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me) }); } }
-  else if (k === "r") room.send("reload");
+  else if (k === "r") { if (me_()?.characterClass === "dispatcher") room.send("skill2"); else room.send("reload"); }   // Astra: R = Safehouse (he reloads with T)
+  else if (k === "t") room.send("reload");
   else if (k === "f") tryRevive();
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
@@ -665,7 +672,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "War Cry", icon: "warCry", life: 10, cd: 60 } };
+const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "War Cry", icon: "warCry", life: 10, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -707,6 +714,7 @@ function drawHealRings() {
   }
 }
 function drawRobot(r) {
+  if (ASTRA_UNITS.has(r.kind)) return drawAstraUnit(r);
   const now = performance.now(); let mv = robotMove.get(r.id);
   if (!mv) { mv = { x: r.x, y: r.y, at: 0, dist: 0 }; robotMove.set(r.id, mv); }
   const step = Math.hypot(r.x - mv.x, r.y - mv.y); if (step > .4) { mv.at = now; mv.dist += step; mv.x = r.x; mv.y = r.y; }
@@ -886,6 +894,67 @@ function drawBriggsFx(f, age) {   // false when finished
   if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
   if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
   return false;
+}
+// ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
+const aImgs = {};
+for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
+const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 184, wall: 24, build: 2, life: 45 }, astraCall = new Map();   // matches the server
+function onAstra(m) {
+  const t = performance.now();
+  if (m.k === "call") astraCall.set(m.id, t);
+  else if (m.k === "cancel") astraCall.delete(m.id);
+  else if (m.k === "arrive" || m.k === "leave") fx.push({ type: "astra", k: m.k, x: m.x, y: m.y, t });
+  else if (m.k === "safeDown" || m.k === "safeCancel") fx.push({ type: "astra", k: "dismantle", x: m.x, y: m.y, t });
+  else if (m.k === "built") { fx.push({ type: "astra", k: "lock", x: m.x, y: m.y, t }); const me = me_(); if (me && Math.hypot(m.x - me.x, m.y - me.y) < 700) shake(6, 220); }
+}
+function astraFx(col, row, x, y, alpha = 1, sc = 1) {   // 96x64 cells: row 0 arrival beacon (centred on y), row 1 heal pulse (bottom on y)
+  const im = aImgs.fx; if (!im.naturalWidth) return; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(im, col * 96, row * 64, 96, 64, Math.round(x - 48 * sc), Math.round(y - (row ? 64 : 32) * sc), 96 * sc, 64 * sc); ctx.restore();
+}
+function drawAstraFx(f, age) {   // false when finished
+  if (f.k === "arrive" || f.k === "leave") { if (age > 400) return false; const c = Math.min(3, Math.floor(age / 100)); astraFx(f.k === "arrive" ? c : 3 - c, 0, f.x, f.y + 14, .9, .7); return true; }
+  if (f.k === "lock") { if (age > 380) return false; ctx.save(); ctx.strokeStyle = `rgba(120,240,255,${1 - age / 380})`; ctx.lineWidth = 4; ctx.strokeRect(f.x - SAFE.half, f.y - SAFE.half, SAFE.half * 2, SAFE.half * 2); ctx.restore(); return true; }
+  if (f.k === "dismantle") { if (age > 600) return false; for (const pc of safePieces(f.x, f.y, 3, 1 - age / 600)) pc.draw(); return true; }
+  return false;
+}
+function safeFrame(st) { return st.deploy > 0 ? (st.deploy > SAFE.build / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
+function safeAlpha(st) { return st.deploy <= 0 && st.hp < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
+// The 4 walls as depth-sorted pieces (north/south: 4 tiles across; east/west: 3 tiles down), so people inside and outside sort right.
+function safePieces(cx, cy, frame, alpha, st = null) {
+  const H = SAFE.half, T = SAFE.wall, out = [], h = aImgs.wallH, v = aImgs.wallV;
+  const tileH = (x, base, i) => out.push({ y: base, draw: () => { if (!h.naturalWidth) return; const w = 92, hh = 46; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(h, frame * 112, 0, 112, 56, Math.round(x - w / 2), Math.round(base - hh), w, hh); ctx.restore();
+    if (st && i === 1 && base < cy) { ctx.save(); ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.fillStyle = st.deploy > 0 ? "#ffd84d" : st.hp < 5 ? "#ff6b5b" : "#8ff0ff"; ctx.fillText(st.deploy > 0 ? "BUILDING…" : `SAFEHOUSE ${Math.ceil(st.hp)}s`, cx, base - 54); ctx.restore(); } } });
+  for (let i = 0; i < 4; i++) { const x = cx - H + 46 + i * 92; tileH(x, cy - H + T, i); tileH(x, cy + H, i); }
+  const len = (2 * H - 2 * T) / 3;
+  for (const x of [cx - H + T / 2, cx + H - T / 2]) for (let i = 0; i < 3; i++) { const base = cy - H + T + (i + 1) * len;
+    out.push({ y: base, draw: () => { if (!v.naturalWidth) return; const sc = len / 104, w = 48 * sc; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(v, frame * 48, 0, 48, 104, Math.round(x - w / 2), Math.round(base - len), w, len); ctx.restore(); } }); }
+  return out;
+}
+function drawAstraGround() {   // safehouse floor / footprint + green heal pulses under patients
+  const now = performance.now();
+  for (const st of state.structures.values()) {
+    if (st.kind !== "safehouse" || !inView(st.x, st.y, 260)) continue;
+    const H = SAFE.half; ctx.save();
+    if (st.deploy > 0) { ctx.setLineDash([10, 8]); ctx.strokeStyle = "rgba(120,240,255,.7)"; ctx.lineWidth = 2; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); }
+    else { ctx.fillStyle = "rgba(90,210,255,.07)"; ctx.fillRect(st.x - H + SAFE.wall, st.y - H + SAFE.wall, 2 * (H - SAFE.wall), 2 * (H - SAFE.wall)); if (st.hp < 5) { ctx.strokeStyle = `rgba(255,90,80,${.4 + .4 * (Math.floor(now / 200) % 2)})`; ctx.lineWidth = 3; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); } }
+    ctx.restore();
+  }
+  if (state.robots) for (const r of state.robots.values()) {
+    if (r.kind !== "doctor" || r.act !== "heal") continue;
+    const pt = V(state.players.get(r.tgt)); if (pt) astraFx(Math.floor(now / 140) % 4, 1, pt.x, pt.y + 22, .9, .75);
+  }
+}
+function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets like the survivors (idle, walk x3, action x2)
+  const now = performance.now(), im = aImgs[r.kind]; let mv = robotMove.get(r.id);
+  if (!mv) { mv = { x: r.x, y: r.y, at: 0, dist: 0 }; robotMove.set(r.id, mv); }
+  const step = Math.hypot(r.x - mv.x, r.y - mv.y); if (step > .4) { mv.at = now; mv.dist += step; mv.x = r.x; mv.y = r.y; }
+  let col = now - mv.at < 160 ? 1 + Math.floor(mv.dist / 14) % 3 : 0;
+  if (r.act === "shoot") col = now - (machineShotAt.get(r.id) || 0) < 90 ? 5 : 4;
+  else if (r.act === "heal" || r.act === "build") col = 4 + Math.floor(now / 220) % 2;
+  const oct = ((Math.round((r.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(r.x, r.y + 17, 13, 4, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * D8.cellW, ROW_OF_OCT[oct] * D8.cellH, D8.cellW, D8.cellH, Math.round(r.x - D8.anchorX), Math.round(r.y + SPR.feet - D8.feetY), D8.cellW, D8.cellH); ctx.restore(); }
+  if (r.kind !== "worker") machineHp(r, 26, r.y - 44);
 }
 // ---------- SOFEA: tank (E) + helicopter (Q) ----------
 const sImgs = {};
@@ -1567,13 +1636,14 @@ function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;con
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='dante'){if(!drawDanteFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='sofea'){if(!drawSofeaFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='briggs'){if(!drawBriggsFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
@@ -1660,6 +1730,7 @@ const DIR8 = {
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "rage"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
+  dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Astra: "radio" = his call for medics / police / workers (3 frames)
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
 };
 const D8 = { cellW: 112, cellH: 88, anchorX: 56, feetY: 80 };
@@ -1693,6 +1764,7 @@ function drawSurvivorDir8(p, pose, img) {
     if (c) { blk = c.block; col = c.col; }
     if (p.ultActive > 0 && p.alive) briggsFire(p, now, false);   // War Cry: back flames behind him, his normal frames on top
   }
+  if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(2, Math.floor(s / 150)); } }   // radio call (E / Q / R)
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);
@@ -1989,10 +2061,11 @@ function drawWorldObjects(extra) {
   items.push({ y: cy + 34, draw: () => drawTower(cx, cy) });
   items.push({ y: cy + GEN_OFF.y + 16, draw: () => drawGenerator(cx + GEN_OFF.x, cy + GEN_OFF.y) });
   for (const item of state.loot.values()) if (inView(item.x, item.y)) items.push({ y: item.y - 30, draw: () => drawLoot(item) });
-  for (const st of state.structures.values()) if (inView(st.x, st.y)) items.push({ y: st.y + (st.kind === "mine" || st.kind === "flameTrap" ? -40 : 10), draw: () => drawStructure(st) });
+  for (const st of state.structures.values()) if (st.kind === "safehouse") { if (inView(st.x, st.y, 260)) safePieces(st.x, st.y, safeFrame(st), safeAlpha(st), st).forEach(pc => items.push(pc)); } else if (inView(st.x, st.y)) items.push({ y: st.y + (st.kind === "mine" || st.kind === "flameTrap" ? -40 : 10), draw: () => drawStructure(st) });
   drawStains();
   drawPuddles();
   drawGroundFx();
+  drawAstraGround();
   drawStompDust();
   drawHealRings();
   drawCorpses();
