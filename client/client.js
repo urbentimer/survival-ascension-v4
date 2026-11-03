@@ -26,7 +26,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 25 }, medic: { name: "Team Heal", cd: 35 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, juggernaut: { name: "Iron Bastion", cd: 45, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
 };
 const BUILD_WHEEL = [
   { id: "barricade",  name: "Barricade",        cost: { scrap: 15 } },
@@ -306,11 +306,12 @@ function renderHotbar(me) {
   const eS = slots[1], qS = slots[0];
   if (eng) eS.frac = ch < 1 ? (me.chargeCd || 0) / 25 : (me.abilityCooldown || 0) / 3;
   if (dan) eS.frac = (me.abilityCooldown || 0) / 8;
-  if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 45; if (eS.active) eS.cd = 0; }
+  if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (op) { eS.active = myV?.kind === "tank" ? (myV.phase === "call" ? 1 : myV.left / 30) : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (rav) { eS.active = me.shadow > 0 ? me.shadow / 20 : me.fire > 0 ? me.fire / 5 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 25; if (eS.active) eS.cd = 0; }
   const UL = ULT[me.characterClass] || {};
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
+  if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { $("hotbar").innerHTML = hb; hotbarHtml = hb; }

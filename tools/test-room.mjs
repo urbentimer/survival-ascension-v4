@@ -715,7 +715,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.stunned = 1; const x0 = p.x; room.moveWithCollision(p, 80, 0); tick(1); ok(p.stunned === 0, "...and no stun inside the dome");
   room.briggs.get("A").castUntil = 0; room.lastInputs.set("A", Date.now() - 1000); const xa = p.x; for (let i = 0; i < 10; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0 }); }
   ok(Math.abs((p.x - xa) - 150 * 0.7) < 3, `he walks 30% slower in it (${Math.round(p.x - xa)}px/s)`);
-  const zhp = z.hp; p.skillT = 0.01; tick(2); ok(p.skillT === 0 && p.abilityCooldown > 44 && z.hp < zhp && events.some(e => e.type === "briggs" && e.k === "shatter"), `the dome shatters (hits + pushes zombies) and E cools down 45s (${p.abilityCooldown.toFixed(0)}s)`);
+  const zhp = z.hp; p.skillT = 0.01; tick(2); ok(p.skillT === 0 && p.abilityCooldown > 29 && z.hp < zhp && events.some(e => e.type === "briggs" && e.k === "shatter"), `the dome shatters (hits + pushes zombies) and E cools down 30s (${p.abilityCooldown.toFixed(0)}s)`);
   room.state.zombies.clear();
   // War Cry
   p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
@@ -725,6 +725,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(near.hp < 500 && near.x > nx + 20 && far.hp === 500, "...the shockwave hurts and knocks back the close ones");
   ok(room.cryBuff(q) > 1.2, "...teammates nearby hit 25% harder");
   room.briggs.get("A").safeUntil = 0; const hb = p.hp; near.damage = 40; near.speed = 0; near.x = p.x + 30; near.attackCooldown = 0; tick(1); ok(Math.abs((hb - p.hp) - (40 - p.defence) / 2) < 1, `...and he takes half damage (${(hb - p.hp).toFixed(1)} of ${40 - p.defence})`);
+  room.state.zombies.clear(); p.x = 900; p.y = 900; const zz = placeZombie(room, p.x + 120, p.y, 9999), bb = placeZombie(room, p.x + 100, p.y + 100, 1e6); bb.boss = true;
+  p.reloadLeft = 0; p.mag = 6; p.lastShot = 0; room.fireWeapon(p, 0, 120); const zx = zz.x;
+  ok(zx > p.x + 120 + 40, `passive Forceful Blast: shotgun hits shove zombies back (${Math.round(zx - p.x - 120)}px)`);
+  p.lastShot = 0; p.mag = 6; const bx0 = bb.x; room.fireWeapon(p, Math.PI / 4, 141); ok(bb.x > bx0 + 10, `...bosses too (${Math.round(bb.x - bx0)}px)`);
   room.ultInfo.get("A").summonedAt -= 10500; tick(1); ok(!p.ultReady && p.ultCd > 50, `after 10s the 60s cooldown runs (${p.ultCd}s left)`);
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

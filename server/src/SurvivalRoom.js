@@ -176,7 +176,8 @@ const SOFEA = {
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
-  bastion: { cast: 0.4, life: 15, cd: 45, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
+  bastion: { cast: 0.4, life: 15, cd: 30, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
+  blast: { push: 24, bossMult: 0.5 },   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
@@ -753,7 +754,13 @@ export class SurvivalRoom extends Room {
         this.ripples.push({ kind: "rocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / DANTE.rocketSpeed, dmg: p.damage, r: w.splash, flat: 1, push: 10, wallSafe: true });
       } else {
         const hits = along.slice(0, w.pierce || 1);
-        for (const h of hits) this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1));
+        for (const h of hits) {
+          if (p.characterClass === "juggernaut" && p.weapon === "shotgun" && this.state.zombies.has(h.z.id)) {   // Briggs: Forceful Blast
+            const B = BRIGGS.blast, k = (1 - 0.5 * Math.min(1, h.t / w.range)) * (h.z.boss ? B.bossMult : 1);
+            this.steerMove(h.z, h.z.id, a, B.push * k, q => this.solveZombie(q));
+          }
+          this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1));
+        }
         if (hits.length) end = hits[hits.length - 1].t;
       }
       tracers.push(Math.round(end));
