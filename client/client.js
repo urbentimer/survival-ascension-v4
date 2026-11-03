@@ -7,9 +7,8 @@ const serverInput = new URLSearchParams(location.search).get("server");
 const defaultEndpoint = location.protocol === "https:" ? `wss://${location.host}` : `ws://${location.hostname || "localhost"}:${GAME_CONFIG.serverPort}`;
 const endpoint = serverInput || GAME_SERVER || defaultEndpoint;
 const client = new Client(endpoint);
-let room = null, myId = "", state = null, keys = {}, lastInput = 0, lastShoot = 0, dashReady = true, paused = false, selectedClass = loadProfile().characterClass || "assault";
+let room = null, myId = "", state = null, keys = {}, lastInput = 0, lastShoot = 0, dashReady = true, selectedClass = loadProfile().characterClass || "assault";
 const canvas = $("arena"), ctx = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
-const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed", "#e5a36b", "#d2d879"];
 function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.profileStorageKey)||"{}");}catch{return {};}}
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
@@ -86,7 +85,6 @@ function connected() {
   room.onMessage("heal", m => fx.push({ type: "healfx", t: performance.now(), ...m }));
   room.onMessage("summon", m => fx.push({ type: "summon", t: performance.now(), ...m }));
   room.onMessage("sky", m => { const t = performance.now(); skyAnim.set(m.id, { t0: t, a: m.a }); fx.push({ ...m, type: "dante", k: "sky", t }); });
-  room.onMessage("breach", m => { fx.push({ ...m, type: "dante", k: "breach", t: performance.now() }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id === myId) shake(5, 160); });
   room.onMessage("demo", m => { const t = performance.now(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
   room.onMessage("shadow", m => { const t = performance.now(); fx.push({ ...m, type: "raven", k: m.k, t }); if (m.k === "dash") ravenDash.set(m.id, { t0: t, a: m.a }); if (m.k === "ignite" && m.id === myId) shake(4, 160); });
   room.onMessage("chop", m => { fx.push({ type: "chop", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 420) shake(11, 380); });
@@ -205,7 +203,6 @@ function renderState() {
   $("feed").innerHTML = feed.filter(f => Date.now() - f.t < 7000).map(f => `<li style="opacity:${Date.now() - f.t > 5500 ? .35 : 1}">${escapeHtml(f.text)}</li>`).join("");
   // big screens: wave cleared + shop, downed, win/loss
   if (state.phase === "cleared") {
-    const secs = Math.ceil(state.countdown || 0);
     showOverlay("WAVE " + state.stage + " CLEARED!", "Spend your gold before the next wave. Build and repair with right-click once it starts.");
     $("nextStage").textContent = "START NOW"; $("nextStage").classList.toggle("hidden", !host); renderShop(me);
   } else if (state.phase === "victory") {
@@ -224,7 +221,8 @@ function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) +
 function renderHud(me, players) {
   // top left: wave, timer, zombies, day/night
   $("hudWave").textContent = state.stage;
-  $("hudTimer").textContent = state.explore ? "EXPLORE MODE" : state.waveType !== "boss" ? fmtTime(90 - (state.elapsed || 0))
+  const hiveUp = [...state.zombies.values()].some(z => z.kind === "hivemind");
+  $("hudTimer").textContent = state.explore ? "EXPLORE MODE" : state.waveType !== "boss" ? ((state.elapsed || 0) >= 90 && hiveUp ? "KILL THE HIVEMIND" : fmtTime(90 - (state.elapsed || 0)))
     : state.bossPhase === "horde" ? (state.elapsed < 45 ? "BOSS WAVE · horde " + fmtTime(45 - (state.elapsed || 0)) : "BOSS WAVE · clear the horde")
     : state.bossPhase === "intro" ? "THE BOSS IS COMING" : "BOSS FIGHT";
   renderBossIntro();
@@ -625,19 +623,6 @@ function sendControls(t) {
 // --- Pixel-art world renderer: hand-drawn Canvas sprites, buildings and props ---
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
-function drawBuilding(x,y,w,h,seed=0){
-  block(x,y,w,h,'#343b3c','#171d1e','#66706a');
-  px(x+7,y+8,w-14,5,'#242b2b');
-  const cols=Math.max(2,Math.floor((w-20)/22));
-  for(let i=0;i<cols;i++) for(let j=0;j<Math.max(1,Math.floor((h-24)/25));j++){
-    const wx=x+12+i*22, wy=y+20+j*25;
-    px(wx,wy,12,10,((i*7+j*3+seed)%4===0)?'#d18a43':'#151e20');
-    px(wx+2,wy+2,8,2,'#e8b56b');
-  }
-  px(x+8,y+h-13,w-16,6,'#111718');
-  // rooftop rubble / vents
-  px(x+w*.62,y-6,14,7,'#202829');px(x+w*.66,y-10,5,4,'#7a8178');
-}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
 const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 } };
 const vImgs = {};
@@ -661,21 +646,6 @@ function drawHeavyTurret(st) {
   const since = now - (machineShotAt.get(st.id) || 0), col = since < 70 ? 2 : since < 140 ? 1 : since < 220 ? 3 : 0;
   vFrame(vImgs.turret, 170, 130, col, rowOf(st.aim || 0), st.x, st.y + 6, 124);
   machineHp(st, 46, st.y - 86);
-}
-function drawRobotAreas() {
-  if (!state?.robots) return;
-  for (const r of state.robots.values()) {
-    if (r.ownerId !== myId || r.kind !== "hunter" || !inView(r.hx, r.hy, 320)) continue;
-    ctx.save(); ctx.setLineDash([8, 8]); ctx.lineWidth = squadWheel ? 2 : 1.2;
-    ctx.strokeStyle = r.kind === "support" ? "rgba(95,184,255,.35)" : r.kind === "hunter" ? "rgba(255,90,74,.3)" : "rgba(242,161,91,.3)";
-    if (squadWheel) ctx.strokeStyle = ctx.strokeStyle.replace(/[\d.]+\)$/, ".7)");
-    // the hunter's 180-degree firing cone, cut out of its 300px ground oval
-    const f = r.face || 0, half = 90 * Math.PI / 180, cy0 = r.hy + 4;
-    const edge = t => { const c = Math.cos(t), s = Math.sin(t), k = 1 / Math.hypot(c / 300, s / 180); return [r.hx + c * k, cy0 + s * k]; };
-    ctx.beginPath(); ctx.moveTo(r.hx, cy0); for (let i = 0; i <= 20; i++) { const [x, y] = edge(f - half + i / 20 * half * 2); ctx.lineTo(x, y); } ctx.closePath();
-    ctx.setLineDash([]); ctx.lineWidth = 1; ctx.strokeStyle = squadWheel ? "rgba(255,150,40,.3)" : "rgba(255,150,40,.12)";   // orange, almost see-through
-    ctx.fillStyle = squadWheel ? "rgba(255,150,40,.14)" : "rgba(255,150,40,.07)"; ctx.fill(); ctx.stroke(); ctx.restore();
-  }
 }
 // Support robot's heal ring under the survivor it's visiting: turns on, pulses slowly while it stays, turns off when it leaves.
 const healRings = new Map();   // robot id -> { pid, t0, off }
@@ -772,7 +742,7 @@ function drawHiveFx(f, age) {   // false when finished
   }
   return false;
 }
-// ---------- DANTE (Demolitionist): Breacher Blast, Demo Ripple ----------
+// ---------- DANTE (Demolitionist): rocket launcher, Sky Barrage (E), Demo Ripple (Q) ----------
 const dImgs = {};
 for (const [k, url] of Object.entries({ place: "assets/sprites/zombies/dir8/dante-place.png", sky: "assets/sprites/zombies/dir8/dante-sky.png", rocket: "assets/sprites/fx/dante-rocket.png", demo: "assets/sprites/fx/dante-demo.png", scorch: "assets/sprites/fx/dante-scorch.png" })) { const im = new Image(); im.src = url; dImgs[k] = im; }
 const danteAnim = new Map();   // player id -> { t0, a }: plays the crate-placing frames
@@ -959,7 +929,6 @@ function squadSliceAt() {
   if (Math.hypot(dx, dy) < 34) return -1;
   return ((Math.round((Math.atan2(dy, dx) + Math.PI / 2) / (Math.PI * 2 / 3)) % 3) + 3) % 3;
 }
-function pickSquadSlice() {}
 function closeSquadWheel() {
   if (!squadWheel) return; const w = squadWheel; squadWheel = null; const me = me_();
 const sel = (() => { const dx = mouse.sx - w.cx, dy = mouse.sy - w.cy; return Math.hypot(dx, dy) < 34 ? -1 : ((Math.round((Math.atan2(dy, dx) + Math.PI / 2) / (Math.PI * 2 / 3)) % 3) + 3) % 3; })();
@@ -1232,7 +1201,7 @@ for (const [k, url] of Object.entries(ZOMBIE_URLS)) { const img = new Image(); i
 const zface = new Map(); // zombie id -> last facing (1 right, -1 left)
 function zombieFacing(z) {
   // face the player they're chasing, otherwise the radio tower
-  const t = state.players.get(z.targetId), cx = worldW() / 2, cy = worldH() / 2;
+  const t = state.players.get(z.targetId), cx = worldW() / 2;
   const tx = t && Math.hypot(t.x - z.x, t.y - z.y) < 380 ? t.x : cx;
   let f = zface.get(z.id) || 1;
   if (Math.abs(tx - z.x) > 6) f = tx > z.x ? 1 : -1;
@@ -1610,14 +1579,13 @@ function drawSurvivor(p){
 // ================= OBJECT ART (client/assets/sprites/objects/<name>.png) =================
 const OBJ_URLS = {
   tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade.png",
-  sandbags: "assets/sprites/objects/sandbags.png", turret: "assets/sprites/objects/turret.png", mine: "assets/sprites/objects/mine.png",
+  turret: "assets/sprites/objects/turret.png", mine: "assets/sprites/objects/mine.png",
   fence: "assets/sprites/objects/fence.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
   medkit: "assets/sprites/objects/medkit.png", ammo: "assets/sprites/objects/ammo.png", weaponCase: "assets/sprites/objects/weaponCase.png",
 };
 const objImgs = {};
 for (const [k, url] of Object.entries(OBJ_URLS)) { const img = new Image(); img.src = url; objImgs[k] = img; }
 const GEN_OFF = { x: 118, y: 6 };     // generator sits beside the tower (matches the server)
-const SANDBAG_RING = [[-112, -58], [-52, -76], [52, -76], [112, -58], [-120, 46], [120, 46], [-56, 66], [56, 66]];
 // Draw an object with its bottom-centre at (x, baseY).
 function drawObj(name, x, baseY, opts = {}) {
   const img = objImgs[name]; if (!img || !img.complete || !img.naturalWidth) return false;
@@ -1710,7 +1678,7 @@ function updateSmooth() {
 // V(entity) = the same entity, but with its smoothed on-screen position.
 function V(e) { if (!e) return e; return smooth.get(e.sessionId !== undefined ? "p" + e.sessionId : "z" + e.id)?.proxy || e; }
 function updateCamera(t) {
-  const dt = Math.min(0.05, (t - (cam.last || t)) / 1000); cam.last = t;
+  cam.last = t;
   if (!state) { cam.ready = false; return; }
   updateSmooth();
   const me = V(me_());
@@ -1795,7 +1763,7 @@ function drawWorld(){
     const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0; if (hsh % 9 === 0) { px(x + (hsh % 20), y + (hsh % 23), 8, 2, '#343b38'); px(x + (hsh % 20) + 3, y + (hsh % 23) + 2, 2, 5, '#101617'); }
   }
   if (!state) return;
-  const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2, R = roads();
+  const WW = worldW(), WH = worldH(), R = roads();
   // roads + lane markings
   for (const r of R.h) { px(0, r.y - r.w / 2, WW, r.w, '#343a39'); px(0, r.y - r.w / 2 + 4, WW, r.w - 8, '#282f30'); for (let x = Math.floor(cam.x / 54) * 54 + 12; x < cam.x + W; x += 54) px(x, r.y - 2, 24, 4, r.main ? '#a78d5e' : '#7f7457'); }
   for (const r of R.v) { px(r.x - r.w / 2, 0, r.w, WH, '#343a39'); px(r.x - r.w / 2 + 5, 0, r.w - 10, WH, '#282f30'); for (let y = Math.floor(cam.y / 54) * 54 + 10; y < cam.y + H; y += 54) px(r.x - 2, y, 4, 24, r.main ? '#a78d5e' : '#7f7457'); }
@@ -1842,7 +1810,7 @@ function drawWorldObjects(extra) {
   drawPuddles();
   drawGroundFx();
   drawStompDust();
-  drawHealRings();   // (the hunter's cone marker, drawRobotAreas, is switched off)
+  drawHealRings();
   drawCorpses();
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }

@@ -10,9 +10,8 @@ const SPAWN_RING = [850, 1150];   // zombies appear this far from the radio towe
 //  "tower"  - RUNNERS: sprint for the radio tower and never attack survivors.
 //  "hunter" - walkers, brutes, spitters, mutants: always go after the nearest survivor (anywhere on the map);
 //             only if every survivor is down do they head for the tower.
-// Bosses go for the tower but fight anyone who comes within BOSS_AGGRO.
+// Bosses (and the Hivemind) hunt survivors only.
 const TOWER_KINDS = { runner: 1 };
-const BOSS_AGGRO = 250;
 // Brute GROUND SLAM: when a survivor is close, the brute stops, winds up (danger circle on the ground),
 // then slams: damage + stun to every survivor inside the radius.
 // Spitter ACID: lobs a glob at where the survivor stands (so it can be dodged). It lands as a big puddle that
@@ -1506,8 +1505,9 @@ export class SurvivalRoom extends Room {
       else { b.reviveTargetId = downed.sessionId; b.reviveProgress = 0; s.message = `${b.name} is reviving ${downed.name}...`; }
     } else if (near) {
       const ax = (b.x - near.x) / nearD, ay = (b.y - near.y) / nearD;
-      if (nearD < 150) { mx = ax; my = ay; }                       // too close: back off
-      else if (nearD > 330) { mx = -ax; my = -ay; }                // too far: move in
+      const melee = b.activeSlot === 1, close = melee ? 55 : 150, far = melee ? 85 : 330;   // Raven (katana only) fights up close
+      if (nearD < close) { mx = ax; my = ay; }                     // too close: back off
+      else if (nearD > far) { mx = -ax; my = -ay; }                // too far: move in
       else { mx = -ay * brain.strafe * 0.7; my = ax * brain.strafe * 0.7; } // in range: circle-strafe
       const fromTower = distance(b, center);
       if (fromTower > 280) { mx += (center.x - b.x) / fromTower; my += (center.y - b.y) / fromTower; }

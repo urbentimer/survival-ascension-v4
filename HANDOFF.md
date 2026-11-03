@@ -15,7 +15,7 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 ## How we work
 - User designs; often says "dont code yet" → discuss only. Code when told ("u can code now", "code it", "lets go").
 - Art from ChatGPT on a flat magenta (#FF00FF) background, one action/weapon per sheet; Claude cuts it with tools/extract-*.py.
-- Every change: `node tools/test-room.mjs` (server tests, all must pass; "bots aim and shoot" test is randomly flaky) → `node tools/build-preview.mjs` → Playwright check → commit → publish preview artifact.
+- Every change: `node tools/test-room.mjs` (server tests, all must pass; "bots aim and shoot" test is randomly flaky), `node tools/sim-waves.mjs 9` (bots of every class play 9 waves fast: no crash / NaN) → `node tools/build-preview.mjs` → Playwright check → commit → publish preview artifact.
 - **LIVE MODE (from 2026-11-03): every change goes to `main`** (user wants friends to try every change). Render (server, rootDir server) and Netlify (client folder) deploy from `main`. Keep `claude/game-backup` = `main`.
 - Sprite PNGs are palette-quantized (256 colours) to keep the preview under 16 MB (now ~13.5 MB).
 

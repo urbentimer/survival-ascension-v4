@@ -574,7 +574,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.lastMelee.clear(); const fh = far.hp; far.x = p.x + 60; ring.forEach(z => room.state.zombies.delete(z.id)); far.x = p.x + 300;
   p.storm = 0.04; tick(2); ok(p.storm === 0 && p.ultCd > 58 && !p.ultReady, `after 10s the storm ends and the 60s cooldown starts (${p.ultCd}s)`);
   // tiers
-  room.state.zombies.clear(); p.katanaKills = 49; p.storm = 0; const kz = placeZombie(room, p.x + 50, p.y, 1); room.lastMelee.clear(); send(A, "attack", { a: 0 });
+  room.state.zombies.clear(); p.katanaKills = 49; p.storm = 0; placeZombie(room, p.x + 50, p.y, 1); room.lastMelee.clear(); send(A, "attack", { a: 0 });
   ok(p.katanaKills === 50 && p.katanaTier === 1, `50 katana kills -> katana tier 1 (Honed Edge)`);
   room._dispose(); }
 // 30. DANTE (Demolitionist): shotgun, Breacher Blast (E), Demo Ripple (Q)
@@ -608,6 +608,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   tick(2); ok(room.demoOf(p) && zs.core.hp === 2000, "it waits for Dante's signal");
   send(A, "ult"); ok(!room.demoOf(p), "Q again: BOOM");
   tick(1); ok(zs.core.hp <= 1700, `the crate blast hits hard (${Math.round(2000 - zs.core.hp)} dmg)`);
+  { const g3 = events.filter(e => e.type === "demo" && e.k === "boom").pop().pts.find(g => g[2] === 2); zs.r3.x = g3[0]; zs.r3.y = g3[1]; }   // stand where an outer grenade lands
   const r1hp = zs.r1.hp; for (const e of room.ripples) e.t -= 2000; tick(1);
   const demo = events.filter(e => e.type === "demo" && e.k === "boom").pop();
   ok(demo && [0, 1, 2].map(r => demo.pts.filter(g => g[2] === r).length).join() === "4,8,16", "the ripples throw 4, 8 and 16 grenades");
@@ -617,7 +618,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(c2 && !room.demoOf(p), "left alone, the charge blows itself after 30s");
   room._dispose(); }
 // 31. THE HIVEMIND: mini boss on waves 2, 6, 10... (between the boss waves)
-{ const { room, events, A, B, P, send } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+{ const { room, events, A, B, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   const hive = () => [...room.state.zombies.values()].find(z => z.kind === "hivemind");
   room.state.elapsed = 39; tick(1); ok(!hive(), "wave 1: no Hivemind");
   room.state.stage = 2; room.beginWave(); room.spawnClock = 9999; room.state.elapsed = 39.9; tick(4);
