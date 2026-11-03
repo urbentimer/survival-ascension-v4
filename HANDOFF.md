@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
+Last updated: 2026-11-03 (latest commit: "Host can skip to the Butcher fight online")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
@@ -49,6 +49,9 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 - Every death now shows a body (server sends "zdead").
 - **Boss waves** 4, 8, 12...: horde → intro card (all players ack) → boss + walkers. Wave 4 = **The Butcher** (armoured front, cleaver quake rings, hook every 10–15s at 2600 px/s with lead aim, axe deflect, enraged spin, +60% HP per extra player). Other bosses: placeholders, no art.
 - **Mini boss: The Hivemind** on waves 2, 6, 10, 14...: arrives at 40s with a warning card; wave can't end until it dies. ~760 HP at wave 2 solo (scales with wave + players). Bite (close), slam (red zone, damage + 0.8s stun), jump at far players (320–760px), spawns walkers every 8s. Death: +40 gold each + 4 gold piles. No dedicated death sheet yet.
+
+## Online host button (Esc menu)
+- **Skip to Butcher fight (host)**: host only, online rooms. Jumps to wave 4, clears zombies, revives everyone, goes to the Butcher intro.
 
 ## Solo preview test panel (Esc menu)
 Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25%, kill boss (also kills Hivemind), hook speed toggle, unlock ultimate. In solo, ultimates are always unlocked.

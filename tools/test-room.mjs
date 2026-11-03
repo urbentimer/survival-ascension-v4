@@ -639,4 +639,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.phase = "playing"; room.inBreak = false; room.state.stage = 3; room.beginWave(); room.state.elapsed = 50; room.spawnClock = 9999; tick(1); ok(!hive(), "wave 3: no Hivemind");
   room.state.stage = 6; room.beginWave(); room.state.elapsed = 41; room.spawnClock = 9999; tick(1); ok(hive() && hive().maxHp > h.maxHp, "wave 6: it's back, tougher");
   room._dispose(); }
+// 32. online: the host can skip to the Butcher fight (other players can't)
+{ const { room, A, B } = makeRoom(); room.state.stage = 2; room.beginWave(); room.state.elapsed = 20;
+  room._handlers.debugBoss(B); ok(room.state.stage === 2, "a non-host player can't skip to the Butcher");
+  room._handlers.debugBoss(A); ok(room.state.stage === 4 && room.state.waveType === "boss" && room.state.bossPhase === "horde" && room.state.zombies.size === 0, "the host skips straight to the Butcher (intro next)");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

@@ -361,10 +361,7 @@ export class SurvivalRoom extends Room {
     // Solo preview only: jump straight to any wave (1-50) to test it.
     this.onMessage("debugWave", (client, data) => {
       const n = Math.round(Number(data?.n)); if (!this.solo || !(n >= 1 && n <= 50) || this.state.phase === "lobby") return;
-      this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.state.stage = n; this.state.phase = "playing"; this.state.explore = false;
-      this.inBreak = false; this.state.countdown = 0; this.enraged.clear();
-      for (const p of this.state.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.hp = p.maxHp; }
-      this.beginWave(); this.state.message = `Test: jumped to wave ${n}` + (this.state.waveType === "boss" ? " (BOSS WAVE)" : "");
+      this.jumpToWave(n); this.state.message = `Test: jumped to wave ${n}` + (this.state.waveType === "boss" ? " (BOSS WAVE)" : "");
     });
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {
@@ -389,10 +386,12 @@ export class SurvivalRoom extends Room {
       const p = this.state.players.get(client.sessionId); if (!p || this.state.bossPhase !== "intro") return;
       this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
     });
-    // Solo preview only: skip the horde and go straight to the boss intro.
-    this.onMessage("debugBoss", () => {
-      if (!this.solo || this.state.phase === "lobby") return;
-      if (this.state.waveType !== "boss") { this.state.stage = 4; this.state.phase = "playing"; this.beginWave(); }
+    // Skip the horde and go straight to the Butcher intro. Solo preview, or the host in an online room.
+    this.onMessage("debugBoss", client => {
+      if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
+      if (this.state.stage !== 4 || this.state.waveType !== "boss" || this.state.phase !== "playing") this.jumpToWave(4);
+      else if (["intro", "fight"].includes(this.state.bossPhase)) return;   // already there
+      if (!this.solo) this.state.message = "Host skipped to the Butcher fight";
       this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
     });
     // Solo preview only: kill the boss (to watch it die) or knock it to 25% HP (to see it enrage).
@@ -557,6 +556,13 @@ export class SurvivalRoom extends Room {
     s.message = "New match! Pick your survivors, then the host starts.";
   }
 
+  // Test helper: restart at wave n (clears zombies, revives everyone).
+  jumpToWave(n) {
+    this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.state.stage = n; this.state.phase = "playing"; this.state.explore = false;
+    this.inBreak = false; this.state.countdown = 0; this.enraged.clear();
+    for (const p of this.state.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.hp = p.maxHp; }
+    this.beginWave();
+  }
   beginWave() {
     this.bossOverAt = 0;
     this.state.elapsed = 0; this.spawnClock = 0.2; this.state.bossSpawned = false; this.state.bossDead = false; this.hiveSpawned = false; this.hiveNag = false;
