@@ -174,6 +174,12 @@ const SOFEA = {
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, rate: 1.5, body: 30, pod: 16,
           shot: { dmg: 65, min: 25, r: 100, speed: 700, range: 800 } },
 };
+// BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
+const BRIGGS = {
+  bastion: { cast: 0.4, life: 15, cd: 45, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
+  cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },
+};
+function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 const DANTE = {
   sky: { cd: 8, range: 520, n: 3, gap: 0.15, flight: 0.85, spread: 80, dmg: 90, r: 75, push: 18 },
   rocketSpeed: 950,
@@ -248,7 +254,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map();
     this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -293,6 +299,7 @@ export class SurvivalRoom extends Room {
       if (this.state.players.size < 1) return;
       this.state.explore = !!data?.explore;
       for (const p of this.state.players.values()) if (p.characterClass === "scout") { ravenLoadout(p); ravenReset(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
       this.state.elapsed = 0;
@@ -319,7 +326,8 @@ export class SurvivalRoom extends Room {
       const previous = this.lastInputs.get(client.sessionId) || (now - 50);
       const dt = Math.min(0.1, Math.max(0, (now - previous) / 1000));
       this.lastInputs.set(client.sessionId, now);
-      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1);
+      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.skillT > 0 ? BRIGGS.bastion.slow : 1);   // in the dome: 30% slower
+      if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(client.sessionId, now); return; }   // Briggs mid-cast (fist slam / roar)
       this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
       // Face the way you walk (left/right). Gun follows movement unless you're shooting.
       if (dx !== 0) { p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(client.sessionId, now); }
@@ -571,7 +579,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
@@ -855,7 +863,8 @@ export class SurvivalRoom extends Room {
 
   useAbility(p, data) {
       const cls=p.characterClass;
-      if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }   // cooldown starts when she gets out
+      if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
+      if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
@@ -978,6 +987,7 @@ export class SurvivalRoom extends Room {
   ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd) r.left = r.alive ? r.active : 0; return r; }
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+    if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
       const v = this.state.vehicles.get(p.sessionId), alive = v?.kind === "heli", active = !alive ? 0 : (v.phase === "call" ? SOFEA.heli.life : v.left) * 1000;
       return { info, alive, active, left: alive ? active + SOFEA.heli.cd * 1000 : Math.max(0, info.readyAt - now) };
@@ -989,7 +999,11 @@ export class SurvivalRoom extends Room {
     return { info, alive, left, active };
   }
   useUlt(p) {
-    if (!["engineer", "scout", "demolitionist", "operator"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "juggernaut") {
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0) return;
+      info.summonedAt = now; info.readyAt = now + (BRIGGS.cry.life + BRIGGS.cry.cd) * 1000; this.ultInfo.set(p.sessionId, info); this.warCry(p, now); return;
+    }
     if (p.characterClass === "operator") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !this.callVehicle(p, "heli")) return;
       info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return;
@@ -1073,6 +1087,58 @@ export class SurvivalRoom extends Room {
       if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
       const { left, active, alive } = this.ultState(p, now), c = this.demoOf(p);
       p.ultCd = alive ? D.cd : Math.ceil(left / 100) / 10; p.ultActive = c ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // ---------- BRIGGS: Iron Bastion (E) + War Cry (Q) ----------
+  bmemOf(p) { let m = this.briggs.get(p.sessionId); if (!m) { m = { castUntil: 0, domeAt: 0, cryUntil: 0, buffUntil: 0, hitAt: 0 }; this.briggs.set(p.sessionId, m); } return m; }
+  // a fist slam into the ground, then the dome: 15s of no damage, no stun, no knockback; he can still fight, 30% slower
+  ironBastion(p) {
+    const now = Date.now(), m = this.bmemOf(p), B = BRIGGS.bastion;
+    m.castUntil = now + B.cast * 1000; m.domeAt = now; p.skillT = B.life; p.charging = false;
+    this.broadcast("briggs", { k: "bastion", id: p.sessionId, a: Math.round((p.aim || 0) * 100) / 100 });
+    this.state.message = `${p.name}: IRON BASTION!`;
+  }
+  shatterBastion(p, now) {
+    const S = BRIGGS.bastion.shatter, scale = 1 + (this.state.stage - 1) * 0.08;
+    p.skillT = 0; p.abilityCooldown = BRIGGS.bastion.cd; this.bmemOf(p).safeUntil = now + 500;
+    for (const z of [...this.state.zombies.values()]) {
+      const d = distance(p, z); if (d > S.r + z.radius) continue;
+      if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), S.push, q => this.solveZombie(q));
+      this.hitZombie(z, p, S.dmg * scale);
+    }
+    this.broadcast("briggs", { k: "shatter", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+  }
+  // a short roar (0.3s), then BOOM: shockwave knocks back + hurts what's close, everything within 350px charges him
+  warCry(p, now) {
+    const C = BRIGGS.cry, m = this.bmemOf(p), scale = 1 + (this.state.stage - 1) * 0.08;
+    m.castUntil = now + C.cast * 1000; m.cryUntil = now + C.life * 1000; p.charging = false;
+    for (const z of [...this.state.zombies.values()]) {
+      const d = distance(p, z);
+      if (d <= C.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: now + (z.boss ? C.bossTaunt : C.life) * 1000 });
+      if (d <= C.impact.r + z.radius) {
+        if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), C.impact.push, q => this.solveZombie(q));
+        this.hitZombie(z, p, C.impact.dmg * scale);
+      }
+    }
+    for (const a of this.state.players.values()) if (a.alive && distance(a, p) <= C.buffR) this.bmemOf(a).buffUntil = now + C.life * 1000;
+    this.broadcast("briggs", { k: "cry", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: C.tauntR });
+    this.state.message = `${p.name}: WAR CRY!`;
+  }
+  cryBuff(p) { const m = this.briggs.get(p.sessionId); return m && m.buffUntil > Date.now() ? 1 + BRIGGS.cry.buff : 1; }
+  tauntTarget(z, now) {   // a zombie Briggs roared at goes for him (while he's alive and the taunt lasts)
+    const t = this.taunt.get(z.id); if (!t) return null;
+    const p = t.until > now ? this.state.players.get(t.id) : null;
+    if (!p?.alive) { this.taunt.delete(z.id); return null; }
+    return p;
+  }
+  updateBriggs(dt, now) {
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "juggernaut") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      if (p.skillT > 0) { p.stunned = 0; p.slowed = 0; p.skillT = Math.max(0, p.skillT - dt); if (p.skillT <= 0 || !p.alive) this.shatterBastion(p, now); }
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? BRIGGS.cry.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
@@ -1207,7 +1273,14 @@ export class SurvivalRoom extends Room {
   vehicleGuard(now) {
     const g = new Map();
     for (const p of this.state.players.values()) {
-      if (!p.alive || p.characterClass !== "operator") continue;
+      if (!p.alive) continue;
+      if (p.characterClass === "juggernaut") {   // dome: nothing gets through (and no hook drag / knockback); War Cry: half damage
+        const bm = this.briggs.get(p.sessionId), dome = p.skillT > 0 || (bm && now < (bm.safeUntil || 0));
+        const k = dome ? 0 : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;
+        if (k < 1) g.set(p, { hp: p.hp, k, x: dome ? p.x : null, y: p.y, dome });
+        continue;
+      }
+      if (p.characterClass !== "operator") continue;
       const v = this.state.vehicles.get(p.sessionId), m = this.vmemory.get(p.sessionId);
       const k = m && now < m.protectUntil ? 0 : v?.phase === "ride" ? SOFEA[v.kind].taken : 1;
       if (k < 1) g.set(p, { hp: p.hp, k });
@@ -1215,9 +1288,12 @@ export class SurvivalRoom extends Room {
     return g;
   }
   applyVehicleGuard(g) {
-    for (const [p, { hp, k }] of g) {
+    const now = Date.now();
+    for (const [p, { hp, k, x, y, dome }] of g) {
+      if (x != null) { p.x = x; p.y = y; p.stunned = 0; p.slowed = 0; }   // in the dome: nothing moves him
       const after = p.alive ? p.hp : (this.downHp.get(p.sessionId) ?? 0);
       if (after >= hp) continue;
+      if (dome) { const bm = this.bmemOf(p); if (now - bm.hitAt > 160) { bm.hitAt = now; this.broadcast("briggs", { k: "hit", id: p.sessionId }); } }
       const fixed = hp - (hp - after) * k;
       if (fixed > 0 && !p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; }
       if (fixed > 0) p.hp = fixed;
@@ -1759,11 +1835,16 @@ export class SurvivalRoom extends Room {
     }
     if (b.hp < b.maxHp * 0.4 && b.medkits > 0) this.useQuickItem(b);
     // Class ability when zombies are close.
+    if (b.characterClass === "juggernaut") {   // Briggs bot: dome when it gets hairy, War Cry into a crowd
+      const crowd = zs.filter(z => distance(b, z) < 350).length;
+      if (b.ultReady && crowd >= 4) this.useUlt(b);
+      else if (b.abilityCooldown <= 0 && !(b.skillT > 0) && nearD < 170 && (b.hp < b.maxHp * 0.75 || crowd >= 3)) this.useAbility(b);
+    }
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
     }
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -1839,7 +1920,7 @@ export class SurvivalRoom extends Room {
 
   hitZombie(z, p, dmg) {
     if (!this.state.zombies.has(z.id)) return;
-    if (p?.sessionId) dmg *= this.supportBuff(p);
+    if (p?.sessionId) dmg *= this.supportBuff(p) * this.cryBuff(p);
     if (z.kind === "butcher" && z.act !== "stagger" && p && Number.isFinite(p.x)) {   // armoured front: half damage from the front (not while staggered)
       let diff = Math.atan2(p.y - z.y, p.x - z.x) - (z.aim || 0); diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) < BUTCHER.armourArc) {
@@ -1854,7 +1935,7 @@ export class SurvivalRoom extends Room {
   }
 
   killZombie(z, killer) {
-    this.state.zombies.delete(z.id); this.dots.delete(z.id);
+    this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id);
     this.broadcast("zdead", { id: z.id, x: Math.round(z.x), y: Math.round(z.y), k: z.kind });
     if (z.kind === "hivemind") {   // mini boss down: everyone gets paid, gold spills out
       this.hiveMem.delete(z.id);
@@ -1864,7 +1945,7 @@ export class SurvivalRoom extends Room {
     }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
-      if (!z.boss && ["engineer", "scout", "demolitionist", "operator"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
       if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
         killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
@@ -1943,6 +2024,7 @@ export class SurvivalRoom extends Room {
     this.updateRaven(dt, now);
     this.updateDante(dt, now);
     this.updateSofea(dt, now);
+    this.updateBriggs(dt, now);
     this.separateZombies();
     for(const p of this.state.players.values()) if(p.reloadLeft>0){p.reloadLeft=Math.max(0,p.reloadLeft-dt);if(p.reloadLeft===0)this.finishReload(p);}
     for(const b of this.state.players.values()) if(b.isBot&&b.alive) this.botThink(b, dt, now);
@@ -1992,15 +2074,16 @@ export class SurvivalRoom extends Room {
     const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
     const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId));   // invisible Raven / Sofea up in her helicopter: zombies can't get her
     for (const z of [...this.state.zombies.values()]) {
-      if (z.kind === "butcher") { this.butcherThink(z, dt, now, seen); continue; }
-      if (z.kind === "hivemind") { this.hiveThink(z, dt, now, seen); continue; }
+      const taunted = this.tauntTarget(z, now);
+      if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
+      if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;
       const tower = {x: ARENA.width/2, y: ARENA.height/2};
-      let target = z.boss ? nearestPlayer   // bosses hunt survivors only
+      let target = taunted ? taunted : z.boss ? nearestPlayer   // War Cry: Briggs first; bosses hunt survivors only
         : z.role === "hunter" ? (nearestPlayer || tower) : tower;
-      if (z.role === "hunter" && !z.boss) {   // hunters also go for Viktor's turret and robots if they're closer
+      if (z.role === "hunter" && !z.boss && !taunted) {   // hunters also go for Viktor's turret and robots if they're closer
         let bd = distance(z, target);
         for (const m of machines) { const md = distance(z, m); if (md < bd) { bd = md; target = m; } }
       }

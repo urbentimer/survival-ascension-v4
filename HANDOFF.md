@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Game log")
+Last updated: 2026-11-03 (latest commit: "Briggs: Iron Bastion + War Cry")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -51,8 +51,11 @@ Last updated: 2026-11-03 (latest commit: "Game log")
   - Q Sky Reign: radio call, helicopter, flies 30s at 230 px/s over zombies (ground zombies can't reach her). Click = 2 rockets every 1.5s (65 → 25 at 100px, 700 px/s, range 800). 60s cooldown after landing.
   - While riding: no dash / melee / medkit / build / repair / revive. Vehicles: state.vehicles (VehicleState, id = her sessionId, phase call/ride). Vehicle damage grows with the wave like Dante's skills. Everyone gets out when the wave ends.
 - Character select: 5 per row (9 survivors + a "Next survivor · coming soon" card); E/Q names shown on the reworked survivors' cards.
-- Briggs (juggernaut) kit planned, PAUSED until the user can make art again: E Iron Bastion (15s steel-and-gold dome, invulnerable, can attack, 30% slower, only him, zombies pile on, shatters with knockback, 45s cd), Q War Cry (taunt ~350px, 50% less damage 10s, teammates +25% dmg, 60s cd), shotgun start. ChatGPT prompts were written in chat (10 sheets).
-- Others (Briggs juggernaut, Elena medic, Sienna sniper, Hayes commander): old side-view art, old simple skills, no ultimate yet.
+- **Briggs (juggernaut)**: 160 HP, speed 150, shotgun + pistol + knife; art for shotgun/knife/bat/axe + E/Q cast poses (tools/art/briggs; cut with `extract-directions.py juggernaut shotgun=...%218x149.875 ... bastion=...!4%299x164 warcry=...!4%299x164` and tools/extract-briggs.py for fx + cards).
+  - E Iron Bastion: 0.4s fist slam, then a steel dome for 15s: no damage, no stun/slow, no hook drag or knockback (guard restores hp + position each tick), can attack, 30% slower. Ends: shatters (40 dmg + 60px push within 150), then 45s cooldown. Zombie hits on the dome = sparks.
+  - Q War Cry: 0.3s roar, then impact: hit-stop + big screen shake + shockwave ring (30 dmg + 45px push within 210), every zombie within 350 targets him (10s; bosses 3s), he takes 50% damage for 10s, teammates within 400 do +25% damage for 10s. 60s cooldown after. Red rage flames at his feet while active.
+  - PlayerState.skillT (E active seconds, generic) added: 63/64 schema fields used.
+- Others (Elena medic, Sienna sniper, Hayes commander): old side-view art, old simple skills, no ultimate yet.
 
 ## Downed / spectating
 - When you're down or bled out there is no dark screen: a small bar shows the bleed-out timer and the camera follows a living teammate (bots too). Space / ← → / click switches who you watch. Night light follows the watched teammate.
@@ -72,6 +75,7 @@ Last updated: 2026-11-03 (latest commit: "Game log")
 Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25%, kill boss (also kills Hivemind), hook speed toggle, unlock ultimate. In solo, ultimates are always unlocked.
 
 ## To do / ideas parked
+- NEXT after Briggs: new character select screen. Concepts: https://claude.ai/artifact/LKD3U3ZjeZC6XStky9HR9R (A Squad Roster, B Arcade Lineup, C Field Dossier). User said "u pick": build **A (Squad Roster)** with B's touches (big name with coloured drop shadow, survivor colour tints the screen), plus teammates' picks + LOCK IN.
 - Hivemind death sheet; Raven's whirlwind spin sheet; Dante launcher version 2 sheet (saved, unused).
 - Other survivors' 8-direction sheets + kits; other bosses' art and moves; walker 8-direction sheet.
 - Boss loot (Butcher's Locker), night vision size choice.

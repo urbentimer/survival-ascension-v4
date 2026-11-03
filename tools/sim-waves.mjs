@@ -39,6 +39,6 @@ for (let wave = 1; wave <= LAST; wave++) {
   send(H, "nextStage");
   if (room.state.phase !== "playing") { room.state.countdown = 0; for (let i = 0; i < 5 && room.state.phase !== "playing"; i++) { t += 100; room.lastTick = t - 100; const real = Date.now; Date.now = () => t; room.tick(); Date.now = real; } }
 }
-console.log("events:", Object.entries(seenEv).filter(([k]) => /hive|demo|sky|shadow|wreck|summon|zdead|sofea/.test(k)).map(([k, v]) => k + "=" + v).join(" "));
+console.log("events:", Object.entries(seenEv).filter(([k]) => /hive|demo|sky|shadow|wreck|summon|zdead|sofea|briggs/.test(k)).map(([k, v]) => k + "=" + v).join(" "));
 console.log(bad.length ? "PROBLEMS:\n" + [...new Set(bad)].slice(0, 20).join("\n") : "SIM OK: no crashes, no NaN");
 room._dispose?.(); process.exit(bad.length ? 1 : 0);

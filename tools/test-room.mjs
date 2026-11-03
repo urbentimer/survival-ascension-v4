@@ -704,4 +704,27 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.tickInner = inner; room.tick(); ok(room.state.phase === "playing", "...and the next tick runs normally");
   send(A, "clientError", { m: "frame: x is not a function" }); ok(logged.some(([lv, k, m]) => k === "client" && /x is not a function/.test(m)), "errors from a player's browser go into the log");
   room._dispose(); }
+// 36. BRIGGS (juggernaut): shotgun, Iron Bastion (E: 15s dome, can't be hurt), War Cry (Q: taunt, half damage, team buff, impact)
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.phase = "lobby"; send(A, "chooseClass", { id: "juggernaut" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.maxHp === 160 && p.weapon === "shotgun", "Briggs: 160 HP, starts with the shotgun");
+  p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
+  send(A, "ability", { a: 0 }); ok(p.skillT > 14.9 && events.some(e => e.type === "briggs" && e.k === "bastion"), "E: Iron Bastion dome for 15s");
+  const z = placeZombie(room, p.x + 30, p.y, 9999); z.role = "hunter"; z.damage = 40; z.attackCooldown = 0; const hp0 = p.hp; tick(3);
+  ok(p.hp === hp0 && events.some(e => e.type === "briggs" && e.k === "hit"), "zombies hit the dome: no damage (sparks)");
+  p.stunned = 1; const x0 = p.x; room.moveWithCollision(p, 80, 0); tick(1); ok(p.stunned === 0, "...and no stun inside the dome");
+  room.briggs.get("A").castUntil = 0; room.lastInputs.set("A", Date.now() - 1000); const xa = p.x; for (let i = 0; i < 10; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0 }); }
+  ok(Math.abs((p.x - xa) - 150 * 0.7) < 3, `he walks 30% slower in it (${Math.round(p.x - xa)}px/s)`);
+  const zhp = z.hp; p.skillT = 0.01; tick(2); ok(p.skillT === 0 && p.abilityCooldown > 44 && z.hp < zhp && events.some(e => e.type === "briggs" && e.k === "shatter"), `the dome shatters (hits + pushes zombies) and E cools down 45s (${p.abilityCooldown.toFixed(0)}s)`);
+  room.state.zombies.clear();
+  // War Cry
+  p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
+  q.x = p.x + 200; q.y = p.y; const far = placeZombie(room, p.x + 300, p.y, 500); far.role = "tower"; const near = placeZombie(room, p.x + 100, p.y, 500); near.role = "tower"; const nx = near.x;
+  send(A, "ult", {}); tick(1);
+  ok(far.targetId === "A" && near.targetId === "A", "Q: War Cry: zombies within 350px (even tower runners) charge Briggs");
+  ok(near.hp < 500 && near.x > nx + 20 && far.hp === 500, "...the shockwave hurts and knocks back the close ones");
+  ok(room.cryBuff(q) > 1.2, "...teammates nearby hit 25% harder");
+  room.briggs.get("A").safeUntil = 0; const hb = p.hp; near.damage = 40; near.speed = 0; near.x = p.x + 30; near.attackCooldown = 0; tick(1); ok(Math.abs((hb - p.hp) - (40 - p.defence) / 2) < 1, `...and he takes half damage (${(hb - p.hp).toFixed(1)} of ${40 - p.defence})`);
+  room.ultInfo.get("A").summonedAt -= 10500; tick(1); ok(!p.ultReady && p.ultCd > 50, `after 10s the 60s cooldown runs (${p.ultCd}s left)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

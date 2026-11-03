@@ -143,9 +143,9 @@ if __name__ == '__main__':
     sheet = Image.new('RGBA', (CELL_W * COLS, CELL_H * 8 * len(specs)), (0, 0, 0, 0))
     names = []
     for bi, (name, spec) in enumerate(specs):
-        spec, _, ncols = spec.partition('!')   # "!4": this sheet has 4 columns (e.g. a skill pose sheet)
-        COLS = int(ncols) if ncols else 6
-        spec, _, pitch = spec.partition('%')   # "%175": columns are evenly spaced every 175px (effects bridge the gaps); "%219x150": rows too
+        spec, _, pitch = spec.partition('%')
+        spec, _, ncols = spec.partition('!')   # "!4": this sheet has 4 columns (e.g. a skill pose sheet); goes before any %pitch
+        COLS = int(ncols) if ncols else 6   # "%175": columns are evenly spaced every 175px (effects bridge the gaps); "%219x150": rows too
         pitch, _, rpitch = pitch.partition('x')
         spec, _, order = spec.partition('@')   # "@U": rows on the sheet go U,UR,R,DR,D,DL,L,UL (instead of D,DR,R,UR,U,UL,L,DL)
         path, _, box = spec.partition('#')

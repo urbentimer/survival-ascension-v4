@@ -11,7 +11,7 @@ defineTypes(PlayerState, {
   damageTaken: "number", towerRepairs: "number", structuresBuilt: "number",
   bonusDamage: "number", rateMult: "number", buffDamage: "number", aim: "number", facing: "number", bledOut: "boolean", owned: "string", armor: "number", isBot: "boolean",
   primary: "string", secondary: "string", activeSlot: "number", mag: "number", magSize: "number", reloadLeft: "number", medkits: "number",
-  isHost: "boolean", color: "string", reviveProgress: "number", charging: "boolean", stunned: "number", slowed: "number", ultKills: "number", ultCd: "number", ultReady: "boolean", ultActive: "number", shadow: "number", fire: "number", storm: "number", katanaKills: "number", robotCharges: "number", chargeCd: "number"
+  isHost: "boolean", color: "string", reviveProgress: "number", charging: "boolean", stunned: "number", slowed: "number", ultKills: "number", ultCd: "number", ultReady: "boolean", ultActive: "number", shadow: "number", fire: "number", storm: "number", katanaKills: "number", robotCharges: "number", chargeCd: "number", skillT: "number"
 });
 
 export class ZombieState extends Schema {}

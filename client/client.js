@@ -24,9 +24,9 @@ const WEAPON_INFO = {
 };
 const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd: 0.6 }, axe: { name: "Fire axe", cd: 0.9 }, katana: { name: "Katana", cd: 0.5 } };
 const SKILLS = {
-  assault: { name: "Combat Rush", cd: 25 }, juggernaut: { name: "Iron Skin", cd: 28 }, medic: { name: "Team Heal", cd: 35 },
+  assault: { name: "Combat Rush", cd: 25 }, medic: { name: "Team Heal", cd: 35 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, juggernaut: { name: "Iron Bastion", cd: 45, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
 };
 const BUILD_WHEEL = [
   { id: "barricade",  name: "Barricade",        cost: { scrap: 15 } },
@@ -116,6 +116,7 @@ function connected() {
   room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
+  room.onMessage("briggs", onBriggs);
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
@@ -286,7 +287,7 @@ let hotbarHtml = "";
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
-  const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", op = me.characterClass === "operator", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
+  const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
   const kk = me.katanaKills || 0, tier = Math.min(5, Math.floor(kk / 50));
   const cd = eng ? Math.ceil(ch < 1 ? me.chargeCd || 0 : me.abilityCooldown || 0) : Math.ceil(me.abilityCooldown || 0);
   const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / w.reload) * 100 : 0;
@@ -295,9 +296,9 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : "", name: skill.name, sub: op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? "in helicopter" : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : "", name: skill.name, sub: jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? "in helicopter" : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -305,6 +306,7 @@ function renderHotbar(me) {
   const eS = slots[1], qS = slots[0];
   if (eng) eS.frac = ch < 1 ? (me.chargeCd || 0) / 25 : (me.abilityCooldown || 0) / 3;
   if (dan) eS.frac = (me.abilityCooldown || 0) / 8;
+  if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 45; if (eS.active) eS.cd = 0; }
   if (op) { eS.active = myV?.kind === "tank" ? (myV.phase === "call" ? 1 : myV.left / 30) : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (rav) { eS.active = me.shadow > 0 ? me.shadow / 20 : me.fire > 0 ? me.fire / 5 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 25; if (eS.active) eS.cd = 0; }
   const UL = ULT[me.characterClass] || {};
@@ -661,7 +663,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 } };
+const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "War Cry", icon: "warCry", life: 10, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -813,6 +815,42 @@ function drawDemoCrate(st) {
     ctx.beginPath(); ctx.ellipse(st.x, st.y, 110, 110 * DEMO.flat, 0, 0, 7); ctx.stroke(); ctx.restore();
   }
   demoFrame(6, armed ? Math.floor(now / 180) % 4 : 0, st.x, st.y + 6);
+}
+// ---------- BRIGGS: Iron Bastion (E) + War Cry (Q) ----------
+const bImg = new Image(); bImg.src = "assets/sprites/fx/briggs-fx.png";
+const BFX = { cw: 220, ch: 150 }, briggsAnim = new Map();   // id -> { k, t0, hitAt }
+function bfxFrame(col, row, x, y, sc = 1, alpha = 1, flip = false) {   // (x, y) = bottom-centre of the frame
+  if (!bImg.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = sc > 1.6; /* the big War Cry ring is scaled up a lot: smooth it */ ctx.globalAlpha = alpha; ctx.translate(Math.round(x), Math.round(y)); if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(bImg, col * BFX.cw, row * BFX.ch, BFX.cw, BFX.ch, -BFX.cw * sc / 2, -BFX.ch * sc, BFX.cw * sc, BFX.ch * sc); ctx.restore();
+}
+function onBriggs(m) {
+  const t = performance.now(), a = briggsAnim.get(m.id) || {}, me = me_(), near = me && Math.hypot((m.x ?? me.x) - me.x, (m.y ?? me.y) - me.y) < 900;
+  if (m.k === "bastion") { briggsAnim.set(m.id, { ...a, k: "bastion", t0: t, domeAt: t + 300 }); setTimeout(() => near && shake(7, 220), 300); }
+  else if (m.k === "cry") {   // the roar lands 0.18s in: hit-stop, big shake, the shockwave ring
+    briggsAnim.set(m.id, { ...a, k: "cry", t0: t });
+    setTimeout(() => { fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: performance.now() }); if (near) { hitStopUntil = performance.now() + 70; shake(16, 520); } }, 180);
+  }
+  else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5 });
+  else if (m.k === "shatter") { fx.push({ type: "briggs", k: "shatter", x: m.x, y: m.y, t }); if (near) shake(10, 360); }
+}
+function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
+  const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
+  if (a.k === "bastion" && s < .48) return { block: 4, col: Math.min(3, Math.floor(s / .12)) };
+  if (a.k === "cry" && s < .62) return { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };
+  return null;
+}
+function briggsAura(p, now) { bfxFrame(Math.floor(now / 90) % 6, 4, p.x, p.y + SPR.feet + 10, .42, .9); }   // red rage flames at his feet (drawn under him)
+function briggsDome(p, now) {   // the steel dome over him: forms, then a slow glowing loop; sparks where he gets hit
+  const a = briggsAnim.get(p.sessionId) || {}, x = p.x, y = p.y + SPR.feet + 8, form = now - (a.domeAt || 0);
+  if (form >= 0 && form < 300) return bfxFrame(Math.min(2, Math.floor(form / 100)), 0, x, y, .56, .85);
+  if (now - (a.hitAt || 0) < 300) return bfxFrame(1 + Math.min(4, Math.floor((now - a.hitAt) / 60)), 1, x, y, .56, .8, a.hitFlip);
+  bfxFrame(3 + Math.floor(now / 160) % 3, 0, x, y, .56, .78);
+}
+function drawBriggsFx(f, age) {   // false when finished
+  const s = age / 1000;
+  if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); return true; }
+  if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
+  return false;
 }
 // ---------- SOFEA: tank (E) + helicopter (Q) ----------
 const sImgs = {};
@@ -1494,12 +1532,13 @@ function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;con
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='dante'){if(!drawDanteFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='sofea'){if(!drawSofeaFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='briggs'){if(!drawBriggsFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
@@ -1584,6 +1623,7 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
 };
@@ -1612,12 +1652,15 @@ function drawSurvivorDir8(p, pose, img) {
   else if (melee && p.charging) col = 4;                                        // axe raised while charging
   else if (holdingGun && shotAge < 320) col = shotAge < 90 ? 5 : 4;             // shooting (5 = muzzle flash)
   else if (now - a.movedAt < 160) col = 1 + Math.floor(now / 130) % 3;          // walking
+  let blk = block;
+  if (p.characterClass === "juggernaut") { const c = briggsCast(p, now); if (c) { blk = c.block; col = c.col; } if (p.ultActive > 0 && p.alive) briggsAura(p, now); }
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, col * D8.cellW, (block * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
+  ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
+  if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsDome(p, now);
   return true;
 }
 
