@@ -1,6 +1,6 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
-import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState } from "./schema.js";
+import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
 import { buildMapLayout, mapBoxes, packLayout } from "./mapLayout.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -118,7 +118,8 @@ const CLASS_STATS = {
   scout:         { hp:  90, speed: 225, defence: 0, dmgMult: 1.03, rateMult: 1.20 },
   demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
   sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
-  commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 }
+  commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 },
+  operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
 };
 // Weapons are balanced around ~20 damage/second on a single zombie; each has a different strength.
 const WEAPONS = {
@@ -163,6 +164,15 @@ function ravenKatana(p) {
 // E SKY BARRAGE (8s cd): fires 3 rockets into the sky one by one (0.15s apart); they come down at random spots around the mouse and explode.
 // Q DEMO RIPPLE (100 kills): first Q places a demo charge crate (arms in 1s); Q again detonates it any time (or it blows by itself after
 //   30s, or if Dante goes down). Big blast at the crate, then 3 rings of grenades fly out and explode: 4 big, 8, then 36 small. 60s cooldown.
+// SOFEA (operator): E = Steel Convoy (drive a tank 30s), Q = Sky Reign (fly a rocket helicopter 30s).
+// Both start with a 0.8s radio call. Ride time starts when she boards; the cooldown starts when she gets out.
+const SOFEA = {
+  call: 0.8, protect: 0.75,
+  tank: { life: 30, cd: 30, speed: 140, taken: 0.65, rate: 1.5, body: 34, reach: 30, hw: 50, hh: 32,
+          shot: { dmg: 65, min: 30, r: 110, speed: 600, range: 650 }, crush: { dmg: 55, boss: 10, gap: 0.75, minSpeed: 40, push: 30 } },
+  heli: { life: 30, cd: 60, speed: 230, taken: 0.8, rate: 1.5, body: 30, pod: 16,
+          shot: { dmg: 65, min: 25, r: 100, speed: 700, range: 800 } },
+};
 const DANTE = {
   sky: { cd: 8, range: 520, n: 3, gap: 0.15, flight: 0.85, spread: 80, dmg: 90, r: 75, push: 18 },
   rocketSpeed: 950,
@@ -232,7 +242,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map();
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
     this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
@@ -286,6 +296,13 @@ export class SurvivalRoom extends Room {
     this.onMessage("input", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !p.alive || this.state.phase !== "playing") return;
+      const veh = this.state.vehicles.get(client.sessionId);
+      if (veh) {   // Sofea in her tank / helicopter: WASD drives it, the mouse aims the gun
+        const t = Date.now(), dtv = Math.min(0.1, Math.max(0, (t - (this.lastInputs.get(client.sessionId) || t - 50)) / 1000)); this.lastInputs.set(client.sessionId, t);
+        const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { veh.aim = a; p.aim = a; }
+        if (veh.phase === "ride") this.moveVehicle(p, veh, clamp(Number(data?.dx) || 0, -1, 1), clamp(Number(data?.dy) || 0, -1, 1), dtv);
+        return;
+      }
       if (p.stunned > 0 || this.shadowDash.has(client.sessionId)) { this.lastInputs.set(client.sessionId, Date.now()); return; }   // stunned / mid-dash: can't steer
       const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
       const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
@@ -304,7 +321,7 @@ export class SurvivalRoom extends Room {
     // Dash: a short 50px hop in the movement direction, once every 5 seconds.
     this.onMessage("dash", (client, data) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0) return;
+      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(client.sessionId)) return;
       const now = Date.now();
       if (now - (this.lastDashAt.get(client.sessionId) || 0) < DASH_COOLDOWN * 1000) return;
       let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
@@ -321,12 +338,13 @@ export class SurvivalRoom extends Room {
       // Aimed shot: the client sends the angle toward the mouse cursor.
       const aim = Number(data?.a);
       if (data?.a === undefined || data?.a === null || !Number.isFinite(aim)) return;
+      if (this.state.vehicles.has(p.sessionId)) { this.vehicleFire(p, aim, Number(data?.d)); return; }
       this.fireWeapon(p, aim, Number(data?.d));
     });
 
     this.onMessage("chooseClass", (client,data) => {
       const p=this.state.players.get(client.sessionId); const id=String(data?.id||"");
-      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander"];
+      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator"];
       if(!p || this.state.phase!=="lobby" || !classes.includes(id)) return;
       p.characterClass=id;
       applyClassBase(p); p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
@@ -345,10 +363,12 @@ export class SurvivalRoom extends Room {
       const p=this.state.players.get(client.sessionId),id=String(data?.id||"");
       if(p&&["knife","bat","axe","katana"].includes(id)){p.melee=id;p.charging=false;if(p.alive)this.setSlot(p,1);}
     });
-    const playing = id => { const p = this.state.players.get(id); return p && p.alive && this.state.phase === "playing" ? p : null; };
+    const playing = id => { const p = this.state.players.get(id); return p && p.alive && this.state.phase === "playing" && !this.state.vehicles.has(id) ? p : null; };   // in a vehicle: normal actions are off
     const angle = data => { const a = Number(data?.a); return data?.a === undefined || data?.a === null || !Number.isFinite(a) ? null : a; };
     // Left click: attack with whatever is in your hand (gun, melee or quick item).
-    this.onMessage("attack", (client, data) => { const p = playing(client.sessionId), a = angle(data); if (p && (a !== null || p.activeSlot === 5)) this.attack(p, a ?? 0, !!data?.heavy, Number(data?.d)); });
+    this.onMessage("attack", (client, data) => { const rider = this.state.vehicles.has(client.sessionId) && this.state.players.get(client.sessionId);
+      if (rider) { const a = angle(data); if (rider.alive && a !== null) this.vehicleFire(rider, a, Number(data?.d)); return; }   // Sofea: left click fires the tank cannon / rockets
+      const p = playing(client.sessionId), a = angle(data); if (p && (a !== null || p.activeSlot === 5)) this.attack(p, a ?? 0, !!data?.heavy, Number(data?.d)); });
     // Fire axe: start/stop charging a heavy swing (the swing itself comes with the "attack" on release).
     this.onMessage("charge", (client, data) => { const p = playing(client.sessionId); if (!p) return;
       if (data?.on && p.activeSlot === 1 && p.melee === "axe") { if (!p.charging) this.chargeAt.set(p.sessionId, Date.now()); p.charging = true; }
@@ -413,14 +433,14 @@ export class SurvivalRoom extends Room {
     this.onMessage("revive", (client, data) => {
       const rescuer=this.state.players.get(client.sessionId);
       const target=this.state.players.get(String(data?.targetId||""));
-      if(!rescuer?.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85)return;
+      if(!rescuer?.alive||this.state.vehicles.has(client.sessionId)||!target||target.alive||target.bledOut||distance(rescuer,target)>85)return;
       rescuer.reviveTargetId=target.sessionId;rescuer.reviveProgress=0;
       this.state.message=`${rescuer.name} is reviving ${target.name}...`;
     });
     this.onMessage("repairTower", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       const amount = Math.max(0, Math.min(2000, Number(data?.amount) || 0));
-      if (!p?.alive || amount <= 0) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || amount <= 0) return;
       const cost = Math.ceil(amount / 25);
       if (this.state.scrap < cost || this.state.towerHp >= this.state.towerMaxHp) return;
       this.state.scrap -= cost;
@@ -430,13 +450,13 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("refuelGenerator", (client) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.fuel < 10 || this.state.generatorFuel >= 100) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.fuel < 10 || this.state.generatorFuel >= 100) return;
       this.state.fuel -= 10; this.state.generatorFuel = Math.min(100, this.state.generatorFuel + 25);
       this.state.message = `${p.name} refuelled the generator.`;
     });
     this.onMessage("repairGenerator", (client) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.scrap < 15 || this.state.generatorHp >= this.state.generatorMaxHp) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.scrap < 15 || this.state.generatorHp >= this.state.generatorMaxHp) return;
       this.state.scrap -= 15; this.state.generatorHp = Math.min(this.state.generatorMaxHp, this.state.generatorHp + 300);
       this.state.message = `${p.name} repaired the generator.`;
     });
@@ -445,7 +465,7 @@ export class SurvivalRoom extends Room {
       const kind = String(data?.kind || "");
       const costs = { barricade:{scrap:15,hp:450}, turret:{scrap:35,electronics:8,hp:300}, mine:{scrap:8,explosives:3,hp:1}, fence:{scrap:25,electronics:5,hp:250}, flameTrap:{scrap:20,fuel:8,hp:180} };
       const cfg = costs[kind];
-      if (!p?.alive || !cfg || this.state.structures.size >= 20) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || !cfg || this.state.structures.size >= 20) return;
       if (this.state.scrap < (cfg.scrap||0) || this.state.electronics < (cfg.electronics||0) || this.state.explosives < (cfg.explosives||0) || this.state.fuel < (cfg.fuel||0)) return;
       { let tx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, ty = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y; const td = Math.hypot(tx - p.x, ty - p.y);
         if (td > BUILD_RANGE) { tx = p.x + (tx - p.x) / td * BUILD_RANGE; ty = p.y + (ty - p.y) / td * BUILD_RANGE; }
@@ -538,7 +558,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
@@ -558,6 +578,7 @@ export class SurvivalRoom extends Room {
 
   // Test helper: restart at wave n (clears zombies, revives everyone).
   jumpToWave(n) {
+    this.dismountAll();
     this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.state.stage = n; this.state.phase = "playing"; this.state.explore = false;
     this.inBreak = false; this.state.countdown = 0; this.enraged.clear();
     for (const p of this.state.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.hp = p.maxHp; }
@@ -615,7 +636,7 @@ export class SurvivalRoom extends Room {
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
     p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
-    const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander"];
+    const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator"];
     if(classIds.includes(profile.characterClass)) p.characterClass=profile.characterClass;
     applyClassBase(p);
     this.loadMag(p);
@@ -629,7 +650,7 @@ export class SurvivalRoom extends Room {
   onLeave(client) {
     const p = this.state.players.get(client.sessionId);
     if (p) this.state.message = `${p.name} left the room.`;
-    this.state.players.delete(client.sessionId);
+    this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       const next = [...this.state.players.values()].find(p => !p.isBot);
@@ -817,6 +838,7 @@ export class SurvivalRoom extends Room {
 
   useAbility(p, data) {
       const cls=p.characterClass;
+      if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
@@ -937,6 +959,10 @@ export class SurvivalRoom extends Room {
   }
   ultState(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+    if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
+      const v = this.state.vehicles.get(p.sessionId), alive = v?.kind === "heli", active = !alive ? 0 : (v.phase === "call" ? SOFEA.heli.life : v.left) * 1000;
+      return { info, alive, active, left: alive ? active + SOFEA.heli.cd * 1000 : Math.max(0, info.readyAt - now) };
+    }
     const scout = p.characterClass === "scout", dante = p.characterClass === "demolitionist";
     const alive = scout ? p.storm > 0 : dante ? !!this.demoOf(p) || this.ripples.some(r => r.owner === p.sessionId && r.kind === "demo") : [...this.state.structures.values()].filter(st => st.kind === "heavyTurret" && st.ownerId === p.sessionId).length;
     const active = !alive ? 0 : scout ? p.storm * 1000 : dante ? Math.max(0, info.summonedAt + DANTE.demo.life * 1000 - now) : Math.max(0, info.summonedAt + ULT_LIFE * 1000 - now);   // while it's up, Q can't be used
@@ -944,7 +970,11 @@ export class SurvivalRoom extends Room {
     return { info, alive, left, active };
   }
   useUlt(p) {
-    if (!["engineer", "scout", "demolitionist"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "operator") {
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !this.callVehicle(p, "heli")) return;
+      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return;
+    }
     if (p.characterClass === "demolitionist") { const c = this.demoOf(p); if (c) { if (c.deploy <= 0) this.detonateDemo(c); return; } }   // second Q: blow it
     const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
     if (p.characterClass === "demolitionist") { this.placeDemo(p); info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return; }
@@ -1009,7 +1039,7 @@ export class SurvivalRoom extends Room {
           const d = Math.hypot(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
           if (e.wallSafe && !this.lineClear(ep, z)) continue;   // rocket blasts don't go through walls
           if (!z.boss && d > 0.1 && e.push) this.steerMove(z, z.id, Math.atan2(z.y - e.y, z.x - e.x), e.push, q => this.solveZombie(q));
-          const dmg = e.dmg * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);
+          const dmg = (e.fall != null ? e.dmg - (e.dmg - e.fall) * Math.min(1, d / e.r) : e.dmg) * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);   // fall: damage at the edge
           if (owner) this.hitZombie(z, owner, dmg); else { z.hp -= dmg; if (z.hp <= 0) this.killZombie(z, null); }
         }
         if (e.kind !== "demo") { this.broadcast("boom", { x: Math.round(e.x), y: Math.round(e.y), r: e.r, k: e.kind }); continue; }
@@ -1025,6 +1055,153 @@ export class SurvivalRoom extends Room {
       const { left, active, alive } = this.ultState(p, now), c = this.demoOf(p);
       p.ultCd = alive ? D.cd : Math.ceil(left / 100) / 10; p.ultActive = c ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // ---------- SOFEA: tank (E) + helicopter (Q) ----------
+  vmem(p) { let m = this.vmemory.get(p.sessionId); if (!m) { m = { shotAt: 0, crush: new Map(), movingUntil: 0, protectUntil: 0, safe: { x: p.x, y: p.y } }; this.vmemory.set(p.sessionId, m); } return m; }
+  vehicleFits(x, y, r) {
+    const cx = ARENA.width / 2, cy = ARENA.height / 2;
+    return x > r + 20 && y > r + 20 && x < ARENA.width - r - 20 && y < ARENA.height - r - 20 && !this.blockedByMap(x, y, r)
+      && !(Math.abs(x - cx) < TOWER_HALF + r && Math.abs(y - cy) < TOWER_HALF + r) && !(Math.abs(x - cx - GEN_OFF.x) < GEN_OFF.h + r && Math.abs(y - cy - GEN_OFF.y) < GEN_OFF.h + r);
+  }
+  // nearest clear spot around (x, y) within `max` px (rings of 12 points), or null
+  clearSpot(x, y, r, max, ok = () => true) {
+    if (this.vehicleFits(x, y, r) && ok(x, y)) return { x, y };
+    for (let d = 30; d <= max; d += 30) for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2, px_ = x + Math.cos(a) * d, py_ = y + Math.sin(a) * d;
+      if (this.vehicleFits(px_, py_, r) && ok(px_, py_)) return { x: px_, y: py_ };
+    }
+    return null;
+  }
+  // E / Q: radio call (0.8s), then the vehicle arrives and she boards it. Returns false (no cooldown used) if it can't come.
+  callVehicle(p, kind) {
+    if (this.state.vehicles.has(p.sessionId) || !p.alive) return false;
+    const spot = kind === "tank" ? this.clearSpot(p.x, p.y, SOFEA.tank.body + 6, 160) : { x: p.x, y: p.y };
+    if (!spot) { this.state.message = `${p.name}: no room for the tank here.`; return false; }
+    const v = new VehicleState(); v.id = p.sessionId; v.kind = kind; v.phase = "call"; v.x = spot.x; v.y = spot.y;
+    v.hull = (p.facing || 1) < 0 ? Math.PI : 0; v.aim = p.aim || 0; v.left = SOFEA.call; v.mv = false; v.shots = 0;
+    this.state.vehicles.set(v.id, v); const m = this.vmem(p); m.shotAt = 0; m.crush.clear(); m.safe = { x: p.x, y: p.y };
+    p.charging = false; if (p.reloadLeft > 0) p.reloadLeft = 0;
+    this.broadcast("sofea", { k: "call", id: p.sessionId, kind });
+    this.state.message = kind === "tank" ? `${p.name}: "Requesting armour!"` : `${p.name}: "Air support, inbound!"`;
+    return true;
+  }
+  moveVehicle(p, v, dx, dy, dt) {
+    const K = SOFEA[v.kind], mag = Math.hypot(dx, dy), now = Date.now();
+    if (mag < 0.01 || dt <= 0) return;
+    const ox = p.x, oy = p.y, step = K.speed * dt, n = Math.max(1, Math.ceil(step / 8));
+    for (let i = 0; i < n; i++) {
+      p.x = clamp(p.x + dx / mag * step / n, K.body, ARENA.width - K.body); p.y = clamp(p.y + dy / mag * step / n, K.body, ARENA.height - K.body);
+      this.solveVehicle(p, v);
+    }
+    const moved = Math.hypot(p.x - ox, p.y - oy);
+    v.x = p.x; v.y = p.y; if (v.kind === "tank") v.hull = Math.atan2(dy, dx);
+    if (moved / dt >= SOFEA.tank.crush.minSpeed) { this.vmem(p).movingUntil = now + 160; if (v.kind === "tank") this.tankCrush(p, v, now, ox, oy); }
+    if (dx) p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(p.sessionId, now);
+  }
+  // tank: blocked by the tower, generator, solid structures and map pieces; helicopter: only tall things (map pieces, tower)
+  solveVehicle(p, v) {
+    const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }];
+    if (v.kind === "tank") {
+      boxes.push({ x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
+      for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
+      for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
+    }
+    for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
+    this.pushOut(p, boxes, SOFEA[v.kind].body);
+  }
+  // tank tracks: zombies inside the hull's footprint (checked along the move, so fast moves can't skip) get run over
+  tankCrush(p, v, now, ox, oy) {
+    const C = SOFEA.tank.crush, K = SOFEA.tank, m = this.vmem(p), scale = 1 + (this.state.stage - 1) * 0.08, c = Math.cos(v.hull), s = Math.sin(v.hull);
+    for (const z of [...this.state.zombies.values()]) {
+      let hit = false;
+      for (const f of [0, 0.5, 1]) {
+        const vx = ox + (v.x - ox) * f, vy = oy + (v.y - oy) * f, rx = z.x - vx, ry = z.y - vy;
+        if (Math.abs(rx * c + ry * s) < K.hw + z.radius * .6 && Math.abs(-rx * s + ry * c) < K.hh + z.radius * .6) { hit = true; break; }
+      }
+      if (!hit || now - (m.crush.get(z.id) || 0) < C.gap * 1000) continue;
+      m.crush.set(z.id, now);
+      if (!z.boss) { const a = Math.atan2(z.y - v.y, z.x - v.x); this.steerMove(z, z.id, a, C.push, q => this.solveZombie(q)); }
+      this.hitZombie(z, p, (z.boss ? C.boss : C.dmg) * scale);
+    }
+  }
+  vehicleFire(p, a, dist) {
+    const v = this.state.vehicles.get(p.sessionId); if (!v || v.phase !== "ride" || v.left <= 0 || !p.alive) return;
+    const K = SOFEA[v.kind], W = K.shot, now = Date.now(), m = this.vmem(p);
+    if (now - m.shotAt < K.rate * 1000) return;
+    m.shotAt = now; v.aim = a; p.aim = a; v.shots++; this.lastAimAt.set(p.sessionId, now);
+    const want = Number.isFinite(dist) && dist > 20 ? Math.min(dist, W.range) : W.range, pts = [];
+    for (const off of v.kind === "tank" ? [0] : [-K.pod, K.pod]) {   // helicopter: one rocket from each wing pod
+      const ox = v.x - Math.sin(a) * off, oy = v.y + Math.cos(a) * off;
+      const end = Math.max(20, Math.min(this.wallDist(ox, oy, a, want) - 4, want)), bx = ox + Math.cos(a) * end, by = oy + Math.sin(a) * end;
+      this.ripples.push({ kind: v.kind === "tank" ? "shell" : "hrocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / W.speed, dmg: W.dmg, fall: W.min, r: W.r, flat: 1, push: 8, wallSafe: true, scaled: true });
+      pts.push([Math.round(ox), Math.round(oy), Math.round(bx), Math.round(by)]);
+    }
+    this.broadcast("sofea", { k: "fire", id: p.sessionId, kind: v.kind, a: Math.round(a * 100) / 100, pts, sp: W.speed });
+  }
+  // get out: next to the vehicle on clear ground, 0.75s of protection, cooldown starts (not if the call never finished)
+  dismount(p, v, now) {
+    this.state.vehicles.delete(v.id);
+    const m = this.vmem(p);
+    if (v.phase === "ride") {
+      const zfree = (x, y) => ![...this.state.zombies.values()].some(z => Math.hypot(z.x - x, z.y - y) < z.radius + BODY_R);
+      const side = v.kind === "tank" ? { x: v.x - Math.sin(v.hull) * 52, y: v.y + Math.cos(v.hull) * 52 } : { x: v.x, y: v.y };
+      const spot = this.clearSpot(side.x, side.y, BODY_R + 2, 180, zfree) || this.clearSpot(v.x, v.y, BODY_R + 2, 240) || (this.vehicleFits(m.safe.x, m.safe.y, BODY_R) ? m.safe : { x: ARENA.width / 2, y: ARENA.height / 2 + TOWER_HALF + 40 });
+      p.x = spot.x; p.y = spot.y; this.solveCollisions(p);
+      if (v.kind === "tank") p.abilityCooldown = SOFEA.tank.cd;
+      else { const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 }; info.readyAt = now + SOFEA.heli.cd * 1000; this.ultInfo.set(p.sessionId, info); }
+      m.protectUntil = now + SOFEA.protect * 1000;
+    } else if (v.kind === "heli") { const info = this.ultInfo.get(p.sessionId); if (info) info.summonedAt = 0; }
+    this.broadcast("sofea", { k: "leave", id: p.sessionId, kind: v.kind, x: Math.round(v.x), y: Math.round(v.y), ok: v.phase === "ride" ? 1 : 0 });
+  }
+  dismountAll() { const now = Date.now(); for (const v of [...this.state.vehicles.values()]) { const p = this.state.players.get(v.id); if (p) this.dismount(p, v, now); else this.state.vehicles.delete(v.id); } }
+  updateSofea(dt, now) {
+    for (const v of [...this.state.vehicles.values()]) {
+      const p = this.state.players.get(v.id);
+      if (!p) { this.state.vehicles.delete(v.id); continue; }
+      if (!p.alive) { this.dismount(p, v, now); continue; }
+      if (v.phase === "call") {
+        v.left = Math.max(0, v.left - dt);
+        if (v.left <= 0) {
+          v.phase = "ride"; v.left = SOFEA[v.kind].life;
+          if (v.kind === "tank") { p.x = v.x; p.y = v.y; } else { v.x = p.x; v.y = p.y; }
+          this.vmem(p).safe = { x: p.x, y: p.y };
+          this.broadcast("sofea", { k: "board", id: p.sessionId, kind: v.kind, x: Math.round(v.x), y: Math.round(v.y) });
+        }
+        continue;
+      }
+      p.stunned = 0; p.slowed = 0; p.charging = false;   // vehicles shrug off stuns and slows
+      v.x = p.x; v.y = p.y; v.mv = now < this.vmem(p).movingUntil;
+      v.left = Math.max(0, v.left - dt);
+      if (v.left <= 0) this.dismount(p, v, now);
+    }
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "operator") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      if (!this.state.vehicles.has(p.sessionId) && p.alive && !this.blockedByMap(p.x, p.y, BODY_R)) this.vmem(p).safe = { x: p.x, y: p.y };
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? SOFEA.heli.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // damage taken while riding: tank 65%, helicopter 80%, none for 0.75s after getting out
+  vehicleGuard(now) {
+    const g = new Map();
+    for (const p of this.state.players.values()) {
+      if (!p.alive || p.characterClass !== "operator") continue;
+      const v = this.state.vehicles.get(p.sessionId), m = this.vmemory.get(p.sessionId);
+      const k = m && now < m.protectUntil ? 0 : v?.phase === "ride" ? SOFEA[v.kind].taken : 1;
+      if (k < 1) g.set(p, { hp: p.hp, k });
+    }
+    return g;
+  }
+  applyVehicleGuard(g) {
+    for (const [p, { hp, k }] of g) {
+      const after = p.alive ? p.hp : (this.downHp.get(p.sessionId) ?? 0);
+      if (after >= hp) continue;
+      const fixed = hp - (hp - after) * k;
+      if (fixed > 0 && !p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; }
+      if (fixed > 0) p.hp = fixed;
     }
   }
   // ---------- RAVEN ----------
@@ -1501,6 +1678,8 @@ export class SurvivalRoom extends Room {
     const pool = seen.length ? seen : zs;
     const near = pool.length ? pool.reduce((a, z) => distance(b, z) < distance(b, a) ? z : a) : null;
     const nearD = near ? distance(b, near) : Infinity;
+    const ride = s.vehicles.get(b.sessionId);
+    if (ride) { if (ride.phase === "ride") this.botVehicle(b, ride, near, nearD, brain, dt); this.botBrain.set(b.sessionId, brain); return; }
     // Rescue: go to the nearest downed teammate unless a zombie is right on top of us.
     const downed = [...s.players.values()].filter(p => !p.alive && !p.bledOut && p !== b)
       .sort((m, n) => distance(b, m) - distance(b, n))[0];
@@ -1560,7 +1739,11 @@ export class SurvivalRoom extends Room {
     }
     if (b.hp < b.maxHp * 0.4 && b.medkits > 0) this.useQuickItem(b);
     // Class ability when zombies are close.
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
+      if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
+      else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
+    }
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -1573,6 +1756,20 @@ export class SurvivalRoom extends Room {
       if (b.ultReady && nearD < 130) this.useUlt(b);
     }
     this.botBrain.set(b.sessionId, brain);
+  }
+
+  // Bot driving Sofea's vehicle: the tank rolls into the nearest zombies, the helicopter keeps its distance and circles; both fire at the nearest.
+  botVehicle(b, v, near, nearD, brain, dt) {
+    const center = { x: ARENA.width / 2, y: ARENA.height / 2 }; let mx = 0, my = 0;
+    if (near) {
+      const ax = (near.x - b.x) / nearD, ay = (near.y - b.y) / nearD;
+      if (v.kind === "tank") { mx = ax; my = ay; }
+      else if (nearD < 220) { mx = -ax; my = -ay; } else if (nearD > 420) { mx = ax; my = ay; } else { mx = -ay * brain.strafe; my = ax * brain.strafe; }
+      const ft = distance(b, center); if (ft > 520) { mx += (center.x - b.x) / ft; my += (center.y - b.y) / ft; }
+      if (nearD < SOFEA[v.kind].shot.range) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
+    } else if (distance(b, center) > 200) { mx = center.x - b.x; my = center.y - b.y; }
+    const ox = b.x, oy = b.y; this.moveVehicle(b, v, mx, my, dt);
+    if (Math.hypot(b.x - ox, b.y - oy) < 0.5 && (mx || my)) brain.strafe = -(brain.strafe || 1);
   }
 
   // Zombies along a straight line from the player, nearest first.
@@ -1612,7 +1809,7 @@ export class SurvivalRoom extends Room {
 
   // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
   downPlayer(target) {
-    target.hp = 0; target.alive = false;
+    this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
     const downs = (this.downs.get(target.sessionId) || 0) + 1;
     this.downs.set(target.sessionId, downs);
     target.bleedout = Math.max(10, 35 - downs * 5);
@@ -1646,7 +1843,7 @@ export class SurvivalRoom extends Room {
     }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
-      if (!z.boss && ["engineer", "scout", "demolitionist"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (!z.boss && ["engineer", "scout", "demolitionist", "operator"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
       if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
         killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
@@ -1675,6 +1872,7 @@ export class SurvivalRoom extends Room {
     this.lastTick = now;
     for (const p of this.state.players.values()) if (p.charging && (!p.alive || p.activeSlot !== 1 || p.melee !== "axe" || this.state.phase !== "playing")) p.charging = false;
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
+    if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
     if (this.state.phase === "cleared") {
       if (!this.inBreak) { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
       this.state.countdown = Math.max(0, this.state.countdown - dt);
@@ -1688,6 +1886,7 @@ export class SurvivalRoom extends Room {
       this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
       return;
     }
+    const guard = this.vehicleGuard(now);
     if (!this.state.explore) this.state.elapsed += dt;   // explore mode: timer frozen, no spawns (zombies were cleared when it was turned on)
     this.state.matchTime += dt;
     for(const p of this.state.players.values()) if(p.abilityCooldown>0)p.abilityCooldown=Math.max(0,p.abilityCooldown-dt);
@@ -1703,6 +1902,7 @@ export class SurvivalRoom extends Room {
     this.updateMachines(dt, now);
     this.updateRaven(dt, now);
     this.updateDante(dt, now);
+    this.updateSofea(dt, now);
     this.separateZombies();
     for(const p of this.state.players.values()) if(p.reloadLeft>0){p.reloadLeft=Math.max(0,p.reloadLeft-dt);if(p.reloadLeft===0)this.finishReload(p);}
     for(const b of this.state.players.values()) if(b.isBot&&b.alive) this.botThink(b, dt, now);
@@ -1749,7 +1949,8 @@ export class SurvivalRoom extends Room {
 
     const players = [...this.state.players.values()].filter(p => p.alive);
     const machines = [...this.state.robots.values(), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
-    const seen = players.filter(p => !(p.shadow > 0));   // invisible Raven: zombies don't see her
+    const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
+    const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId));   // invisible Raven / Sofea up in her helicopter: zombies can't get her
     for (const z of [...this.state.zombies.values()]) {
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, seen); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, seen); continue; }
@@ -1765,7 +1966,7 @@ export class SurvivalRoom extends Room {
       }
       const isMachine = !!target.maxHp && !target.sessionId;
       z.targetId = target.sessionId || "";
-      const d = distance(z, target);
+      const d = distance(z, target) - (target.sessionId && this.state.vehicles.get(target.sessionId)?.phase === "ride" ? SOFEA.tank.reach : 0);   // the tank is big: they hit its side
       const a = Math.atan2(target.y - z.y, target.x - z.x);
       if (z.kind === "mutant") {
         if (z.slam > 0) {                                  // mid-attack
@@ -1818,6 +2019,7 @@ export class SurvivalRoom extends Room {
         this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
       }
     }
+    this.applyVehicleGuard(guard);
     const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
     if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }
     if (this.state.elapsed >= 90 && !hiveAlive && this.state.waveType === "normal" && this.state.phase === "playing") {

@@ -33,13 +33,17 @@ defineTypes(StructureState, {
 export class RobotState extends Schema {}
 defineTypes(RobotState, { id: "string", kind: "string", x: "number", y: "number", hp: "number", maxHp: "number", ownerId: "string", aim: "number", act: "string", hx: "number", hy: "number", uses: "number", face: "number", tgt: "string" });
 
+// Sofea's tank / helicopter (one per Sofea, id = her sessionId). phase: "call" (radio call) then "ride".
+export class VehicleState extends Schema {}
+defineTypes(VehicleState, { id: "string", kind: "string", phase: "string", x: "number", y: "number", hull: "number", aim: "number", left: "number", mv: "boolean", shots: "number" });
+
 // A spitter's acid puddle on the ground (hurts survivors standing in it).
 export class PuddleState extends Schema {}
 defineTypes(PuddleState, { id: "string", x: "number", y: "number", r: "number", life: "number", maxLife: "number" });
 
 export class GameState extends Schema {}
 defineTypes(GameState, {
-  players: { map: PlayerState }, zombies: { map: ZombieState }, structures: { map: StructureState }, loot: { map: LootState }, puddles: { map: PuddleState }, robots: { map: RobotState },
+  players: { map: PlayerState }, zombies: { map: ZombieState }, structures: { map: StructureState }, loot: { map: LootState }, puddles: { map: PuddleState }, robots: { map: RobotState }, vehicles: { map: VehicleState },
   stage: "number", elapsed: "number", stageDuration: "number",
   bossSpawned: "boolean", bossDead: "boolean", phase: "string",
   roomCode: "string", hostId: "string", message: "string", totalKills: "number",

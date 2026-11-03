@@ -9,13 +9,13 @@ const room = new SurvivalRoom(); room.onCreate({}); const seenEv = {}; room._onB
 const H = { sessionId: "H" }; room.onJoin(H, { name: "Host" });
 const send = (c, t, d) => room._handlers[t](c, d);
 for (let i = 0; i < 7; i++) send(H, "addBot");
-const classes = ["engineer", "scout", "demolitionist", "assault", "medic", "juggernaut", "sniper", "commander"]; let ci = 0;
+const classes = ["engineer", "scout", "demolitionist", "assault", "medic", "juggernaut", "sniper", "operator"]; let ci = 0;
 for (const p of room.state.players.values()) { p.characterClass = classes[ci++ % classes.length]; }
 const host = room.state.players.get("H"); host.isBot = true; room.botBrain.set("H", { strafe: 1, nextThink: 0 });
 send(H, "start", {});
 const bad = [];
 function scan(tag) {
-  for (const [what, map] of [["player", room.state.players], ["zombie", room.state.zombies], ["robot", room.state.robots], ["structure", room.state.structures]])
+  for (const [what, map] of [["player", room.state.players], ["zombie", room.state.zombies], ["robot", room.state.robots], ["structure", room.state.structures], ["vehicle", room.state.vehicles]])
     for (const e of map.values()) for (const k of ["x", "y", "hp"]) if (e[k] !== undefined && !Number.isFinite(e[k])) bad.push(`${tag}: ${what} ${e.id || e.sessionId} ${e.kind || e.characterClass} ${k}=${e[k]}`);
 }
 let t = Date.now(); const stats = {};
@@ -38,6 +38,6 @@ for (let wave = 1; wave <= LAST; wave++) {
   send(H, "nextStage");
   if (room.state.phase !== "playing") { room.state.countdown = 0; for (let i = 0; i < 5 && room.state.phase !== "playing"; i++) { t += 100; room.lastTick = t - 100; const real = Date.now; Date.now = () => t; room.tick(); Date.now = real; } }
 }
-console.log("events:", Object.entries(seenEv).filter(([k]) => /hive|demo|sky|shadow|wreck|summon|zdead/.test(k)).map(([k, v]) => k + "=" + v).join(" "));
+console.log("events:", Object.entries(seenEv).filter(([k]) => /hive|demo|sky|shadow|wreck|summon|zdead|sofea/.test(k)).map(([k, v]) => k + "=" + v).join(" "));
 console.log(bad.length ? "PROBLEMS:\n" + [...new Set(bad)].slice(0, 20).join("\n") : "SIM OK: no crashes, no NaN");
 room._dispose?.(); process.exit(bad.length ? 1 : 0);

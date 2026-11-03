@@ -20,6 +20,7 @@ COLS = 6
 TARGET_H = 54                       # body height in game pixels
 CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside a cell (room below for slash arcs)
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
+TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
 MIRROR_OF = {5: 3, 6: 2, 7: 1}      # up-left <- up-right, left <- right, down-left <- down-right
 out_dir = os.path.join(here, '..', 'client', 'assets', 'sprites', 'dir8'); os.makedirs(out_dir, exist_ok=True)
 
@@ -47,7 +48,7 @@ def squeeze(runs, n):               # join the closest neighbours until there ar
 def foreground(src):
     r, g, b = src[..., 0], src[..., 1], src[..., 2]
     core = (r > 200) & (b > 200) & (g < 90)
-    soft = (r > 140) & (b > 140) & (g < 130) & (abs(r - b) < 110)
+    soft = (r > 140) & (b > 140) & (g < 130) & (abs(r - b) < (45 if TIGHT else 110))
     shadow = (r > 80) & (b > 80) & (g < 55) & (abs(r - b) < 50)       # darker magenta drop shadow: the game draws its own
     bgm = core.copy()
     for _ in range(3): bgm = ndimage.binary_dilation(bgm) & (core | soft | shadow)
@@ -101,7 +102,7 @@ def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
             sub = m[y0:y1, x0:x1]; rgb = src[ya + y0:ya + y1, xa + x0:xa + x1].copy()
             bg_ = ~sub
             edge = sub & (np.roll(bg_, 1, 0) | np.roll(bg_, -1, 0) | np.roll(bg_, 1, 1) | np.roll(bg_, -1, 1))
-            pink = edge & (rgb[..., 0] > rgb[..., 1] + 40) & (rgb[..., 2] > rgb[..., 1] + 40)
+            pink = edge & (rgb[..., 0] > rgb[..., 1] + 40) & (rgb[..., 2] > rgb[..., 1] + 40) & (abs(rgb[..., 0] - rgb[..., 2]) < 60 if TIGHT else True)
             rgb[pink] = (rgb[pink] * 0.35).astype(int)
             rgba = np.zeros(sub.shape + (4,), np.uint8); rgba[..., :3] = np.clip(rgb, 0, 255); rgba[..., 3] = sub * 255
             mainmask = lab[y0:y1, x0:x1] == main + 1
@@ -133,6 +134,8 @@ if __name__ == '__main__':
     sheet = Image.new('RGBA', (CELL_W * COLS, CELL_H * 8 * len(specs)), (0, 0, 0, 0))
     names = []
     for bi, (name, spec) in enumerate(specs):
+        spec, _, ncols = spec.partition('!')   # "!4": this sheet has 4 columns (e.g. a skill pose sheet)
+        COLS = int(ncols) if ncols else 6
         spec, _, pitch = spec.partition('%')   # "%175": columns are evenly spaced every 175px (effects bridge the gaps); "%219x150": rows too
         pitch, _, rpitch = pitch.partition('x')
         spec, _, order = spec.partition('@')   # "@U": rows on the sheet go U,UR,R,DR,D,DL,L,UL (instead of D,DR,R,UR,U,UL,L,DL)

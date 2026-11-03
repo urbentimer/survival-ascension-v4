@@ -117,5 +117,36 @@
    "attack1/windup",
    "attack2/hit"
   ]
+ },
+ "operator": {
+  "cellW": 112,
+  "cellH": 88,
+  "anchorX": 56,
+  "feetY": 80,
+  "blocks": [
+   "gun",
+   "knife",
+   "bat",
+   "axe",
+   "radio"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
  }
 }

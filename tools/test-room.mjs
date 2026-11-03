@@ -644,4 +644,48 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._handlers.debugBoss(B); ok(room.state.stage === 2, "a non-host player can't skip to the Butcher");
   room._handlers.debugBoss(A); ok(room.state.stage === 4 && room.state.waveType === "boss" && room.state.bossPhase === "horde" && room.state.zombies.size === 0, "the host skips straight to the Butcher (intro next)");
   room._dispose(); }
+// 33. SOFEA (operator): E = tank 30s (cannon + run-over), Q = helicopter 30s (rockets), then cooldowns
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.phase = "lobby"; p.characterClass = "operator"; send(A, "chooseClass", { id: "operator" }); room.state.phase = "playing";
+  ok(p.characterClass === "operator" && p.maxHp === 115 && p.speed === 180, "Sofea: 115 HP, speed 180");
+  p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
+  send(A, "ability", { a: 0 }); const v = room.state.vehicles.get("A");
+  ok(v && v.kind === "tank" && v.phase === "call", "E: radio call for the tank");
+  tick(18); ok(v.phase === "ride" && Math.abs(v.left - 30) < 0.2 && p.abilityCooldown === 0, `...then she's driving it for 30s (${v.left.toFixed(1)}s left)`);
+  send(A, "ability", {}); ok(room.state.vehicles.size === 1, "E again does nothing while she's in it");
+  const x0 = p.x; for (let i = 0; i < 10; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0, a: 0 }); }
+  ok(p.x - x0 > 120 && p.x - x0 < 150 && Math.abs(v.x - p.x) < 1, `WASD drives the tank at ~140 px/s (${Math.round(p.x - x0)}px in 1s)`);
+  // run-over
+  const z = placeZombie(room, p.x + 60, p.y, 500); const hp0 = z.hp;
+  for (let i = 0; i < 3; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0, a: 0 }); }
+  ok(z.hp < hp0 && hp0 - z.hp <= 60, `driving into a zombie runs it over (${Math.round(hp0 - z.hp)} dmg, not again within 0.75s)`);
+  room.state.zombies.clear();
+  // cannon
+  const t = placeZombie(room, p.x + 300, p.y, 500); events.length = 0;
+  send(A, "attack", { a: 0, d: 300 }); send(A, "attack", { a: 0, d: 300 }); room.ripples.forEach(r => r.t -= 3000);
+  ok(events.filter(e => e.type === "sofea" && e.k === "fire").length === 1, "left click fires the cannon (once per 1.5s)");
+  tick(12); ok(t.hp < 500 - 60 && t.hp > 500 - 80, `the shell flies to the click and explodes (${Math.round(500 - t.hp)} dmg)`);
+  room.state.zombies.clear();
+  // armour: 35% less damage
+  const hpA = p.hp, bz = placeZombie(room, p.x + 40, p.y, 9999); bz.attackCooldown = 0; bz.damage = 20; bz.role = "hunter"; tick(1);
+  ok(p.hp < hpA && Math.abs((hpA - p.hp) - 20 * 0.65) < 1.5, `the tank takes 35% off hits (${(hpA - p.hp).toFixed(1)} of 20)`);
+  room.state.zombies.clear();
+  // ride ends -> out next to it, cooldown 30s
+  v.left = 0.05; tick(2); ok(!room.state.vehicles.has("A") && p.abilityCooldown > 29, `after 30s she gets out and E cools down 30s (${p.abilityCooldown.toFixed(1)}s)`);
+  ok(!room.blockedByMap(p.x, p.y, 10) && p.alive, "...on clear ground");
+  // helicopter
+  p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
+  send(A, "ult", { a: 0 }); const h = room.state.vehicles.get("A"); ok(h && h.kind === "heli", "Q: radio call for the helicopter"); tick(18);
+  ok(h.phase === "ride", "...she flies it");
+  const zz = placeZombie(room, p.x + 30, p.y, 500); zz.attackCooldown = 0; zz.role = "hunter"; zz.damage = 20; const hpH = p.hp; tick(3);
+  ok(p.hp === hpH, "zombies on the ground can't reach the helicopter");
+  room.state.zombies.clear(); const r1 = placeZombie(room, p.x + 400, p.y, 500); events.length = 0;
+  send(A, "attack", { a: 0, d: 400 }); room.ripples.forEach(r => r.t -= 3000); const f = events.find(e => e.type === "sofea" && e.k === "fire"); ok(f && f.pts.length === 2, "left click fires a pair of rockets");
+  tick(14); ok(500 - r1.hp > 100, `both rockets hit (${Math.round(500 - r1.hp)} dmg)`);
+  h.left = 0.05; tick(2); ok(!room.state.vehicles.has("A") && p.ultCd > 59, `after 30s she lands; Q cools down 60s (${p.ultCd}s)`);
+  // can't call the tank with no room / while downed the vehicle goes
+  send(A, "ability", {}); ok(!room.state.vehicles.has("A"), "E is on cooldown");
+  p.abilityCooldown = 0; send(A, "ability", {}); tick(18); room.vmemory.get("A").protectUntil = 0; p.hp = 1; const killer = placeZombie(room, p.x + 30, p.y, 9999); killer.attackCooldown = 0; killer.damage = 500; killer.role = "hunter"; tick(3);
+  ok(!p.alive && !room.state.vehicles.has("A"), "if she goes down, the tank goes away (normal downed rules)");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
