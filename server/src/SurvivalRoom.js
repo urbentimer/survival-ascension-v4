@@ -1,16 +1,223 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
-import { GameState, PlayerState, ZombieState, StructureState, LootState } from "./schema.js";
+import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState } from "./schema.js";
+import { buildMapLayout, mapBoxes, packLayout } from "./mapLayout.js";
 
-const ARENA = { width: 1200, height: 760 };
+// The world: about 9x the area of one screen. The camera follows each player around it.
+const ARENA = { width: 3600, height: 2280 };
+const SPAWN_RING = [850, 1150];   // zombies appear this far from the radio tower (out of view)
+// Two kinds of zombie (z.role):
+//  "tower"  - RUNNERS: sprint for the radio tower and never attack survivors.
+//  "hunter" - walkers, brutes, spitters, mutants: always go after the nearest survivor (anywhere on the map);
+//             only if every survivor is down do they head for the tower.
+// Bosses go for the tower but fight anyone who comes within BOSS_AGGRO.
+const TOWER_KINDS = { runner: 1 };
+const BOSS_AGGRO = 250;
+// Brute GROUND SLAM: when a survivor is close, the brute stops, winds up (danger circle on the ground),
+// then slams: damage + stun to every survivor inside the radius.
+// Spitter ACID: lobs a glob at where the survivor stands (so it can be dodged). It lands as a big puddle that
+// burns anyone standing in it for a few seconds. Puddles are ellipses (ry = r * 0.6) to match the 3/4 view.
+const ACID = { minRange: 140, maxRange: 430, hold: 380, backOff: 170, speed: 330, cooldown: 2.6, splash: 34, radius: 85, life: 5, dpsMult: 1.4 };
+// ---------- THE BUTCHER (wave 4 boss) ----------
+// Tanky, hunts survivors only (never the tower). Armoured front: 50% less damage from the front, full from behind.
+// CHOP: cleaver smash -> 3 ground shockwaves: red = damage, yellow = stun, blue = slow (bands, measured on the flat ground ellipse).
+// HOOK: every 10-15s throws a meat hook at the furthest survivor in range; a hit drags them in, holds them 0.5s and he chops.
+// ENRAGED (<30% HP): faster, hooks every 8-10s, and a whirlwind spin every ~8s.
+const BUTCHER = {
+  speed: 130, armour: 0.5, armourArc: 1.05,
+  chop: { trigger: 150, windup: .7, comboWindup: .38, after: .65, cd: 2.6, offset: 55, rings: [95, 185, 275], ringDelay: .12, stun: 1.0, slow: 2.0 },
+  hook: { range: 480, minRange: 170, aim: .5, lock: .08, speed: 2600, cd: [10, 15], enragedCd: [8, 10], first: 5, hitR: 34, pullSpeed: 640, hold: .55, dmg: 8 },
+  spin: { every: 8, dur: 3, radius: 115, tick: .35, dmgMult: .45, speedMult: 1.15 },
+  enrageAt: .3, enrageSpeed: 1.2,
+};
+// DEFLECT: only the FIRE AXE. Swing it toward the incoming hook as it arrives (tip within `reach` of you),
+// or up to `window` seconds before it touches you -> the hook breaks and the Butcher staggers (armour down).
+const DEFLECT = { window: .25, reach: 95, arc: 1.25, stagger: 1.5, heavyStagger: 2.5 };
+// THE HIVEMIND: mini boss on the waves between the big boss waves (2, 6, 10, 14...). It crawls in partway through the wave;
+// the wave only ends once it's dead. Bites up close, slams the ground (damage + stun), leaps at survivors far away,
+// and keeps tearing zombies out of its body. Comes back tougher every time.
+const HIVE = {
+  hp: 700, speed: 46, radius: 44, dmg: 20, arriveAt: 40, gold: 40,
+  bite:  { range: 120, windup: .45, total: .95, cd: 1.3, reach: 135, arc: 1.05, mult: 1.4 },
+  slam:  { range: 200, windup: .55, total: 1.35, cd: 7, radius: 210, mult: 1.1, stun: .8, flat: .62 },
+  jump:  { min: 320, max: 760, total: 1.2, up: .3, land: .9, cd: 9, radius: 150, mult: 1.25 },
+  spawn: { every: 8, first: 5, max: 4 },
+};
+const isHiveWave = stage => stage % 4 === 2;
+const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
+// ---------- VIKTOR (Engineer) ----------
+// E (skill): ROBOT. Summons ONE robot (assault / support / hunter) where Viktor aims; 25s cooldown. Up to 3 alive:
+//   a 4th replaces the oldest. Robots are independent: each guards its own spot and never strays more than
+//   ROBOT_LEASH px from it. They stay until destroyed. Zombies attack them.
+// Q (ultimate): HEAVY TURRET. Unlocks at 100 of Viktor's own kills (bosses don't count) and stays unlocked.
+//   Deploys in 1s (vulnerable), spins to the nearest zombie, minigun, no generator. One at a time.
+//   Q again 30s after deploying replaces it; once it's destroyed, wait 30s. (Solo preview: unlocked from the start.)
+const HEAVY_TURRET = { cd: 25, hp: 650, deploy: 1.0, range: 680, rate: .52, dmg: 16, radius: 22 };
+const ULT_KILLS = 100, ULT_CD = 60, ULT_LIFE = 40,   // Heavy Turret: lasts 40s, then the 60s cooldown starts
+      ROBOT_CD = 25, ROBOT_GAP = 3, ROBOT_LEASH = 300, ROBOT_MAX = 3, ROBOT_CHARGES = 3;   // Viktor: 3 robot charges, 3s between summons, +1 charge every 25s
+// Assault: 5 per hit (a wave-1 walker, 38 HP, takes 8). Hunter: 7 per laser (6 hits), every 2.2s, only at zombies inside its circle.
+// Assault hunts zombies anywhere; support visits survivors in turn (5s each, 3 visits, then breaks); hunter holds a 300px patch.
+const ROBOT = {
+  assault: { hp: 250, speed: 85, range: 230, rate: .6, dmg: 5 },
+  support: { hp: 150, speed: 185, range: 230, heal: 7, buff: 0.15, visit: 5, visits: 3, near: 80 },
+  hunter:  { hp: 90, speed: 155, range: 650, rate: 2.2, dmg: 7, pierce: 1, cone: 180 },   // range = laser length; targets come only from its circle
+};
+const ROBOT_R = 13;
+const BOSS_HP_PER_PLAYER = 0.6;                      // boss health +60% for every survivor after the first (bots count)
+const BOSS_WAVE = { horde: 45, introWait: 25, escortEvery: 3.2, escortMax: 14 };
+const ringZone = (dx, dy) => Math.hypot(dx, dy / 0.55);   // distance on the flat ground ellipse the shockwaves are drawn as
+const SLAM = { trigger: 115, radius: 140, windup: 0.8, total: 1.45, cooldown: 5.5, stun: 1.3, dmgMult: 1.5 };
+// How far past its body edge a zombie can hit (brutes have long, heavy arms).
+const ATTACK_REACH = { brute: 48, mutant: 52 }, DEFAULT_REACH = 22;
+// MUTANT: the scary one. Fast, tough, hits hard, and its claw slash is an area attack (everyone in a wide arc in front)
+// that it does WHILE running, without stopping.
+// Its attack is a CHARGED WHIP: coil (glows, slows down: your warning) -> lunge forward -> whip slash hits everyone
+// in a wide arc -> brief recovery. Times in seconds from the start of the attack (z.slam counts down from total).
+const MUTANT = { trigger: 150, charge: .38, lungeEnd: .56, hit: .47, total: .9, cooldown: 1.0, chargeSpeed: .35, lungeSpeed: 430, arc: 1.2, dmgMult: 1.6 };
+// Which zombies make up each wave: % of walker, runner, brute, spitter, mutant (adds up to 100).
+// Waves 1-16 are hand-tuned (runners from wave 1, brutes from wave 3 at 20%, spitters from 5, mutants from 9).
+// From 17 on, waves cycle through themes (rush, siege, mutant horde, boss) and walkers slowly thin out.
+const WAVE_MIX = {
+  1: [85, 15, 0, 0, 0],   2: [75, 25, 0, 0, 0],   3: [55, 25, 20, 0, 0],  4: [60, 25, 15, 0, 0],
+  5: [50, 25, 15, 10, 0], 6: [45, 30, 15, 10, 0], 7: [40, 25, 20, 15, 0], 8: [45, 25, 15, 15, 0],
+  9: [35, 25, 20, 10, 10], 10: [30, 30, 15, 15, 10], 11: [30, 25, 20, 10, 15], 12: [35, 25, 15, 15, 10],
+  13: [25, 30, 20, 10, 15], 14: [25, 25, 20, 15, 15], 15: [20, 30, 20, 15, 15], 16: [30, 25, 15, 15, 15],
+};
+const MIX_KINDS = ["walker", "runner", "brute", "spitter", "mutant"];
+function waveMix(stage) {
+  if (WAVE_MIX[stage]) return WAVE_MIX[stage];
+  const w = Math.round(25 - (Math.min(stage, 49) - 17) * 15 / 32);   // walkers: 25% at wave 17 -> 10% at wave 49
+  const rest = 100 - w;
+  const theme = [                                                     // shares of the non-walker part
+    [.40, .20, .15, .25],   // rush: lots of runners
+    [.15, .40, .30, .15],   // siege: brutes + spitters
+    [.20, .15, .15, .50],   // mutant horde
+    [.25, .25, .25, .25],   // boss wave: even mix
+  ][(stage - 17) % 4];
+  const m = [w, ...theme.map(t => Math.round(t * rest))]; m[4] += 100 - m.reduce((a, b) => a + b, 0);
+  return m;
+}
+function pickKind(stage) {
+  const m = waveMix(stage); let r = Math.random() * 100;
+  for (let i = 0; i < 5; i++) { r -= m[i]; if (r < 0) return MIX_KINDS[i]; }
+  return "walker";
+}
 const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed", "#e5a36b", "#d2d879"];
 const UPGRADES = {
-  damage: p => { p.damage += 5; },
-  fireRate: p => { p.fireRate = Math.min(5, p.fireRate * 1.2); },
+  damage: p => { p.bonusDamage = (p.bonusDamage || 0) + 20; applyLoadout(p); }, // +20% damage
+  fireRate: p => { p.rateMult = Math.min(3, (p.rateMult || 1) * 1.2); applyLoadout(p); },
   health: p => { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 35); },
   defence: p => { p.defence += 2; },
   speed: p => { p.speed = Math.min(300, p.speed * 1.1); }
 };
+// Class identity: base HP/speed/defence plus multipliers that apply to ANY weapon.
+const CLASS_STATS = {
+  assault:       { hp: 110, speed: 190, defence: 0, dmgMult: 1.10, rateMult: 1.10 },
+  juggernaut:    { hp: 160, speed: 150, defence: 5, dmgMult: 0.93, rateMult: 0.85 },
+  medic:         { hp: 105, speed: 185, defence: 1, dmgMult: 0.97, rateMult: 1.00 },
+  engineer:      { hp: 110, speed: 175, defence: 1, dmgMult: 0.97, rateMult: 1.00 },
+  scout:         { hp:  90, speed: 225, defence: 0, dmgMult: 1.03, rateMult: 1.20 },
+  demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
+  sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
+  commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 }
+};
+// Weapons are balanced around ~20 damage/second on a single zombie; each has a different strength.
+const WEAPONS = {
+  // slot: "secondary" = key 3 (sidearms), "primary" = key 2. mag = shots per magazine, reload = seconds.
+  // auto: hold the mouse to keep firing (otherwise one shot per click). jitter = random spread in radians.
+  pistol:   { slot: "secondary", dmg: 14, rate: 4.0, range: 450, mag: 12, reload: 1.0, infinite: true },          // semi-auto, never runs dry
+  smg:      { slot: "secondary", dmg:  6, rate: 8.0, range: 360, mag: 30, reload: 1.4, auto: true, jitter: 0.07 }, // full-auto spray, short range
+  rifle:    { slot: "primary",   dmg:  9, rate: 4.5, range: 520, mag: 30, reload: 1.6, auto: true, jitter: 0.03 }, // full-auto, accurate
+  shotgun:  { slot: "primary",   dmg: 12, rate: 1.1, range: 260, mag: 6,  reload: 2.0, pellets: 5, spread: 0.21, pelletMult: 0.5 }, // pump, 5-pellet cone
+  sniper:   { slot: "primary",   dmg: 55, rate: 0.8, range: 760, mag: 5,  reload: 2.2, pierce: 3 },  // bolt-action, goes through up to 3 zombies
+  launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 2.6, splash: 80 } // explodes on first hit
+};
+// Melee (key 1): swing in an arc toward the mouse. cd = seconds between swings, arc = half-angle in radians.
+const MELEE = {
+  // Melee is a last resort: a walker (38 HP) takes ~5 knife stabs.
+  knife:  { dmg:  8, cd: 0.35, range: 60, arc: 1.0 },
+  bat:    { dmg: 14, cd: 0.60, range: 72, arc: 1.2 },
+  axe:    { dmg: 26, cd: 0.90, range: 70, arc: 0.9 },
+  katana: { dmg: 18, cd: 0.50, range: 82, arc: 1.3 }
+};
+const MELEE_ORDER = ["knife", "bat", "axe", "katana"];
+// RAVEN (Scout): katana specialist. Starts with only her katana (stronger than anyone else's); can buy guns.
+// Katana tiers: one every 50 katana kills: 1 +25% dmg, 2 hits up to 5 + wider arc, 3 bleed, 4 +30% slash speed, 5 every 4th slash crits x2.5.
+// E SHADOW PASS: 350px dash slashing everything in the path -> invisible up to 20s (zombies ignore her; attacking ends it)
+//   -> her katana burns for 5s (hits stack burns on zombies: 3s, up to 5 stacks) -> then the 25s cooldown starts.
+// Q BLADE STORM (100 kills): spins for 10s slashing everything around her, then a 60s cooldown.
+const RAVEN = {
+  katana: { dmg: 27, cd: 0.42, range: 96, arc: 1.4, targets: 3 },
+  dash: { dist: 350, time: 0.22, mult: 2, width: 26 },
+  shadow: 20, fire: 5, cd: 25,
+  burn: { len: 3, dps: 8, max: 5 },
+  bleed: { len: 3, frac: 0.3 },
+  storm: { len: 10, cd: 60, radius: 118, every: 0.25, mult: 0.55 },
+  tierKills: 50, tiers: ["", "Honed Edge", "Wide Cut", "Bleed", "Swift Blade", "Ghost Steel"], critEvery: 4, crit: 2.5,
+};
+function ravenKatana(p) {
+  const t = p.katanaTier || 0, k = RAVEN.katana;
+  return { dmg: k.dmg * (t >= 1 ? 1.25 : 1), cd: k.cd * (t >= 4 ? 0.77 : 1), range: k.range, arc: k.arc + (t >= 2 ? 0.3 : 0), targets: t >= 2 ? 5 : k.targets };
+}
+// DANTE (Demolitionist): starts with a rocket launcher. Rockets fly in a straight line to where you click (or max range / a wall)
+//   and explode there (any survivor's launcher works this way).
+// E SKY BARRAGE (8s cd): fires 3 rockets into the sky one by one (0.15s apart); they come down at random spots around the mouse and explode.
+// Q DEMO RIPPLE (100 kills): first Q places a demo charge crate (arms in 1s); Q again detonates it any time (or it blows by itself after
+//   30s, or if Dante goes down). Big blast at the crate, then 3 rings of grenades fly out and explode: 4 big, 8, then 36 small. 60s cooldown.
+const DANTE = {
+  sky: { cd: 8, range: 520, n: 3, gap: 0.15, flight: 0.85, spread: 80, dmg: 90, r: 75, push: 18 },
+  rocketSpeed: 950,
+  demo: { arm: 1, life: 30, cd: 60, place: 46, flight: 0.45,
+    core: { dmg: 300, r: 110 },
+    // grenades land scattered around each ring (not a perfect circle); the last ripple mixes big and small blasts
+    rings: [{ n: 4, R: 90, dmg: 160, r: 70, at: 0.0 }, { n: 8, R: 180, dmg: 110, r: 60, at: 0.4 }, { n: 16, R: 300, dmg: 75, r: 46, at: 0.8, small: true, bigEvery: 3, bigDmg: 120, bigR: 62 }],
+    flat: 0.62, bossMult: 0.5, push: 22 },
+};
+function danteLoadout(p) { p.owned = "launcher,pistol"; p.primary = "launcher"; p.secondary = "pistol"; p.weapon = "launcher"; p.activeSlot = 2; }
+function ravenLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "katana"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
+function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.katanaKills = 0; p.katanaTier = 0; }
+// Fire axe heavy swing: hold the mouse 1 second, release -> wide, hard swing that hits everything in front and knocks zombies back.
+const AXE_HEAVY = { charge: 1.0, dmgMult: 2.5, range: 100, arc: 1.7, knockback: 36, moveMult: 0.6 };
+const MAX_MEDKITS = 3;
+// Things players and bots can't walk through (half-width of their square). Mines and flame traps are floor traps.
+const SOLID = { barricade: 20, turret: 16, fence: 18 };
+const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
+const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
+const BODY_R = 12;          // a survivor's collision radius
+const BUILD_RANGE = 160;
+const DASH_DISTANCE = 50, DASH_COOLDOWN = 5;   // seconds // you can place structures up to this far from yourself
+// Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
+// Upgrades are stored separately, so switching weapons never erases them.
+function applyLoadout(p) {
+  const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
+  const w = WEAPONS[p.weapon] || WEAPONS.rifle;
+  // bonusDamage / buffDamage are percentages (+20 = +20% damage)
+  p.damage = Math.round(w.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * 10) / 10;
+  p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1));
+}
+function applyClassBase(p) {
+  const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
+  p.maxHp = c.hp; p.hp = c.hp; p.speed = c.speed; p.defence = c.defence;
+  applyLoadout(p);
+}
+// Shop (open during the break between waves). Gold is earned per match from kills and gold pickups.
+const STARTER_WEAPONS = "pistol,rifle";
+const SHOP = {
+  smg:         { price: 35,  label: "SMG",            type: "weapon" },
+  shotgun:     { price: 40,  label: "Shotgun",        type: "weapon" },
+  sniper:      { price: 70,  label: "Sniper rifle",   type: "weapon" },
+  launcher:    { price: 120, label: "Launcher",       type: "weapon" },
+  medkit:      { price: 10,  label: "Medkit (quick item, max 3)" },
+  ammo:        { price: 5,   label: "Ammo +90" },
+  armor:       { price: 30,  label: "Armour plate (+2 defence)", max: 5 },
+  scrap:       { price: 15,  label: "Scrap +40 (team)" },
+  electronics: { price: 20,  label: "Electronics +8 (team)" },
+  fuel:        { price: 10,  label: "Fuel +30 (team)" },
+  explosives:  { price: 15,  label: "Explosives +5 (team)" }
+};
+const KILL_GOLD = { brute: 3, mutant: 5, spitter: 2 };
+const BREAK_SECONDS = 20;
+const BOT_NAMES = ["Ava", "Rex", "Juno", "Kai", "Mira", "Odin", "Zed", "Nova"];
 const rand = (a, b) => a + Math.random() * (b - a);
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -18,13 +225,26 @@ export class SurvivalRoom extends Room {
   maxClients = 8;
   patchRate = 50;
 
-  onCreate() {
+  onCreate(options = {}) {
     this.autoDispose = true;
+    this.solo = !!options.solo;   // set only by the single-player preview build (enables test helpers)
+    this.axeSwing = new Map();
     this.setState(new GameState());
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map();
     this.state.loot = new MapSchema();
+    this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
+    this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
+    // the city: buildings, wrecks, trees... (solid) — same layout every match, sent to every player
+    const layout = buildMapLayout(ARENA.width, ARENA.height);
+    this.state.mapLayout = packLayout(layout);
+    this.mapGrid = new Map();               // 160px cells -> solid boxes touching that cell (fast lookups)
+    for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
+      const k = gx + "," + gy; if (!this.mapGrid.has(k)) this.mapGrid.set(k, []); this.mapGrid.get(k).push(b);
+    }
+    this.steer = new Map();                 // zombie/bot id -> which way they go around obstacles
     this.state.stage = 1;
     this.state.elapsed = 0;
     this.state.stageDuration = 90;
@@ -39,28 +259,35 @@ export class SurvivalRoom extends Room {
     this.state.scrap = 100; this.state.electronics = 20; this.state.explosives = 10; this.state.fuel = 100;
     this.state.dayTime = 0; this.state.isNight = false;
     this.state.generatorMaxHp = 1200; this.state.generatorHp = 1200; this.state.generatorFuel = 100;
-    this.state.waveType = "normal"; this.state.remaining = 0; this.state.matchTime = 0;
+    this.state.waveType = "normal"; this.state.remaining = 0; this.state.matchTime = 0; this.state.countdown = 0;
+    this.state.worldW = ARENA.width; this.state.worldH = ARENA.height;
     this.spawnClock = 0;
     this.structureSequence = 0;
     this.lootSequence = 0;
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
-    this.onMessage("start", (client) => {
+    this.onMessage("start", (client, data) => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby") return;
       if (this.state.players.size < 1) return;
+      this.state.explore = !!data?.explore;
+      for (const p of this.state.players.values()) if (p.characterClass === "scout") { ravenLoadout(p); ravenReset(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
       this.state.elapsed = 0;
       this.state.message = "Wave 1/50: protect the radio tower!";
       this.beginWave();
+      if (this.state.explore) this.state.message = "EXPLORE MODE: no zombies. Walk around freely. Host: Esc menu to start the waves.";
     });
 
     this.onMessage("input", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !p.alive || this.state.phase !== "playing") return;
+      if (p.stunned > 0 || this.shadowDash.has(client.sessionId)) { this.lastInputs.set(client.sessionId, Date.now()); return; }   // stunned / mid-dash: can't steer
       const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
       const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
       const mag = Math.hypot(dx, dy) || 1;
@@ -68,25 +295,34 @@ export class SurvivalRoom extends Room {
       const previous = this.lastInputs.get(client.sessionId) || (now - 50);
       const dt = Math.min(0.1, Math.max(0, (now - previous) / 1000));
       this.lastInputs.set(client.sessionId, now);
-      p.x = clamp(p.x + dx / mag * p.speed * dt, 18, ARENA.width - 18);
-      p.y = clamp(p.y + dy / mag * p.speed * dt, 18, ARENA.height - 18);
+      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1);
+      this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
+      // Face the way you walk (left/right). Gun follows movement unless you're shooting.
+      if (dx !== 0) { p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(client.sessionId, now); }
+      if ((dx !== 0 || dy !== 0) && now - (this.lastAimAt.get(client.sessionId) || 0) > 400) p.aim = Math.atan2(dy, dx);
+    });
+
+    // Dash: a short 50px hop in the movement direction, once every 5 seconds.
+    this.onMessage("dash", (client, data) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0) return;
+      const now = Date.now();
+      if (now - (this.lastDashAt.get(client.sessionId) || 0) < DASH_COOLDOWN * 1000) return;
+      let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
+      if (!dx && !dy) dx = p.facing || 1;
+      const mag = Math.hypot(dx, dy);
+      this.lastDashAt.set(client.sessionId, now);
+      this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
+      if (dx) p.facing = dx > 0 ? 1 : -1;
     });
 
     this.onMessage("shoot", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !p.alive || this.state.phase !== "playing") return;
-      const now = Date.now();
-      if (now - p.lastShot < 1000 / p.fireRate) return;
-      p.lastShot = now;
-      if(p.ammo<=0){p.ammo=30;this.state.message=`${p.name} reloaded.`;return;}
-      p.ammo--;
-      const target = [...this.state.zombies.values()].filter(z => distance(p, z) < 520)
-        .sort((a, b) => distance(p, a) - distance(p, b))[0];
-      if (!target) return;
-      target.hp -= p.damage;
-      p.damageDealt += p.damage;
-      if (target.boss) p.bossDamage += p.damage;
-      if (target.hp <= 0) this.killZombie(target, p);
+      // Aimed shot: the client sends the angle toward the mouse cursor.
+      const aim = Number(data?.a);
+      if (data?.a === undefined || data?.a === null || !Number.isFinite(aim)) return;
+      this.fireWeapon(p, aim, Number(data?.d));
     });
 
     this.onMessage("chooseClass", (client,data) => {
@@ -94,52 +330,92 @@ export class SurvivalRoom extends Room {
       const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander"];
       if(!p || this.state.phase!=="lobby" || !classes.includes(id)) return;
       p.characterClass=id;
-      const base={assault:[110,18,1.1,190,0],juggernaut:[160,13,.85,150,5],medic:[105,14,1,185,1],engineer:[110,14,1,175,1],scout:[90,16,1.2,225,0],demolitionist:[105,20,.85,175,0],sniper:[95,28,.65,165,0],commander:[115,15,1,180,1]}[id];
-      p.maxHp=base[0];p.hp=base[0];p.damage=base[1];p.fireRate=base[2];p.speed=base[3];p.defence=base[4];
+      applyClassBase(p); p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
       this.state.message=`${p.name} selected ${id.toUpperCase()}.`;
     });
-    this.onMessage("ability", client => {
+    this.onMessage("ability", (client, data) => {
       const p=this.state.players.get(client.sessionId); if(!p?.alive||this.state.phase!=="playing"||p.abilityCooldown>0)return;
-      const cls=p.characterClass; const cooldown=cls==="medic"?35:cls==="engineer"?40:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="commander"?40:cls==="juggernaut"?28:25;
-      p.abilityCooldown=cooldown;
-      if(cls==="medic"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<190)a.hp=Math.min(a.maxHp,a.hp+45);}
-      else if(cls==="engineer"){const st=new StructureState();st.id=`s${++this.structureSequence}`;st.kind="turret";st.x=p.x;st.y=p.y;st.hp=420;st.maxHp=420;st.ownerId=p.sessionId;this.state.structures.set(st.id,st);}
-      else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
-      else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
-      else if(cls==="sniper"){const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<650).sort((a,b)=>distance(p,a)-distance(p,b))[0];if(z){const hit=Math.min(z.hp,p.damage*12);z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);}}
-      else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
-      else if(cls==="commander"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<220){a.defence+=4;setTimeout(()=>{if(this.state.players.has(a.sessionId))a.defence=Math.max(0,a.defence-4);},8000);}}
-      else {p.damage+=12;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.damage=Math.max(8,p.damage-12);},6000);}
-      this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
+      const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { p.aim = a; this.lastAimAt.set(client.sessionId, Date.now()); }   // skills go where the mouse points
+      this.useAbility(p, data);
     });
     this.onMessage("weapon", (client,data) => {
       const p=this.state.players.get(client.sessionId);const w=String(data?.id||"");
-      const weapons={pistol:[10,2.2],shotgun:[9,1.0],rifle:[15,1.3],smg:[8,2.8],sniper:[42,.55],launcher:[85,.35]};
-      if(!p?.alive||!weapons[w])return;p.weapon=w;p.damage=weapons[w][0];p.fireRate=weapons[w][1];
+      if(!p?.alive||!WEAPONS[w]||!p.owned.split(",").includes(w)){if(p&&WEAPONS[w])this.state.message=`${p.name}: buy the ${w} in the shop first.`;return;}this.storeMag(p);p[WEAPONS[w].slot]=w;this.setSlot(p,WEAPONS[w].slot==="primary"?2:3);
     });
     this.onMessage("meleeEquip",(client,data)=>{
       const p=this.state.players.get(client.sessionId),id=String(data?.id||"");
-      if(p&&["knife","bat","axe","katana"].includes(id))p.melee=id;
+      if(p&&["knife","bat","axe","katana"].includes(id)){p.melee=id;p.charging=false;if(p.alive)this.setSlot(p,1);}
     });
-    this.onMessage("melee", client => {
-      const p=this.state.players.get(client.sessionId);if(!p?.alive||this.state.phase!=="playing")return;
-      const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<65).sort((a,b)=>distance(p,a)-distance(p,b))[0];
-      if(!z)return;const hit=p.melee==="axe"?85:p.melee==="bat"?45:p.melee==="katana"?65:30;z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);
+    const playing = id => { const p = this.state.players.get(id); return p && p.alive && this.state.phase === "playing" ? p : null; };
+    const angle = data => { const a = Number(data?.a); return data?.a === undefined || data?.a === null || !Number.isFinite(a) ? null : a; };
+    // Left click: attack with whatever is in your hand (gun, melee or quick item).
+    this.onMessage("attack", (client, data) => { const p = playing(client.sessionId), a = angle(data); if (p && (a !== null || p.activeSlot === 5)) this.attack(p, a ?? 0, !!data?.heavy, Number(data?.d)); });
+    // Fire axe: start/stop charging a heavy swing (the swing itself comes with the "attack" on release).
+    this.onMessage("charge", (client, data) => { const p = playing(client.sessionId); if (!p) return;
+      if (data?.on && p.activeSlot === 1 && p.melee === "axe") { if (!p.charging) this.chargeAt.set(p.sessionId, Date.now()); p.charging = true; }
+      else p.charging = false; });
+    this.onMessage("melee", (client, data) => { const p = playing(client.sessionId); if (!p) return;
+      let a = angle(data); if (a === null) { const z = [...this.state.zombies.values()].sort((m, n) => distance(p, m) - distance(p, n))[0]; a = z ? Math.atan2(z.y - p.y, z.x - p.x) : (p.aim || 0); }
+      this.meleeAttack(p, a); });
+    this.onMessage("slot", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && p.alive) this.setSlot(p, Number(data?.n), !!data?.cycle); });
+    this.onMessage("explore", (client, data) => { if (client.sessionId === this.state.hostId && this.state.phase === "playing") this.setExplore(!!data?.on); });
+    // Solo preview only: jump straight to any wave (1-50) to test it.
+    this.onMessage("debugWave", (client, data) => {
+      const n = Math.round(Number(data?.n)); if (!this.solo || !(n >= 1 && n <= 50) || this.state.phase === "lobby") return;
+      this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.state.stage = n; this.state.phase = "playing"; this.state.explore = false;
+      this.inBreak = false; this.state.countdown = 0; this.enraged.clear();
+      for (const p of this.state.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.hp = p.maxHp; }
+      this.beginWave(); this.state.message = `Test: jumped to wave ${n}` + (this.state.waveType === "boss" ? " (BOSS WAVE)" : "");
     });
+    // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
+    this.onMessage("debugSpawn", (client, data) => {
+      const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
+      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind"].includes(kind)) return;
+      if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, ARENA.width - 60); z.y = p.y; this.solveZombie(z); } return; }
+      const was = this.state.explore; this.state.explore = false;
+      for (let i = 0; i < 5; i++) {
+        this.spawnZombie(false, kind);
+        const z = [...this.state.zombies.values()].pop(), a = Math.random() * Math.PI * 2, d = 320 + Math.random() * 120;
+        z.x = clamp(p.x + Math.cos(a) * d, 30, ARENA.width - 30); z.y = clamp(p.y + Math.sin(a) * d, 30, ARENA.height - 30); this.solveZombie(z);
+      }
+      this.state.explore = was;
+      this.state.message = `Test: 5 ${kind}s spawned near you`;
+    });
+    // Q: Viktor's robot squad. data.kinds = up to 3 of "assault" | "support" | "hunter"
+    this.onMessage("ult", (client, data) => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
+      const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { p.aim = a; this.lastAimAt.set(client.sessionId, Date.now()); }
+      this.useUlt(p); });
+    this.onMessage("debugUlt", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.ultKills = ULT_KILLS; this.state.message = "Test: ultimate unlocked (100 kills)"; } });
+    this.onMessage("ackBoss", client => {
+      const p = this.state.players.get(client.sessionId); if (!p || this.state.bossPhase !== "intro") return;
+      this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
+    });
+    // Solo preview only: skip the horde and go straight to the boss intro.
+    this.onMessage("debugBoss", () => {
+      if (!this.solo || this.state.phase === "lobby") return;
+      if (this.state.waveType !== "boss") { this.state.stage = 4; this.state.phase = "playing"; this.beginWave(); }
+      this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
+    });
+    // Solo preview only: kill the boss (to watch it die) or knock it to 25% HP (to see it enrage).
+    this.onMessage("debugBossHp", (client, data) => {
+      const p = this.state.players.get(client.sessionId), z = [...this.state.zombies.values()].find(q => q.boss) || [...this.state.zombies.values()].find(q => q.kind === "hivemind");
+      if (!this.solo || !p || !z) return;
+      if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
+    });
+    this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
+    this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
+    this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
+    this.onMessage("useItem", client => { const p = playing(client.sessionId); if (p) this.useQuickItem(p); });
     this.onMessage("upgrade", (client, data) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !p.alive || !UPGRADES[data?.id] || p.xp < p.xpNext) return;
-      p.xp -= p.xpNext;
-      p.level++;
-      p.xpNext = Math.floor(p.xpNext * 1.35 + 8);
-      UPGRADES[data.id](p);
-      this.state.message = `${p.name} upgraded: ${String(data.id)}.`;
+      if (!p || !p.alive) return;
+      this.applyUpgrade(p, data?.id);
     });
 
     this.onMessage("revive", (client, data) => {
       const rescuer=this.state.players.get(client.sessionId);
       const target=this.state.players.get(String(data?.targetId||""));
-      if(!rescuer?.alive||!target||target.alive||distance(rescuer,target)>85)return;
+      if(!rescuer?.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85)return;
       rescuer.reviveTargetId=target.sessionId;rescuer.reviveProgress=0;
       this.state.message=`${rescuer.name} is reviving ${target.name}...`;
     });
@@ -173,31 +449,153 @@ export class SurvivalRoom extends Room {
       const cfg = costs[kind];
       if (!p?.alive || !cfg || this.state.structures.size >= 20) return;
       if (this.state.scrap < (cfg.scrap||0) || this.state.electronics < (cfg.electronics||0) || this.state.explosives < (cfg.explosives||0) || this.state.fuel < (cfg.fuel||0)) return;
+      { let tx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, ty = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y; const td = Math.hypot(tx - p.x, ty - p.y);
+        if (td > BUILD_RANGE) { tx = p.x + (tx - p.x) / td * BUILD_RANGE; ty = p.y + (ty - p.y) / td * BUILD_RANGE; }
+        if (this.blockedByMap(tx, ty, 12)) { this.state.message = `${p.name}: can't build inside that.`; return; } }
       this.state.scrap -= cfg.scrap||0; this.state.electronics -= cfg.electronics||0; this.state.explosives -= cfg.explosives||0; this.state.fuel -= cfg.fuel||0;
       const st = new StructureState(); st.id = `s${++this.structureSequence}`; st.kind = kind;
-      st.x = clamp(Number(data?.x)||p.x, 30, ARENA.width-30); st.y = clamp(Number(data?.y)||p.y, 30, ARENA.height-30);
+      let bx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, by = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y;
+      const bd = Math.hypot(bx - p.x, by - p.y);
+      if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
+      st.x = clamp(bx, 30, ARENA.width-30); st.y = clamp(by, 30, ARENA.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
       this.state.structures.set(st.id, st); p.structuresBuilt++;
       this.state.message = `${p.name} built a ${kind}.`;
     });
+    // Host-only: after a win or loss, bring everyone back to the lobby for a fresh match.
+    this.onMessage("restart", client => {
+      if (client.sessionId !== this.state.hostId || !["victory", "defeat"].includes(this.state.phase)) return;
+      this.resetMatch();
+    });
+    // Shop: only during the break between waves.
+    this.onMessage("buy", (client, data) => {
+      const p = this.state.players.get(client.sessionId);
+      const id = String(data?.id || ""), item = SHOP[id];
+      if (!p || !item || this.state.phase !== "cleared") return;
+      if (item.type === "weapon" && p.owned.split(",").includes(id)) return;
+      if (item.max && p.armor >= item.max) return;
+      if (id === "medkit" && p.medkits >= MAX_MEDKITS) return;
+      if (p.currency < item.price) { this.state.message = `${p.name} needs ${item.price - p.currency} more gold for ${item.label}.`; return; }
+      p.currency -= item.price;
+      const s = this.state;
+      if (item.type === "weapon") { this.unlockWeapon(p, id); this.storeMag(p); p[WEAPONS[id].slot] = id; this.setSlot(p, WEAPONS[id].slot === "primary" ? 2 : 3); }
+      else if (id === "medkit") p.medkits += 1;
+      else if (id === "ammo") p.ammo += 90;
+      else if (id === "armor") { p.armor++; p.defence += 2; }
+      else if (id === "scrap") s.scrap += 40;
+      else if (id === "electronics") s.electronics += 8;
+      else if (id === "fuel") s.fuel += 30;
+      else if (id === "explosives") s.explosives += 5;
+      s.message = `${p.name} bought ${item.label}.`;
+    });
+
+    // AI teammates: the host can add or remove bots in the lobby (bots fill empty slots).
+    this.onMessage("addBot", client => {
+      if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || this.state.players.size >= 8) return;
+      const used = new Set([...this.state.players.values()].map(p => p.name));
+      const name = "Bot " + (BOT_NAMES.find(n => !used.has("Bot " + n)) || "X");
+      const id = "bot-" + Math.random().toString(36).slice(2, 8);
+      this.onJoin({ sessionId: id }, { name });
+      const b = this.state.players.get(id);
+      b.isBot = true;
+      const classes = Object.keys(CLASS_STATS);
+      b.characterClass = classes[Math.floor(Math.random() * classes.length)];
+      applyClassBase(b);
+      this.botBrain.set(id, { strafe: Math.random() < 0.5 ? 1 : -1, nextThink: 0 });
+      this.state.message = `${name} (${b.characterClass}) joined as an AI teammate.`;
+    });
+    this.onMessage("removeBot", client => {
+      if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby") return;
+      const bot = [...this.state.players.values()].reverse().find(p => p.isBot);
+      if (bot) { this.state.players.delete(bot.sessionId); this.botBrain.delete(bot.sessionId); this.state.message = `${bot.name} left.`; }
+    });
+
+    // Host can skip the countdown and start the next wave right away.
     this.onMessage("nextStage", client => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "cleared") return;
-      this.state.stage++;
-      this.state.elapsed = 0;
-      this.state.bossSpawned = false;
-      this.state.bossDead = false;
-      this.state.zombies.clear();
-      this.state.phase = "playing";
-      for (const p of this.state.players.values()) { p.hp = p.maxHp; p.alive = true; }
-      this.state.message = `Wave ${this.state.stage}/50: the infected are getting stronger!`; this.beginWave();
+      this.startNextWave();
     });
   }
 
+  startNextWave() {
+    const s = this.state;
+    this.inBreak = false; s.countdown = 0;
+    s.stage++;
+    s.elapsed = 0;
+    s.bossSpawned = false;
+    s.bossDead = false;
+    s.zombies.clear();
+    s.phase = "playing";
+    this.downs.clear();
+    for (const p of s.players.values()) { p.hp = p.maxHp; p.alive = true; p.bledOut = false; p.bleedout = 0; }
+    s.message = `Wave ${s.stage}/50: the infected are getting stronger!`;
+    this.beginWave();
+  }
+
+  resetMatch() {
+    const s = this.state;
+    s.stage = 1; s.elapsed = 0; s.matchTime = 0; s.totalKills = 0;
+    s.bossSpawned = false; s.bossDead = false; s.waveType = "normal"; s.remaining = 0;
+    s.towerHp = s.towerMaxHp;
+    s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
+    s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
+    s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
+    for (const p of s.players.values()) {
+      p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
+      p.level = 1; p.xp = 0; p.xpNext = 30;
+      p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
+      p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
+      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0;
+      p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.weapon = "rifle"; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
+      this.mags.delete(p.sessionId + ":rifle"); this.mags.delete(p.sessionId + ":pistol"); this.loadMag(p);
+      p.ammo = 240; p.abilityCooldown = 0; p.bleedout = 0; p.reviveProgress = 0; p.reviveTargetId = "";
+      p.alive = true; p.bledOut = false; p.lastShot = 0; p.facing = 1; p.aim = 0;
+      applyClassBase(p);
+    }
+    s.phase = "lobby";
+    s.message = "New match! Pick your survivors, then the host starts.";
+  }
+
   beginWave() {
-    this.state.elapsed = 0; this.spawnClock = 0.2; this.state.bossSpawned = false; this.state.bossDead = false;
+    this.bossOverAt = 0;
+    this.state.elapsed = 0; this.spawnClock = 0.2; this.state.bossSpawned = false; this.state.bossDead = false; this.hiveSpawned = false; this.hiveNag = false;
     this.state.waveType = this.state.stage % 4 === 0 || this.state.stage === 50 ? "boss" : "normal";
-    if (this.state.waveType === "boss") { this.state.bossSpawned = true; this.spawnZombie(true); this.state.message = `BOSS WAVE ${this.state.stage}!`; }
-    else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.`;
+    this.state.bossPhase = ""; this.state.bossIntro = "";
+    // Boss waves: first a horde (walkers on wave 4); once it's cleared, the boss intro card; when everyone is ready, the boss.
+    if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
+    else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
+  }
+  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
+  bossWaveTick(dt, now) {
+    const s = this.state;
+    if (s.bossPhase === "horde") {
+      if (this.spawnClock <= 0 && s.elapsed < BOSS_WAVE.horde) {
+        this.spawnZombie(false);   // the horde uses the wave's normal mix; once the boss is out, only walkers come
+        const early = { 4: 1.3 }[s.stage]; this.spawnClock = early || Math.max(0.3, 1.15 - s.stage * 0.018);
+      }
+      if (s.elapsed >= BOSS_WAVE.horde && s.zombies.size === 0) {
+        s.bossPhase = "intro"; s.bossIntro = this.bossKind(); this.introAcks = new Set(); this.introUntil = now + BOSS_WAVE.introWait * 1000;
+        s.introNeed = [...s.players.values()].filter(p => !p.isBot).length; s.introReady = 0;
+        s.message = "Horde cleared... the boss is coming!";
+      }
+    } else if (s.bossPhase === "intro") {
+      if (s.introReady >= s.introNeed || now >= this.introUntil) this.spawnBoss();
+    } else if (s.bossPhase === "fight") {
+      if (this.spawnClock <= 0) { if (s.zombies.size < BOSS_WAVE.escortMax) this.spawnZombie(false, "walker"); this.spawnClock = BOSS_WAVE.escortEvery; }
+    }
+  }
+  spawnBoss() {
+    const s = this.state; s.bossPhase = "fight"; s.bossIntro = ""; s.bossSpawned = true; this.spawnClock = BOSS_WAVE.escortEvery;
+    this.spawnZombie(true);
+    const z = [...s.zombies.values()].find(q => q.boss), alive = [...s.players.values()].filter(p => p.alive);
+    if (z && alive.length) {   // walk in from ~650px away from the team, not from the far side of the map
+      const cx = alive.reduce((a, p) => a + p.x, 0) / alive.length, cy = alive.reduce((a, p) => a + p.y, 0) / alive.length, ang = Math.random() * Math.PI * 2;
+      z.x = clamp(cx + Math.cos(ang) * 650, 60, ARENA.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, ARENA.height - 60); this.solveZombie(z);
+    }
+    this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
+    s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
   }
 
   onJoin(client, options = {}) {
@@ -205,20 +603,17 @@ export class SurvivalRoom extends Room {
     const p = new PlayerState();
     p.sessionId = client.sessionId;
     p.name = cleanName(options.name) || `Survivor ${this.state.players.size + 1}`;
-    p.x = rand(430, 770); p.y = rand(280, 480);
+    p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
-    p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 120; p.currency = 0;
-    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.damage = 15; p.fireRate = 1; p.speed = 190; p.defence = 0;
+    p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
+    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
-    p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=Math.max(0,Math.min(1000000,Number(profile.currency)||0));
+    p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
     const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander"];
-    if(classIds.includes(profile.characterClass)){
-      p.characterClass=profile.characterClass;
-      const savedClass={assault:[110,18,1.1,190,0],juggernaut:[160,13,.85,150,5],medic:[105,14,1,185,1],engineer:[110,14,1,175,1],scout:[90,16,1.2,225,0],demolitionist:[105,20,.85,175,0],sniper:[95,28,.65,165,0],commander:[115,15,1,180,1]}[p.characterClass];
-      p.maxHp=savedClass[0];p.hp=savedClass[0];p.damage=savedClass[1];p.fireRate=savedClass[2];p.speed=savedClass[3];p.defence=savedClass[4];
-    }
-    const weaponIds=["pistol","shotgun","rifle","smg","sniper","launcher"];if(weaponIds.includes(profile.weapon))p.weapon=profile.weapon;
+    if(classIds.includes(profile.characterClass)) p.characterClass=profile.characterClass;
+    applyClassBase(p);
+    this.loadMag(p);
     p.alive = true; p.ready = true; p.isHost = this.state.players.size === 0;
     p.color = COLORS[this.state.players.size % COLORS.length]; p.lastShot = 0; p.reviveProgress = 0; p.reviveTargetId = "";
     this.state.players.set(client.sessionId, p);
@@ -232,80 +627,1106 @@ export class SurvivalRoom extends Room {
     this.state.players.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
-      const next = this.state.players.values().next();
-      this.state.hostId = next.done ? "" : next.value.sessionId;
-      if (next.value) next.value.isHost = true;
+      const next = [...this.state.players.values()].find(p => !p.isBot);
+      this.state.hostId = next ? next.sessionId : "";
+      if (next) next.isHost = true;
     }
+    if (![...this.state.players.values()].some(p => !p.isBot)) { this.state.players.clear(); this.botBrain.clear(); }
     if (this.state.players.size === 0) this.state.phase = "lobby";
   }
 
-  spawnZombie(boss = false) {
-    const edge = Math.floor(Math.random() * 4);
-    const x = edge === 0 ? 8 : edge === 1 ? ARENA.width - 8 : rand(20, ARENA.width - 20);
-    const y = edge === 2 ? 8 : edge === 3 ? ARENA.height - 8 : rand(20, ARENA.height - 20);
-    const roll = Math.random();
-    const normalKinds = ["walker","runner","brute","spitter","mutant"];
-    const kind = boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : (this.state.stage < 5 ? "walker" : this.state.stage < 9 ? (roll<0.25?"runner":"walker") : this.state.stage < 13 ? (roll<0.2?"brute":roll<0.5?"runner":"walker") : this.state.stage < 17 ? (roll<0.25?"spitter":roll<0.5?"brute":"runner") : (normalKinds[Math.floor(Math.random()*normalKinds.length)]));
+  // Explore mode (host): waves stop, all zombies vanish, the wave timer freezes; day/night keeps going.
+  setExplore(on) {
+    this.state.explore = !!on;
+    if (on) { this.state.zombies.clear(); this.state.message = "EXPLORE MODE: waves stopped. Walk around freely."; }
+    else {
+      if (this.state.bossPhase === "fight" && !this.state.bossDead && ![...this.state.zombies.values()].some(z => z.boss)) this.spawnBoss();
+      this.state.message = "Waves resumed!";
+    }
+  }
+  spawnZombie(boss = false, forceKind = "") {
+    if (this.state.explore) return;
+    // appear somewhere on a ring around the radio tower, out of the players' view
+    const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
+    const x = clamp(ARENA.width / 2 + Math.cos(ang) * dist, 20, ARENA.width - 20);
+    const y = clamp(ARENA.height / 2 + Math.sin(ang) * dist, 20, ARENA.height - 20);
+
+    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
-    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:75, butcher:1200, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
+    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
     const z = new ZombieState();
     z.id = `z${++this.zombieSequence}`; z.kind = kind; z.x = x; z.y = y;
-    z.maxHp = base * scale * (boss ? Math.max(1, this.state.players.size * 0.25) : 1);
-    z.hp = z.maxHp; z.speed = ({walker:57,runner:125,brute:34,spitter:28,mutant:90}[kind] || (boss?42:55)) * (this.state.isNight?1.2:1);
-    z.damage = ({walker:8,runner:7,brute:18,spitter:6,mutant:13}[kind] || (boss?28:10)) * scale * (this.state.isNight?1.3:1);
-    z.radius = boss ? 42 : kind === "brute" ? 22 : kind === "mutant" ? 18 : 14; z.attackCooldown = 0;
+    z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
+    z.hp = z.maxHp; z.speed = ({walker:57,runner:125,brute:34,spitter:28,mutant:105}[kind] || (boss?42:55)) * (this.state.isNight?1.2:1);
+    z.damage = ({walker:8,runner:7,brute:18,spitter:6,mutant:16}[kind] || (boss?28:10)) * scale * (this.state.isNight?1.3:1);
+    z.radius = boss ? 42 : kind === "brute" ? 33 : kind === "mutant" ? 18 : 14; z.attackCooldown = 0;   // brutes are 50% bigger than before
+    this.solveZombie(z);   // don't appear inside a building
     z.targetId = ""; z.boss = boss;
+    z.role = boss || TOWER_KINDS[kind] ? "tower" : "hunter"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false;
+    if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = 40; }
+    if (kind === "spitter") z.attackCooldown = 0.6 + Math.random() * 1.6;   // spitters don't all fire at once
     this.state.zombies.set(z.id, z);
   }
 
+  // One shot from player p toward angle aim. Used by humans and AI bots alike.
+  fireWeapon(p, aim, dist) {
+    const now = Date.now();
+    if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId)) return;
+    if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility
+    if (p.reloadLeft > 0) return;
+    if (now - p.lastShot < 1000 / p.fireRate) return;
+    const w = WEAPONS[p.weapon] || WEAPONS.rifle;
+    if (p.mag <= 0) {
+      if (!w.infinite && p.ammo <= 0) { // out of spare ammo: fall back to the pistol
+        p.secondary = "pistol"; this.setSlot(p, 3); this.event(`${p.name} is out of ammo, switching to pistol.`);
+      } else this.startReload(p);
+      return;
+    }
+    p.lastShot = now;
+    p.mag -= 1;
+    p.aim = aim;
+    this.lastAimAt.set(p.sessionId, now);
+    if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
+    const tracers = [];
+    const angles = w.pellets
+      ? Array.from({ length: w.pellets }, (_, i) => aim + (i / (w.pellets - 1) - 0.5) * 2 * w.spread)
+      : [aim + (w.jitter ? rand(-w.jitter, w.jitter) : 0)];
+    for (const a of angles) {
+      const wall = this.wallDist(p.x, p.y, a, w.range);          // buildings, cars... stop bullets
+      const along = this.rayHits(p, a, wall);
+      let end = wall;
+      if (w.splash) {   // rocket: flies straight to the aimed spot (or max range / a wall), then explodes there
+        const want = Number.isFinite(dist) && dist > 20 ? dist : w.range;
+        end = Math.max(20, Math.min(wall - 4, want));
+        const bx = p.x + Math.cos(a) * end, by = p.y + Math.sin(a) * end;
+        this.ripples.push({ kind: "rocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / DANTE.rocketSpeed, dmg: p.damage, r: w.splash, flat: 1, push: 10, wallSafe: true });
+      } else {
+        const hits = along.slice(0, w.pierce || 1);
+        for (const h of hits) this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1));
+        if (hits.length) end = hits[hits.length - 1].t;
+      }
+      tracers.push(Math.round(end));
+    }
+    this.broadcast("shot", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y - 4), a: angles, len: tracers, w: p.weapon, ...(w.splash ? { fl: Math.round(tracers[0] / DANTE.rocketSpeed * 1000) / 1000 } : {}) });
+  }
+
+  // ---------- slots, reload, melee, quick item ----------
+  event(text) { this.state.message = text; }
+
+  // Switch hotbar slot: 1 melee, 2 primary gun, 3 secondary gun, 5 quick item.
+  // Pressing 1/2/3 again while already on it cycles to your next owned melee/primary/secondary.
+  setSlot(p, n, cycle = false) {
+    if (![1, 2, 3, 5].includes(n)) return;
+    const owned = p.owned.split(",");
+    if (cycle && n === p.activeSlot) {
+      if (n === 1) p.melee = MELEE_ORDER[(MELEE_ORDER.indexOf(p.melee) + 1) % MELEE_ORDER.length];
+      if (n === 2 || n === 3) {
+        const kind = n === 2 ? "primary" : "secondary";
+        const list = Object.keys(WEAPONS).filter(id => WEAPONS[id].slot === kind && owned.includes(id));
+        if (list.length > 1) p[kind] = list[(list.indexOf(p[kind]) + 1) % list.length];
+      }
+    }
+    if ((n === 2 && !p.primary) || (n === 3 && !p.secondary)) return;   // Raven starts with no guns
+    this.storeMag(p);
+    p.activeSlot = n;
+    if (n === 2) p.weapon = p.primary;
+    if (n === 3) p.weapon = p.secondary;
+    this.loadMag(p);
+    applyLoadout(p);
+  }
+  storeMag(p) { if (p.weapon) this.mags.set(p.sessionId + ":" + p.weapon, p.mag); p.reloadLeft = 0; }
+  loadMag(p) {
+    const w = WEAPONS[p.weapon] || WEAPONS.rifle;
+    const saved = this.mags.get(p.sessionId + ":" + p.weapon);
+    p.magSize = w.mag; p.mag = saved === undefined ? w.mag : saved;
+  }
+  startReload(p) {
+    const w = WEAPONS[p.weapon] || WEAPONS.rifle;
+    if (p.reloadLeft > 0 || p.activeSlot === 1 || p.activeSlot === 5 || p.mag >= w.mag) return;
+    if (!w.infinite && p.ammo <= 0) { this.event(`${p.name} has no spare ammo for the ${p.weapon}.`); return; }
+    p.reloadLeft = w.reload;
+  }
+  finishReload(p) {
+    const w = WEAPONS[p.weapon] || WEAPONS.rifle;
+    const need = w.mag - p.mag, take = w.infinite ? need : Math.min(need, p.ammo);
+    p.mag += take; if (!w.infinite) p.ammo -= take;
+  }
+  meleeAttack(p, aim, wantHeavy = false) {
+    if (p.stunned > 0) return;
+    const now = Date.now();
+    // heavy only counts if the server saw the axe charging for (almost) the full second
+    const heavy = wantHeavy && p.melee === "axe" && p.charging && now - (this.chargeAt.get(p.sessionId) || now) >= AXE_HEAVY.charge * 1000 - 60;
+    p.charging = false;
+    const raven = p.characterClass === "scout" && p.melee === "katana";
+    if (raven && (p.storm > 0 || this.shadowDash.has(p.sessionId))) return;   // busy spinning / dashing
+    const base = raven ? ravenKatana(p) : MELEE[p.melee] || MELEE.knife;
+    const m = heavy ? { ...base, dmg: base.dmg * AXE_HEAVY.dmgMult, range: AXE_HEAVY.range, arc: AXE_HEAVY.arc } : base;
+    if (now - (this.lastMelee.get(p.sessionId) || 0) < m.cd * 1000) return;
+    this.lastMelee.set(p.sessionId, now);
+    p.aim = aim; this.lastAimAt.set(p.sessionId, now);
+    if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility (and lights her katana)
+    if (p.melee === "axe") {   // fire axe: can deflect the Butcher's hook
+      this.axeSwing.set(p.sessionId, { t: now, aim, heavy });
+      for (const z of this.state.zombies.values()) {
+        if (z.kind !== "butcher" || z.act !== "hook" || (z.actLen - z.slam) < BUTCHER.hook.aim || !(z.hookD > 0)) continue;
+        const tx = z.x + Math.cos(z.aim) * z.hookD, ty = z.y + Math.sin(z.aim) * z.hookD;
+        if (Math.hypot(tx - p.x, ty - p.y) <= DEFLECT.reach && this.canDeflect(p, z, now, 1)) this.deflectHook(z, p, now);
+      }
+    }
+    if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
+    const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
+    let dmg = Math.round(m.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
+    let crit = false;
+    if (raven && (p.katanaTier || 0) >= 5) { const n = (this.slashCount.get(p.sessionId) || 0) + 1; this.slashCount.set(p.sessionId, n); if (n % RAVEN.critEvery === 0) { dmg = Math.round(dmg * RAVEN.crit); crit = true; } }
+    let left = raven ? m.targets : Infinity;
+    const inRange = [...this.state.zombies.values()].map(z => [z, distance(p, z)]).sort((a, b) => a[1] - b[1]);
+    for (const [z, d] of inRange) {
+      if (d > m.range + z.radius || left <= 0) continue;
+      let diff = Math.atan2(z.y - p.y, z.x - p.x) - aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) <= m.arc || d < z.radius + 10) {
+        if (heavy && !z.boss && d > 0.1) {   // knock back (before the hit, so a killed zombie doesn't matter)
+          const ka = Math.atan2(z.y - p.y, z.x - p.x);
+          z.x = clamp(z.x + Math.cos(ka) * AXE_HEAVY.knockback, 5, ARENA.width - 5); z.y = clamp(z.y + Math.sin(ka) * AXE_HEAVY.knockback, 5, ARENA.height - 5); this.solveZombie(z);
+        }
+        if (raven) { left--; this.katanaHit(z, p, dmg); } else this.hitZombie(z, p, dmg);
+      }
+    }
+    this.broadcast("swing", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y - 4), a: aim, r: m.range, arc: m.arc, m: p.melee, heavy, fire: raven && p.fire > 0, crit });
+  }
+  useQuickItem(p) {
+    const now = Date.now();
+    if (now - (this.lastItem.get(p.sessionId) || 0) < 1000) return;
+    if (p.medkits <= 0) { this.event(`${p.name} has no medkits. Buy them in the shop.`); return; }
+    if (p.hp >= p.maxHp) return;
+    this.lastItem.set(p.sessionId, now);
+    p.medkits -= 1; p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.6));
+    this.event(`${p.name} used a medkit.`);
+  }
+  // Left mouse button: does whatever is in your hand.
+  attack(p, aim, heavy = false, dist) {
+    if (p.stunned > 0) return;
+    if (p.activeSlot === 1) this.meleeAttack(p, aim, heavy);
+    else if (p.activeSlot === 5) this.useQuickItem(p);
+    else this.fireWeapon(p, aim, dist);
+  }
+
+  useAbility(p, data) {
+      const cls=p.characterClass;
+      if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
+      if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
+      if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
+      const cooldown=cls==="medic"?35:cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="commander"?40:cls==="juggernaut"?28:25;
+    p.abilityCooldown=cooldown;
+    if(cls==="medic"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<190)a.hp=Math.min(a.maxHp,a.hp+45);}
+    else if(cls==="engineer") this.summonRobot(p, data?.kind);
+    else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
+    else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
+    else if(cls==="sniper"){const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<650).sort((a,b)=>distance(p,a)-distance(p,b)).find(z=>this.lineClear(p,z));if(z){const hit=Math.min(z.hp,p.damage*12);z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);}}
+    else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
+    else if(cls==="commander"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<220){a.defence+=4;setTimeout(()=>{if(this.state.players.has(a.sessionId))a.defence=Math.max(0,a.defence-4);},8000);}}
+    else {p.buffDamage=50;applyLoadout(p);setTimeout(()=>{if(this.state.players.has(p.sessionId)){p.buffDamage=0;applyLoadout(p);}},6000);}
+    this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
+  }
+
+  applyUpgrade(p, id) {
+    if (!UPGRADES[id] || p.xp < p.xpNext) return false;
+    p.xp -= p.xpNext;
+    p.level++;
+    p.xpNext = Math.floor(p.xpNext * 1.35 + 8);
+    UPGRADES[id](p);
+    this.state.message = `${p.name} upgraded: ${String(id)}.`;
+    return true;
+  }
+
+  // Solid map pieces (buildings, wrecks, trees...) near a point.
+  mapBoxesNear(x, y) {
+    const gx = Math.floor(x / 160), gy = Math.floor(y / 160), out = new Set();
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of this.mapGrid?.get((gx + i) + "," + (gy + j)) || []) out.add(b);
+    return out;
+  }
+  // Is this point inside (or within pad of) a solid map piece?
+  blockedByMap(x, y, pad = 0) {
+    for (const b of this.mapBoxesNear(x, y)) if (Math.abs(x - b.x) < b.hw + pad && Math.abs(y - b.y) < b.hh + pad) return true;
+    return false;
+  }
+  // Push an entity (circle of radius r) out of solid boxes {x, y, hw, hh}.
+  pushOut(p, boxes, r) {
+    for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
+      const cx = clamp(p.x, b.x - b.hw, b.x + b.hw), cy = clamp(p.y, b.y - b.hh, b.y + b.hh);
+      let dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+      if (d >= r) continue;
+      if (d < 0.001) { // centre is inside the box: push out the shortest way
+        const exits = [[b.x - b.hw - r - p.x, 0], [b.x + b.hw + r - p.x, 0], [0, b.y - b.hh - r - p.y], [0, b.y + b.hh + r - p.y]];
+        const [ex, ey] = exits.sort((m, n) => Math.hypot(...m) - Math.hypot(...n))[0];
+        p.x += ex; p.y += ey;
+      } else { p.x = cx + dx / d * r; p.y = cy + dy / d * r; }
+      p.x = clamp(p.x, 18, ARENA.width - 18); p.y = clamp(p.y, 18, ARENA.height - 18);
+    }
+  }
+  // Survivors: blocked by the tower base, the generator, solid structures and the map pieces.
+  solveCollisions(p) {
+    const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }, { x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h }];
+    for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
+    for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
+    for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
+    this.pushOut(p, boxes, BODY_R);
+  }
+  // Zombies: blocked by the map pieces only (they attack barricades/the tower instead of walking around them).
+  // Spitter lobs a glob of acid at (tx, ty). It flies for a moment (players can dodge), then lands as a puddle.
+  spit(z, tx, ty, atTower = false) {
+    const sx = z.x, sy = z.y - 26, flight = Math.max(.35, Math.hypot(tx - sx, ty - sy) / ACID.speed);
+    this.spits.push({ tx, ty, land: Date.now() + flight * 1000, dmg: z.damage, atTower });
+    this.broadcast("spit", { sx: Math.round(sx), sy: Math.round(sy), tx: Math.round(tx), ty: Math.round(ty), ms: Math.round(flight * 1000) });
+  }
+  acidLand(s) {
+    if (s.atTower) { this.state.towerHp = Math.max(0, this.state.towerHp - s.dmg * 1.5); if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } return; }
+    for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if ((this.state.robots.has(m.id) || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
+    for (const p of this.state.players.values()) {   // direct hit
+      if (!p.alive || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
+      const dealt = Math.max(1, Math.round(s.dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+    }
+    const pu = new PuddleState(); pu.id = "a" + (++this.puddleSeq); pu.x = Math.round(s.tx); pu.y = Math.round(s.ty);
+    pu.r = ACID.radius; pu.life = ACID.life; pu.maxLife = ACID.life;
+    this.puddleDps.set(pu.id, s.dmg * ACID.dpsMult); this.state.puddles.set(pu.id, pu);
+  }
+  updateAcid(dt) {
+    const now = Date.now();
+    for (let i = this.spits.length - 1; i >= 0; i--) if (now >= this.spits[i].land) { this.acidLand(this.spits[i]); this.spits.splice(i, 1); }
+    const burn = new Map();   // player -> strongest puddle they stand in (puddles don't stack)
+    for (const pu of [...this.state.puddles.values()]) {
+      pu.life -= dt;
+      if (pu.life <= 0) { this.state.puddles.delete(pu.id); this.puddleDps.delete(pu.id); continue; }
+      const dps = this.puddleDps.get(pu.id) || 8;
+      for (const p of this.state.players.values()) {
+        if (!p.alive) continue;
+        const dx = (p.x - pu.x) / pu.r, dy = (p.y - pu.y) / (pu.r * 0.6);
+        if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
+      }
+    }
+    for (const [p, dps] of burn) { const dealt = dps * dt; p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+  }
+  // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
+  separateZombies() {
+    const grid = new Map(), C = 64;
+    for (const z of this.state.zombies.values()) { const k = Math.floor(z.x / C) + "," + Math.floor(z.y / C); (grid.get(k) || grid.set(k, []).get(k)).push(z); }
+    for (const z of this.state.zombies.values()) {
+      if (z.slam > 0) continue;
+      const gx = Math.floor(z.x / C), gy = Math.floor(z.y / C);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const o of grid.get((gx + i) + "," + (gy + j)) || []) {
+        if (o === z) continue;
+        const dx = z.x - o.x, dy = z.y - o.y, d = Math.hypot(dx, dy), min = (Math.min(z.radius, 30) + Math.min(o.radius, 30)) * .75;
+        if (d >= min) continue;
+        const push = (min - d) * .25, ux = d > .01 ? dx / d : Math.random() - .5, uy = d > .01 ? dy / d : Math.random() - .5;
+        z.x = clamp(z.x + ux * push, 5, ARENA.width - 5); z.y = clamp(z.y + uy * push, 5, ARENA.height - 5);
+      }
+    }
+  }
+  // ---------- Viktor: Heavy Turret + Robot Squad ----------
+  deployHeavyTurret(p) {
+    for (const st of [...this.state.structures.values()]) if (st.kind === "heavyTurret" && st.ownerId === p.sessionId) this.destroyMachine(st, "turret");   // one at a time
+    const st = new StructureState(); st.id = `s${++this.structureSequence}`; st.kind = "heavyTurret";
+    const a = p.aim || 0; st.x = clamp(p.x + Math.cos(a) * 46, 30, ARENA.width - 30); st.y = clamp(p.y + Math.sin(a) * 46, 30, ARENA.height - 30);
+    if (this.blockedByMap(st.x, st.y, 16)) { st.x = p.x; st.y = p.y + 30; }
+    st.hp = st.maxHp = HEAVY_TURRET.hp; st.ownerId = p.sessionId; st.aim = a; st.deploy = HEAVY_TURRET.deploy;
+    this.state.structures.set(st.id, st); this.state.message = `${p.name} deployed a HEAVY TURRET!`;
+  }
+  ultState(p, now = Date.now()) {
+    const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+    const scout = p.characterClass === "scout", dante = p.characterClass === "demolitionist";
+    const alive = scout ? p.storm > 0 : dante ? !!this.demoOf(p) || this.ripples.some(r => r.owner === p.sessionId && r.kind === "demo") : [...this.state.structures.values()].filter(st => st.kind === "heavyTurret" && st.ownerId === p.sessionId).length;
+    const active = !alive ? 0 : scout ? p.storm * 1000 : dante ? Math.max(0, info.summonedAt + DANTE.demo.life * 1000 - now) : Math.max(0, info.summonedAt + ULT_LIFE * 1000 - now);   // while it's up, Q can't be used
+    const left = alive ? active + (scout ? RAVEN.storm.cd : dante ? DANTE.demo.cd : ULT_CD) * 1000 : Math.max(0, info.readyAt - now);
+    return { info, alive, left, active };
+  }
+  useUlt(p) {
+    if (!["engineer", "scout", "demolitionist"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "demolitionist") { const c = this.demoOf(p); if (c) { if (c.deploy <= 0) this.detonateDemo(c); return; } }   // second Q: blow it
+    const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
+    if (p.characterClass === "demolitionist") { this.placeDemo(p); info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return; }
+    if (p.characterClass === "scout") { if (this.shadowDash.has(p.sessionId)) return; p.storm = RAVEN.storm.len; this.stormTick.set(p.sessionId, 0); this.state.message = `${p.name} unleashed BLADE STORM!`; }
+    else this.deployHeavyTurret(p);
+    info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info);
+  }
+  // ---------- DANTE ----------
+  skyBarrage(p, dist) {   // 3 rockets up, one by one; they come down at random spots around the aimed point
+    const K = DANTE.sky, a = p.aim || 0, d = Math.max(60, Math.min(K.range, Number.isFinite(dist) ? dist : K.range * .6));
+    const cx = clamp(p.x + Math.cos(a) * d, 20, ARENA.width - 20), cy = clamp(p.y + Math.sin(a) * d, 20, ARENA.height - 20), now = Date.now(), pts = [];
+    for (let i = 0; i < K.n; i++) {
+      const ang = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * K.spread;
+      const x = clamp(cx + Math.cos(ang) * rr, 10, ARENA.width - 10), y = clamp(cy + Math.sin(ang) * rr, 10, ARENA.height - 10);
+      pts.push([Math.round(x), Math.round(y)]);
+      this.ripples.push({ kind: "sky", owner: p.sessionId, x, y, t: now, at: i * K.gap + K.flight, dmg: K.dmg, r: K.r, flat: 1, push: K.push, scaled: true });
+    }
+    p.lastShot = now;
+    this.broadcast("sky", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: Math.round(a * 100) / 100, pts, gap: K.gap, fl: K.flight });
+  }
+  demoOf(p) { for (const st of this.state.structures.values()) if (st.kind === "demoCharge" && st.ownerId === p.sessionId) return st; return null; }
+  placeDemo(p) {
+    const st = new StructureState(), a = p.aim || 0; st.id = `s${++this.structureSequence}`; st.kind = "demoCharge";
+    st.x = clamp(p.x + Math.cos(a) * DANTE.demo.place, 30, ARENA.width - 30); st.y = clamp(p.y + Math.sin(a) * DANTE.demo.place * .7 + 8, 30, ARENA.height - 30);
+    if (this.blockedByMap(st.x, st.y, 14)) { st.x = p.x; st.y = p.y + 10; }
+    st.hp = st.maxHp = 1; st.ownerId = p.sessionId; st.aim = a; st.deploy = DANTE.demo.arm;
+    this.state.structures.set(st.id, st);
+    this.broadcast("demo", { k: "place", id: p.sessionId, a: Math.round(a * 100) / 100 });
+    this.state.message = `${p.name} planted a DEMO CHARGE! Press Q again to blow it.`;
+  }
+  detonateDemo(st) {
+    const owner = this.state.players.get(st.ownerId), now = Date.now(), D = DANTE.demo, seed = Math.random() * Math.PI * 2;
+    this.state.structures.delete(st.id);
+    this.ripples.push({ kind: "demo", owner: st.ownerId, x: st.x, y: st.y, t: now, at: 0, dmg: D.core.dmg, r: D.core.r, scaled: true, bossMult: D.bossMult, push: D.push, flat: D.flat });
+    const pts = [];   // [x, y, ring, big] for the client to fly each grenade to
+    D.rings.forEach((ring, ri) => {
+      for (let i = 0; i < ring.n; i++) {
+        const ang = seed + (i + rand(-.35, .35)) / ring.n * Math.PI * 2, R = ring.R * rand(.75, 1.2);
+        const gx = clamp(st.x + Math.cos(ang) * R, 10, ARENA.width - 10), gy = clamp(st.y + Math.sin(ang) * R * D.flat, 10, ARENA.height - 10);
+        const big = !ring.small || (ring.bigEvery && i % ring.bigEvery === 0);
+        this.ripples.push({ kind: "demo", owner: st.ownerId, x: gx, y: gy, t: now, at: ring.at + D.flight, dmg: ring.small && big ? ring.bigDmg : ring.dmg, r: ring.small && big ? ring.bigR : ring.r, scaled: true, bossMult: D.bossMult, push: D.push, flat: D.flat });
+        pts.push([Math.round(gx), Math.round(gy), ri, big ? 1 : 0]);
+      }
+    });
+    this.broadcast("demo", { k: "boom", x: Math.round(st.x), y: Math.round(st.y), pts });
+    if (owner) this.state.message = `${owner.name}: DEMO RIPPLE!`;
+  }
+  updateDante(dt, now) {
+    const scale = 1 + (this.state.stage - 1) * 0.08, D = DANTE.demo;
+    for (const st of [...this.state.structures.values()]) {
+      if (st.kind !== "demoCharge") continue;
+      if (st.deploy > 0) st.deploy = Math.max(0, st.deploy - dt);
+      const owner = this.state.players.get(st.ownerId), info = this.ultInfo.get(st.ownerId);
+      if (!owner || !owner.alive || (info && now - info.summonedAt >= D.life * 1000)) this.detonateDemo(st);   // Dante went down / 30s: it blows itself
+    }
+    if (this.ripples.length) {
+      const left = [];
+      for (const e of this.ripples) {
+        if (now - e.t < e.at * 1000) { left.push(e); continue; }
+        const owner = this.state.players.get(e.owner) || null, flat = e.flat || 1, ep = { x: e.x, y: e.y - 4 };
+        for (const z of [...this.state.zombies.values()]) {
+          const d = Math.hypot(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
+          if (e.wallSafe && !this.lineClear(ep, z)) continue;   // rocket blasts don't go through walls
+          if (!z.boss && d > 0.1 && e.push) this.steerMove(z, z.id, Math.atan2(z.y - e.y, z.x - e.x), e.push, q => this.solveZombie(q));
+          const dmg = e.dmg * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);
+          if (owner) this.hitZombie(z, owner, dmg); else { z.hp -= dmg; if (z.hp <= 0) this.killZombie(z, null); }
+        }
+        if (e.kind !== "demo") { this.broadcast("boom", { x: Math.round(e.x), y: Math.round(e.y), r: e.r, k: e.kind }); continue; }
+        if (!left.some(x => x.owner === e.owner && x.kind === "demo") && !this.ripples.some(x => x !== e && x.kind === "demo" && x.owner === e.owner && now - x.t < x.at * 1000)) {   // last blast: cooldown starts
+          const info = this.ultInfo.get(e.owner) || { summonedAt: 0 }; info.readyAt = now + D.cd * 1000; this.ultInfo.set(e.owner, info);
+        }
+      }
+      this.ripples = left;
+    }
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "demolitionist") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const { left, active, alive } = this.ultState(p, now), c = this.demoOf(p);
+      p.ultCd = alive ? D.cd : Math.ceil(left / 100) / 10; p.ultActive = c ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // ---------- RAVEN ----------
+  startShadowPass(p) {
+    const a = p.aim || 0, len = Math.max(0, Math.min(RAVEN.dash.dist, this.wallDist(p.x, p.y, a, RAVEN.dash.dist + BODY_R + 2) - BODY_R - 2));
+    this.shadowDash.set(p.sessionId, { fx: p.x, fy: p.y, tx: p.x + Math.cos(a) * len, ty: p.y + Math.sin(a) * len, t0: Date.now(), hit: new Set(), a, px: p.x, py: p.y });
+    p.dashT = RAVEN.dash.time; p.aim = a;
+    this.broadcast("shadow", { k: "dash", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: Math.round(a * 100) / 100, len: Math.round(len) });
+  }
+  breakShadow(p) {   // invisibility ends (attacked, or 20s ran out): the katana catches fire for 5s
+    p.shadow = 0; p.fire = RAVEN.fire;
+    this.broadcast("shadow", { k: "ignite", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+  }
+  katanaHit(z, p, dmg) {   // a hit from Raven's katana (slash, dash or storm): burns while it's on fire, bleeds from tier 3
+    if (!this.state.zombies.has(z.id)) return;
+    this.katanaMark.add(z.id);
+    const now = Date.now(), d = this.dots.get(z.id) || { owner: p.sessionId, burn: 0, burnUntil: 0, bleed: 0, bleedUntil: 0 };
+    d.owner = p.sessionId;
+    if (p.fire > 0) { d.burn = Math.min(RAVEN.burn.max, (now < d.burnUntil ? d.burn : 0) + 1); d.burnUntil = now + RAVEN.burn.len * 1000; }
+    if ((p.katanaTier || 0) >= 3) { d.bleed = Math.max(now < d.bleedUntil ? d.bleed : 0, dmg * RAVEN.bleed.frac / RAVEN.bleed.len); d.bleedUntil = now + RAVEN.bleed.len * 1000; }
+    if (d.burn || d.bleed) this.dots.set(z.id, d);
+    z.burn = now < d.burnUntil ? d.burn : 0;
+    this.hitZombie(z, p, dmg);
+  }
+  updateRaven(dt, now) {
+    const scale = 1 + (this.state.stage - 1) * 0.08;
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "scout") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const sd = this.shadowDash.get(p.sessionId);
+      if (sd) {   // the dash: slide along the line, slashing everything once
+        const t = Math.min(1, (now - sd.t0) / (RAVEN.dash.time * 1000));
+        p.x = sd.fx + (sd.tx - sd.fx) * t; p.y = sd.fy + (sd.ty - sd.fy) * t; p.dashT = Math.max(0, RAVEN.dash.time * (1 - t));
+        const k = ravenKatana(p), c = CLASS_STATS.scout || CLASS_STATS.assault;
+        const dmg = Math.round(k.dmg * RAVEN.dash.mult * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
+        const sx = p.x - sd.px, sy = p.y - sd.py, sl = Math.hypot(sx, sy) || 1;   // everything along the bit of path covered this tick
+        for (const z of [...this.state.zombies.values()]) {
+          if (sd.hit.has(z.id)) continue;
+          const u = Math.max(0, Math.min(1, ((z.x - sd.px) * sx + (z.y - sd.py) * sy) / (sl * sl)));
+          if (Math.hypot(z.x - (sd.px + sx * u), z.y - (sd.py + sy * u)) < z.radius + RAVEN.dash.width) { sd.hit.add(z.id); this.katanaHit(z, p, dmg); }
+        }
+        sd.px = p.x; sd.py = p.y;
+        if (t >= 1) { this.shadowDash.delete(p.sessionId); this.solveCollisions(p); p.dashT = 0; p.shadow = RAVEN.shadow; this.broadcast("shadow", { k: "vanish", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) }); }
+      }
+      if (p.shadow > 0) { p.shadow = Math.max(0, p.shadow - dt); if (p.shadow <= 0) this.breakShadow(p); }
+      else if (p.fire > 0) { p.fire = Math.max(0, p.fire - dt); if (p.fire <= 0) p.abilityCooldown = RAVEN.cd; }
+      if (p.storm > 0) {
+        p.storm = Math.max(0, p.storm - dt);
+        const tk = (this.stormTick.get(p.sessionId) || 0) - dt;
+        if (tk <= 0 && p.alive) {
+          const k = ravenKatana(p), c = CLASS_STATS.scout || CLASS_STATS.assault;
+          const dmg = Math.round(k.dmg * RAVEN.storm.mult * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
+          for (const z of [...this.state.zombies.values()]) if (distance(p, z) < RAVEN.storm.radius + z.radius) this.katanaHit(z, p, dmg);
+          this.stormTick.set(p.sessionId, RAVEN.storm.every);
+        } else this.stormTick.set(p.sessionId, tk);
+        if (p.storm <= 0) { const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + RAVEN.storm.cd * 1000; this.ultInfo.set(p.sessionId, info); }
+      }
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? RAVEN.storm.cd : Math.ceil(left / 100) / 10; p.ultActive = Math.ceil(active / 100) / 10; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+    // burns and bleeds
+    for (const [id, d] of this.dots) {
+      const z = this.state.zombies.get(id), owner = this.state.players.get(d.owner);
+      if (!z || !owner) { this.dots.delete(id); if (z) z.burn = 0; continue; }
+      let dmg = 0;
+      if (d.burn && now < d.burnUntil) dmg += d.burn * RAVEN.burn.dps * scale * dt; else { d.burn = 0; }
+      if (d.bleed && now < d.bleedUntil) dmg += d.bleed * dt; else d.bleed = 0;
+      z.burn = d.burn;
+      if (!d.burn && !d.bleed) { this.dots.delete(id); continue; }
+      if (dmg > 0) this.hitZombie(z, owner, dmg);
+    }
+  }
+  summonRobot(p, kind) {
+    if (p.characterClass !== "engineer") return;
+    kind = ROBOT[kind] ? kind : "assault";
+    const mine = [...this.state.robots.values()].filter(r => r.ownerId === p.sessionId);
+    if (mine.length >= ROBOT_MAX) this.state.robots.delete(mine[0].id);   // oldest goes
+    const r = new RobotState(), a = p.aim || 0;
+    r.id = `r${++this.robotSeq}`; r.kind = kind; r.ownerId = p.sessionId;
+    r.x = clamp(p.x + Math.cos(a) * 60, 20, ARENA.width - 20); r.y = clamp(p.y + Math.sin(a) * 60, 20, ARENA.height - 20);
+    r.hp = r.maxHp = ROBOT[kind].hp; r.uses = ROBOT[kind].visits || 0; r.aim = a; r.face = a; /* hunter: its 70-degree firing cone points where Viktor aimed */ r.act = ""; this.solveRobot(r); r.hx = r.x; r.hy = r.y;
+    this.state.robots.set(r.id, r);
+    this.broadcast("summon", { x: Math.round(r.x), y: Math.round(r.y) });
+    this.state.message = `${p.name} deployed a ${kind.toUpperCase()} robot!`;
+  }
+  solveRobot(r) { this.pushOut(r, this.mapBoxesNear(r.x, r.y), ROBOT_R); }
+  // A turret or robot breaks: wreck animation, and robots start the owner's ult timer when the last one goes.
+  destroyMachine(m, type) {
+    if (type === "turret") this.state.structures.delete(m.id); else this.state.robots.delete(m.id);
+    this.broadcast("wreck", { kind: type === "turret" ? "turret" : m.kind, x: Math.round(m.x), y: Math.round(m.y) });
+    if (type === "turret") { const info = this.ultInfo.get(m.ownerId) || { summonedAt: 0 }; info.readyAt = Date.now() + ULT_CD * 1000; this.ultInfo.set(m.ownerId, info); }
+  }
+  damageMachine(m, dmg) {
+    m.hp -= dmg;
+    if (m.hp <= 0) this.destroyMachine(m, m.kind === "heavyTurret" ? "turret" : "robot");
+  }
+  // shoot along a line from (x,y) at angle a: hits up to `pierce` zombies before a wall. Returns the shot length.
+  machineShot(x, y, a, range, dmg, pierce, owner) {
+    const wall = this.wallDist(x, y, a, range), hits = this.rayHits({ x, y }, a, wall).slice(0, pierce);
+    for (const h of hits) this.hitZombie(h.z, owner, dmg);
+    return hits.length ? hits[hits.length - 1].t : wall;
+  }
+  nearestZombie(x, y, range, needLine = true) {
+    let best = null, bd = range;
+    for (const z of this.state.zombies.values()) { const d = Math.hypot(z.x - x, z.y - y); if (d < bd && (!needLine || this.lineClear({ x, y }, z))) { bd = d; best = z; } }
+    return best;
+  }
+  updateMachines(dt, now) {
+    const scale = 1 + (this.state.stage - 1) * 0.06;
+    for (const st of [...this.state.structures.values()]) {
+      if (st.kind !== "heavyTurret") continue;
+      const life = this.ultInfo.get(st.ownerId);
+      if (life && now - life.summonedAt >= ULT_LIFE * 1000) { this.destroyMachine(st, "turret"); continue; }   // time's up: breaks down, cooldown starts
+      if (st.deploy > 0) { st.deploy = Math.max(0, st.deploy - dt); continue; }
+      const owner = this.state.players.get(st.ownerId) || null;
+      const z = this.nearestZombie(st.x, st.y - 20, HEAVY_TURRET.range); if (!z) continue;
+      st.aim = Math.atan2(z.y - (st.y - 20), z.x - st.x);
+      const last = this.robotFire.get(st.id) || 0;
+      if (now - last >= HEAVY_TURRET.rate * 1000) {
+        this.robotFire.set(st.id, now);
+        // one attack = one burst = one play of the turret sound (0.52s); drawn as 3 tracers
+        const a = st.aim, len = this.machineShot(st.x, st.y - 20, a, HEAVY_TURRET.range, HEAVY_TURRET.dmg * scale, 1, owner), sp = [-.04, 0, .04].map(d => a + d + rand(-.015, .015));
+        this.broadcast("shot", { id: st.id, x: Math.round(st.x + Math.cos(a) * 30), y: Math.round(st.y - 24 + Math.sin(a) * 16), a: sp, len: sp.map(() => Math.round(len)), w: "minigun" });
+      }
+    }
+    for (const r of [...this.state.robots.values()]) {
+      const owner = this.state.players.get(r.ownerId);
+      if (!owner) { this.state.robots.delete(r.id); continue; }
+      const R = ROBOT[r.kind], home = { x: r.hx, y: r.hy };
+      let goal = home; r.act = "";
+      if (r.kind === "assault") {
+        const z = this.nearestZombie(r.x, r.y, 1e9, false);   // goes looking for the nearest zombie, anywhere
+        if (z) {
+          const d = distance(r, z); r.aim = Math.atan2(z.y - r.y, z.x - r.x);
+          goal = d > 110 ? z : r;
+          if (d < R.range && this.lineClear(r, z) && now - (this.robotFire.get(r.id) || 0) >= R.rate * 1000) {
+            this.robotFire.set(r.id, now); r.act = "shoot";
+            const len = this.machineShot(r.x, r.y - 12, r.aim + rand(-.06, .06), R.range, R.dmg * scale, 1, owner);
+            this.broadcast("shot", { id: r.id, x: Math.round(r.x + Math.cos(r.aim) * 14), y: Math.round(r.y - 12), a: [r.aim], len: [Math.round(len)], w: "smg" });
+          } else if (now - (this.robotFire.get(r.id) || 0) < 200) r.act = "shoot";
+        }
+      } else if (r.kind === "support") {
+        // walks to the nearest survivor it hasn't helped yet, supports them for 5s (heal + the +15% damage aura), then looks for another.
+        // Each survivor only once. Breaks down after 3 visits, or when there's nobody left it hasn't helped.
+        const m = this.supportMem.get(r.id) || { done: 0, t: 0, target: "", seen: new Set() }; this.supportMem.set(r.id, m); r.tgt = "";
+        let tg = this.state.players.get(m.target);
+        if (!tg?.alive) {
+          tg = [...this.state.players.values()].filter(q => q.alive && !m.seen.has(q.sessionId)).sort((a, b) => distance(a, r) - distance(b, r))[0];
+          if (!tg) { if (m.done > 0) { this.supportMem.delete(r.id); this.destroyMachine(r, "robot"); continue; } }
+          else { m.target = tg.sessionId; m.t = 0; }
+        }
+        if (tg) {
+          const d = distance(r, tg); goal = d > R.near * .6 ? tg : r; r.aim = Math.atan2(tg.y - r.y, tg.x - r.x);
+          if (d < R.near) {
+            m.t += dt; r.act = tg.hp < tg.maxHp ? "heal" : "buff"; r.tgt = tg.sessionId;   // client draws the heal ring under them
+            tg.hp = Math.min(tg.maxHp, tg.hp + R.heal * dt);
+            if (now - (this.robotFire.get(r.id) || 0) > 900) { this.robotFire.set(r.id, now); this.broadcast("heal", { x: Math.round(tg.x), y: Math.round(tg.y) }); }
+            if (m.t >= R.visit) {
+              m.done++; m.seen.add(tg.sessionId); m.target = ""; m.t = 0; r.uses = R.visits - m.done;
+              if (m.done >= R.visits) { this.supportMem.delete(r.id); this.destroyMachine(r, "robot"); continue; }
+            }
+          }
+        }
+      } else if (r.kind === "hunter") {
+        // only shoots zombies inside its circle (the same 300px ground oval the player sees, flattened .6 for perspective)
+        let z = null, bd = 1;
+        for (const c of this.state.zombies.values()) {
+          const e = Math.hypot((c.x - r.hx) / ROBOT_LEASH, (c.y - r.hy) / (ROBOT_LEASH * .6));
+          let off = Math.atan2(c.y - r.hy, c.x - r.hx) - (r.face ?? 0); off = Math.atan2(Math.sin(off), Math.cos(off));   // inside the 70-degree cone?
+          if (e <= 1 && Math.abs(off) <= R.cone * Math.PI / 360 && Math.hypot(c.x - r.x, c.y - r.y) < bd * 1e4 && this.lineClear(r, c)) { const d = Math.hypot(c.x - r.x, c.y - r.y) / 1e4; if (d < bd) { bd = d; z = c; } }
+        }
+        if (z) {
+          r.aim = Math.atan2(z.y - (r.y - 14), z.x - r.x);
+          const since = now - (this.robotFire.get(r.id) || 0);
+          if (since >= R.rate * 1000) {
+            this.robotFire.set(r.id, now);
+            const len = this.machineShot(r.x, r.y - 14, r.aim, R.range, R.dmg * scale, R.pierce, owner);
+            this.broadcast("laser", { x: Math.round(r.x + Math.cos(r.aim) * 16), y: Math.round(r.y - 16 + Math.sin(r.aim) * 8), a: Math.round(r.aim * 100) / 100, len: Math.round(len) });
+          }
+          r.act = since > R.rate * 1000 - 350 ? "charge" : since < 220 ? "fire" : "";
+        } else r.aim = r.face ?? r.aim;   // idle: head looks back down its cone
+      }
+      const gd = distance(r, goal);
+      if (gd > 8) { const a = Math.atan2(goal.y - r.y, goal.x - r.x); this.steerMove(r, r.id, a, Math.min(gd, R.speed * dt), e => this.solveRobot(e)); if (!r.act || r.act === "buff") r.aim = a; }
+      const hd = Math.hypot(r.x - r.hx, r.y - r.hy);   // the hunter never strays more than ROBOT_LEASH from its spot
+      if (r.kind === "hunter" && hd > ROBOT_LEASH) { r.x = r.hx + (r.x - r.hx) / hd * ROBOT_LEASH; r.y = r.hy + (r.y - r.hy) / hd * ROBOT_LEASH; }
+    }
+    // robots keep a little space from survivors and from each other (so they never cover Viktor)
+    for (const r of this.state.robots.values()) {
+      for (const o of [...this.state.players.values(), ...this.state.robots.values()]) {
+        if (o === r || (o.sessionId && !o.alive)) continue;
+        const min = o.sessionId ? 36 : 26, d = distance(r, o); if (d >= min) continue;
+        const ux = d > .01 ? (r.x - o.x) / d : Math.random() - .5, uy = d > .01 ? (r.y - o.y) / d : Math.random() - .5;
+        r.x += ux * (min - d) * .5; r.y += uy * (min - d) * .5; this.solveRobot(r);
+      }
+    }
+    // ult HUD numbers for every Viktor
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "engineer") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const { left, active, alive } = this.ultState(p, now); p.ultCd = alive ? ULT_CD : Math.ceil(left / 100) / 10; p.ultActive = Math.ceil(active / 100) / 10; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // support robots near a survivor: +15% damage
+  supportBuff(p) {
+    if (!p || !Number.isFinite(p.x) || !this.state.robots.size) return 1;
+    for (const r of this.state.robots.values()) if (r.kind === "support" && distance(r, p) < ROBOT.support.range) return 1 + ROBOT.support.buff;
+    return 1;
+  }
+  // ---------- The Butcher's brain ----------
+  bmem(z, now) {
+    let m = this.bossMem.get(z.id);
+    if (!m) { m = { chopReady: now + 1000, hookReady: now + BUTCHER.hook.first * 1000, spinReady: 0, combo: false, spinTick: 0, stuck: 0 }; this.bossMem.set(z.id, m); }
+    return m;
+  }
+  startAct(z, act, len, aim) { z.act = act; z.actLen = len; z.slam = len; if (aim !== undefined) z.aim = aim; }
+  // ---------- The Hivemind (mini boss) ----------
+  spawnHivemind() {
+    this.hiveSpawned = true; this.spawnZombie(false, "hivemind");
+    const z = [...this.state.zombies.values()].pop(); if (!z || z.kind !== "hivemind") return null;
+    const scale = 1 + (this.state.stage - 1) * 0.08, n = this.state.players.size;
+    z.maxHp = z.hp = HIVE.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, n - 1));
+    z.speed = HIVE.speed; z.radius = HIVE.radius; z.damage = HIVE.dmg * scale; z.role = "hunter"; z.boss = false;
+    this.hiveMem.set(z.id, { biteReady: 0, slamReady: Date.now() + 2500, jumpReady: Date.now() + 3000, spawnAt: Date.now() + HIVE.spawn.first * 1000 });
+    this.state.message = "THE HIVEMIND HAS ARRIVED!";
+    this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y) });
+    return z;
+  }
+  hiveHurt(p, dmg) { if (!p.alive) return; const dealt = Math.max(1, Math.round(dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
+  hiveThink(z, dt, now, players) {
+    const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000 }; this.hiveMem.set(z.id, m);
+    if (now >= m.spawnAt && z.act !== "jump") {   // tears zombies out of its body
+      const n = Math.min(H.spawn.max, 1 + Math.floor(this.state.stage / 8)), was = this.state.explore; this.state.explore = false;
+      for (let i = 0; i < n; i++) {
+        this.spawnZombie(false, "walker"); const w = [...this.state.zombies.values()].pop(), a = Math.random() * Math.PI * 2;
+        w.x = clamp(z.x + Math.cos(a) * (z.radius + 22), 20, ARENA.width - 20); w.y = clamp(z.y + Math.sin(a) * (z.radius + 22) * .7, 20, ARENA.height - 20); w.attackCooldown = 1.2; this.solveZombie(w);
+        this.broadcast("hive", { k: "spawn", x: Math.round(w.x), y: Math.round(w.y) });
+      }
+      this.state.explore = was; m.spawnAt = now + H.spawn.every * 1000;
+    }
+    if (z.act) {
+      const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam;
+      if (z.act === "bite" && t0 < H.bite.windup && t1 >= H.bite.windup) {
+        for (const p of this.state.players.values()) {
+          if (!p.alive) continue; const d = distance(z, p); if (d > H.bite.reach + BODY_R) continue;
+          let diff = Math.atan2(p.y - z.y, p.x - z.x) - z.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          if (Math.abs(diff) <= H.bite.arc || d < z.radius + 14) this.hiveHurt(p, z.damage * H.bite.mult);
+        }
+      }
+      if (z.act === "slam" && t0 < H.slam.windup && t1 >= H.slam.windup) {
+        for (const p of this.state.players.values()) if (p.alive && Math.hypot(p.x - z.x, (p.y - z.y) / H.slam.flat) < H.slam.radius) { this.hiveHurt(p, z.damage * H.slam.mult); p.stunned = Math.max(p.stunned || 0, H.slam.stun); p.charging = false; }
+        this.broadcast("hive", { k: "slam", x: Math.round(z.x), y: Math.round(z.y), r: H.slam.radius });
+      }
+      if (z.act === "jump") {
+        const J = H.jump;
+        if (t1 > J.up && t0 < J.land) { const k = Math.min(1, (t1 - J.up) / (J.land - J.up)); z.x = m.jx0 + (m.jx1 - m.jx0) * k; z.y = m.jy0 + (m.jy1 - m.jy0) * k; }
+        if (t0 < J.land && t1 >= J.land) {
+          this.solveZombie(z);
+          for (const p of this.state.players.values()) if (p.alive && Math.hypot(p.x - z.x, (p.y - z.y) / H.slam.flat) < J.radius) this.hiveHurt(p, z.damage * J.mult);
+          this.broadcast("hive", { k: "land", x: Math.round(z.x), y: Math.round(z.y), r: J.radius });
+        }
+      }
+      if (z.slam <= 0) z.act = "";
+      return;
+    }
+    if (!players.length) return;
+    const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
+    z.targetId = near.sessionId; z.aim = a;
+    if (d < H.bite.range + z.radius && now >= m.biteReady) { this.startAct(z, "bite", H.bite.total, a); m.biteReady = now + H.bite.cd * 1000; return; }
+    if (d < H.slam.range && now >= m.slamReady) { this.startAct(z, "slam", H.slam.total, a); m.slamReady = now + H.slam.cd * 1000; return; }
+    if (d > H.jump.min && d < H.jump.max && now >= m.jumpReady) {   // leap at a survivor far away: lands just short of them
+      const land = Math.max(0, d - z.radius - 30);
+      m.jx0 = z.x; m.jy0 = z.y; m.jx1 = clamp(z.x + Math.cos(a) * land, 40, ARENA.width - 40); m.jy1 = clamp(z.y + Math.sin(a) * land, 40, ARENA.height - 40);
+      if (this.blockedByMap(m.jx1, m.jy1, z.radius * .6)) m.jumpReady = now + 1500;
+      else { this.startAct(z, "jump", H.jump.total, a); m.jumpReady = now + H.jump.cd * 1000; this.broadcast("hive", { k: "jump", id: z.id, x0: Math.round(m.jx0), y0: Math.round(m.jy0), x1: Math.round(m.jx1), y1: Math.round(m.jy1) }); return; }
+    }
+    if (d > z.radius + 40) this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));
+  }
+  butcherThink(z, dt, now, players) {
+    const B = BUTCHER, m = this.bmem(z, now);
+    if (!z.enraged && z.hp / z.maxHp < B.enrageAt) {
+      z.enraged = true; z.speed *= B.enrageSpeed; m.spinReady = now + 1200;
+      this.state.message = "THE BUTCHER IS ENRAGED!"; this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
+    }
+    if (z.act) {
+      const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, act = z.act;
+      this["butcher_" + act](z, t0, t1, dt, m, now, players);
+      if (z.act === act && z.slam <= 0) { z.act = ""; z.hookId = ""; }
+      return;
+    }
+    if (!players.length) return;
+    const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
+    z.targetId = near.sessionId;
+    if (z.enraged && now >= m.spinReady) { this.startAct(z, "spin", B.spin.dur, a); m.spinTick = 0; return; }
+    if (d < B.chop.trigger && now >= m.chopReady) { m.combo = false; m.chopW = B.chop.windup; this.startAct(z, "chop", B.chop.windup + B.chop.after, a); return; }
+    if (now >= m.hookReady) {
+      const cands = players.filter(p => { const pd = distance(z, p); return pd >= B.hook.minRange && pd <= B.hook.range && this.lineClear(z, p); });
+      if (cands.length) {
+        const far = cands.reduce((a, b) => distance(z, a) > distance(z, b) ? a : b);
+        m.hookTarget = far.sessionId; z.targetId = far.sessionId; z.hookD = 0; m.lastTX = m.lastTY = undefined; m.vx = m.vy = 0;
+        const cd = z.enraged ? B.hook.enragedCd : B.hook.cd; m.hookReady = now + rand(cd[0], cd[1]) * 1000;
+        this.startAct(z, "hook", B.hook.aim + B.hook.range / this.hookSpd() + .05, Math.atan2(far.y - z.y, far.x - z.x)); return;
+      }
+    }
+    z.aim = a;
+    if (d > z.radius + 30) this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));
+  }
+  butcher_chop(z, t0, t1, dt, m, now) {
+    const C = BUTCHER.chop, W = m.chopW || C.windup;
+    const cx = z.x + Math.cos(z.aim) * C.offset, cy = z.y + Math.sin(z.aim) * C.offset;
+    for (let i = 0; i < 3; i++) {
+      const at = W + i * C.ringDelay; if (!(t0 < at && t1 >= at)) continue;
+      if (i === 0) this.broadcast("chop", { x: Math.round(cx), y: Math.round(cy), r: C.rings, d: C.ringDelay });
+      const inner = i ? C.rings[i - 1] : 0, outer = C.rings[i];
+      for (const p of this.state.players.values()) {
+        if (!p.alive) continue; const zd = ringZone(p.x - cx, p.y - cy); if (zd < inner || zd >= outer) continue;
+        if (i === 0) { const dealt = Math.max(1, Math.round(z.damage - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
+        else if (i === 1) { p.stunned = Math.max(p.stunned || 0, C.stun); p.charging = false; }
+        else p.slowed = Math.max(p.slowed || 0, C.slow);
+      }
+    }
+    if (z.slam <= 0) { m.chopReady = now + C.cd * 1000; m.combo = false; }
+  }
+  butcher_hook(z, t0, t1, dt, m, now) {
+    const H = BUTCHER.hook, target = this.state.players.get(m.hookTarget);
+    if (t1 < H.aim) {   // aiming: tracks the target and LEADS them (aims where they'll be when the hook arrives); locks just before the throw
+      if (target?.alive && t1 < H.aim - H.lock) {
+        const vx = m.lastTX !== undefined && dt > 0 ? (target.x - m.lastTX) / dt : 0, vy = m.lastTY !== undefined && dt > 0 ? (target.y - m.lastTY) / dt : 0;
+        m.vx = (m.vx || 0) * .6 + vx * .4; m.vy = (m.vy || 0) * .6 + vy * .4;
+        const lead = distance(z, target) / this.hookSpd() + (H.aim - t1);
+        z.aim = Math.atan2(target.y + m.vy * lead - z.y, target.x + m.vx * lead - z.x);
+      }
+      if (target) { m.lastTX = target.x; m.lastTY = target.y; }
+      return;
+    }
+    if (t0 < H.aim) m.wall = this.wallDist(z.x, z.y - 30, z.aim, H.range);                                                  // thrown: where would it hit a wall?
+    const reach = Math.min(H.range, m.wall ?? H.range), d0 = z.hookD || 0, d1 = Math.min(reach, (t1 - H.aim) * this.hookSpd());
+    z.hookD = d1;
+    const dx = Math.cos(z.aim), dy = Math.sin(z.aim);
+    let hit = null, best = Infinity;
+    for (const p of this.state.players.values()) {
+      if (!p.alive) continue; const vx = p.x - z.x, vy = p.y - z.y, along = vx * dx + vy * dy;
+      if (along < d0 - H.hitR || along > d1 + H.hitR) continue;
+      if (Math.abs(vx * dy - vy * dx) <= H.hitR + BODY_R && along < best) { best = along; hit = p; }
+    }
+    if (hit && this.canDeflect(hit, z, now, DEFLECT.window)) { this.deflectHook(z, hit, now); return; }
+    if (hit) {
+      z.hookId = hit.sessionId; z.hookD = best; hit.stunned = Math.max(hit.stunned || 0, .3); hit.charging = false;
+      const dealt = Math.max(1, H.dmg - hit.defence); hit.hp -= dealt; hit.damageTaken += dealt;
+      if (hit.hp <= 0) { this.downPlayer(hit); this.startAct(z, "hookback", .35); return; }
+      this.broadcast("hooked", { id: hit.sessionId }); m.stuck = 0;
+      this.startAct(z, "pull", 2.5); return;
+    }
+    if (d1 >= reach) this.startAct(z, "hookback", Math.max(.25, Math.min(.5, reach / (this.hookSpd() * 1.6))));   // missed: reel the chain back in
+  }
+  butcher_hookback() {}
+  butcher_stagger() {}
+  hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
+  // Did survivor p swing the fire axe toward the hook (from Butcher z) in the last `win` seconds?
+  canDeflect(p, z, now, win) {
+    const sw = this.axeSwing.get(p.sessionId); if (!sw || now - sw.t > win * 1000) return false;
+    let diff = Math.atan2(z.y - p.y, z.x - p.x) - sw.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    return Math.abs(diff) <= DEFLECT.arc;
+  }
+  deflectHook(z, p, now) {
+    const sw = this.axeSwing.get(p.sessionId), heavy = !!sw?.heavy; this.axeSwing.delete(p.sessionId);
+    const ang = Math.atan2(z.y - p.y, z.x - p.x), cx = p.x + Math.cos(ang) * 30, cy = p.y - 22 + Math.sin(ang) * 18;
+    const m = this.bmem(z, now), cd = z.enraged ? BUTCHER.hook.enragedCd : BUTCHER.hook.cd;
+    m.hookReady = now + rand(cd[0], cd[1]) * 1000; m.chopReady = Math.max(m.chopReady || 0, now + 600);
+    z.hookId = ""; z.hookD = 0;
+    this.startAct(z, "stagger", heavy ? DEFLECT.heavyStagger : DEFLECT.stagger, z.aim);
+    this.broadcast("deflect", { id: p.sessionId, x: Math.round(cx), y: Math.round(cy), a: Math.round(z.aim * 100) / 100, heavy });
+    this.state.message = `${p.name} DEFLECTED the hook!`;
+  }
+  butcher_pull(z, t0, t1, dt, m) {
+    const H = BUTCHER.hook, p = this.state.players.get(z.hookId);
+    if (!p || !p.alive) { z.act = ""; z.hookId = ""; return; }
+    const ang = Math.atan2(p.y - z.y, p.x - z.x), d = distance(z, p); z.aim = ang;
+    p.stunned = Math.max(p.stunned || 0, .25);
+    const stop = z.radius + BODY_R + 14;
+    if (d > stop) {
+      const step = Math.min(d - stop, H.pullSpeed * dt), bx = p.x, by = p.y;
+      this.moveWithCollision(p, -Math.cos(ang) * step, -Math.sin(ang) * step);
+      m.stuck = Math.hypot(p.x - bx, p.y - by) < step * .3 ? m.stuck + dt : 0;
+    }
+    z.hookD = distance(z, p);
+    if (distance(z, p) <= stop + 2 || m.stuck > .3) {   // arrived (or snagged on something): hold them and CHOP
+      p.stunned = Math.max(p.stunned || 0, H.hold); z.hookId = "";
+      m.combo = true; m.chopW = BUTCHER.chop.comboWindup;
+      this.startAct(z, "chop", BUTCHER.chop.comboWindup + BUTCHER.chop.after, ang);
+    }
+  }
+  butcher_spin(z, t0, t1, dt, m, now, players) {
+    const S = BUTCHER.spin;
+    if (players.length) {
+      const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), a = Math.atan2(near.y - z.y, near.x - z.x);
+      z.aim = a; if (distance(z, near) > 20) this.steerMove(z, z.id, a, z.speed * S.speedMult * dt, e => this.solveZombie(e));
+    }
+    m.spinTick -= dt;
+    if (m.spinTick <= 0 && t1 > .3) {
+      m.spinTick = S.tick;
+      for (const p of this.state.players.values()) {
+        if (!p.alive || distance(z, p) > S.radius + BODY_R) continue;
+        const dealt = Math.max(1, Math.round(z.damage * S.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+      }
+    }
+    if (z.slam <= 0) m.spinReady = now + S.every * 1000;
+  }
+  // Mutant whip lands: hits every survivor in a wide arc in front of it.
+  mutantWhip(z, ang) {
+    const reach = z.radius + ATTACK_REACH.mutant + BODY_R;
+    for (const p of this.state.players.values()) {
+      if (!p.alive) continue; const pd = distance(z, p); if (pd > reach) continue;
+      let diff = Math.atan2(p.y - z.y, p.x - z.x) - ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > MUTANT.arc && pd > z.radius + BODY_R + 4) continue;
+      const dealt = Math.max(1, Math.round(z.damage * MUTANT.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+    }
+    this.broadcast("whip", { x: Math.round(z.x), y: Math.round(z.y), a: Math.round(ang * 100) / 100 });
+  }
+  // Brute ground slam lands: damage + stun everyone in the radius.
+  bruteSlam(z) {
+    for (const p of this.state.players.values()) {
+      if (!p.alive || distance(p, z) > SLAM.radius + BODY_R) continue;
+      const dealt = Math.max(1, Math.round(z.damage * SLAM.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt;
+      p.stunned = Math.max(p.stunned || 0, SLAM.stun); p.charging = false;
+      if (p.hp <= 0) this.downPlayer(p);
+    }
+    this.broadcast("slam", { x: Math.round(z.x), y: Math.round(z.y), r: SLAM.radius });
+  }
+  solveZombie(z) { this.pushOut(z, this.mapBoxesNear(z.x, z.y), Math.min(z.radius, 34) * 0.8); }
+  // Walk toward angle `ang`; if something solid is in the way, slide around it (keeps going round the same side for a while).
+  steerMove(e, key, ang, dist, solve) {
+    const st = this.steer.get(key) || { side: Math.random() < .5 ? 1 : -1, until: 0, off: 0 }; this.steer.set(key, st);
+    const now = Date.now(), x0 = e.x, y0 = e.y;
+    const tryDir = (a) => {
+      e.x = clamp(x0 + Math.cos(a) * dist, 5, ARENA.width - 5); e.y = clamp(y0 + Math.sin(a) * dist, 5, ARENA.height - 5); solve(e);
+      return Math.hypot(e.x - x0, e.y - y0);
+    };
+    const offs = now < st.until ? [st.off, 0] : [0];
+    for (const o of [...offs, .6 * st.side, 1.1 * st.side, 1.6 * st.side, -.6 * st.side, -1.1 * st.side]) {
+      const moved = tryDir(ang + o);
+      const forward = (e.x - x0) * Math.cos(ang) + (e.y - y0) * Math.sin(ang);
+      if (moved > dist * .55 && (o === 0 ? forward > dist * .5 : true)) {
+        if (o !== 0 && o !== st.off) { st.off = o; st.side = Math.sign(o); }
+        if (o !== 0) st.until = now + 700;
+        return;
+      }
+    }
+    st.side = -st.side; st.until = 0;    // boxed in: try the other side next time
+  }
+  // Move in small steps so fast moves (dash) can't skip through a wall.
+  moveWithCollision(p, dx, dy) {
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
+    for (let i = 0; i < steps; i++) {
+      p.x = clamp(p.x + dx / steps, 18, ARENA.width - 18); p.y = clamp(p.y + dy / steps, 18, ARENA.height - 18);
+      this.solveCollisions(p);
+    }
+  }
+
+  unlockWeapon(p, id) {
+    const owned = new Set(p.owned.split(",").filter(Boolean));
+    owned.add(id); p.owned = [...owned].join(",");
+  }
+
+  // ---------- AI teammate brain (runs every server tick for each bot) ----------
+  botThink(b, dt, now) {
+    if (b.stunned > 0) return;
+    const brain = this.botBrain.get(b.sessionId) || { strafe: 1 };
+    const s = this.state, center = { x: ARENA.width / 2, y: ARENA.height / 2 };
+    // Level-ups: bots pick a random upgrade.
+    while (b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * 5)]);
+    const zs = [...s.zombies.values()];
+    const seen = zs.filter(z => distance(b, z) < 700 && this.lineClear(b, z));
+    const pool = seen.length ? seen : zs;
+    const near = pool.length ? pool.reduce((a, z) => distance(b, z) < distance(b, a) ? z : a) : null;
+    const nearD = near ? distance(b, near) : Infinity;
+    // Rescue: go to the nearest downed teammate unless a zombie is right on top of us.
+    const downed = [...s.players.values()].filter(p => !p.alive && !p.bledOut && p !== b)
+      .sort((m, n) => distance(b, m) - distance(b, n))[0];
+    let mx = 0, my = 0;
+    if (b.reviveTargetId) { /* hold still while reviving */ }
+    else if (downed && nearD > 90) {
+      if (distance(b, downed) > 55) { mx = downed.x - b.x; my = downed.y - b.y; }
+      else { b.reviveTargetId = downed.sessionId; b.reviveProgress = 0; s.message = `${b.name} is reviving ${downed.name}...`; }
+    } else if (near) {
+      const ax = (b.x - near.x) / nearD, ay = (b.y - near.y) / nearD;
+      if (nearD < 150) { mx = ax; my = ay; }                       // too close: back off
+      else if (nearD > 330) { mx = -ax; my = -ay; }                // too far: move in
+      else { mx = -ay * brain.strafe * 0.7; my = ax * brain.strafe * 0.7; } // in range: circle-strafe
+      const fromTower = distance(b, center);
+      if (fromTower > 280) { mx += (center.x - b.x) / fromTower; my += (center.y - b.y) / fromTower; }
+    } else if (distance(b, center) > 140) { mx = center.x - b.x; my = center.y - b.y; }
+    // Boss: keep ~260px away, and get out of a cleaver chop's shockwave before it lands.
+    const boss = zs.find(z => z.boss);
+    if (boss && !b.reviveTargetId) {
+      const bd = distance(b, boss);
+      if (bd < 240) { mx += (b.x - boss.x) / bd * 1.6; my += (b.y - boss.y) / bd * 1.6; }
+      if (boss.act === "chop") {
+        const cx = boss.x + Math.cos(boss.aim) * BUTCHER.chop.offset, cy = boss.y + Math.sin(boss.aim) * BUTCHER.chop.offset, zd = ringZone(b.x - cx, b.y - cy);
+        if (zd < BUTCHER.chop.rings[2] + 20) { const dd = Math.hypot(b.x - cx, b.y - cy) || 1; mx = (b.x - cx) / dd * 3; my = (b.y - cy) / dd * 3; }
+      }
+    }
+    // Keep a little personal space from other survivors so bots don't stack on top of each other.
+    for (const o of s.players.values()) {
+      if (o === b || !o.alive) continue;
+      const d = distance(b, o);
+      if (d < 46 && d > 0.01) { mx += (b.x - o.x) / d * 1.4; my += (b.y - o.y) / d * 1.4; }
+      else if (d <= 0.01) { mx += rand(-1, 1); my += rand(-1, 1); }
+    }
+    // Swap strafe direction when hugging a wall.
+    if (b.x < 40 || b.x > ARENA.width - 40 || b.y < 40 || b.y > ARENA.height - 40) brain.strafe *= -1;
+    const mag = Math.hypot(mx, my);
+    if (mag > 0.01) {
+      this.steerMove(b, b.sessionId, Math.atan2(my, mx), b.speed * 0.9 * (b.slowed > 0 ? 0.5 : 1) * dt, e => this.solveCollisions(e));
+      if (Math.abs(mx) > 0.05) { b.facing = mx > 0 ? 1 : -1; this.lastMoveAt.set(b.sessionId, now); }
+    }
+    // Aim like a person: react after a short delay, swing the aim over (no snapping),
+    // wobble a little, and don't fire every possible moment.
+    const w = WEAPONS[b.weapon] || WEAPONS.rifle;
+    if (near && near.id !== brain.target) { brain.target = near.id; brain.reactAt = now + rand(280, 650); }
+    if (near) {
+      const want = Math.atan2(near.y - b.y, near.x - b.x);
+      if (brain.aim === undefined) brain.aim = want;
+      let diff = Math.atan2(Math.sin(want - brain.aim), Math.cos(want - brain.aim));
+      const turn = 4.5 * dt; brain.aim += Math.max(-turn, Math.min(turn, diff));
+      brain.wobble = (brain.wobble || 0) * 0.88 + rand(-0.09, 0.09);
+      diff = Math.atan2(Math.sin(want - brain.aim), Math.cos(want - brain.aim));
+      const ready = now >= (brain.reactAt || 0) && Math.abs(diff) < 0.25;
+      if (ready && nearD < w.range && seen.includes(near) && !b.reviveTargetId && now - b.lastShot >= 1000 / b.fireRate && Math.random() < 0.6) {
+        this.fireWeapon(b, brain.aim + brain.wobble + rand(-0.2, 0.2), nearD);
+      }
+    }
+    if (b.hp < b.maxHp * 0.4 && b.medkits > 0) this.useQuickItem(b);
+    // Class ability when zombies are close.
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
+    if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
+      if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
+      const c = this.demoOf(b);
+      if (!c && b.ultReady && nearD < 260) this.useUlt(b);
+      else if (c && c.deploy <= 0 && [...this.state.zombies.values()].filter(z => Math.hypot(z.x - c.x, z.y - c.y) < 200).length >= 4) this.useUlt(b);
+    }
+    if (b.characterClass === "scout") {   // Raven bot: katana when close, storm when crowded
+      if (near && nearD < 105 && b.activeSlot === 1) this.meleeAttack(b, Math.atan2(near.y - b.y, near.x - b.x));
+      if (b.ultReady && nearD < 130) this.useUlt(b);
+    }
+    this.botBrain.set(b.sessionId, brain);
+  }
+
+  // Zombies along a straight line from the player, nearest first.
+  // How far a straight line from (x, y) at angle a goes before hitting a solid map piece (or `range` if nothing).
+  wallDist(x, y, a, range) {
+    const dx = Math.cos(a), dy = Math.sin(a); let best = range; const seen = new Set();
+    for (let t = 0; t <= range + 160; t += 120) {
+      for (const b of this.mapBoxesNear(x + dx * t, y + dy * t)) {
+        if (seen.has(b)) continue; seen.add(b);
+        // ray vs box (slab test)
+        let t0 = 0, t1 = best;
+        for (const [o, d, lo, hi] of [[x, dx, b.x - b.hw, b.x + b.hw], [y, dy, b.y - b.hh, b.y + b.hh]]) {
+          if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = Infinity; break; } continue; }
+          let ta = (lo - o) / d, tb = (hi - o) / d; if (ta > tb) [ta, tb] = [tb, ta];
+          t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) break;
+        }
+        if (t0 <= t1 && t0 < best) best = t0;
+      }
+      if (t > best) break;
+    }
+    return best;
+  }
+  // Nothing solid between a and b?
+  lineClear(a, b) { const d = distance(a, b); return this.wallDist(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), d) >= d - 1; }
+  rayHits(p, a, range) {
+    const dx = Math.cos(a), dy = Math.sin(a), out = [];
+    for (const z of this.state.zombies.values()) {
+      const vx = z.x - p.x, vy = z.y - p.y;
+      const t = vx * dx + vy * dy;
+      if (t < 0 || t > range) continue;
+      if (Math.abs(vx * dy - vy * dx) <= z.radius + 6) out.push({ z, t });
+    }
+    return out.sort((m, n) => m.t - n.t);
+  }
+
+  recentlyMoved(id) { return Date.now() - (this.lastMoveAt.get(id) || 0) < 250; }
+
+  // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
+  downPlayer(target) {
+    target.hp = 0; target.alive = false;
+    const downs = (this.downs.get(target.sessionId) || 0) + 1;
+    this.downs.set(target.sessionId, downs);
+    target.bleedout = Math.max(10, 35 - downs * 5);
+    this.state.message = `${target.name} is down! Revive within ${target.bleedout}s.`;
+  }
+
+  hitZombie(z, p, dmg) {
+    if (!this.state.zombies.has(z.id)) return;
+    if (p?.sessionId) dmg *= this.supportBuff(p);
+    if (z.kind === "butcher" && z.act !== "stagger" && p && Number.isFinite(p.x)) {   // armoured front: half damage from the front (not while staggered)
+      let diff = Math.atan2(p.y - z.y, p.x - z.x) - (z.aim || 0); diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) < BUTCHER.armourArc) {
+        dmg *= BUTCHER.armour;
+        const now = Date.now(); if (now - (this.clangAt || 0) > 140) { this.clangAt = now; this.broadcast("clang", { x: Math.round(z.x + Math.cos(z.aim || 0) * 30), y: Math.round(z.y - 40) }); }
+      }
+    }
+    z.hp -= dmg;
+    p.damageDealt += dmg;
+    if (z.boss) p.bossDamage += dmg;
+    if (z.hp <= 0) this.killZombie(z, p);
+  }
+
   killZombie(z, killer) {
-    this.state.zombies.delete(z.id);
+    this.state.zombies.delete(z.id); this.dots.delete(z.id);
+    this.broadcast("zdead", { id: z.id, x: Math.round(z.x), y: Math.round(z.y), k: z.kind });
+    if (z.kind === "hivemind") {   // mini boss down: everyone gets paid, gold spills out
+      this.hiveMem.delete(z.id);
+      for (const p of this.state.players.values()) p.currency += HIVE.gold;
+      for (let i = 0; i < 4; i++) { const item = new LootState(); item.id = `l${++this.lootSequence}`; item.kind = "gold"; item.amount = 15; item.rarity = "Rare"; item.x = z.x + rand(-50, 50); item.y = z.y + rand(-30, 30); this.state.loot.set(item.id, item); }
+      this.state.message = `THE HIVEMIND IS DEAD! +${HIVE.gold} gold each.`;
+    }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
+      if (!z.boss && ["engineer", "scout", "demolitionist"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
+        killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
+        if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
+      }
       killer.killLeadSince = Date.now();
       killer.xp += z.boss ? 35 : z.kind === "brute" ? 9 : 5;
+      killer.currency += z.boss ? 25 : (KILL_GOLD[z.kind] || 1);
       killer.hp = Math.min(killer.maxHp, killer.hp + (z.boss ? 25 : 1));
     }
     this.state.totalKills++;
-    if(Math.random()<(z.boss?.95:.28)){const item=new LootState();item.id=`l${++this.lootSequence}`;const roll=Math.random();item.kind=z.boss||roll>.92?"weapon":roll<.25?"ammo":roll<.48?"medkit":roll<.72?"scrap":"gold";item.x=z.x;item.y=z.y;item.amount=item.kind==="medkit"?35:item.kind==="ammo"?45:item.kind==="gold"?15:item.kind==="scrap"?8:0;item.rarity=z.boss?"Legendary":roll>.97?"Epic":roll>.9?"Rare":"Common";this.state.loot.set(item.id,item);}
+    if(Math.random()<(z.boss?1:.28)){const item=new LootState();item.id=`l${++this.lootSequence}`;const roll=Math.random();item.kind=z.boss||roll>.92?"weapon":roll<.25?"ammo":roll<.48?"medkit":roll<.72?"scrap":"gold";item.x=z.x;item.y=z.y;item.amount=item.kind==="medkit"?35:item.kind==="ammo"?60:item.kind==="gold"?15:item.kind==="scrap"?8:0;item.rarity=z.boss?"Legendary":roll>.97?"Epic":roll>.9?"Rare":"Common";this.state.loot.set(item.id,item);}
     this.state.scrap += z.boss ? 35 : 2; if (Math.random()<0.12) this.state.electronics += 1; if (Math.random()<0.08) this.state.fuel += 1;
     if (z.boss) {
-      this.state.bossDead = true;
-      this.state.phase = this.state.stage === 50 ? "victory" : "cleared";
-      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
+      this.state.bossDead = true; this.state.bossPhase = "";
+      for (const p of this.state.players.values()) p.currency += 40;   // everyone gets paid for a boss
+      this.broadcast("bossDead", { kind: z.kind, x: Math.round(z.x), y: Math.round(z.y) });
+      // let everyone watch it die for a few seconds before the wave ends
+      this.bossOverAt = Date.now() + 4500;
+      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN!" : `${String(z.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()} IS DEAD!`;
     }
   }
 
   tick() {
-    if (this.state.phase !== "playing") return;
     const now = Date.now();
     const dt = Math.min(0.1, (now - this.lastTick) / 1000);
     this.lastTick = now;
-    this.state.elapsed += dt; this.state.matchTime += dt;
+    for (const p of this.state.players.values()) if (p.charging && (!p.alive || p.activeSlot !== 1 || p.melee !== "axe" || this.state.phase !== "playing")) p.charging = false;
+    // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
+    if (this.state.phase === "cleared") {
+      if (!this.inBreak) { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.countdown = Math.max(0, this.state.countdown - dt);
+      if (this.state.countdown <= 0) this.startNextWave();
+      return;
+    }
+    if (this.state.phase !== "playing") return;
+    if (this.bossOverAt && now >= this.bossOverAt) {   // boss died a few seconds ago: wave over
+      this.bossOverAt = 0; this.state.zombies.clear(); this.state.puddles.clear(); this.spits = [];
+      this.state.phase = this.state.stage === 50 ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
+      return;
+    }
+    if (!this.state.explore) this.state.elapsed += dt;   // explore mode: timer frozen, no spawns (zombies were cleared when it was turned on)
+    this.state.matchTime += dt;
     for(const p of this.state.players.values()) if(p.abilityCooldown>0)p.abilityCooldown=Math.max(0,p.abilityCooldown-dt);
+    for (const p of this.state.players.values()) {   // Viktor's robot charges refill one at a time, every 25s
+      if (p.characterClass !== "engineer") continue;
+      if (p.robotCharges == null) p.robotCharges = ROBOT_CHARGES;
+      if (p.robotCharges >= ROBOT_CHARGES) { p.chargeCd = 0; continue; }
+      p.chargeCd = Math.max(0, (p.chargeCd || ROBOT_CD) - dt);
+      if (p.chargeCd <= 0) { p.robotCharges++; p.chargeCd = p.robotCharges < ROBOT_CHARGES ? ROBOT_CD : 0; }
+    }
+    for(const p of this.state.players.values()) { if(p.stunned>0)p.stunned=Math.max(0,p.stunned-dt); if(p.slowed>0)p.slowed=Math.max(0,p.slowed-dt); }
+    this.updateAcid(dt);
+    this.updateMachines(dt, now);
+    this.updateRaven(dt, now);
+    this.updateDante(dt, now);
+    this.separateZombies();
+    for(const p of this.state.players.values()) if(p.reloadLeft>0){p.reloadLeft=Math.max(0,p.reloadLeft-dt);if(p.reloadLeft===0)this.finishReload(p);}
+    for(const b of this.state.players.values()) if(b.isBot&&b.alive) this.botThink(b, dt, now);
     for(const rescuer of this.state.players.values()) if(rescuer.reviveTargetId){
       const target=this.state.players.get(rescuer.reviveTargetId);
-      if(!rescuer.alive||!target||target.alive||distance(rescuer,target)>85){rescuer.reviveTargetId="";rescuer.reviveProgress=0;}
+      if(!rescuer.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85){rescuer.reviveTargetId="";rescuer.reviveProgress=0;}
       else {rescuer.reviveProgress+=dt;if(rescuer.reviveProgress>=5){target.alive=true;target.bleedout=0;target.hp=Math.max(30,Math.round(target.maxHp*.35));rescuer.revives++;rescuer.reviveTargetId="";rescuer.reviveProgress=0;this.state.message=`${rescuer.name} revived ${target.name}!`;}}
     }
-    for(const p of this.state.players.values()) if(!p.alive&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0)this.state.message=`${p.name} has bled out.`;}
+    for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit")p.hp=Math.min(p.maxHp,p.hp+item.amount);else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){p.weapon=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun";p.damage=item.rarity==="Legendary"?85:item.rarity==="Epic"?42:24;}
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun";p.ammo+=30;this.unlockWeapon(p,found);this.storeMag(p);p[WEAPONS[found].slot]=found;if(p.activeSlot===2||p.activeSlot===3)this.setSlot(p,p.activeSlot);else this.loadMag(p);this.state.message=`${p.name} found a ${item.rarity} ${found}!`;}
       this.state.loot.delete(item.id);
     }
     this.state.dayTime = (this.state.dayTime + dt) % 240;
     this.state.isNight = this.state.dayTime >= 120;
     this.spawnClock -= dt;
-    if (this.spawnClock <= 0 && this.state.elapsed < 90) {
+    if (this.state.waveType === "normal" && isHiveWave(this.state.stage) && !this.hiveSpawned && !this.state.explore && this.state.elapsed >= HIVE.arriveAt) this.spawnHivemind();
+    if (this.state.waveType === "boss") this.bossWaveTick(dt, now);
+    else if (this.spawnClock <= 0 && this.state.elapsed < 90) {
       this.spawnZombie();
-      if (this.state.stage > 1 && Math.random() < Math.min(.65,.15 + this.state.stage*.01)) this.spawnZombie();
-      this.spawnClock = Math.max(0.24, 1.15 - this.state.stage * 0.018);
+      // Waves 1-6 are a warm-up that ramps up smoothly; wave 7+ uses the normal formula.
+      const early = { 1: 2.6, 2: 2.0, 3: 1.6, 4: 1.3, 5: 1.1, 6: 0.95 }[this.state.stage];   // warm-up waves: ~35 / 45 / 56 / 69 / 82 / 95 zombies
+      if (!early && Math.random() < Math.min(.65,.15 + this.state.stage*.01)) this.spawnZombie();
+      this.spawnClock = early || Math.max(0.24, 1.15 - this.state.stage * 0.018);
     }
     if (this.state.generatorFuel > 0 && this.state.generatorHp > 0) this.state.generatorFuel = Math.max(0,this.state.generatorFuel-dt*0.025);
     else if (this.state.generatorHp <= 0 || this.state.generatorFuel <= 0) this.state.generatorHp = Math.max(0,this.state.generatorHp-dt*0.1);
     for (const st of this.state.structures.values()) {
       if (st.kind === "turret" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
-        const target=[...this.state.zombies.values()].sort((a,b)=>distance(st,a)-distance(st,b))[0];
+        const target=[...this.state.zombies.values()].filter(z=>distance(st,z)<260).sort((a,b)=>distance(st,a)-distance(st,b)).find(z=>this.lineClear(st,z));
         if(target && distance(st,target)<260){target.hp-=18*dt;if(target.hp<=0)this.killZombie(target,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null);}
       }
       if (st.kind === "fence" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
@@ -321,44 +1742,80 @@ export class SurvivalRoom extends Room {
     }
 
     const players = [...this.state.players.values()].filter(p => p.alive);
+    const machines = [...this.state.robots.values(), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
+    const seen = players.filter(p => !(p.shadow > 0));   // invisible Raven: zombies don't see her
     for (const z of [...this.state.zombies.values()]) {
+      if (z.kind === "butcher") { this.butcherThink(z, dt, now, seen); continue; }
+      if (z.kind === "hivemind") { this.hiveThink(z, dt, now, seen); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
-      const nearestPlayer = players.length ? players.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;
+      const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;
       const tower = {x: ARENA.width/2, y: ARENA.height/2};
-      const target = nearestPlayer && distance(z,nearestPlayer)<230 ? nearestPlayer : tower;
-      z.targetId = nearestPlayer?.sessionId || "";
+      let target = z.boss ? nearestPlayer   // bosses hunt survivors only
+        : z.role === "hunter" ? (nearestPlayer || tower) : tower;
+      if (z.role === "hunter" && !z.boss) {   // hunters also go for Viktor's turret and robots if they're closer
+        let bd = distance(z, target);
+        for (const m of machines) { const md = distance(z, m); if (md < bd) { bd = md; target = m; } }
+      }
+      const isMachine = !!target.maxHp && !target.sessionId;
+      z.targetId = target.sessionId || "";
       const d = distance(z, target);
       const a = Math.atan2(target.y - z.y, target.x - z.x);
+      if (z.kind === "mutant") {
+        if (z.slam > 0) {                                  // mid-attack
+          const t0 = MUTANT.total - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = MUTANT.total - z.slam;
+          if (t1 < MUTANT.charge) { this.lungeAng.set(z.id, a); this.steerMove(z, z.id, a, z.speed * MUTANT.chargeSpeed * dt, e => this.solveZombie(e)); }   // coiling: creeps in, keeps aiming
+          else if (t1 < MUTANT.lungeEnd && d > z.radius + 6) this.steerMove(z, z.id, this.lungeAng.get(z.id) ?? a, MUTANT.lungeSpeed * dt, e => this.solveZombie(e));   // LUNGE
+          if (t0 < MUTANT.hit && t1 >= MUTANT.hit) this.mutantWhip(z, this.lungeAng.get(z.id) ?? a);
+          continue;
+        }
+        if (target.sessionId && d < MUTANT.trigger && now >= (this.slamReady.get(z.id) || 0)) {
+          z.slam = MUTANT.total; this.lungeAng.set(z.id, a); this.slamReady.set(z.id, now + (MUTANT.total + MUTANT.cooldown) * 1000); continue;
+        }
+      }
+      if (z.kind === "brute") {
+        if (z.slam > 0) {                                  // mid-slam: stand still; hit at the end of the wind-up
+          const before = SLAM.total - z.slam; z.slam = Math.max(0, z.slam - dt);
+          if (before < SLAM.windup && SLAM.total - z.slam >= SLAM.windup) this.bruteSlam(z);
+          continue;
+        }
+        if (target.sessionId && d < SLAM.trigger && now >= (this.slamReady.get(z.id) || 0)) {
+          z.slam = SLAM.total; this.slamReady.set(z.id, now + (SLAM.total + SLAM.cooldown) * 1000); continue;
+        }
+      }
       const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&distance(st,z)<30);
       if (barricade) {
         z.attackCooldown -= dt;
         if(z.attackCooldown<=0){barricade.hp-=z.damage;z.attackCooldown=1;if(barricade.hp<=0)this.state.structures.delete(barricade.id);}
-      } else if (z.kind === "spitter" && d < 210) {
-        // Spitters hold their distance and deal periodic ranged damage.
-        if (d < 115) { z.x -= Math.cos(a) * z.speed * dt; z.y -= Math.sin(a) * z.speed * dt; }
-      } else if (d > z.radius + 18) {
-        z.x = clamp(z.x + Math.cos(a) * z.speed * dt, 5, ARENA.width - 5);
-        z.y = clamp(z.y + Math.sin(a) * z.speed * dt, 5, ARENA.height - 5);
+      } else if (z.kind === "spitter" && d < ACID.hold) {
+        // Spitters keep their distance and lob acid from range.
+        if (d < ACID.backOff) this.steerMove(z, z.id, a + Math.PI, z.speed * dt, e => this.solveZombie(e));
+      } else if (d > (z.kind === "mutant" ? z.radius + 10 : z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) - 4)) {
+        this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
       }
       z.attackCooldown -= dt;
-      if (d < z.radius + 22 && z.attackCooldown <= 0) {
-        if (target.sessionId) {
+      if (d < z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) && z.attackCooldown <= 0) {
+        if (isMachine) {
+          if (this.state.robots.has(target.id) || this.state.structures.has(target.id)) this.damageMachine(target, z.damage * (z.kind === "mutant" ? 1.6 : 1));
+        } else if (z.kind === "mutant" && target.sessionId) {
+          // mutants only hurt survivors with their charged whip (above)
+        } else if (target.sessionId) {
           const dealt = Math.max(1,z.damage-target.defence); target.hp-=dealt; target.damageTaken+=dealt;
-          if(target.hp<=0){target.hp=0;target.alive=false;target.bleedout=30;this.state.message=`${target.name} is down! A teammate can revive them.`;}
+          if(target.hp<=0)this.downPlayer(target);
         } else {
           this.state.towerHp=Math.max(0,this.state.towerHp-z.damage*(z.boss?2:1));
           if(this.state.towerHp<=0){this.state.phase="defeat";this.state.message="THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED.";}
         }
         z.attackCooldown = z.boss ? 0.8 : 1.0;
       }
-      if (z.kind === "spitter" && target.sessionId && d >= 115 && d < 330 && z.attackCooldown <= 0) {
-        const dealt=Math.max(1,z.damage-target.defence);target.hp-=dealt;target.damageTaken+=dealt;z.attackCooldown=2.4;
-        if(target.hp<=0){target.hp=0;target.alive=false;target.bleedout=30;this.state.message=`${target.name} is down! A teammate can revive them.`;}
+      if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target)) {
+        this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
       }
     }
-    if (this.state.elapsed >= 90 && this.state.waveType === "normal" && this.state.phase === "playing") {
-      this.state.phase = this.state.stage >= 50 ? "victory" : "cleared";
+    const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
+    if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }
+    if (this.state.elapsed >= 90 && !hiveAlive && this.state.waveType === "normal" && this.state.phase === "playing") {
+      this.state.phase = this.state.stage >= 50 ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
       this.state.message = `Wave ${this.state.stage} survived! Host can launch the next wave.`;
     }
     if ([...this.state.players.values()].every(p=>!p.alive) && this.state.players.size>0 && this.state.phase==="playing") {

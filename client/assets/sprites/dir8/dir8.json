@@ -1,0 +1,121 @@
+{
+ "assault": {
+  "cellW": 112,
+  "cellH": 88,
+  "anchorX": 56,
+  "feetY": 80,
+  "blocks": [
+   "gun",
+   "knife",
+   "bat",
+   "axe"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
+ },
+ "engineer": {
+  "cellW": 112,
+  "cellH": 88,
+  "anchorX": 56,
+  "feetY": 80,
+  "blocks": [
+   "gun",
+   "knife"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
+ },
+ "scout": {
+  "cellW": 112,
+  "cellH": 88,
+  "anchorX": 56,
+  "feetY": 80,
+  "blocks": [
+   "gun",
+   "katana",
+   "fire"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
+ },
+ "demolitionist": {
+  "cellW": 112,
+  "cellH": 88,
+  "anchorX": 56,
+  "feetY": 80,
+  "blocks": [
+   "launcher",
+   "rifle",
+   "shotgun",
+   "knife",
+   "bat",
+   "axe"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
+ }
+}

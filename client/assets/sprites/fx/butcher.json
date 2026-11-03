@@ -1,0 +1,35 @@
+{
+ "hook": [
+  89,
+  27
+ ],
+ "chain": [
+  57,
+  11
+ ],
+ "spin": {
+  "cellW": 330,
+  "cellH": 230,
+  "feetY": 224
+ },
+ "death": {
+  "cellW": 330,
+  "cellH": 230,
+  "feetY": 224
+ },
+ "shock": {
+  "cellW": 300,
+  "cellH": 180,
+  "centerY": 111,
+  "ringWidths": [
+   238,
+   273,
+   263,
+   271
+  ]
+ },
+ "portrait": [
+  539,
+  520
+ ]
+}

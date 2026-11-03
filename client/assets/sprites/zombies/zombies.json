@@ -1,0 +1,67 @@
+{
+ "walker": {
+  "cellW": 104,
+  "cellH": 80,
+  "anchorX": 46,
+  "frames": [
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1",
+   "attack2",
+   "dead"
+  ]
+ },
+ "runner": {
+  "cellW": 104,
+  "cellH": 80,
+  "anchorX": 46,
+  "frames": [
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1",
+   "attack2",
+   "dead"
+  ]
+ },
+ "brute": {
+  "cellW": 104,
+  "cellH": 80,
+  "anchorX": 46,
+  "frames": [
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1",
+   "attack2",
+   "dead"
+  ]
+ },
+ "spitter": {
+  "cellW": 104,
+  "cellH": 80,
+  "anchorX": 46,
+  "frames": [
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1",
+   "attack2",
+   "dead"
+  ]
+ },
+ "mutant": {
+  "cellW": 104,
+  "cellH": 80,
+  "anchorX": 46,
+  "frames": [
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1",
+   "attack2",
+   "dead"
+  ]
+ }
+}

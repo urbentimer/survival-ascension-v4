@@ -1,0 +1,90 @@
+{
+ "assault": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "juggernaut": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "medic": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "engineer": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "scout": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "demolitionist": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "sniper": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ },
+ "commander": {
+  "cellW": 128,
+  "cellH": 72,
+  "anchorX": 44,
+  "rows": [
+   "idle",
+   "walk",
+   "shoot"
+  ],
+  "frames": 3
+ }
+}

@@ -23,18 +23,197 @@ h2{color:#f1f3f4;letter-spacing:.025em}details.guide summary{cursor:pointer;colo
 /* CHARACTER SELECT — OPERATIVE ROSTER */
 .character-select{background:linear-gradient(145deg,#1b242a,#10161a);border-color:#59636a}.select-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:13px}.select-head b{font-size:15px;letter-spacing:.13em}.selection-status{font-size:10px;letter-spacing:.12em;color:#ffb56d;border:1px solid #a65f31;padding:7px 9px;background:#2a1c14;white-space:nowrap}.character-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.character-card{display:flex;flex-direction:column;align-items:stretch;gap:5px;text-align:left;min-width:0;padding:10px;background:linear-gradient(160deg,#273139,#131a1f);border:1px solid #46545c;color:#e9edf0;border-radius:3px;cursor:pointer;transition:.15s}.character-card:hover{border-color:#f28b36;transform:translateY(-2px);background:linear-gradient(160deg,#35434b,#182127)}.character-card.selected{border:2px solid #f28b36;padding:9px;background:linear-gradient(160deg,#3a3028,#171d21);box-shadow:0 0 0 1px #f28b3633,0 7px 20px #0007}.portrait{height:90px;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:1000;color:#f3f3ed;text-shadow:2px 3px #000;clip-path:polygon(12% 0,88% 0,100% 15%,94% 100%,6% 100%,0 15%);border:1px solid #758087;background:radial-gradient(circle at 50% 30%,#77848a,#29343a 58%,#11171b);position:relative}.portrait:after{content:"";position:absolute;inset:auto 15% 0;height:30%;background:linear-gradient(transparent,#080c0f99)}.portrait-juggernaut{background:radial-gradient(circle at 50% 30%,#a58b70,#4b4037 55%,#161616)}.portrait-medic{background:radial-gradient(circle at 50% 30%,#b8a2a0,#634b50 55%,#161616)}.portrait-engineer{background:radial-gradient(circle at 50% 30%,#9c9d82,#4a5549 55%,#161616)}.portrait-scout{background:radial-gradient(circle at 50% 30%,#8b9d9f,#35484d 55%,#161616)}.portrait-demo{background:radial-gradient(circle at 50% 30%,#c18c62,#69432f 55%,#161616)}.portrait-sniper{background:radial-gradient(circle at 50% 30%,#a4a5b4,#4b4d62 55%,#161616)}.portrait-commander{background:radial-gradient(circle at 50% 30%,#a7a17d,#4c4a37 55%,#161616)}.character-name{font-weight:950;font-size:13px;letter-spacing:.12em}.character-role{font-size:10px;font-weight:900;letter-spacing:.16em;color:#f2a15b}.character-desc{font-size:11px;color:#b6c1c6;min-height:28px}.character-ability{font-size:9px;font-weight:900;color:#d9e3e7;letter-spacing:.04em;border-top:1px solid #ffffff20;padding-top:6px}.character-stats{font-size:9px;color:#9eabb1;font-variant-numeric:tabular-nums}@media(max-width:850px){.character-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:420px){.character-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.portrait{height:70px}.character-card{padding:8px}.character-card.selected{padding:7px}.character-desc{font-size:10px}}
 
+
+/* BATTLEFIELD-FIRST LAYOUT: map left, controls right on laptops; stacked on small screens */
+.battle{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px;align-items:start;margin-top:12px}
+.battle-main{position:sticky;top:8px;min-width:0}
+.battle-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.battle-side .card{margin:0}
+.battle-side .stats{grid-template-columns:repeat(3,1fr)}
+.side-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.side-grid .button{width:100%;font-size:11px;padding:9px 8px;min-width:0}
+.status-row{margin-top:8px}
+body.in-match #lobby,body.in-match .guide{display:none}
+@media(max-width:980px){.battle{grid-template-columns:1fr}.battle-main{position:static}}
+/* LEVEL-UP PANEL: never blocks the map */
+.levelup{border:2px solid #f28b36;background:linear-gradient(160deg,#3a2a1c,#141a1e);box-shadow:0 0 0 1px #f28b3633,0 8px 24px #0008}
+.levelup-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.levelup-head b{letter-spacing:.14em;color:#ffb56d}
+#levelUpCount{font-size:11px;color:#ffd2a8}
+.levelup-choices{display:grid;gap:6px;margin-top:8px}
+.levelup-choices .button{display:flex;gap:10px;align-items:center;text-align:left;padding:8px 10px;font-size:12px;width:100%}
+.levelup-choices kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;border:1px solid #f28b36;color:#ffb56d;font:700 11px monospace}
+.levelup-choices small{display:block;color:#b6c1c6;font-weight:600;font-size:10px;margin-top:2px}
+.levelup-hint{font-size:10px;margin-top:7px}
+#restartGame{width:100%;margin-top:6px}
+.battle-side .stats{grid-template-columns:repeat(6,1fr)}
+.battle-side .stat{grid-column:span 2;order:1;padding:8px 10px}.battle-side .stat:nth-child(3),.battle-side .stat:nth-child(4){grid-column:span 3;order:2}
+.battle-side .stat b{font-size:17px;white-space:nowrap}
+#clockLabel{flex:0 0 auto;text-align:right}
+body.in-match #arena{cursor:none}
+
+/* SHOP (break between waves) */
+#botControls .button{font-size:11px}
+
+/* ================= FULL-SCREEN GAME SCREEN ================= */
+body.in-match{overflow:hidden}
+body.in-match main.wrap{display:none}
+#gameArea{position:fixed;inset:0;z-index:20;background:#05080a;overflow:hidden;user-select:none;-webkit-user-select:none}
+#arena{position:absolute;inset:0;margin:auto;width:min(100vw,calc(100vh * 1200 / 760));height:min(100vh,calc(100vw * 760 / 1200));border:0;border-radius:0;image-rendering:pixelated;cursor:none;background:#111719}
+.hud{position:absolute;z-index:3;pointer-events:none;color:#eef2f0;font:12px/1.35 Inter,system-ui,sans-serif;text-shadow:0 1px 2px #000c}
+.hud-tl{top:max(12px,env(safe-area-inset-top,0px));left:max(14px,env(safe-area-inset-left,0px))}
+.hud-tc{top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(440px,46vw)}
+.hud-tr{top:max(12px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));width:200px;display:grid;gap:8px}
+.hud-bl{bottom:max(14px,env(safe-area-inset-bottom,0px));left:max(14px,env(safe-area-inset-left,0px));width:min(330px,34vw);display:grid;gap:3px}
+.hud-bc{bottom:max(14px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:5px}
+.hud-br{bottom:max(14px,env(safe-area-inset-bottom,0px));right:max(14px,env(safe-area-inset-right,0px));text-align:right;display:grid;gap:6px;justify-items:end}
+.hud-wave{display:flex;align-items:baseline;gap:6px}.hud-wave small{font-size:10px;letter-spacing:.18em;color:#f2a15b;font-weight:900}.hud-wave b{font-size:30px;font-weight:950;line-height:1}.hud-wave span{color:#9aa8ad;font-weight:700}
+.hud-line{font:600 11px/1.4 ui-monospace,Menlo,monospace;color:#cdd6d3;font-variant-numeric:tabular-nums}
+.bar-label{display:flex;justify-content:space-between;gap:8px;font:800 10px/1.3 Inter,system-ui,sans-serif;letter-spacing:.14em}.bar-label span{font:600 11px ui-monospace,Menlo,monospace;letter-spacing:0;font-variant-numeric:tabular-nums}.bar-label.small{opacity:.85;margin-top:3px}
+.hbar{height:9px;background:#0b1013cc;border:1px solid #ffffff22;overflow:hidden}.hbar span{display:block;height:100%;width:100%;background:#58ce8b;transition:width .15s}
+.hbar.big{height:13px}.hbar.thin{height:5px}.hbar.thin span{background:#c9d36a}.hbar.hp{height:14px}.hbar.hp span{background:#e05a4f}.hbar.xp span{background:#f2a15b}.boss{margin-top:8px}.boss-bar span{background:#c2413a}
+#minimap.minimap,#minimap{position:static;width:200px;height:127px;border:1px solid #ffffff2a;background:#07100bd9;image-rendering:pixelated}
+.team{display:grid;gap:4px}.team-row{display:grid;grid-template-columns:8px 1fr auto;gap:6px;align-items:center;font:600 11px Inter,system-ui,sans-serif}.team-row i{width:8px;height:8px;border-radius:50%}.team-row .hbar{grid-column:2/4;height:4px}.team-row em{font-style:normal;color:#ff7568;font-size:10px}
+.feed{top:120px;left:max(14px,env(safe-area-inset-left,0px));margin:0;padding:0;list-style:none;display:grid;gap:4px;max-width:min(340px,34vw)}
+.feed li{background:#0b1013b3;border-left:2px solid #f28b36;padding:4px 8px;font-size:11px;transition:opacity .6s}
+.lvl-badge{pointer-events:auto;justify-self:start;margin-bottom:6px;padding:6px 10px;border:1px solid #f28b36;background:#3a2a1ce6;color:#ffd2a8;font:800 11px Inter,system-ui,sans-serif;letter-spacing:.1em;cursor:pointer;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 4px #f28b3633}}@media(prefers-reduced-motion:reduce){.lvl-badge{animation:none}}
+.hotbar{display:flex;gap:6px}
+.slot{position:relative;width:76px;height:62px;padding:6px 7px;background:#0b1013d9;border:1px solid #ffffff26;display:grid;align-content:space-between;overflow:hidden}
+.slot.active{border:2px solid #f28b36;padding:5px 6px;background:#2a1c14e6;box-shadow:0 0 14px #f28b3655}
+.slot kbd{position:absolute;top:4px;right:6px;font:800 10px ui-monospace,Menlo,monospace;color:#f2a15b}
+.slot b{font:800 10px/1.15 Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding-right:12px}
+.slot small{font:600 10px ui-monospace,Menlo,monospace;color:#cdd6d3;font-variant-numeric:tabular-nums}
+.slot .cd{position:absolute;inset:0;background:#000a;display:grid;place-items:center;font:800 16px ui-monospace,Menlo,monospace;color:#fff}
+.slot .reload{position:absolute;left:0;bottom:0;height:3px;background:#ffd27a}
+.slot.empty{opacity:.55}
+.ammo-line{font:700 12px ui-monospace,Menlo,monospace;color:#ffd27a;font-variant-numeric:tabular-nums;min-height:15px}
+.resources{display:flex;gap:10px;font:700 11px ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.resources span{color:#9aa8ad}.resources b{color:#eef2f0}
+.hints{font-size:10px;color:#9aa8ad}.hints kbd,.controls kbd{font:700 10px ui-monospace,Menlo,monospace;border:1px solid #ffffff3a;padding:1px 4px;color:#eef2f0;background:#ffffff10}
+.panel{position:absolute;z-index:6;left:50%;transform:translateX(-50%);background:linear-gradient(160deg,#1f282dee,#10161aee);border:1px solid #65737a;border-top:3px solid #f28b36;padding:14px;color:#eef2f0;box-shadow:0 20px 60px #000b}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}.panel-head b{letter-spacing:.16em;color:#ffb56d}.panel-head span{font-size:11px;color:#9aa8ad}
+.panel-hint{font-size:11px;margin-top:8px}
+.levelup{bottom:120px;width:min(420px,92vw)}
+.levelup-choices{display:grid;gap:6px}
+.levelup-choices .button{display:flex;gap:10px;align-items:center;text-align:left;padding:8px 10px;font-size:12px;width:100%}
+.levelup-choices kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;border:1px solid #f28b36;color:#ffb56d;font:700 11px monospace}
+.levelup-choices small{display:block;color:#b6c1c6;font-weight:600;font-size:10px;margin-top:2px}
+.equip{top:50%;transform:translate(-50%,-50%);width:min(760px,94vw)}
+.equip-body{display:grid;grid-template-columns:230px 1fr;gap:16px}@media(max-width:700px){.equip-body{grid-template-columns:1fr}}
+.equipped{display:grid;gap:6px;align-content:start}
+.eq-row{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:center;padding:7px 9px;background:#0b1013b3;border:1px solid #ffffff1f}
+.eq-row kbd{font:800 11px ui-monospace,Menlo,monospace;color:#f2a15b}.eq-row b{display:block;font-size:12px}.eq-row small{color:#9aa8ad;font-size:10px;letter-spacing:.08em}
+.equip-sub{font:800 10px Inter,system-ui,sans-serif;letter-spacing:.16em;color:#f2a15b;margin-bottom:6px;display:flex;justify-content:space-between}.equip-sub span{color:#9aa8ad}
+.bag{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.bag-slot{aspect-ratio:1;max-width:100%;border:1px dashed #ffffff26;background:#0b101380;display:grid;place-items:center;text-align:center;font:700 10px/1.2 Inter,system-ui,sans-serif;color:#eef2f0;padding:4px}
+button.bag-slot{border-style:solid;border-color:#7fa6b0;background:#1b2a31;cursor:pointer}button.bag-slot:hover,button.bag-slot:focus-visible{border-color:#f28b36;outline:none}
+.bag-slot small{display:block;color:#9aa8ad;font-size:9px;margin-top:2px}
+button.bag-slot.sel{border-color:#f28b36;background:#2c2219;box-shadow:inset 0 0 0 1px #f28b36}
+.menu{top:50%;transform:translate(-50%,-50%);width:min(560px,94vw)}
+.menu-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.menu-actions .button{flex:1}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px}.controls div{display:flex;justify-content:space-between;gap:8px;align-items:center}.controls span{color:#cdd6d3;text-align:right}
+@media(max-width:520px){.controls{grid-template-columns:1fr}}
+#gameArea .overlay{position:absolute;inset:0;z-index:8}
+#gameArea .scoreboard{position:absolute;top:110px;left:50%;right:auto;transform:translateX(-50%);z-index:5}
+
+/* item / hotbar icons (client/assets/icons, cut by tools/extract-icons.py) */
+.ic{display:inline-block;width:20px;height:20px;background:center/contain no-repeat;vertical-align:middle;flex:none}
+.ic-knife{background-image:url(assets/icons/knife.png)}.ic-bat{background-image:url(assets/icons/bat.png)}.ic-axe{background-image:url(assets/icons/axe.png)}.ic-katana{background-image:url(assets/icons/katana.png)}.ic-pistol{background-image:url(assets/icons/pistol.png)}.ic-smg{background-image:url(assets/icons/smg.png)}.ic-rifle{background-image:url(assets/icons/rifle.png)}.ic-shotgun{background-image:url(assets/icons/shotgun.png)}.ic-sniper{background-image:url(assets/icons/sniper.png)}.ic-launcher{background-image:url(assets/icons/launcher.png)}.ic-medkit{background-image:url(assets/icons/medkit.png)}.ic-grenade{background-image:url(assets/icons/grenade.png)}.ic-armor{background-image:url(assets/icons/armor.png)}.ic-scrap{background-image:url(assets/icons/scrap.png)}.ic-electronics{background-image:url(assets/icons/electronics.png)}.ic-explosives{background-image:url(assets/icons/explosives.png)}.ic-fuel{background-image:url(assets/icons/fuel.png)}.ic-heavyTurret{background-image:url(assets/icons/heavyTurret.png)}.ic-robotSquad{background-image:url(assets/icons/robotSquad.png)}.ic-gold{background-image:url(assets/icons/gold.png)}
+.ic.portrait{background-size:cover;background-position:center 15%;border:1px solid #ffffff33}
+.slot{height:76px;align-content:end;justify-items:center;text-align:center}.slot.active{padding:5px 6px}.slot .ic{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:36px;height:36px}.slot.empty .ic{opacity:.35;filter:grayscale(1)}.slot b{padding-right:0;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.eq-row{grid-template-columns:22px 30px 1fr}.eq-row .ic{width:30px;height:30px}
+.bag-slot{align-content:center;gap:2px}.bag-slot .ic{width:60%;height:auto;aspect-ratio:1;display:block;margin:0 auto}
+.resources{gap:12px}.resources span{display:inline-flex;align-items:center;gap:4px}.resources .ic{width:22px;height:22px}#hudGold .ic{width:16px;height:16px;margin:-3px 3px 0 0}
+
+/* ---- shop (between waves) ---- */
+.modal:has(.shop:not(.hidden)){max-width:820px;padding:14px 20px 16px;max-height:calc(100% - 16px);overflow-y:auto}
+.modal:has(.shop:not(.hidden))>div:first-child{font-size:28px!important;line-height:1}
+.modal:has(.shop:not(.hidden)) h2{margin:2px 0 0;font-size:24px}.modal:has(.shop:not(.hidden)) p{margin:0 0 4px;font-size:13px}
+.shop{display:grid;gap:9px;margin:8px 0 12px;text-align:left}
+.shop-top{display:flex;justify-content:space-between;align-items:stretch;gap:12px;flex-wrap:wrap}
+.wallet{display:flex;align-items:center;gap:12px;padding:6px 18px 6px 10px;background:linear-gradient(135deg,#3a2b10,#1d160a);border:2px solid #e2b54a;border-radius:6px;box-shadow:0 0 22px #e2b54a33,inset 0 0 18px #00000066}
+.wallet .ic{width:46px;height:46px}.wallet small{display:block;font:800 10px/1 Inter,system-ui,sans-serif;letter-spacing:.18em;color:#e8c77a}
+.wallet b{display:block;letter-spacing:0;font:900 36px/1 Inter,system-ui,sans-serif;color:#ffd75e;text-shadow:0 2px 0 #7a5410,0 0 18px #ffcf4d66;font-variant-numeric:tabular-nums}
+.wallet.bump b{animation:goldbump .45s ease-out}@keyframes goldbump{0%{transform:scale(1.25);color:#fff3b0}100%{transform:scale(1)}}
+.shop-timer{display:flex;align-items:center;gap:10px;padding:8px 14px;border:1px solid #ffffff22;background:#0b1013b3;border-radius:6px}
+.shop-timer b{font:900 30px/1 ui-monospace,Menlo,monospace;color:#f2a15b;font-variant-numeric:tabular-nums}.shop-timer small{font-size:10px;line-height:1.3;letter-spacing:.1em;color:#9aa8ad;text-transform:uppercase}
+.shop-group{display:grid;gap:6px}.shop-group>span{font-size:11px;letter-spacing:.18em;color:#f2a15b;font-weight:900}
+.shop-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.shop-card{position:relative;display:grid;justify-items:center;align-content:start;gap:2px;padding:7px 6px 6px;letter-spacing:0;background:linear-gradient(180deg,#1f2a30,#141b1f);border:1px solid #ffffff1f;border-radius:6px;color:#eef2f0;font:inherit;text-align:center;cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s}
+.shop-card .ic{width:40px;height:40px}
+.shop-card>b{font:800 13px/1.15 Inter,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.shop-card>small{font-size:11px;color:#9fb0b4;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.shop-card .tag{display:inline-flex;align-items:center;gap:5px;margin-top:3px;padding:3px 12px 3px 6px;border-radius:999px;background:#2c210b;border:1px solid #e2b54a;letter-spacing:0;font:900 18px/1 Inter,system-ui,sans-serif;color:#ffd75e;font-variant-numeric:tabular-nums}
+.shop-card .tag .ic{width:20px;height:20px;margin:0}
+.shop-card .tag.done{font-size:13px;padding:6px 12px;color:#8fe0a6;border-color:#3f8a57;background:#12271b}
+.shop-card .need{font:800 11px/1.3 Inter,system-ui,sans-serif;color:#ff8a7a;letter-spacing:0}.shop-card .have{font-size:10px;color:#7f8f94;letter-spacing:.04em}
+.shop-card.ok{border-color:#e2b54a66}
+.shop-card.ok:hover,.shop-card.ok:focus-visible{transform:translateY(-2px);border-color:#ffd75e;box-shadow:0 6px 20px #e2b54a33;outline:none}
+.shop-card.short{cursor:not-allowed}.shop-card.short .ic:not(.tag .ic){filter:grayscale(1) brightness(.6)}.shop-card.short .tag{background:#2a1414;border-color:#a54a3f;color:#ff8a7a}.shop-card.short>b,.shop-card.short>small{opacity:.55}
+.shop-card.owned,.shop-card.maxed{cursor:default;opacity:.7}
+.shop-card.bought{animation:bought .5s ease-out}@keyframes bought{0%{box-shadow:0 0 0 3px #ffd75e,0 0 30px #ffd75e88}100%{box-shadow:none}}
+@media(prefers-reduced-motion:reduce){.wallet.bump b,.shop-card.bought{animation:none}.shop-card{transition:none}}
+@media(max-width:600px){.shop-items{grid-template-columns:repeat(2,1fr)}.wallet b{font-size:30px}}
+.wave-jump{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px dashed #f28b36;border-radius:4px;background:#2a1c14;color:#ffd2a8;font-size:12px}
+.wave-jump input{width:64px;padding:6px 8px;background:#0b1013;border:1px solid #f28b36;border-radius:3px;color:#fff;font:700 14px ui-monospace,Menlo,monospace}
+.wave-jump small{flex-basis:100%;color:#c9a88a;font-size:11px}.spawn-row{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.spawn-row .button{padding:5px 9px;font-size:11px}
+
+/* ---- boss intro card ---- */
+.boss-intro{position:absolute;inset:0;z-index:9;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:12px;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));background:radial-gradient(ellipse at 35% 55%,rgba(120,10,14,.55),rgba(4,4,6,.86) 70%);animation:biIn .5s ease-out}
+@keyframes biIn{from{opacity:0}to{opacity:1}}
+.bi-portrait{justify-self:end;max-height:min(84vh,620px);max-width:100%;opacity:.62;image-rendering:auto;filter:drop-shadow(0 0 30px rgba(255,40,40,.45)) saturate(1.1);animation:biFloat 4s ease-in-out infinite}
+@keyframes biFloat{50%{transform:translateY(-6px)}}
+.bi-card{max-width:440px;display:grid;gap:10px;color:#f1e9e2}
+.bi-kicker{font:800 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;color:#ff7468}
+.bi-card h2{margin:0;font:900 clamp(34px,5vw,58px)/.95 Inter,system-ui,sans-serif;letter-spacing:.04em;color:#fff;text-shadow:0 3px 0 #5a0b0b,0 0 24px rgba(255,50,50,.5)}
+.bi-lore{margin:0;color:#c9b8b0;font-size:13px;line-height:1.5}
+.bi-skills{list-style:none;margin:4px 0;padding:0;display:grid;gap:7px}
+.bi-skills li{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;padding:8px 10px;background:rgba(10,8,8,.72);border:1px solid rgba(255,255,255,.1);border-left:3px solid var(--c,#ff5a4a);border-radius:3px;font-size:12px;line-height:1.4;color:#cfc3bc}
+.bi-skills li b{display:block;color:#fff;font-size:13px;letter-spacing:.03em}
+.bi-skills .ico{font-size:20px;line-height:1;text-align:center}
+.bi-rings{display:inline-flex;gap:4px;margin-top:3px}.bi-rings i{font-style:normal;font:700 10px/1 ui-monospace,monospace;padding:3px 6px;border-radius:2px;color:#111}
+.bi-ack{justify-self:start;padding:12px 22px;font-size:14px;letter-spacing:.1em}
+.bi-wait{color:#b39f96;font-size:11px}
+.boss-wait{position:absolute;left:50%;top:86px;transform:translateX(-50%);z-index:7;padding:7px 14px;background:rgba(40,6,8,.85);border:1px solid #a33;border-radius:3px;color:#ffd0c8;font:700 12px Inter,system-ui,sans-serif;letter-spacing:.06em}
+.boss-bar{position:relative}.enrage-mark{position:absolute;left:30%;top:-2px;bottom:-2px;width:2px;background:#ffd75e;box-shadow:0 0 4px #000}
+@media(max-width:700px){.boss-intro{grid-template-columns:1fr;align-content:center;overflow-y:auto}.bi-portrait{position:absolute;inset:auto 0 0 auto;max-height:55vh;opacity:.25;z-index:-1}.bi-card{margin:0 auto}}
+@media(prefers-reduced-motion:reduce){.boss-intro,.bi-portrait{animation:none}}
+.slot.skillcard{background:#000 center/cover no-repeat;border:1px solid #f28b3655;padding:0}.slot.skillcard small{position:absolute;top:2px;left:2px;right:2px;background:#000c;border-radius:3px;font-size:9px;padding:1px 2px;text-align:center;white-space:nowrap;overflow:hidden;color:#ffd27a}.slot.skillcard.empty{opacity:1;filter:none}
+.slot.skillcard .locked{position:absolute;inset:0;background:#000000b8;display:grid;place-items:center;color:#c9c2b8}.slot.skillcard .lock{width:24px;height:24px;margin-top:8px;filter:drop-shadow(0 1px 2px #000)}
+.slot.skillcard .live{position:absolute;left:3px;right:3px;bottom:3px;height:4px;background:#000a;border-radius:2px;overflow:hidden}.slot.skillcard .live::after{content:"";position:absolute;inset:0;width:calc(var(--p) * 100%);background:#ffd75e;box-shadow:0 0 6px #ffd75e}
+.slot.skillcard:has(.live){border-color:#ffd75e;box-shadow:0 0 12px #ffd75e88}
+.slot.skillcard .clock{position:absolute;inset:0;background:conic-gradient(#000000c4 calc(var(--p) * 1turn),#0000002a 0);display:grid;place-items:center}.slot.skillcard .clock span{margin-top:8px;font:800 18px ui-monospace,Menlo,monospace;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000}
+.card-heavyTurret{background-image:url(assets/icons/card-heavyTurret.png)!important}.card-skyBarrage{background-image:url(assets/icons/card-skyBarrage.png)!important}.card-breacherBlast{background-image:url(assets/icons/card-breacherBlast.png)!important}.card-demoRipple{background-image:url(assets/icons/card-demoRipple.png)!important}.card-shadowPass{background-image:url(assets/icons/card-shadowPass.png)!important}.card-bladeStorm{background-image:url(assets/icons/card-bladeStorm.png)!important}.card-robotSquad{background-image:url(assets/icons/card-robotSquad.png)!important}
+.hive-warn{position:fixed;left:50%;top:18%;transform:translate(-50%,-10px);display:flex;gap:14px;align-items:center;padding:12px 18px 12px 12px;background:#140a0ce6;border:1px solid #b8343f;box-shadow:0 0 30px #b8343f66;opacity:0;pointer-events:none;z-index:30;width:min(540px,92vw);box-sizing:border-box}
+.hive-warn img{width:86px;height:86px;object-fit:cover;border:1px solid #b8343f88}.hive-warn small{display:block;font:800 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;color:#ff7a6e}.hive-warn b{display:block;margin:4px 0;font:900 20px/1.1 Inter,system-ui,sans-serif;color:#fff1ec;letter-spacing:.04em}.hive-warn span{font:500 12px/1.35 Inter,system-ui,sans-serif;color:#d9c2bd}
+.hive-warn.show{animation:hivewarn 4.2s ease-out forwards}@keyframes hivewarn{0%{opacity:0;transform:translate(-50%,-30px) scale(1.06)}8%{opacity:1;transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,0)}}
+.slot.ult-ready{border-color:#ffd75e;box-shadow:0 0 14px #ffd75e88;animation:ultpulse 1.2s ease-in-out infinite}@keyframes ultpulse{50%{box-shadow:0 0 22px #ffd75ecc}}
+@media(max-width:900px){.hud-tr{width:150px}#minimap{width:150px;height:95px}.slot{width:60px;height:64px}.slot .ic{width:28px;height:28px}.feed{display:none}}
+
+/* CHARACTER PORTRAITS (art: client/assets/portraits/<class>.webp) */
+.p-assault{background-image:url(assets/portraits/assault.webp)}.p-juggernaut{background-image:url(assets/portraits/juggernaut.webp)}
+.p-medic{background-image:url(assets/portraits/medic.webp)}.p-engineer{background-image:url(assets/portraits/engineer.webp)}
+.p-scout{background-image:url(assets/portraits/scout.webp)}.p-demolitionist{background-image:url(assets/portraits/demolitionist.webp)}
+.p-sniper{background-image:url(assets/portraits/sniper.webp)}.p-commander{background-image:url(assets/portraits/commander.webp)}
+.character-card .portrait{height:118px;background-size:cover!important;background-position:center 30%!important;image-rendering:pixelated;font-size:0}
+.character-card .portrait:after{display:none}
+.character-card:not(.selected) .portrait{filter:saturate(.75) brightness(.85)}
+.character-card:hover .portrait,.character-card.selected .portrait{filter:none}
+.hud-me{display:flex;gap:10px;align-items:flex-end}
+.hud-portrait{width:64px;height:64px;flex:0 0 64px;border:2px solid #f28b36;background-color:#111;background-position:center 25%;background-size:cover;background-repeat:no-repeat;image-rendering:pixelated;box-shadow:0 4px 14px #000a}
+.hud-me-stats{flex:1;min-width:0;display:grid;gap:3px}
+.ammo-row{display:flex;gap:12px;align-items:center}.dash-chip{font:700 10px ui-monospace,Menlo,monospace;color:#9aa8ad;letter-spacing:.06em;font-variant-numeric:tabular-nums}.dash-chip.ready{color:#7fd39a}
 </style>
 </head>
 <body><main class="wrap">
 <header class="top"><div><div class="tag">8-PLAYER PRIVATE CO-OP · ZOMBIE SURVIVAL</div><div class="brand">☣ SURVIVAL ASCENSION</div></div><div id="connection" class="pill">Not connected</div></header>
 <details class="guide"><summary>HOW TO PLAY · FIELD MANUAL</summary>
  <p><b>Objective:</b> Protect the radio tower. If its health reaches zero, the team loses. Survive 50 waves and defeat the final boss on Wave 50.</p>
- <p><b>Waves:</b> Standard waves last 90 seconds. Every fourth wave is a boss encounter; Wave 50 is the final boss. Boss waves continue until the boss is defeated.</p>
- <p><b>Combat:</b> Move with WASD or arrow keys. Your survivor automatically fires at the nearest zombie in range. Press Space to dash.</p>
- <p><b>Teamwork:</b> Press E near a downed teammate to revive them. Keep an eye on the tower and generator status.</p>
+ <p><b>Waves:</b> Standard waves last 90 seconds, then a 10-second break before the next wave starts by itself (the host can start it sooner). Every fourth wave is a boss encounter; Wave 50 is the final boss. Boss waves continue until the boss is defeated.</p>
+ <p><b>Combat:</b> Move with WASD or arrow keys. Aim with the mouse and hold the left button to shoot. Your survivor faces the way you walk. Each weapon has its own range: shotguns hit up to 3 close zombies, launchers damage an area, snipers reach furthest. Upgrades carry over when you switch weapons. Press Space to dash.</p>
+ <p><b>Teamwork:</b> Press E near a downed teammate and stay close for 5 seconds to revive them. If nobody reaches them before the bleed-out timer ends (shorter each time you go down in a wave), they sit out until the next wave. Keep an eye on the tower and generator status.</p>
  <p><b>Build & maintain:</b> Use field-action buttons to repair the tower, repair/refuel the generator and build barricades, turrets, mines, electric fences and flame traps. Turrets, fences and flame traps need generator power.</p>
  <p><b>Day & night:</b> Night reduces visibility and increases zombie aggression. Check the HUD for current conditions.</p>
- <p><b>Scoreboard:</b> Press TAB to show or hide the live kill leaderboard. The current kill leader wears a golden crown.</p>
+ <p><b>Level up:</b> A panel appears beside the map. Press 1–5 or click to pick; the fight keeps going while you choose.</p> <p><b>Scoreboard:</b> Press TAB to show or hide the live kill leaderboard. The current kill leader wears a golden crown.</p>
  </details>
  <section class="card" id="lobby">
  <h2 style="margin:0 0 8px">Private co-op room</h2><p class="muted" style="margin:0 0 14px;font-size:13px">Create a room and share its invitation code. Friends join using the code—rooms are not listed publicly.</p>
@@ -42,50 +221,98 @@ h2{color:#f1f3f4;letter-spacing:.025em}details.guide summary{cursor:pointer;colo
  <div class="row" style="margin-top:9px"><input id="roomCode" placeholder="Enter room code"><button class="button" id="join">Join room</button></div>
  <div id="invite" class="card hidden"><div class="muted" style="font-size:11px">YOUR ROOM INVITATION CODE</div><div id="codeDisplay" style="font-size:28px;font-weight:900;letter-spacing:.12em;margin:5px 0"></div><button class="button" id="copy">Copy code</button><span class="muted" id="roomCount" style="margin-left:8px"></span></div>
  <div class="card character-select" style="margin-top:12px"><div class="select-head"><div><b>CHOOSE YOUR SURVIVOR</b><div class="muted" style="font-size:11px;margin-top:5px">Select an operative. Each survivor has unique combat stats and a signature ability.</div></div><div class="selection-status" id="classSelectionStatus">ASSAULT SELECTED</div></div><div class="character-grid" id="characterGrid">
-  <button class="character-card selected" data-class="assault"><span class="portrait portrait-assault">M</span><span class="character-name">MARCUS</span><span class="character-role">ASSAULT</span><span class="character-desc">Balanced frontline fighter</span><span class="character-ability">ABILITY · COMBAT RUSH</span><span class="character-stats">HP 110 · DMG 18 · SPEED 190</span></button>
-  <button class="character-card" data-class="juggernaut"><span class="portrait portrait-juggernaut">B</span><span class="character-name">BRIGGS</span><span class="character-role">JUGGERNAUT</span><span class="character-desc">Heavy armor and resilience</span><span class="character-ability">ABILITY · IRON SKIN</span><span class="character-stats">HP 160 · DMG 13 · SPEED 150</span></button>
-  <button class="character-card" data-class="medic"><span class="portrait portrait-medic">E</span><span class="character-name">ELENA</span><span class="character-role">MEDIC</span><span class="character-desc">Keeps the squad alive</span><span class="character-ability">ABILITY · TEAM HEAL</span><span class="character-stats">HP 105 · DMG 14 · SPEED 185</span></button>
-  <button class="character-card" data-class="engineer"><span class="portrait portrait-engineer">V</span><span class="character-name">VIKTOR</span><span class="character-role">ENGINEER</span><span class="character-desc">Builds automated defenses</span><span class="character-ability">ABILITY · DEPLOY TURRET</span><span class="character-stats">HP 110 · DMG 14 · SPEED 175</span></button>
-  <button class="character-card" data-class="scout"><span class="portrait portrait-scout">R</span><span class="character-name">RAVEN</span><span class="character-role">SCOUT</span><span class="character-desc">Fast, agile and evasive</span><span class="character-ability">ABILITY · OVERDRIVE</span><span class="character-stats">HP 90 · DMG 16 · SPEED 225</span></button>
-  <button class="character-card" data-class="demolitionist"><span class="portrait portrait-demo">D</span><span class="character-name">DANTE</span><span class="character-role">DEMOLITIONIST</span><span class="character-desc">Explosive area damage</span><span class="character-ability">ABILITY · BLAST WAVE</span><span class="character-stats">HP 105 · DMG 20 · SPEED 175</span></button>
-  <button class="character-card" data-class="sniper"><span class="portrait portrait-sniper">S</span><span class="character-name">SIENNA</span><span class="character-role">SNIPER</span><span class="character-desc">Precision long-range damage</span><span class="character-ability">ABILITY · DEAD EYE</span><span class="character-stats">HP 95 · DMG 28 · SPEED 165</span></button>
-  <button class="character-card" data-class="commander"><span class="portrait portrait-commander">H</span><span class="character-name">HAYES</span><span class="character-role">COMMANDER</span><span class="character-desc">Strengthens nearby teammates</span><span class="character-ability">ABILITY · RALLY</span><span class="character-stats">HP 115 · DMG 15 · SPEED 180</span></button>
+  <button class="character-card selected" data-class="assault"><span class="portrait portrait-assault p-assault" role="img" aria-label="assault portrait"></span><span class="character-name">MARCUS</span><span class="character-role">ASSAULT</span><span class="character-desc">Balanced frontline fighter</span><span class="character-ability">ABILITY · COMBAT RUSH</span><span class="character-stats">HP 110 · DMG 17 · SPEED 190</span></button>
+  <button class="character-card" data-class="juggernaut"><span class="portrait portrait-juggernaut p-juggernaut" role="img" aria-label="juggernaut portrait"></span><span class="character-name">BRIGGS</span><span class="character-role">JUGGERNAUT</span><span class="character-desc">Heavy armor and resilience</span><span class="character-ability">ABILITY · IRON SKIN</span><span class="character-stats">HP 160 · DMG 14 · SPEED 150</span></button>
+  <button class="character-card" data-class="medic"><span class="portrait portrait-medic p-medic" role="img" aria-label="medic portrait"></span><span class="character-name">ELENA</span><span class="character-role">MEDIC</span><span class="character-desc">Keeps the squad alive</span><span class="character-ability">ABILITY · TEAM HEAL</span><span class="character-stats">HP 105 · DMG 15 · SPEED 185</span></button>
+  <button class="character-card" data-class="engineer"><span class="portrait portrait-engineer p-engineer" role="img" aria-label="engineer portrait"></span><span class="character-name">VIKTOR</span><span class="character-role">ENGINEER</span><span class="character-desc">Builds automated defenses</span><span class="character-ability">ABILITY · DEPLOY TURRET</span><span class="character-stats">HP 110 · DMG 15 · SPEED 175</span></button>
+  <button class="character-card" data-class="scout"><span class="portrait portrait-scout p-scout" role="img" aria-label="scout portrait"></span><span class="character-name">RAVEN</span><span class="character-role">SCOUT</span><span class="character-desc">Fast, agile and evasive</span><span class="character-ability">ABILITY · OVERDRIVE</span><span class="character-stats">HP 90 · DMG 15 · SPEED 225</span></button>
+  <button class="character-card" data-class="demolitionist"><span class="portrait portrait-demolitionist p-demolitionist" role="img" aria-label="demolitionist portrait"></span><span class="character-name">DANTE</span><span class="character-role">DEMOLITIONIST</span><span class="character-desc">Explosive area damage</span><span class="character-ability">ABILITY · BLAST WAVE</span><span class="character-stats">HP 105 · DMG 18 · SPEED 175</span></button>
+  <button class="character-card" data-class="sniper"><span class="portrait portrait-sniper p-sniper" role="img" aria-label="sniper portrait"></span><span class="character-name">SIENNA</span><span class="character-role">SNIPER</span><span class="character-desc">Precision long-range damage</span><span class="character-ability">ABILITY · DEAD EYE</span><span class="character-stats">HP 95 · DMG 21 · SPEED 165</span></button>
+  <button class="character-card" data-class="commander"><span class="portrait portrait-commander p-commander" role="img" aria-label="commander portrait"></span><span class="character-name">HAYES</span><span class="character-role">COMMANDER</span><span class="character-desc">Strengthens nearby teammates</span><span class="character-ability">ABILITY · RALLY</span><span class="character-stats">HP 115 · DMG 15 · SPEED 180</span></button>
  </div><div class="muted" style="font-size:11px;margin-top:9px">Click a survivor card to lock in your choice. You can change your selection while in the lobby.</div></div>
  <div id="lobbyPlayers" class="playerlist" style="margin-top:10px"></div>
+ <div id="botControls" class="row hidden" style="margin-top:10px"><button class="button" id="addBot">+ Add AI teammate</button><button class="button" id="removeBot">Remove AI teammate</button></div>
  <button class="button primary hidden" id="startGame" style="width:100%;margin-top:12px">START THE APOCALYPSE</button>
+ <button class="button hidden" id="exploreGame" style="width:100%;margin-top:8px" title="No zombies, no waves: walk around the map safely">EXPLORE THE MAP (NO ZOMBIES)</button>
  <div class="notice" id="lobbyMessage" style="margin-top:10px">Connect to a room to assemble your team.</div>
 </section>
-<section id="gameArea" class="hidden">
- <div class="stats card"><div class="stat"><small>WAVE / 50</small><b id="stage">1</b></div><div class="stat"><small>LEVEL</small><b id="level">1</b></div><div class="stat"><small>HEALTH</small><b id="hp">100</b></div><div class="stat"><small>GOLD</small><b id="gold">0</b></div><div class="stat"><small>KILLS</small><b id="kills">0</b></div></div>
- <div class="card">
-  <div class="row" style="font-size:12px;justify-content:space-between"><b>RADIO TOWER</b><span id="towerText">10000 / 10000 HP</span></div><div class="bar"><span id="towerBar" style="width:100%"></span></div>
-  <div class="row" style="font-size:12px;justify-content:space-between;margin-top:8px"><b>GENERATOR</b><span id="generatorText">100% fuel · 1200 HP</span></div><div class="bar"><span id="generatorBar" style="width:100%"></span></div>
-  <div class="row" style="font-size:12px;margin-top:8px"><span id="resources">Scrap 100 · Electronics 20 · Explosives 10 · Fuel 100</span><span id="clockLabel">DAY</span></div>
-  <div class="row" style="font-size:12px;justify-content:space-between;margin-top:8px"><span>EXPERIENCE</span><span id="xpText">0 / 30</span></div><div class="bar"><span id="xpBar" style="width:0%"></span></div>
- </div>
- <div class="game"><canvas id="arena" width="1200" height="760"></canvas><canvas id="minimap" class="minimap" width="360" height="228"></canvas><aside id="scoreboard" class="scoreboard hidden" aria-live="polite"></aside><div id="overlay" class="overlay"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle">Waiting for host</h2><p class="muted" id="overlayText">The host will start the game when everyone is ready.</p><div id="upgradeChoices"></div><button class="button primary hidden" id="nextStage">START NEXT STAGE</button></div></div></div>
- <div class="card"><b>FIELD ACTIONS</b><div class="row" style="margin-top:8px">
-  <button class="button" id="repairTower">Repair tower (10 scrap)</button>
-  <button class="button" id="repairGen">Repair generator (15 scrap)</button>
-  <button class="button" id="refuelGen">Refuel generator (10 fuel)</button>
- </div><div class="row" style="margin-top:8px">
-  <button class="button" data-build="barricade">Build barricade</button>
-  <button class="button" data-build="turret">Build turret</button>
-  <button class="button" data-build="mine">Place mine</button>
-  <button class="button" data-build="fence">Build electric fence</button>
-  <button class="button" data-build="flameTrap">Build flame trap</button>
- </div><div class="muted" style="font-size:11px;margin-top:6px">Structures are placed at your current position. Turrets and electric fences require generator power.</div></div>
- <div class="card"><b>TEAM</b><div class="playerlist" id="team" style="margin-top:9px"></div></div>
- <div class="card"><b>LOADOUT & ABILITIES</b><div class="row" style="margin-top:8px">
-  <select id="weaponPick" class="button"><option value="pistol">Pistol</option><option value="shotgun">Shotgun</option><option value="rifle" selected>Assault rifle</option><option value="smg">SMG</option><option value="sniper">Sniper rifle</option><option value="launcher">Launcher</option></select>
-  <button class="button" id="equipWeapon">Equip weapon</button><select id="meleePick" class="button"><option value="knife">Combat knife</option><option value="bat">Baseball bat</option><option value="axe">Fire axe</option><option value="katana">Katana</option></select><button class="button" id="equipMelee">Equip melee</button>
-  <button class="button" id="useAbility">Use class ability</button>
-  <button class="button" id="meleeAttack">Melee attack</button><button class="button" id="musicToggle">Ambient music: OFF</button>
- </div><div id="loadoutText" class="muted" style="font-size:11px;margin-top:6px">Rifle equipped · Knife equipped</div></div>
- <div class="row"><button class="button" id="leave">Leave room</button><span class="muted" id="gameMessage" style="font-size:12px;flex:3">Waiting for survivors.</span></div>
- <div class="footer">WASD / arrow keys to move · Automatic fire targets nearest zombie · Space to dash · E near a downed teammate to revive · F melee · Q class ability · TAB scoreboard · P pause locally</div>
-</section>
+
 <p class="footer">Prototype note: the Node.js server is authoritative for room membership, movement, zombie AI, attacks, health, kills and stage state. Deploy the server publicly before friends can connect from other networks.</p>
 </main>
+<section id="gameArea" class="hidden" aria-label="Game">
+ <canvas id="arena" width="1200" height="760"></canvas>
+ <div class="hud hud-tl">
+  <div class="hud-wave"><small>WAVE</small><b id="hudWave">1</b><span>/ 50</span></div>
+  <div class="hud-line"><span id="hudTimer">1:30</span> · <span id="hudZombies">0 zombies</span> · <span id="hudClock">DAY</span></div>
+ </div>
+ <div class="hud hud-tc">
+  <div class="bar-label"><b>RADIO TOWER</b><span id="towerText">10000 / 10000</span></div>
+  <div class="hbar big"><span id="towerBar"></span></div>
+  <div class="bar-label small"><b>GENERATOR</b><span id="genText">100% fuel</span></div>
+  <div class="hbar thin"><span id="genBar"></span></div>
+  <div id="hiveWarn" class="hive-warn" aria-live="polite"><img src="assets/portraits/hivemind.webp" alt=""><div><small>MINI BOSS</small><b>THE HIVEMIND HAS ARRIVED</b><span>It bites, slams, leaps and spawns zombies. The wave won't end until it dies.</span></div></div>
+  <div id="bossBox" class="boss hidden"><div class="bar-label"><b id="bossName">BOSS</b><span id="bossText"></span></div><div class="hbar boss-bar"><span id="bossBar"></span><i class="enrage-mark" title="Enrages below 30%"></i></div></div>
+ </div>
+ <div class="hud hud-tr">
+  <canvas id="minimap" width="360" height="228" aria-label="Minimap"></canvas>
+  <div id="team" class="team"></div>
+ </div>
+ <ol id="feed" class="hud feed" aria-live="polite"></ol>
+ <div class="hud hud-bl">
+  <button id="lvlBadge" class="lvl-badge hidden" type="button">▲ LEVEL UP · press U</button>
+  <div class="hud-me"><div id="hudPortrait" class="hud-portrait p-assault" role="img" aria-label="Your survivor"></div><div class="hud-me-stats">
+  <div class="bar-label"><b>HEALTH</b><span id="hpText">100 / 100</span></div>
+  <div class="hbar hp"><span id="hpBar"></span></div>
+  <div class="bar-label small"><b id="hudLevel">LV 1</b><span id="xpText">0 / 30 XP</span></div>
+  <div class="hbar thin xp"><span id="xpBar"></span></div>
+  <div class="hud-line"><span id="hudGold">0g</span> · <span id="hudDef">DEF 0</span> · <span id="hudClass">ASSAULT</span></div>
+  </div></div>
+ </div>
+ <div class="hud hud-bc">
+  <div id="hotbar" class="hotbar"></div>
+  <div class="ammo-row"><div id="ammoLine" class="ammo-line">30 / 120</div><div id="dashChip" class="dash-chip ready">DASH READY · Space</div></div>
+ </div>
+ <div class="hud hud-br">
+  <div id="resources" class="resources"></div>
+  <div class="hints"><kbd>E</kbd> skill · <kbd>Q</kbd> ultimate · Hold <kbd>Right-click</kbd> build · <kbd>T</kbd> equipment · <kbd>Esc</kbd> menu</div>
+ </div>
+ <aside id="scoreboard" class="scoreboard hidden" aria-live="polite"></aside>
+ <div id="levelUp" class="panel levelup hidden" aria-live="polite">
+  <div class="panel-head"><b>LEVEL UP</b><span id="levelUpCount">1 upgrade ready</span></div>
+  <div id="levelUpChoices" class="levelup-choices"></div>
+  <div class="muted panel-hint" id="levelUpHint">Press 1–5 or click. U or Esc to close. The fight keeps going.</div>
+ </div>
+ <div id="equip" class="panel equip hidden" role="dialog" aria-label="Equipment">
+  <div class="panel-head"><b>EQUIPMENT</b><span>T or Esc to close</span></div>
+  <div class="equip-body"><div id="equipped" class="equipped"></div><div><div class="equip-sub">BACKPACK <span id="bagCount">0 / 20</span></div><div id="bag" class="bag"></div><div id="bagInfo" class="muted panel-hint">Double-click an item to equip it.</div></div></div>
+ </div>
+ <div id="menu" class="panel menu hidden" role="dialog" aria-label="Menu">
+  <div class="panel-head"><b>MENU</b><span>Esc to close</span></div>
+  <div class="menu-actions"><button class="button primary" id="resume">Resume</button><button class="button hidden" id="exploreToggle">Explore mode: OFF</button><div id="waveJump" class="wave-jump hidden"><label for="waveJumpN">Test: jump to wave</label><input id="waveJumpN" type="number" min="1" max="50" value="4" inputmode="numeric"><button class="button" id="waveJumpGo">Go</button><small>or press [ and ] in game</small><span class="spawn-row"><button class="button" id="bossNow">Boss intro now</button><button class="button" id="bossEnrage">Boss to 25%</button><button class="button" id="bossKill">Kill boss</button><button class="button" id="hookSpd">Hook speed</button><button class="button" id="ultNow">Unlock ultimate</button></span><span class="spawn-row">Spawn 5 near you: <button class="button" data-spawn="walker">Walker</button><button class="button" data-spawn="runner">Runner</button><button class="button" data-spawn="brute">Brute</button><button class="button" data-spawn="spitter">Spitter</button><button class="button" data-spawn="mutant">Mutant</button><button type="button" class="button" data-spawn="hivemind">Hivemind</button></span></div><button class="button" id="musicToggle">Ambient music: OFF</button><button class="button" id="leave">Leave room</button></div>
+  <div class="controls">
+   <div><kbd>W A S D</kbd><span>Walk</span></div><div><kbd>Left click</kbd><span>Use what's in your hand (hold: rifle/SMG)</span></div>
+   <div><kbd>1</kbd><span>Melee (press again to switch)</span></div><div><kbd>2</kbd><span>Primary gun (press again to switch)</span></div>
+   <div><kbd>3</kbd><span>Secondary gun</span></div><div><kbd>E</kbd><span>Class skill (Viktor: hold to pick robots)</span></div><div><kbd>Q</kbd><span>Ultimate</span></div>
+   <div><kbd>5</kbd><span>Quick item (medkit)</span></div><div><kbd>Mouse wheel</kbd><span>Cycle 1 · 2 · 3 · 5</span></div>
+   <div><kbd>R</kbd><span>Reload</span></div><div><kbd>F</kbd><span>Revive a downed teammate</span></div>
+   <div><kbd>T</kbd><span>Equipment</span></div><div><kbd>Hold right-click</kbd><span>Build wheel (release on an option)</span></div>
+   <div><kbd>U</kbd><span>Level-up picker</span></div><div><kbd>Space</kbd><span>Dash</span></div>
+   <div><kbd>Tab</kbd><span>Scoreboard</span></div><div><kbd>Esc</kbd><span>This menu</span></div>
+  </div>
+ </div>
+ <div id="bossIntro" class="boss-intro hidden" role="dialog" aria-modal="true" aria-labelledby="bossIntroName">
+  <img id="bossIntroImg" class="bi-portrait" alt="">
+  <div class="bi-card">
+   <div class="bi-kicker" id="bossIntroWave">BOSS · WAVE 4</div>
+   <h2 id="bossIntroName">THE BUTCHER</h2>
+   <p class="bi-lore" id="bossIntroLore"></p>
+   <ul class="bi-skills" id="bossIntroSkills"></ul>
+   <button class="button primary bi-ack" id="bossAck">I UNDERSTAND</button>
+   <small class="bi-wait" id="bossIntroWait"></small>
+  </div>
+ </div>
+ <div id="bossWaitBanner" class="boss-wait hidden"></div>
+ <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><button class="button primary hidden" id="nextStage">START NOW</button><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
+</section>
 <script type="module" src="./client.js"></script>
 </body></html>

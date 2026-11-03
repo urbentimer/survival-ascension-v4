@@ -1,0 +1,291 @@
+{
+ "runner": {
+  "cellW": 100,
+  "cellH": 84,
+  "anchorX": 50,
+  "feetY": 78,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "brute": {
+  "cellW": 150,
+  "cellH": 124,
+  "anchorX": 75,
+  "feetY": 118,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "brute-slam": {
+  "cellW": 230,
+  "cellH": 150,
+  "anchorX": 115,
+  "feetY": 144,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "spitter": {
+  "cellW": 130,
+  "cellH": 104,
+  "anchorX": 65,
+  "feetY": 98,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 8
+ },
+ "mutant": {
+  "cellW": 180,
+  "cellH": 124,
+  "anchorX": 90,
+  "feetY": 118,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 8
+ },
+ "butcher-walk": {
+  "cellW": 230,
+  "cellH": 185,
+  "anchorX": 115,
+  "feetY": 179,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "butcher-chop": {
+  "cellW": 320,
+  "cellH": 250,
+  "anchorX": 160,
+  "feetY": 244,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "butcher-hook": {
+  "cellW": 420,
+  "cellH": 250,
+  "anchorX": 210,
+  "feetY": 244,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "butcher-stagger": {
+  "cellW": 260,
+  "cellH": 200,
+  "anchorX": 130,
+  "feetY": 194,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 4
+ },
+ "viktor-turret": {
+  "cellW": 170,
+  "cellH": 130,
+  "anchorX": 85,
+  "feetY": 124,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 4
+ },
+ "robot-assault": {
+  "cellW": 110,
+  "cellH": 90,
+  "anchorX": 55,
+  "feetY": 84,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "robot-support": {
+  "cellW": 110,
+  "cellH": 90,
+  "anchorX": 55,
+  "feetY": 84,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "robot-hunter": {
+  "cellW": 110,
+  "cellH": 90,
+  "anchorX": 55,
+  "feetY": 84,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ },
+ "raven-dash": {
+  "cellW": 150,
+  "cellH": 100,
+  "anchorX": 75,
+  "feetY": 94,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 4
+ },
+ "dante-place": {
+  "cellW": 150,
+  "cellH": 100,
+  "anchorX": 75,
+  "feetY": 94,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 4
+ },
+ "dante-sky": {
+  "cellW": 150,
+  "cellH": 124,
+  "anchorX": 75,
+  "feetY": 118,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 4
+ },
+ "hivemind": {
+  "cellW": 210,
+  "cellH": 150,
+  "anchorX": 105,
+  "feetY": 144,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
+ }
+}
