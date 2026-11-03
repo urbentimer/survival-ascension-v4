@@ -9,6 +9,14 @@ const endpoint = serverInput || GAME_SERVER || defaultEndpoint;
 const client = new Client(endpoint);
 let room = null, myId = "", state = null, keys = {}, lastInput = 0, lastShoot = 0, dashReady = true, selectedClass = loadProfile().characterClass || "assault";
 const canvas = $("arena"), ctx = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
+// Crash-proof drawing: count save/restore depth so a sprite that throws halfway can't leave the camera offset broken
+// (that froze everyone's screen on wave 3), and never let a tiny negative radius throw.
+let ctxDepth = 0;
+{ const sv = ctx.save.bind(ctx), rs = ctx.restore.bind(ctx), el = ctx.ellipse.bind(ctx), ar = ctx.arc.bind(ctx);
+  ctx.save = () => { ctxDepth++; sv(); }; ctx.restore = () => { if (ctxDepth > 0) { ctxDepth--; rs(); } };
+  ctx.ellipse = (x, y, rx, ry, ...r) => el(x, y, Math.max(0, rx || 0), Math.max(0, ry || 0), ...r);
+  ctx.arc = (x, y, rr, ...r) => ar(x, y, Math.max(0, rr || 0), ...r); }
+function unwindTo(d) { while (ctxDepth > d) ctx.restore(); }
 function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.profileStorageKey)||"{}");}catch{return {};}}
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
@@ -1488,7 +1496,7 @@ function drawZombieAny(z) {
   if (!img || !img.complete || !img.naturalWidth) { drawZombie(z); drawHitFlash(z); return; }   // bosses (no art yet) use the old drawing
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + (z.radius || 14) * 0.8, (z.radius || 14) * 1.05, 4, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.kind === "brute" && z.slam > 0) {   // danger zone: fills up during the wind-up so you can get out
-    const st = slamStart.get(z.id), t = st ? (performance.now() - st) / 1000 : SLAM_T.total - z.slam, k = Math.min(1, t / SLAM_T.windup);
+    const st = slamStart.get(z.id), t = st ? (performance.now() - st) / 1000 : SLAM_T.total - z.slam, k = Math.max(0, Math.min(1, t / SLAM_T.windup));
     if (t < SLAM_T.windup + .1) {
       ctx.save(); const cy = z.y + (z.radius || 14) * 0.8;
       ctx.fillStyle = `rgba(255,70,50,${.10 + .18 * k})`; ctx.strokeStyle = `rgba(255,90,60,${.5 + .4 * k})`; ctx.lineWidth = 2;
@@ -2060,7 +2068,7 @@ function drawWorldObjects(extra) {
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) items.push({ y: p.y + 12, draw: () => drawSurvivor(p) }); }
-  items.sort((a, b) => a.y - b.y).forEach(it => { ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } ctx.restore(); });   // one broken sprite can't stop the rest
+  items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });   // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
   if (leader && leader.kills > 0) { ctx.save(); ctx.font = 'bold 22px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 12; ctx.fillStyle = '#ffd84d'; ctx.fillText('♛', leader.x, leader.y - 60); ctx.restore(); }
@@ -2186,7 +2194,7 @@ setInterval(() => {
 function frame(t){
   if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);
-  let saved = 0;
+  let saved = 0; unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
     sendControls(t); updateFeel(); updateCamera(t);
     ctx.clearRect(0, 0, W, H);
@@ -2194,7 +2202,7 @@ function frame(t){
     ctx.save(); saved = 1; ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore(); saved = 0;
     drawScreen(); drawBuildWheel(); drawSquadWheel(); drawHurt();
     if (performance.now() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - performance.now()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
-  } catch (e) { if (saved) ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
+  } catch (e) { unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
 }
 requestAnimationFrame(frame);
 // ===================== LOBBY / CHARACTER SELECT SCREEN =====================
@@ -2396,7 +2404,7 @@ $("lsRename").onclick = () => {
   if (!room) { $("name").focus(); $("name").select(); return; }
   const box = document.createElement("input"); box.maxLength = 18; box.value = cur || ""; box.className = "ls-renamebox"; box.style.cssText = "position:absolute;left:14px;right:14px;top:46px;z-index:3";
   const panel = $("lsRename").closest(".ls-panel"); panel.style.position = "relative"; panel.appendChild(box); box.focus(); box.select();
-  const done = ok => { if (ok && box.value.trim()) { room.send("setName", { name: box.value.trim() }); $("name").value = box.value.trim(); } box.remove(); };
+  let closed = false; const done = ok => { if (closed) return; closed = true; if (ok && box.value.trim()) { room.send("setName", { name: box.value.trim() }); $("name").value = box.value.trim(); } box.remove(); };   // Enter then blur: only once
   box.onkeydown = e => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }; box.onblur = () => done(true);
 };
 const sendSettings = d => { if (room && state?.hostId === myId) room.send("settings", d); };

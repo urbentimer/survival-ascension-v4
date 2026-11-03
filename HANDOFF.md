@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Sofea replaces Elena")
+Last updated: 2026-11-03 (latest commit: "Fix wave-3 screen freeze")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -89,3 +89,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Other survivors' 8-direction sheets + kits; other bosses' art and moves; walker 8-direction sheet.
 - Boss loot (Butcher's Locker), night vision size choice.
 - Character kit v3 (2026-11-03, strict): ONE image per weapon, max 8 rows x 6 cols (skill poses 8 x max 4; bosses max 4 cols); exact flat #FF00FF, nothing see-through, no magenta/hot pink in the art; big chunky pixels, little fine detail; chibi like Briggs/Marcus (reference/EXAMPLE-briggs-shotgun.png + STYLE-AND-SIZE-GUIDE.png). Older A/B two-part sheets still cut fine: `gun=a.png+b.png`.
+
+- Wave-3 freeze fix: ctx save/restore depth counter + unwind per draw, ellipse/arc radii clamped.
