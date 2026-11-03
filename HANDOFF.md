@@ -12,6 +12,9 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 - Progress infographic: https://claude.ai/artifact/TbZ6oNk2DjaePnKAAc7Auo (out of date: before Viktor rework / Raven / Dante / Hivemind)
 - Art prompts doc: project file `claude/chatgpt-art-prompts.md`
 
+- Connectors linked: Render (workspace tea-dbjk0fk9v7es73ab4tp0, service srv-dbjm617b9u1s73eejs20) and Netlify (site 3d671c3a-862a-48d6-8db6-42e536b9c8a8). Use them to check deploys/logs instead of asking for screenshots.
+- Free Render server sleeps after ~15 min idle; the client retries create/join for ~90s ("Waking up the server…").
+
 ## How we work
 - User designs; often says "dont code yet" → discuss only. Code when told ("u can code now", "code it", "lets go").
 - Art from ChatGPT on a flat magenta (#FF00FF) background, one action/weapon per sheet; Claude cuts it with tools/extract-*.py.
