@@ -3,7 +3,7 @@
 Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 
 ## Where things are
-- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-v4.onrender.com (client/config.js). Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
+- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open https://lucent-lamington-40beed.netlify.app (auto-deploys from main; Render auto-deploy is on too).
 - Claude's workspace copy: `/home/claude/sa` (git, branch `master`, ~72 commits). Exists only in the chat session it was made in.
 - **Backup on GitHub: branch `claude/game-backup`** of urbentimer/survival-ascension-v4 (everything except raw ChatGPT sheets in tools/art). `main` = what's live; don't touch it until the user says to go live.
 - Push routine: work in `/home/claude/sa`, then copy the tree (minus .git, node_modules, tools/dist, tools/art) into the clone `/home/claude/survival-ascension-v4` on `claude/game-backup`, commit, push. A new chat: clone the repo, check out `claude/game-backup`.
@@ -12,7 +12,7 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 - Progress infographic: https://claude.ai/artifact/TbZ6oNk2DjaePnKAAc7Auo (out of date: before Viktor rework / Raven / Dante / Hivemind)
 - Art prompts doc: project file `claude/chatgpt-art-prompts.md`
 
-- Connectors linked: Render (workspace tea-dbjk0fk9v7es73ab4tp0, service srv-dbjm617b9u1s73eejs20) and Netlify (site 3d671c3a-862a-48d6-8db6-42e536b9c8a8). Use them to check deploys/logs instead of asking for screenshots.
+- Connectors linked: Render (workspace tea-dbjk0fk9v7es73ab4tp0, service srv-dbkkpufb9u1s73fmj99g Singapore) and Netlify (site 3d671c3a-862a-48d6-8db6-42e536b9c8a8). Use them to check deploys/logs instead of asking for screenshots.
 - Free Render server sleeps after ~15 min idle; the client retries create/join for ~90s ("Waking up the server…").
 
 ## How we work
