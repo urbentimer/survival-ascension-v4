@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Fix wave-3 screen freeze")
+Last updated: 2026-11-03 (latest commit: "Butcher/Sofea/Astra fixes + balance")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -91,3 +91,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Character kit v3 (2026-11-03, strict): ONE image per weapon, max 8 rows x 6 cols (skill poses 8 x max 4; bosses max 4 cols); exact flat #FF00FF, nothing see-through, no magenta/hot pink in the art; big chunky pixels, little fine detail; chibi like Briggs/Marcus (reference/EXAMPLE-briggs-shotgun.png + STYLE-AND-SIZE-GUIDE.png). Older A/B two-part sheets still cut fine: `gun=a.png+b.png`.
 
 - Wave-3 freeze fix: ctx save/restore depth counter + unwind per draw, ellipse/arc radii clamped.
+
+## Nov 3 night fixes + balance
+- Butcher & Hivemind never freeze: with nobody reachable (Sofea in the heli, Raven hidden, everyone in a safehouse) they go for the radio tower (Butcher chops it, 2x his damage every chop cd).
+- Butcher hook: speed 2600 -> 2100 (easier to deflect); stopped by buildings (checked from his body and the hook height) and by safehouse walls (boxRayDist); can't hit untouchable(p) = in the helicopter or sheltered; the pull lets go when the chain is blocked by a wall or the target reaches a safehouse. Chop rings skip helicopter riders.
+- Sofea: tank shells and heli rockets explode on the FIRST zombie in their path (rayHits), not only at the mouse point.
+- Astra: 1 medic (was 3), 4 police (was 7), safehouse half 184 -> 130 (260x260 outside); client wall tiling adapts to the size.
+- Day/night: 180s cycle, night = the last 60s (was 240 / 120).

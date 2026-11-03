@@ -199,7 +199,7 @@ function renderState() {
   $("waveJump").classList.toggle("hidden", !SOLO_PREVIEW || state.phase === "lobby");
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates with no cooldown: ${state.noCd ? "ON" : "OFF"}`;
-  if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2600) >= 2600 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
+  if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
   $("exploreToggle").textContent = state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves";
   // switch between lobby page and full-screen game
   const playingNow = state.phase !== "lobby";
@@ -886,7 +886,7 @@ function drawBriggsFx(f, age) {   // false when finished
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
 const aImgs = {};
 for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
-const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 184, wall: 24, build: 2, life: 45 }, astraCall = new Map();   // matches the server
+const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 2, life: 45 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
   if (m.k === "call") astraCall.set(m.id, t);
@@ -910,11 +910,12 @@ function safeAlpha(st) { return st.deploy <= 0 && st.hp < 5 && Math.floor(perfor
 // The 4 walls as depth-sorted pieces (north/south: 4 tiles across; east/west: 3 tiles down), so people inside and outside sort right.
 function safePieces(cx, cy, frame, alpha, st = null) {
   const H = SAFE.half, T = SAFE.wall, out = [], h = aImgs.wallH, v = aImgs.wallV;
-  const tileH = (x, base, i) => out.push({ y: base, draw: () => { if (!h.naturalWidth) return; const w = 92, hh = 46; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(h, frame * 112, 0, 112, 56, Math.round(x - w / 2), Math.round(base - hh), w, hh); ctx.restore();
-    if (st && i === 1 && base < cy) { ctx.save(); ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.fillStyle = st.deploy > 0 ? "#ffd84d" : st.hp < 5 ? "#ff6b5b" : "#8ff0ff"; ctx.fillText(st.deploy > 0 ? "BUILDING…" : `SAFEHOUSE ${Math.ceil(st.hp)}s`, cx, base - 54); ctx.restore(); } } });
-  for (let i = 0; i < 4; i++) { const x = cx - H + 46 + i * 92; tileH(x, cy - H + T, i); tileH(x, cy + H, i); }
-  const len = (2 * H - 2 * T) / 3;
-  for (const x of [cx - H + T / 2, cx + H - T / 2]) for (let i = 0; i < 3; i++) { const base = cy - H + T + (i + 1) * len;
+  const nH = Math.max(2, Math.round(2 * H / 90)), tw = 2 * H / nH;   // north/south walls: tiles across
+  const tileH = (x, base, i) => out.push({ y: base, draw: () => { if (!h.naturalWidth) return; const w = tw, hh = 46; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(h, frame * 112, 0, 112, 56, Math.round(x - w / 2), Math.round(base - hh), w, hh); ctx.restore();
+    if (st && i === Math.floor(nH / 2) && base < cy) { ctx.save(); ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.fillStyle = st.deploy > 0 ? "#ffd84d" : st.hp < 5 ? "#ff6b5b" : "#8ff0ff"; ctx.fillText(st.deploy > 0 ? "BUILDING…" : `SAFEHOUSE ${Math.ceil(st.hp)}s`, cx, base - 54); ctx.restore(); } } });
+  for (let i = 0; i < nH; i++) { const x = cx - H + tw / 2 + i * tw; tileH(x, cy - H + T, i); tileH(x, cy + H, i); }
+  const nV = Math.max(2, Math.round((2 * H - 2 * T) / 104)), len = (2 * H - 2 * T) / nV;
+  for (const x of [cx - H + T / 2, cx + H - T / 2]) for (let i = 0; i < nV; i++) { const base = cy - H + T + (i + 1) * len;
     out.push({ y: base, draw: () => { if (!v.naturalWidth) return; const sc = len / 104, w = 48 * sc; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(v, frame * 48, 0, 48, 104, Math.round(x - w / 2), Math.round(base - len), w, len); ctx.restore(); } }); }
   return out;
 }
@@ -2231,8 +2232,8 @@ const ROSTER = [
   { id: "commander", name: "HAYES", role: "COMMANDER", cat: "support", hp: 115, dmg: 15, spd: 180, def: 1, desc: "Veteran leader. Hardens the squad so they can hold the line.",
     skills: [{ k: "E", n: "Rally", cd: 40, t: "+4 defence for teammates within 220px for 8 seconds." }], gear: ["rifle", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
-    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "3 doctors for 20s, each healing a different teammate at 25 HP/s." },
-             { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "7 armed officers fight beside you for 30s." },
+    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A doctor for 20s who heals the most injured nearby teammate at 25 HP/s." },
+             { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "4 armed officers fight beside you for 30s." },
              { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 2s. Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };

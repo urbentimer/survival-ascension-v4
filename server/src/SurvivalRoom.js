@@ -26,7 +26,7 @@ const ACID = { minRange: 140, maxRange: 430, hold: 380, backOff: 170, speed: 330
 const BUTCHER = {
   speed: 130, armour: 0.5, armourArc: 1.05,
   chop: { trigger: 150, windup: .7, comboWindup: .38, after: .65, cd: 2.6, offset: 55, rings: [95, 185, 275], ringDelay: .12, stun: 1.0, slow: 2.0 },
-  hook: { range: 480, minRange: 170, aim: .5, lock: .08, speed: 2600, cd: [10, 15], enragedCd: [8, 10], first: 5, hitR: 34, pullSpeed: 640, hold: .55, dmg: 8 },
+  hook: { range: 480, minRange: 170, aim: .5, lock: .08, speed: 2100, cd: [10, 15], enragedCd: [8, 10], first: 5, hitR: 34, pullSpeed: 640, hold: .55, dmg: 8 },
   spin: { every: 8, dur: 3, radius: 115, tick: .35, dmgMult: .45, speedMult: 1.15 },
   enrageAt: .3, enrageSpeed: 1.2,
 };
@@ -195,9 +195,9 @@ const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a tea
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
-  medic: { n: 3, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },
-  police: { n: 7, life: 30, cd: 60, hp: 110, speed: 195, dmg: 10, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
-  safe: { cd: 90, build: 2, life: 45, half: 184, wall: 24, search: 120, worker: 200 },   // 368x368 outside, 320x320 inside, 24px walls
+  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },
+  police: { n: 4, life: 30, cd: 60, hp: 110, speed: 195, dmg: 10, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
+  safe: { cd: 90, build: 2, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
@@ -1396,7 +1396,9 @@ export class SurvivalRoom extends Room {
     const want = Number.isFinite(dist) && dist > 20 ? Math.min(dist, W.range) : W.range, pts = [];
     for (const off of v.kind === "tank" ? [0] : [-K.pod, K.pod]) {   // helicopter: one rocket from each wing pod
       const ox = v.x - Math.sin(a) * off, oy = v.y + Math.cos(a) * off;
-      const end = Math.max(20, Math.min(this.wallDist(ox, oy, a, want) - 4, want)), bx = ox + Math.cos(a) * end, by = oy + Math.sin(a) * end;
+      let end = Math.max(20, Math.min(this.wallDist(ox, oy, a, want) - 4, want));
+      const first = this.rayHits({ x: ox, y: oy }, a, end)[0]; if (first) end = Math.max(20, first.t);   // it blows up on the first zombie it hits, not behind it
+      const bx = ox + Math.cos(a) * end, by = oy + Math.sin(a) * end;
       this.ripples.push({ kind: v.kind === "tank" ? "shell" : "hrocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / W.speed, dmg: W.dmg, fall: W.min, r: W.r, flat: 1, push: 8, wallSafe: true, scaled: true });
       pts.push([Math.round(ox), Math.round(oy), Math.round(bx), Math.round(by)]);
     }
@@ -1990,7 +1992,11 @@ export class SurvivalRoom extends Room {
       if (z.slam <= 0) z.act = "";
       return;
     }
-    if (!players.length) return;
+    if (!players.length) {   // nobody reachable: crawl toward the radio tower instead of freezing
+      const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x); z.aim = ta; z.targetId = "";
+      if (distance(z, tw) > z.radius + TOWER_HALF + 20) this.steerMove(z, z.id, ta, z.speed * dt, e => this.solveZombie(e));
+      return;
+    }
     const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
     z.targetId = near.sessionId; z.aim = a;
     if (d < H.bite.range + z.radius && now >= m.biteReady) { this.startAct(z, "bite", H.bite.total, a); m.biteReady = now + H.bite.cd * 1000; return; }
@@ -2015,13 +2021,19 @@ export class SurvivalRoom extends Room {
       if (z.act === act && z.slam <= 0) { z.act = ""; z.hookId = ""; }
       return;
     }
-    if (!players.length) return;
+    if (!players.length) {   // nobody he can reach (Sofea flying, Raven hidden, everyone in a safehouse): he goes for the radio tower instead of standing still
+      const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x), td = distance(z, tw); z.aim = ta; z.targetId = "";
+      if (td > z.radius + TOWER_HALF + 20) this.steerMove(z, z.id, ta, z.speed * dt, e => this.solveZombie(e));
+      else if (now >= m.chopReady) { m.chopReady = now + BUTCHER.chop.cd * 1000; this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2); this.broadcast("chop", { x: Math.round(z.x + Math.cos(ta) * 55), y: Math.round(z.y + Math.sin(ta) * 55), r: BUTCHER.chop.rings, d: BUTCHER.chop.ringDelay });
+        if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } }
+      return;
+    }
     const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
     z.targetId = near.sessionId;
     if (z.enraged && now >= m.spinReady) { this.startAct(z, "spin", B.spin.dur, a); m.spinTick = 0; return; }
     if (d < B.chop.trigger && now >= m.chopReady) { m.combo = false; m.chopW = B.chop.windup; this.startAct(z, "chop", B.chop.windup + B.chop.after, a); return; }
     if (now >= m.hookReady) {
-      const cands = players.filter(p => { const pd = distance(z, p); return pd >= B.hook.minRange && pd <= B.hook.range && this.lineClear(z, p); });
+      const cands = players.filter(p => { const pd = distance(z, p); return pd >= B.hook.minRange && pd <= B.hook.range && this.lineClear(z, p) && !this.sheltered(p); });
       if (cands.length) {
         const far = cands.reduce((a, b) => distance(z, a) > distance(z, b) ? a : b);
         m.hookTarget = far.sessionId; z.targetId = far.sessionId; z.hookD = 0; m.lastTX = m.lastTY = undefined; m.vx = m.vy = 0;
@@ -2040,7 +2052,7 @@ export class SurvivalRoom extends Room {
       if (i === 0) this.broadcast("chop", { x: Math.round(cx), y: Math.round(cy), r: C.rings, d: C.ringDelay });
       const inner = i ? C.rings[i - 1] : 0, outer = C.rings[i];
       for (const p of this.state.players.values()) {
-        if (!p.alive) continue; const zd = ringZone(p.x - cx, p.y - cy); if (zd < inner || zd >= outer) continue;
+        if (!p.alive || this.untouchable(p)) continue; const zd = ringZone(p.x - cx, p.y - cy); if (zd < inner || zd >= outer) continue;
         if (i === 0) { const dealt = Math.max(1, Math.round(z.damage - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
         else if (i === 1) { p.stunned = Math.max(p.stunned || 0, C.stun); p.charging = false; }
         else p.slowed = Math.max(p.slowed || 0, C.slow);
@@ -2060,13 +2072,13 @@ export class SurvivalRoom extends Room {
       if (target) { m.lastTX = target.x; m.lastTY = target.y; }
       return;
     }
-    if (t0 < H.aim) m.wall = this.wallDist(z.x, z.y - 30, z.aim, H.range);                                                  // thrown: where would it hit a wall?
+    if (t0 < H.aim) m.wall = Math.min(this.wallDist(z.x, z.y - 30, z.aim, H.range), this.wallDist(z.x, z.y, z.aim, H.range), this.boxRayDist(z.x, z.y, z.aim, H.range, this.safeBoxes));   // buildings and Astra's safehouse stop the hook                                                  // thrown: where would it hit a wall?
     const reach = Math.min(H.range, m.wall ?? H.range), d0 = z.hookD || 0, d1 = Math.min(reach, (t1 - H.aim) * this.hookSpd());
     z.hookD = d1;
     const dx = Math.cos(z.aim), dy = Math.sin(z.aim);
     let hit = null, best = Infinity;
     for (const p of this.state.players.values()) {
-      if (!p.alive) continue; const vx = p.x - z.x, vy = p.y - z.y, along = vx * dx + vy * dy;
+      if (!p.alive || this.untouchable(p)) continue; const vx = p.x - z.x, vy = p.y - z.y, along = vx * dx + vy * dy;
       if (along < d0 - H.hitR || along > d1 + H.hitR) continue;
       if (Math.abs(vx * dy - vy * dx) <= H.hitR + BODY_R && along < best) { best = along; hit = p; }
     }
@@ -2083,6 +2095,20 @@ export class SurvivalRoom extends Room {
   butcher_hookback() {}
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p); }   // up in the helicopter / inside a safehouse
+  boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
+    const dx = Math.cos(a), dy = Math.sin(a); let best = range;
+    for (const b of boxes || []) {
+      if (Math.abs(x - b.x) <= b.hw && Math.abs(y - b.y) <= b.hh) continue;   // starting inside: ignore
+      let t0 = 0, t1 = best;
+      for (const [o, d, lo, hi] of [[x, dx, b.x - b.hw, b.x + b.hw], [y, dy, b.y - b.hh, b.y + b.hh]]) {
+        if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = Infinity; break; } continue; }
+        let ta = (lo - o) / d, tb = (hi - o) / d; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) break;
+      }
+      if (t0 <= t1 && t0 < best) best = t0;
+    }
+    return best;
+  }
   // Did survivor p swing the fire axe toward the hook (from Butcher z) in the last `win` seconds?
   canDeflect(p, z, now, win) {
     const sw = this.axeSwing.get(p.sessionId); if (!sw || now - sw.t > win * 1000) return false;
@@ -2102,6 +2128,7 @@ export class SurvivalRoom extends Room {
   butcher_pull(z, t0, t1, dt, m) {
     const H = BUTCHER.hook, p = this.state.players.get(z.hookId);
     if (!p || !p.alive) { z.act = ""; z.hookId = ""; return; }
+    if (this.untouchable(p) || !this.lineClear(z, p)) { z.hookId = ""; this.startAct(z, "hookback", .3); return; }   // chain blocked by a wall / they reached a safehouse: it lets go
     const ang = Math.atan2(p.y - z.y, p.x - z.x), d = distance(z, p); z.aim = ang;
     p.stunned = Math.max(p.stunned || 0, .25);
     const stop = z.radius + BODY_R + 14;
@@ -2480,7 +2507,7 @@ export class SurvivalRoom extends Room {
       if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun";p.ammo+=30;this.unlockWeapon(p,found);this.storeMag(p);p[WEAPONS[found].slot]=found;if(p.activeSlot===2||p.activeSlot===3)this.setSlot(p,p.activeSlot);else this.loadMag(p);this.state.message=`${p.name} found a ${item.rarity} ${found}!`;}
       this.state.loot.delete(item.id);
     }
-    this.state.dayTime = (this.state.dayTime + dt) % 240;
+    this.state.dayTime = (this.state.dayTime + dt) % 180;   // 2 minutes of day, 1 minute of night
     this.state.isNight = this.state.dayTime >= 120;
     this.spawnClock -= dt;
     if (this.state.waveType === "normal" && isHiveWave(this.state.stage) && !this.hiveSpawned && !this.state.explore && this.state.elapsed >= HIVE.arriveAt) this.spawnHivemind();
