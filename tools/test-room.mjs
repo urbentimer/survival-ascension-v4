@@ -13,7 +13,7 @@ let fails = 0; const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAI
 const W = ms => new Promise(r => setTimeout(r, ms));
 
 function makeRoom(withMap = false) {
-  const room = new SurvivalRoom(); room.onCreate({});
+  const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false;   // tests check the real cooldowns
   if (!withMap) room.mapGrid = new Map();   // most tests use an empty map (fixed test positions may sit inside buildings)
   const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" };
@@ -535,7 +535,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.ultInfo.get(A.sessionId).readyAt = Date.now() - 1; tick(1); ok(p.ultReady, "...then Q is ready again (stays unlocked)");
   room._dispose(); }
 // 29. RAVEN (Scout): katana only, Shadow Pass (E), flaming katana + burns, Blade Storm (Q), katana tiers
-{ const room = new SurvivalRoom(); room.onCreate({}); room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
+{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Raven" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
   send(A, "chooseClass", { id: "scout" });
@@ -578,7 +578,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(p.katanaKills === 50 && p.katanaTier === 1, `50 katana kills -> katana tier 1 (Honed Edge)`);
   room._dispose(); }
 // 30. DANTE (Demolitionist): shotgun, Breacher Blast (E), Demo Ripple (Q)
-{ const room = new SurvivalRoom(); room.onCreate({}); room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
+{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Dante" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
   send(A, "chooseClass", { id: "demolitionist" }); room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
@@ -687,5 +687,12 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "ability", {}); ok(!room.state.vehicles.has("A"), "E is on cooldown");
   p.abilityCooldown = 0; send(A, "ability", {}); tick(18); room.vmemory.get("A").protectUntil = 0; p.hp = 1; const killer = placeZombie(room, p.x + 30, p.y, 9999); killer.attackCooldown = 0; killer.damage = 500; killer.role = "hunter"; tick(3);
   ok(!p.alive && !room.state.vehicles.has("A"), "if she goes down, the tank goes away (normal downed rules)");
+  room._dispose(); }
+// 34. test mode (host toggle): ultimates unlocked, no cooldown after they end
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.phase = "lobby"; send(A, "chooseClass", { id: "scout" }); room.state.phase = "playing"; p.ultKills = 0;
+  send(B, "testNoCd"); ok(!room.state.noCd, "only the host can switch test mode");
+  send(A, "testNoCd"); tick(1); ok(room.state.noCd && p.ultReady, "test mode: the ultimate is unlocked straight away");
+  send(A, "ult", {}); ok(p.storm > 0, "...Blade Storm starts"); p.storm = 0.01; tick(3); ok(p.ultReady && p.ultCd === 0, "...and is ready again as soon as it ends (no cooldown)");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

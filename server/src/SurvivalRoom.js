@@ -243,6 +243,7 @@ export class SurvivalRoom extends Room {
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
     this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map();
+    this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
     this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
@@ -420,6 +421,7 @@ export class SurvivalRoom extends Room {
       if (!this.solo || !p || !z) return;
       if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
     });
+    this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
     this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
@@ -957,7 +959,9 @@ export class SurvivalRoom extends Room {
     st.hp = st.maxHp = HEAVY_TURRET.hp; st.ownerId = p.sessionId; st.aim = a; st.deploy = HEAVY_TURRET.deploy;
     this.state.structures.set(st.id, st); this.state.message = `${p.name} deployed a HEAVY TURRET!`;
   }
-  ultState(p, now = Date.now()) {
+  // Test mode (host toggle, on by default for now): ultimates are unlocked and have no cooldown (still can't stack while one is running)
+  ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd) r.left = r.alive ? r.active : 0; return r; }
+  ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
       const v = this.state.vehicles.get(p.sessionId), alive = v?.kind === "heli", active = !alive ? 0 : (v.phase === "call" ? SOFEA.heli.life : v.left) * 1000;
@@ -1890,6 +1894,7 @@ export class SurvivalRoom extends Room {
     if (!this.state.explore) this.state.elapsed += dt;   // explore mode: timer frozen, no spawns (zombies were cleared when it was turned on)
     this.state.matchTime += dt;
     for(const p of this.state.players.values()) if(p.abilityCooldown>0)p.abilityCooldown=Math.max(0,p.abilityCooldown-dt);
+    if (this.state.noCd) for (const p of this.state.players.values()) if ((p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;
     for (const p of this.state.players.values()) {   // Viktor's robot charges refill one at a time, every 25s
       if (p.characterClass !== "engineer") continue;
       if (p.robotCharges == null) p.robotCharges = ROBOT_CHARGES;

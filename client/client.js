@@ -170,6 +170,7 @@ $("ultNow").onclick = () => { room?.send("debugUlt"); closePanels(); };
 $("bossKill").onclick = () => { room?.send("debugBossHp", { kill: true }); closePanels(); };
 $("exploreToggle").onclick = () => room?.send("explore", { on: !state?.explore });
 $("skipButcher").onclick = () => { room?.send("debugBoss"); closePanels(); };
+$("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
 $("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });
@@ -207,6 +208,7 @@ function renderState() {
   $("exploreToggle").classList.toggle("hidden", !host || state.phase !== "playing");
   $("waveJump").classList.toggle("hidden", !SOLO_PREVIEW || state.phase === "lobby");
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
+  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates with no cooldown: ${state.noCd ? "ON" : "OFF"}`;
   if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2600) >= 2600 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
   $("exploreToggle").textContent = state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves";
   // switch between lobby page and full-screen game
