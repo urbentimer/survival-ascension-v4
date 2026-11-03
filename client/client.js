@@ -2221,9 +2221,12 @@ const ROSTER = [
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
+// literal paths so the single-file preview build can embed them
+const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", medic: "assets/hero/medic.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
+  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", commander: "assets/hero/commander.webp", dispatcher: "assets/hero/dispatcher.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
-const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, heroImgs: {}, toastAt: 0 };
+const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
 const heroDef = () => rosterOf(selectedClass);
 const setHtml = (id, html) => { const el = $(id); if (el._h !== html) { el._h = html; el.innerHTML = html; } };   // only touch the DOM when something changed (state updates ~20x/s)
@@ -2248,11 +2251,10 @@ function renderHero() {
   $("heroName").textContent = r.name; $("heroRole").textContent = r.role; $("heroDesc").textContent = r.desc;
   $("heroStats").innerHTML = [["HP", r.hp, 90, 160, '<path d="M12 21s-8-5-8-11a4.5 4.5 0 0 1 8-2.7A4.5 4.5 0 0 1 20 10c0 6-8 11-8 11Z"/>'], ["DMG", r.dmg, 14, 21, '<path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/>'], ["SPD", r.spd, 150, 225, '<path d="M13 4 4 14h7l-1 6 9-10h-7z"/>'], ["DEF", r.def, 0, 5, '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>']]
     .map(([k, v, lo, hi, ic]) => `<div class="ls-stat" title="${k} ${v}"><svg viewBox="0 0 24 24">${ic}</svg><span>${k}</span>${bars(v, lo, hi)}</div>`).join("");
-  // hero art: assets/hero/<class>.webp when it exists (ChatGPT splash art), else the animated in-game sprite
-  const art = $("heroArt"), known = ls.heroImgs[r.id];
-  if (known === false || !known) { art.hidden = true; $("heroSprite").hidden = false; }
-  if (known === undefined) { const im = new Image(); im.onload = () => { ls.heroImgs[r.id] = im.src; if (selectedClass === r.id) renderHero(); }; im.onerror = () => { ls.heroImgs[r.id] = false; }; im.src = `assets/hero/${r.id}.webp`; }
-  else if (known) { art.src = known; art.hidden = false; $("heroSprite").hidden = true; }
+  // hero art: ChatGPT splash art (tools/extract-heroes.py) when there is one, else the animated in-game sprite
+  const art = $("heroArt"), src = HERO_ART[r.id];
+  art.hidden = !src; $("heroSprite").hidden = !!src;
+  if (src && art.getAttribute("src") !== src) { art.classList.remove("in"); art.src = src; requestAnimationFrame(() => requestAnimationFrame(() => art.classList.add("in"))); }
 }
 function skillIcon(s, r) { return s.card ? `<div class="icon card-${s.card}"></div>` : `<div class="icon"><svg viewBox="0 0 24 24">${ROLE_ICON[r.cat]}</svg></div>`; }
 function gearIcon(id) { return `<span class="gi">${icon(id === "katana" ? "katana" : id) || ""}</span>`; }
@@ -2358,7 +2360,7 @@ requestAnimationFrame(lsFrame);
 addEventListener("pointermove", e => { if (!lsAnimOn || document.body.classList.contains("in-match")) return; const dx = e.clientX / innerWidth - .5, dy = e.clientY / innerHeight - .5;
   $("lsHero").style.transform = `translate(${dx * -14}px,${dy * -8}px)`; $("lsScene").style.translate = `${dx * 18}px ${dy * 10}px`; });
 // background splash art (assets/hero/background.webp from ChatGPT) replaces the drawn skyline when it exists
-{ const im = new Image(); im.onload = () => { $("lsBgArt").src = im.src; $("lsBgArt").hidden = false; }; im.src = ["assets", "hero", "background.webp"].join("/"); }   // built at runtime: the file is optional (ChatGPT art)
+{ const im = new Image(); im.onload = () => { $("lsBgArt").src = im.src; $("lsBgArt").hidden = false; }; im.src = "assets/hero/background.webp"; }   // ChatGPT background over the drawn skyline
 
 // ---- wiring ----
 document.querySelectorAll(".ls-nav button").forEach(b => b.onclick = () => setView(b.dataset.view));

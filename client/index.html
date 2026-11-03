@@ -295,9 +295,10 @@ body.in-match #ls{display:none}
 .ls-bar{display:flex;gap:4px}.ls-bar i{height:9px;flex:1;max-width:22px;background:#3a2f2a;transform:skewX(-20deg)}.ls-bar i.on{background:linear-gradient(90deg,#ff9a2a,#ff6a10);box-shadow:0 0 8px rgba(255,110,20,.6)}
 .ls-hero{position:relative;min-height:260px;display:grid;place-items:end center}
 .ls-hero-glow{position:absolute;inset:8% 6% 0;background:radial-gradient(ellipse 50% 55% at 50% 60%,rgba(255,100,20,.35),transparent 70%);filter:blur(6px)}
-.ls-hero canvas,.ls-hero img{position:relative;max-width:100%;max-height:100%;animation:lsBreath 4.2s ease-in-out infinite;transition:transform .25s ease-out;filter:drop-shadow(0 0 22px rgba(255,90,20,.35))}
-.ls-hero canvas{background:none!important;border:0!important;box-shadow:none!important;image-rendering:pixelated;width:100%;height:100%;object-fit:contain}
-.ls-hero img{object-fit:contain;width:100%;height:100%;object-position:bottom}
+.ls-hero canvas,.ls-hero img{max-width:100%;max-height:100%;animation:lsBreath 4.2s ease-in-out infinite;transition:transform .25s ease-out;filter:drop-shadow(0 0 22px rgba(255,90,20,.35))}
+.ls-hero canvas{position:relative;background:none!important;border:0!important;box-shadow:none!important;image-rendering:pixelated;width:100%;height:100%;object-fit:contain}
+.ls-hero img{position:absolute;left:50%;bottom:0;height:calc(100% + 110px);width:auto;max-width:none;max-height:none;translate:-50% 0;object-fit:contain;opacity:0;transition:opacity .35s,transform .25s ease-out}.ls-hero img.in{opacity:1}.ls-hero img{-webkit-mask-image:linear-gradient(to top,transparent 0,#000 14%);mask-image:linear-gradient(to top,transparent 0,#000 14%)}.ls-head{position:relative;z-index:3}
+.ls-info{position:relative;z-index:2}.ls-side{position:relative;z-index:2}.ls-hero{z-index:1}.ls-hero,.ls-hero *{pointer-events:none}
 .ls-side{background:var(--pan);border:1px solid var(--line2);border-radius:6px;padding:10px;display:flex;flex-direction:column;min-height:0;min-width:0}
 .ls-tabs{display:flex;border-bottom:1px solid var(--line2);margin-bottom:10px}
 .ls-tabs button{flex:1;background:none;border:0;padding:10px 6px;font:italic 800 19px var(--cond);letter-spacing:.04em;color:#d7cec7}
