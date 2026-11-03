@@ -188,6 +188,11 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
 // Astra (dispatcher): E = 3 doctors (25 HP/s each, one per patient), Q = 7 police, R = safehouse (4 walls zombies can't cross).
+// Lobby mission settings. Sites = map layouts (same city style, different streets).
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }];
+const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
+const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
+const PICKABLE = ["assault", "juggernaut", "medic", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
   medic: { n: 3, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },
@@ -280,12 +285,20 @@ export class SurvivalRoom extends Room {
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
     this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
     // the city: buildings, wrecks, trees... (solid) — same layout every match, sent to every player
-    const layout = buildMapLayout(ARENA.width, ARENA.height);
+    this.state.mapSite = 0; this.state.difficulty = "normal"; this.state.waveMode = "campaign"; this.state.friendlyFire = false; this.state.extraLoot = false;
+    this.loadSite(0);
+    this.onCreateRest(options);
+  }
+  loadSite(i) {   // build the chosen map and its collision grid
+    this.state.mapSite = i;
+    const layout = buildMapLayout(ARENA.width, ARENA.height, SITES[i].seed);
     this.state.mapLayout = packLayout(layout);
     this.mapGrid = new Map();               // 160px cells -> solid boxes touching that cell (fast lookups)
     for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
       const k = gx + "," + gy; if (!this.mapGrid.has(k)) this.mapGrid.set(k, []); this.mapGrid.get(k).push(b);
     }
+  }
+  onCreateRest(options) {
     this.steer = new Map();                 // zombie/bot id -> which way they go around obstacles
     this.state.stage = 1;
     this.state.elapsed = 0;
@@ -381,7 +394,7 @@ export class SurvivalRoom extends Room {
 
     this.onMessage("chooseClass", (client,data) => {
       const p=this.state.players.get(client.sessionId); const id=String(data?.id||"");
-      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher","dispatcher"];
+      const classes=this.allowAllClasses ? Object.keys(CLASS_STATS) : PICKABLE;   // Sofea (operator) was removed from the roster; Arshan (slasher) isn't pickable yet (tests can allow all)
       if(!p || this.state.phase!=="lobby" || !classes.includes(id)) return;
       p.characterClass=id;
       applyClassBase(p); p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
@@ -465,6 +478,23 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
     this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (p?.alive && this.state.phase === "playing" && p.characterClass === "dispatcher") this.astraCast(p, "R"); });   // Astra's R: safehouse
+    // ---- lobby: name, READY UP, mission settings (host) ----
+    this.onMessage("setName", (client, data) => { const p = this.state.players.get(client.sessionId), n = cleanName(data?.name); if (p && n && this.state.phase === "lobby") p.name = n; });
+    this.onMessage("ready", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && this.state.phase === "lobby" && !p.isHost) p.ready = data?.on == null ? !p.ready : !!data.on; });
+    this.onMessage("kick", (client, data) => {   // host removes a player from the lobby
+      if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || !data?.id || data.id === client.sessionId) return;
+      const target = this.state.players.get(String(data.id)); if (!target || target.isBot) return;
+      const c = this.clients?.find?.(x => x.sessionId === target.sessionId); this.state.message = `${target.name} was removed by the host.`;
+      if (c) c.leave(4000); else this.state.players.delete(target.sessionId);
+    });
+    this.onMessage("settings", (client, data) => {
+      if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || !data) return;
+      if (Number.isInteger(data.map) && data.map >= 0 && data.map < SITES.length && data.map !== this.state.mapSite) this.loadSite(data.map);
+      if (DIFFICULTY[data.difficulty]) this.state.difficulty = data.difficulty;
+      if (data.waveMode === "campaign" || data.waveMode === "ascension") this.state.waveMode = data.waveMode;
+      if (typeof data.friendlyFire === "boolean") this.state.friendlyFire = data.friendlyFire;
+      if (typeof data.extraLoot === "boolean") this.state.extraLoot = data.extraLoot;
+    });
     this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
     this.onMessage("useItem", client => { const p = playing(client.sessionId); if (p) this.useQuickItem(p); });
     this.onMessage("upgrade", (client, data) => {
@@ -558,16 +588,16 @@ export class SurvivalRoom extends Room {
       const id = "bot-" + Math.random().toString(36).slice(2, 8);
       this.onJoin({ sessionId: id }, { name });
       const b = this.state.players.get(id);
-      b.isBot = true;
-      const classes = Object.keys(CLASS_STATS);
+      b.isBot = true; b.ready = true;
+      const classes = PICKABLE;
       b.characterClass = classes[Math.floor(Math.random() * classes.length)];
       applyClassBase(b);
       this.botBrain.set(id, { strafe: Math.random() < 0.5 ? 1 : -1, nextThink: 0 });
       this.state.message = `${name} (${b.characterClass}) joined as an AI teammate.`;
     });
-    this.onMessage("removeBot", client => {
+    this.onMessage("removeBot", (client, data) => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby") return;
-      const bot = [...this.state.players.values()].reverse().find(p => p.isBot);
+      const bot = data?.id ? [...this.state.players.values()].find(p => p.isBot && p.sessionId === data.id) : [...this.state.players.values()].reverse().find(p => p.isBot);
       if (bot) { this.state.players.delete(bot.sessionId); this.botBrain.delete(bot.sessionId); this.state.message = `${bot.name} left.`; }
     });
 
@@ -680,11 +710,11 @@ export class SurvivalRoom extends Room {
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
     p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
-    const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher"];
+    const classIds=PICKABLE;
     if(classIds.includes(profile.characterClass)) p.characterClass=profile.characterClass;
     applyClassBase(p);
     this.loadMag(p);
-    p.alive = true; p.ready = true; p.isHost = this.state.players.size === 0;
+    p.alive = true; p.isHost = this.state.players.size === 0; p.ready = p.isHost;   // lobby READY UP (the host counts as ready)
     p.color = COLORS[this.state.players.size % COLORS.length]; p.lastShot = 0; p.reviveProgress = 0; p.reviveTargetId = "";
     this.state.players.set(client.sessionId, p);
     if (!this.state.hostId) this.state.hostId = client.sessionId;
@@ -702,7 +732,7 @@ export class SurvivalRoom extends Room {
     if (this.state.hostId === client.sessionId) {
       const next = [...this.state.players.values()].find(p => !p.isBot);
       this.state.hostId = next ? next.sessionId : "";
-      if (next) next.isHost = true;
+      if (next) { next.isHost = true; next.ready = true; }
     }
     if (![...this.state.players.values()].some(p => !p.isBot)) { this.state.players.clear(); this.botBrain.clear(); }
     if (this.state.players.size === 0) this.state.phase = "lobby";
@@ -732,6 +762,7 @@ export class SurvivalRoom extends Room {
     z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
     z.hp = z.maxHp; z.speed = ({walker:57,runner:125,brute:34,spitter:28,mutant:105}[kind] || (boss?42:55)) * (this.state.isNight?1.2:1);
     z.damage = ({walker:8,runner:7,brute:18,spitter:6,mutant:16}[kind] || (boss?28:10)) * scale * (this.state.isNight?1.3:1);
+    const D = DIFFICULTY[this.state.difficulty] || DIFFICULTY.normal; z.maxHp *= D.hp; z.hp = z.maxHp; z.damage *= D.dmg;   // lobby difficulty
     z.radius = boss ? 42 : kind === "brute" ? 33 : kind === "mutant" ? 18 : 14; z.attackCooldown = 0;   // brutes are 50% bigger than before
     this.solveZombie(z);   // don't appear inside a building
     z.targetId = ""; z.boss = boss;
@@ -785,6 +816,14 @@ export class SurvivalRoom extends Room {
           this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1));
         }
         if (hits.length) end = hits[hits.length - 1].t;
+        if (this.state.friendlyFire) {   // lobby setting: a bullet that crosses a teammate first hurts them (35%)
+          const dx = Math.cos(a), dy = Math.sin(a); let ff = null, ft = end;
+          for (const q of this.state.players.values()) {
+            if (q === p || !q.alive) continue; const vx = q.x - p.x, vy = q.y - p.y, t = vx * dx + vy * dy;
+            if (t > 0 && t < ft && Math.abs(vx * dy - vy * dx) <= BODY_R + 2) { ff = q; ft = t; }
+          }
+          if (ff) { const dealt = Math.max(1, Math.round(p.damage * (w.pelletMult || 1) * FRIENDLY_FIRE - ff.defence)); ff.hp -= dealt; ff.damageTaken += dealt; if (ff.hp <= 0) this.downPlayer(ff); end = ft; }
+        }
       }
       tracers.push(Math.round(end));
     }
@@ -2357,7 +2396,7 @@ export class SurvivalRoom extends Room {
       killer.hp = Math.min(killer.maxHp, killer.hp + (z.boss ? 25 : 1));
     }
     this.state.totalKills++;
-    if(Math.random()<(z.boss?1:.28)){const item=new LootState();item.id=`l${++this.lootSequence}`;const roll=Math.random();item.kind=z.boss||roll>.92?"weapon":roll<.25?"ammo":roll<.48?"medkit":roll<.72?"scrap":"gold";item.x=z.x;item.y=z.y;item.amount=item.kind==="medkit"?35:item.kind==="ammo"?60:item.kind==="gold"?15:item.kind==="scrap"?8:0;item.rarity=z.boss?"Legendary":roll>.97?"Epic":roll>.9?"Rare":"Common";this.state.loot.set(item.id,item);}
+    if(Math.random()<(z.boss?1:this.state.extraLoot?.45:.28)){const item=new LootState();item.id=`l${++this.lootSequence}`;const roll=Math.random();item.kind=z.boss||roll>.92?"weapon":roll<.25?"ammo":roll<.48?"medkit":roll<.72?"scrap":"gold";item.x=z.x;item.y=z.y;item.amount=item.kind==="medkit"?35:item.kind==="ammo"?60:item.kind==="gold"?15:item.kind==="scrap"?8:0;item.rarity=z.boss?"Legendary":roll>.97?"Epic":roll>.9?"Rare":"Common";this.state.loot.set(item.id,item);}
     this.state.scrap += z.boss ? 35 : 2; if (Math.random()<0.12) this.state.electronics += 1; if (Math.random()<0.08) this.state.fuel += 1;
     if (z.boss) {
       this.state.bossDead = true; this.state.bossPhase = "";
@@ -2403,8 +2442,8 @@ export class SurvivalRoom extends Room {
     if (this.state.phase !== "playing") return;
     if (this.bossOverAt && now >= this.bossOverAt) {   // boss died a few seconds ago: wave over
       this.bossOverAt = 0; this.state.zombies.clear(); this.state.puddles.clear(); this.spits = [];
-      this.state.phase = this.state.stage === 50 ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
-      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
+      this.state.phase = this.state.stage === 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.message = this.state.stage === 50 && this.state.waveMode !== "ascension" ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
       return;
     }
     const guard = this.vehicleGuard(now);
@@ -2551,7 +2590,7 @@ export class SurvivalRoom extends Room {
     const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
     if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }
     if (this.state.elapsed >= 90 && !hiveAlive && this.state.waveType === "normal" && this.state.phase === "playing") {
-      this.state.phase = this.state.stage >= 50 ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.phase = this.state.stage >= 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
       this.state.message = `Wave ${this.state.stage} survived! Host can launch the next wave.`;
     }
     if ([...this.state.players.values()].every(p=>!p.alive) && this.state.players.size>0 && this.state.phase==="playing") {

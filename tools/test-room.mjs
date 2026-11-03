@@ -647,7 +647,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 // 33. SOFEA (operator): E = tank 30s (cannon + run-over), Q = helicopter 30s (rockets), then cooldowns
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
-  room.state.phase = "lobby"; p.characterClass = "operator"; send(A, "chooseClass", { id: "operator" }); room.state.phase = "playing";
+  room.state.phase = "lobby"; room.allowAllClasses = true; p.characterClass = "operator"; send(A, "chooseClass", { id: "operator" }); room.state.phase = "playing";
   ok(p.characterClass === "operator" && p.maxHp === 115 && p.speed === 180, "Sofea: 115 HP, speed 180");
   p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
   send(A, "ability", { a: 0 }); const v = room.state.vehicles.get("A");
@@ -737,7 +737,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
 // 37. ARSHAN (slasher): chain-axe, Reaper's Reach (E: hook + self-pull), Crimson Cyclone (Q: 260px spin, 12s)
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   const fast = n => { for (let i = 0; i < n; i++) { const h = room.hooks.get("A"); if (h) h.t0 -= 50; tick(1); } };   // hook timers use real time: wind them on with the fake ticks
-  room.state.phase = "lobby"; send(A, "chooseClass", { id: "slasher" }); send(A, "start", {}); room.state.phase = "playing";
+  room.state.phase = "lobby"; room.allowAllClasses = true; send(A, "chooseClass", { id: "slasher" }); send(A, "start", {}); room.state.phase = "playing";
   ok(p.maxHp === 135 && p.melee === "chainaxe" && p.activeSlot === 1 && !p.primary, "Arshan: 135 HP, chain-axe only");
   p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
   const zs = [0, 1, 2, 3, 4].map(i => placeZombie(room, p.x + 100 + i * 8, p.y - 40 + i * 20, 500));
@@ -808,5 +808,25 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // no room: boss in the way -> refused, no cooldown
   const m = room.amemOf(p); m.safeReady = 0; room.state.zombies.clear(); const boss = placeZombie(room, p.x + 60, p.y, 1e5); boss.boss = true; boss.radius = 40;
   send(A, "skill2", {}); call(); ok(!room.safeOf(p) && m.safeReady === 0, "R with a boss in the way: refused, no cooldown used");
+  room._dispose(); }
+// 39. LOBBY: rename, READY UP, mission settings (host only): map site, difficulty, wave mode, friendly fire, extra loot; Sofea not pickable
+{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; const events = []; room._onBroadcast = (t, m) => events.push({ type: t, ...m });
+  const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Host" }); room.onJoin(B, { name: "Friend" });
+  const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
+  ok(p.ready && !q.ready, "host counts as ready, a new player starts NOT READY");
+  send(B, "ready", {}); ok(q.ready, "READY UP toggles"); send(B, "ready", {}); ok(!q.ready, "...and back");
+  send(B, "setName", { name: "Gemma<>" }); ok(q.name === "Gemma", "players can rename themselves in the lobby (cleaned)");
+  const lay0 = room.state.mapLayout; send(B, "settings", { map: 1, difficulty: "hard" }); ok(room.state.mapSite === 0 && room.state.difficulty === "normal", "only the host can change mission settings");
+  send(A, "settings", { map: 1, difficulty: "hard", waveMode: "ascension", friendlyFire: true, extraLoot: true });
+  ok(room.state.mapSite === 1 && room.state.mapLayout !== lay0 && room.mapGrid.size > 0, "host picks Site 02: a different map layout");
+  ok(room.state.difficulty === "hard" && room.state.waveMode === "ascension" && room.state.friendlyFire && room.state.extraLoot, "difficulty / wave mode / friendly fire / extra loot saved");
+  send(A, "settings", { difficulty: "nightmare" }); ok(room.state.difficulty === "hard", "...bad values are ignored");
+  send(A, "chooseClass", { id: "operator" }); ok(p.characterClass !== "operator", "Sofea can't be picked any more");
+  for (let i = 0; i < 6; i++) send(A, "addBot", {}); ok(![...room.state.players.values()].some(b => b.isBot && (b.characterClass === "operator" || b.characterClass === "slasher")) && [...room.state.players.values()].filter(b => b.isBot).every(b => b.ready), "bots never pick Sofea/Arshan and are always ready");
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); ok(Math.abs(z.maxHp - 38 * 1.35) < .5, `hard: zombies have +35% HP (${z.maxHp.toFixed(1)})`);
+  p.x = 1000; p.y = 1000; q.x = 1100; q.y = 1000; q.alive = true; const hq = q.hp; p.activeSlot = 2; p.weapon = "rifle"; p.mag = 30; p.reloadLeft = 0; p.lastShot = 0; p.stunned = 0;
+  room.fireWeapon(p, 0, 100); ok(q.hp < hq, `friendly fire: a bullet through a teammate hurts them (${Math.round(hq - q.hp)} dmg)`);
+  room.state.stage = 50; room.state.phase = "playing"; room.state.waveType = "normal"; room.state.elapsed = 95; room.hiveSpawned = true; room.lastTick = Date.now() - 50; room.tick(); ok(room.state.phase === "cleared", "Ascension (∞): wave 50 doesn't end the game");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

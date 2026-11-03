@@ -56,7 +56,7 @@ const BUILD_RANGE = 160;
 
 // ===================== SCREENS & CONNECTION =====================
 function status(text, good = false) { $("connection").textContent = text; $("connection").style.borderColor = good ? "#4d9c68" : "#8a6852"; }
-function message(text) { $("lobbyMessage").textContent = text; }
+function message(text) { toast(text); }
 function showOverlay(title, text) {
   $("shop").classList.add("hidden"); $("overlay").classList.remove("hidden");
   $("overlayTitle").textContent = title; $("overlayText").textContent = text;
@@ -92,8 +92,7 @@ async function joinRoom() {
 }
 function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
-  $("invite").classList.remove("hidden"); $("codeDisplay").textContent = room.roomId; $("roomCount").textContent = "Room connected";
-  message("Connected. Share the invitation code with your friends.");
+  toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); renderState(); } catch (e) { reportError(e, "ui"); } });
   room.onMessage("shot", m => { fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
@@ -124,16 +123,13 @@ function connected() {
   room.onMessage("boom", m => { if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
-    status("Disconnected"); message("You left the room (" + code + ")."); room = null; state = null;
+    status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
     document.body.classList.remove("in-match"); closePanels(); $("gameArea").classList.add("hidden");
   });
   room.onError((code, msg) => message("Room error: " + msg));
 }
 document.addEventListener("click", e => { const b = e.target.closest?.("button"); if (b) b.blur(); });
 $("create").onclick = createRoom; $("join").onclick = joinRoom;
-$("copy").onclick = async () => { try { await navigator.clipboard.writeText(room.roomId); $("copy").textContent = "Copied!"; } catch { $("copy").textContent = "Code: " + room.roomId; } };
-$("startGame").onclick = () => room?.send("start");
-$("exploreGame").onclick = () => room?.send("start", { explore: true });
 // ---------- Boss intro card ----------
 const BOSS_INFO = {
   butcher: { wave: 4, portrait: "assets/portraits/butcher.webp", name: "THE BUTCHER",
@@ -177,20 +173,10 @@ function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (
 $("waveJumpGo").onclick = jumpToWave;
 $("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
-$("addBot").onclick = () => room?.send("addBot"); $("removeBot").onclick = () => room?.send("removeBot");
 $("nextStage").onclick = () => room?.send("nextStage"); $("restartGame").onclick = () => room?.send("restart");
 $("resume").onclick = () => closePanels();
 $("leave").onclick = () => { closePanels(); room?.leave(); };
 $("lvlBadge").onclick = () => togglePanel("levelUp");
-function setSelectedClass(id, send = true) {
-  selectedClass = id;
-  document.querySelectorAll(".character-card[data-class]").forEach(card => card.classList.toggle("selected", card.dataset.class === id));
-  const card = document.querySelector(`.character-card[data-class="${id}"]`);
-  $("classSelectionStatus").textContent = (card?.querySelector(".character-role")?.textContent || id).toUpperCase() + " SELECTED";
-  if (send && room) room.send("chooseClass", { id });
-}
-document.querySelectorAll(".character-card[data-class]").forEach(card => card.addEventListener("click", () => setSelectedClass(card.dataset.class, true)));
-setSelectedClass(selectedClass, false);
 
 // ===================== RENDER (runs on every server update, ~20x a second) =====================
 const feed = []; let lastMessage = "";
@@ -200,13 +186,7 @@ function renderState() {
   const players = [...state.players.values()], me = state.players.get(myId), host = state.hostId === myId;
   saveProfile(me);
   if (me?.characterClass && me.characterClass !== selectedClass) setSelectedClass(me.characterClass, false);
-  // lobby screen
-  $("lobbyPlayers").innerHTML = players.map(p => `<span class="pill">${p.isBot ? "🤖 " : ""}${escapeHtml(p.name)} ${p.isHost ? "★" : ""}</span>`).join("");
-  $("botControls").classList.toggle("hidden", !host || state.phase !== "lobby");
-  $("addBot").disabled = players.length >= 8; $("removeBot").disabled = !players.some(p => p.isBot);
-  $("roomCount").textContent = players.length + " / 8 survivors";
-  $("startGame").classList.toggle("hidden", !host || state.phase !== "lobby");
-  $("exploreGame").classList.toggle("hidden", !host || state.phase !== "lobby");
+  renderLobbyRoom();
   $("exploreToggle").classList.toggle("hidden", !host || state.phase !== "playing");
   $("waveJump").classList.toggle("hidden", !SOLO_PREVIEW || state.phase === "lobby");
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
@@ -323,7 +303,7 @@ function renderHotbar(me) {
   if (hb !== hotbarHtml) { $("hotbar").innerHTML = hb; hotbarHtml = hb; }
   const dashLeft = Math.max(0, dashReadyAt - performance.now()) / 1000;
   $("dashChip").textContent = dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"; $("dashChip").classList.toggle("ready", dashLeft <= 0);
-  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press T" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
+  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press C" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
 }
 
 function renderScoreboard(players) {
@@ -454,7 +434,7 @@ function aimAngle(me) { const v = V(me); return Math.atan2(mouse.y - v.y, mouse.
 function aimDist(me) { const v = V(me); return Math.round(Math.hypot(mouse.y - v.y, mouse.x - v.x)); }   // rockets fly to the mouse
 let mouse = { x: W / 2, y: H / 2, sx: W / 2, sy: H / 2 };
 const fx = [];
-let audioContext = null, ambientGain = null, ambientOn = false;
+let audioContext = null, ambientGain = null, ambientOn = false, sfxOn = true;
 // Sound effects (Web Audio). The browser only allows sound after the first click/key, so the context starts then.
 const SFX = { turret: { url: "assets/sfx/turret-shoot.mp3", vol: .45 } };
 function sfxContext() {
@@ -471,7 +451,7 @@ function playSfx(name, x, y) {
   if (!s.buf) { if (s.raw && !s.decoding) { s.decoding = true; ac.decodeAudioData(s.raw.slice(0)).then(b => { s.buf = b; }).catch(() => {}); } return; }
   const me = V(me_()); let vol = s.vol;
   if (me && Number.isFinite(x)) { const d = Math.hypot(x - me.x, y - me.y); vol *= Math.max(0, 1 - d / 900); if (vol < .02) return; }   // quieter far away
-  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = s.buf; g.gain.value = vol; src.connect(g); g.connect(ac.destination); src.start();
+  if (!sfxOn) return; const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = s.buf; g.gain.value = vol; src.connect(g); g.connect(ac.destination); src.start();
   return s.buf.duration;
 }
 addEventListener("pointerdown", sfxContext, { once: true }); addEventListener("keydown", sfxContext, { once: true });
@@ -545,8 +525,8 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me) }); } }
-  else if (k === "r") { if (me_()?.characterClass === "dispatcher") room.send("skill2"); else room.send("reload"); }   // Astra: R = Safehouse (he reloads with T)
-  else if (k === "t") room.send("reload");
+  else if (k === "r") { if (me_()?.characterClass === "dispatcher") room.send("skill2"); else room.send("reload"); }   // Astra: R = Safehouse (he reloads with C)
+  else if (k === "c" && me_()?.characterClass === "dispatcher") room.send("reload");   // Astra reloads with C (his R is the Safehouse)
   else if (k === "f") tryRevive();
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
@@ -2210,3 +2190,228 @@ function frame(t){
   } catch (e) { if (saved) ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
 }
 requestAnimationFrame(frame);
+// ===================== LOBBY / CHARACTER SELECT SCREEN =====================
+// Roster: who you can pick (Sofea was removed; Arshan shows as the locked "???" tile until he's ready).
+const ROSTER = [
+  { id: "assault", name: "MARCUS", role: "ASSAULT", cat: "assault", hp: 110, dmg: 17, spd: 190, def: 0, desc: "Balanced frontline fighter. Fast rifle fire and a damage rush when the horde closes in.",
+    skills: [{ k: "E", n: "Combat Rush", cd: 25, t: "+50% damage for 6 seconds." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
+    skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
+             { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." },
+             { k: "PASSIVE", n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too." }], gear: ["shotgun", "pistol", "knife"] },
+  { id: "medic", name: "ELENA", role: "MEDIC", cat: "support", hp: 105, dmg: 15, spd: 185, def: 1, desc: "Keeps the squad alive. Patches up everyone nearby in one burst.",
+    skills: [{ k: "E", n: "Team Heal", cd: 35, t: "Heals every teammate within 190px for 45 HP." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
+    skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
+             { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "scout", name: "RAVEN", role: "SCOUT", cat: "assault", hp: 90, dmg: 15, spd: 225, def: 0, desc: "Katana only. Dashes through the horde, vanishes, then strikes with a burning blade.",
+    skills: [{ k: "E", n: "Shadow Pass", card: "shadowPass", cd: 25, t: "Dash through zombies and vanish. Your next attack ignites the katana." },
+             { k: "Q", n: "Blade Storm", card: "bladeStorm", cd: 60, t: "A whirlwind of katana slashes around you." }], gear: ["katana"] },
+  { id: "demolitionist", name: "DANTE", role: "DEMOLITIONIST", cat: "assault", hp: 105, dmg: 18, spd: 175, def: 0, desc: "If it's standing, it's a target. Rockets land wherever you click.",
+    skills: [{ k: "E", n: "Sky Barrage", card: "skyBarrage", cd: 8, t: "3 rockets up, 3 down around your mouse." },
+             { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }], gear: ["launcher", "pistol", "knife"] },
+  { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
+    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "A huge shot at the nearest zombie in sight." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "commander", name: "HAYES", role: "COMMANDER", cat: "support", hp: 115, dmg: 15, spd: 180, def: 1, desc: "Veteran leader. Hardens the squad so they can hold the line.",
+    skills: [{ k: "E", n: "Rally", cd: 40, t: "+4 defence for teammates within 220px for 8 seconds." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
+    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "3 doctors for 20s, each healing a different teammate at 25 HP/s." },
+             { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "7 armed officers fight beside you for 30s." },
+             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 2s. Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
+];
+const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
+const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
+const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
+const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, heroImgs: {}, toastAt: 0 };
+const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
+const heroDef = () => rosterOf(selectedClass);
+const setHtml = (id, html) => { const el = $(id); if (el._h !== html) { el._h = html; el.innerHTML = html; } };   // only touch the DOM when something changed (state updates ~20x/s)
+const portraitUrl = id => `assets/portraits/${id}.webp`;
+function toast(text) { const t = $("lobbyMessage"); t.textContent = text; t.classList.add("show"); ls.toastAt = Date.now(); setTimeout(() => { if (Date.now() - ls.toastAt >= 2900) t.classList.remove("show"); }, 3000); }
+function inviteText() { const code = room?.roomId || ""; let url = location.origin + location.pathname; if (/^https?:/.test(url)) url += "?room=" + encodeURIComponent(code); else url = ""; return { code, url }; }
+async function copyText(text, done) { try { await navigator.clipboard.writeText(text); toast(done); } catch { toast(text); } }
+
+function setSelectedClass(id, send = true) {
+  if (!ROSTER.some(r => r.id === id)) id = "assault";
+  selectedClass = id; renderRoster(); renderHero(); renderSide();
+  if (send && room) room.send("chooseClass", { id });
+}
+function renderRoster() {
+  const list = ROSTER.filter(r => ls.cat === "all" || r.cat === ls.cat);
+  $("characterGrid").innerHTML = list.map(r => `<button class="ls-tile p-${r.id}${r.id === selectedClass ? " on" : ""}${r.isNew ? " new" : ""}" data-class="${r.id}" aria-pressed="${r.id === selectedClass}"><b>${r.name}</b><small>${r.role}</small></button>`).join("")
+    + (ls.cat === "all" ? `<div class="ls-tile lock" title="Next survivor: coming soon"><span>🔒</span><b>???</b><small>&nbsp;</small></div>` : "");
+}
+function bars(v, lo, hi) { const n = Math.max(1, Math.min(5, Math.round(1 + (v - lo) / (hi - lo) * 4))); return `<span class="ls-bar">${[0, 1, 2, 3, 4].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`; }
+function renderHero() {
+  const r = heroDef();
+  $("heroName").textContent = r.name; $("heroRole").textContent = r.role; $("heroDesc").textContent = r.desc;
+  $("heroStats").innerHTML = [["HP", r.hp, 90, 160, '<path d="M12 21s-8-5-8-11a4.5 4.5 0 0 1 8-2.7A4.5 4.5 0 0 1 20 10c0 6-8 11-8 11Z"/>'], ["DMG", r.dmg, 14, 21, '<path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/>'], ["SPD", r.spd, 150, 225, '<path d="M13 4 4 14h7l-1 6 9-10h-7z"/>'], ["DEF", r.def, 0, 5, '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>']]
+    .map(([k, v, lo, hi, ic]) => `<div class="ls-stat" title="${k} ${v}"><svg viewBox="0 0 24 24">${ic}</svg><span>${k}</span>${bars(v, lo, hi)}</div>`).join("");
+  // hero art: assets/hero/<class>.webp when it exists (ChatGPT splash art), else the animated in-game sprite
+  const art = $("heroArt"), known = ls.heroImgs[r.id];
+  if (known === false || !known) { art.hidden = true; $("heroSprite").hidden = false; }
+  if (known === undefined) { const im = new Image(); im.onload = () => { ls.heroImgs[r.id] = im.src; if (selectedClass === r.id) renderHero(); }; im.onerror = () => { ls.heroImgs[r.id] = false; }; im.src = `assets/hero/${r.id}.webp`; }
+  else if (known) { art.src = known; art.hidden = false; $("heroSprite").hidden = true; }
+}
+function skillIcon(s, r) { return s.card ? `<div class="icon card-${s.card}"></div>` : `<div class="icon"><svg viewBox="0 0 24 24">${ROLE_ICON[r.cat]}</svg></div>`; }
+function gearIcon(id) { return `<span class="gi">${icon(id === "katana" ? "katana" : id) || ""}</span>`; }
+function renderSide() {
+  const r = heroDef(); document.querySelectorAll(".ls-tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === ls.tab));
+  const clock = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+  if (ls.tab === "abilities") {
+    const rows = r.skills.map(s => `<div class="ls-ab">${skillIcon(s, r)}<div><div class="t"><span class="k">${s.k}</span><span class="n">${s.n.toUpperCase()}</span>${s.cd ? `<span class="cd">${clock}${s.cd}s</span>` : ""}</div><p>${s.t}</p></div></div>`);
+    if (!r.skills.some(s => s.k === "Q")) rows.push(`<div class="ls-ab" style="opacity:.55"><div class="icon"><svg viewBox="0 0 24 24"><path d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z"/></svg></div><div><div class="t"><span class="k">Q</span><span class="n">ULTIMATE</span></div><p>Coming soon.</p></div></div>`);
+    $("sideBody").innerHTML = rows.join("");
+  } else if (ls.tab === "gear") {
+    $("sideBody").innerHTML = r.gear.map(g => `<div class="ls-gear">${gearIcon(g) || '<span class="gi"></span>'}<div><b>${(WEAPON_INFO[g]?.name || MELEE_INFO[g]?.name || g).toUpperCase()}</b><small>${GEAR[g] || ""}</small></div></div>`).join("")
+      + `<div class="ls-gear">${gearIcon("medkit")}<div><b>MEDKIT ×1</b><small>Press 4 to heal. More drop from zombies.</small></div></div><p style="margin:4px 2px;color:var(--mut);font-size:12px">More guns and melee weapons in the shop between waves.</p>`;
+  } else {
+    $("sideBody").innerHTML = `<div class="ls-skins"><div class="ls-skin on p-${r.id}">DEFAULT</div><div class="ls-skin locked p-${r.id}">BATTLE-WORN</div><div class="ls-skin locked p-${r.id}">NIGHT OPS</div><div class="ls-skin locked p-${r.id}">INFERNO</div></div><p style="margin:4px 2px;color:var(--mut);font-size:12px">New skins coming soon.</p>`;
+  }
+}
+function renderPages() {
+  const me = room && state?.players?.get(myId), r = heroDef();
+  $("loadoutPage").innerHTML = `<h2>LOADOUT · ${r.name}</h2><p>What ${r.name[0] + r.name.slice(1).toLowerCase()} starts every match with. Buy more in the shop between waves (gold drops from zombies).</p>
+    <h4>STARTING GEAR</h4><div class="ls-grid">${r.gear.map(g => `<div class="ls-gear">${gearIcon(g) || '<span class="gi"></span>'}<div><b>${(WEAPON_INFO[g]?.name || MELEE_INFO[g]?.name || g).toUpperCase()}</b><small>${GEAR[g] || ""}</small></div></div>`).join("")}</div>
+    <h4>ALL GUNS</h4><div style="overflow-x:auto"><table class="ls-wtable"><tr><th>GUN</th><th>MAGAZINE</th><th>RELOAD</th><th>FIRE</th></tr>${Object.entries(WEAPON_INFO).map(([k, w]) => `<tr class="${r.gear.includes(k) ? "mine" : ""}"><td>${w.name}</td><td>${w.infinite ? "∞" : w.mag}</td><td>${w.reload}s</td><td>${w.auto ? "full auto" : "single"}</td></tr>`).join("")}</table></div>
+    <h4>MELEE</h4><div class="ls-grid">${Object.entries(MELEE_INFO).map(([k, m]) => `<div class="ls-gear">${gearIcon(k)}<div><b>${m.name.toUpperCase()}</b><small>${GEAR[k] || ""} · ${m.cd}s per swing</small></div></div>`).join("")}</div>`;
+  $("skillsPage").innerHTML = `<h2>SKILLS</h2><p>Every operator's skills. E = skill, Q = ultimate (unlocks after 100 kills), R = Astra's third skill.</p><div class="ls-grid">${ROSTER.map(o => `<div class="ls-op"><div class="h"><i class="p-${o.id}"></i><div><b>${o.name}</b><small>${o.role}</small></div></div>${o.skills.map(s => `<div class="ls-ab" style="grid-template-columns:52px 1fr">${skillIcon(s, o).replace('class="icon"', 'class="icon" style="width:52px;height:52px"').replace('class="icon" style="background', 'class="icon" style="width:52px;height:52px;background')}<div><div class="t"><span class="k">${s.k}</span><span class="n" style="font-size:17px">${s.n.toUpperCase()}</span>${s.cd ? `<span class="cd">${s.cd}s</span>` : ""}</div><p>${s.t}</p></div></div>`).join("")}</div>`).join("")}</div>`;
+  $("manualPage").innerHTML = `<h2>FIELD MANUAL</h2>
+    <h4>OBJECTIVE</h4><p>Protect the radio tower in the middle of the map. If it falls, the team loses. Every 4th wave is a boss fight; the Hivemind mini boss shows up between them. Campaign mode ends with the final boss on wave 50; Ascension mode never ends.</p>
+    <h4>CONTROLS</h4><div class="ls-keys">${[["W A S D", "Walk"], ["Mouse", "Aim · hold left click to shoot"], ["1 / 2 / 3", "Melee / primary / secondary"], ["4", "Medkit"], ["E", "Skill"], ["Q", "Ultimate (after 100 kills)"], ["R", "Reload (Astra: Safehouse)"], ["Space", "Dash"], ["F", "Revive a downed teammate"], ["T", "Equipment"], ["Right click", "Build wheel (hold)"], ["U", "Level-up picker"], ["Tab", "Scoreboard"], ["Esc", "Menu"]].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join("")}</div>
+    <h4>TEAMWORK</h4><p>Stand next to a downed teammate and hold F for 5 seconds to revive them. If nobody gets there in time they sit out until the next wave. When you're down you can watch your teammates fight.</p>
+    <h4>BUILD & REPAIR</h4><p>Hold right click for the build wheel: barricades, turrets, mines, electric fences and flame traps. Turrets, fences and traps need the generator: keep it fuelled and repaired.</p>
+    <h4>LEVELLING & SHOP</h4><p>Kills give XP. Each level lets you pick an upgrade (press U). Between waves the shop opens: spend gold on guns, melee weapons and medkits.</p>`;
+}
+function setView(v) {
+  ls.view = v; document.querySelectorAll(".ls-nav button").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  document.querySelectorAll(".ls-view").forEach(s => s.hidden = s.dataset.view !== v);
+  if (v !== "lobby") renderPages();
+}
+// ---- room panel, mission settings, party, ready button (from the server state) ----
+function renderLobbyRoom() {
+  const inRoom = !!(room && state), players = inRoom ? [...state.players.values()] : [], host = inRoom && state.hostId === myId, me = inRoom ? state.players.get(myId) : null;
+  $("lsConnect").hidden = inRoom; $("lsRoom").hidden = !inRoom; $("ls").classList.toggle("guest", !host);
+  $("lsHostNote").textContent = !inRoom ? "create a room" : host ? "host" : "host only";
+  if (inRoom) {
+    $("codeDisplay").textContent = ls.hideCode ? "•".repeat(Math.min(9, room.roomId.length)) : room.roomId;
+    $("roomCount").textContent = `${players.length} / 8 PLAYERS`;
+    const rows = players.map(p => `<div class="ls-pl"><span class="cr">${p.isHost ? "♛" : ""}</span><i class="av p-${p.characterClass || "assault"}"></i><span class="nm">${escapeHtml(p.name)}${p.isBot ? "<small>AI</small>" : p.sessionId === myId ? "<small>YOU</small>" : ""}</span><span class="st${p.ready ? " ok" : ""}">${p.ready ? "READY" : "NOT READY"}<i class="dot">${p.ready ? "✓" : ""}</i>${host && !p.isHost ? `<button class="x" data-kick="${p.sessionId}" data-bot="${p.isBot ? 1 : ""}" title="Remove">×</button>` : ""}</span></div>`);
+    for (let i = players.length; i < 8; i++) rows.push(`<button class="ls-pl empty" data-invite="1" title="${host ? "Click to add an AI teammate (or use INVITE to bring friends)" : "Copy the invite link"}"><span class="plus">+</span><span>Invite player</span>${host ? "<small>+ AI</small>" : ""}</button>`);
+    setHtml("lobbyPlayers", rows.join(""));
+    setHtml("lsParty", players.map(p => { const o = rosterOf(p.characterClass); return `<div class="ls-pc${p.ready ? " ok" : ""}"><div class="top"><div class="av p-${o.id}"></div><div><b>${escapeHtml(p.name)}</b><small>${o.name}</small></div></div>${p.isHost ? '<span class="cr">♛</span>' : ""}${host && !p.isHost ? `<button class="x" data-kick="${p.sessionId}" data-bot="${p.isBot ? 1 : ""}" title="Remove">–</button>` : ""}<div class="rs">${p.ready ? "✓ READY" : "○ NOT READY"}</div></div>`; }).join(""));
+    const humans = players.filter(p => !p.isBot), readyN = humans.filter(p => p.ready).length, all = readyN === humans.length;
+    const btn = $("startGame"); btn.disabled = false; btn.classList.toggle("on", !host && !!me?.ready);
+    if (host) { $("readyLabel").textContent = all ? "START MISSION" : "START ANYWAY"; $("readySub").textContent = `${readyN} / ${humans.length} READY`; }
+    else { $("readyLabel").textContent = me?.ready ? "READY!" : "READY UP"; $("readySub").textContent = me?.ready ? "click to cancel · waiting for the host" : `${readyN} / ${humans.length} READY`; }
+    // mission settings
+    const site = state.mapSite || 0; $("mapName").textContent = SITE_NAMES[site][0]; $("mapSub").textContent = SITE_NAMES[site][1];
+    $("setDifficulty").textContent = (state.difficulty || "normal").toUpperCase();
+    $("setWaveMode").textContent = state.waveMode === "ascension" ? "ASCENSION (∞)" : "CAMPAIGN (50)";
+    $("setFriendlyFire").textContent = state.friendlyFire ? "ON" : "OFF"; $("setExtraLoot").textContent = state.extraLoot ? "ON" : "OFF";
+    $("setNoCd").checked = !!state.noCd;
+    if (ls.mapSrc !== state.mapLayout) { ls.mapSrc = state.mapLayout; drawMapThumb(); }
+  } else {
+    setHtml("lsParty", ""); $("readyLabel").textContent = "CREATE A ROOM"; $("readySub").textContent = "or join a friend's room"; $("startGame").classList.remove("on");
+  }
+}
+function drawMapThumb() {   // a little satellite view of the chosen map (from the layout the server sent)
+  const c = $("lsMapThumb"), g = c.getContext("2d"), W = c.width, H = c.height, WW = 3600, WH = 2280, s = W / WW, oy = (H - WH * s) / 2;
+  g.fillStyle = "#1b1f1a"; g.fillRect(0, 0, W, H);
+  const grad = g.createRadialGradient(W * .7, 0, 10, W * .7, 0, W); grad.addColorStop(0, "rgba(255,90,30,.25)"); grad.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#2c2f2c"; g.fillRect(0, oy + WH / 2 * s - 6, W, 12); g.fillRect(W / 2 - 7, 0, 14, H);
+  for (const r of (ls.mapSrc || "").split(";")) {
+    const [k, x, y] = r.split(",").map(Number), kind = MAP_KINDS[k]; if (!kind) continue;
+    const big = /building|ruin/.test(kind), tree = kind === "tree", car = /car|bus|police/i.test(kind);
+    g.fillStyle = big ? "#4a3f39" : tree ? "#2f4a2a" : car ? "#5a5a60" : "#3a3a36"; const z = big ? 14 : tree ? 6 : car ? 6 : 3;
+    g.fillRect(x * s - z / 2, oy + y * s - z / 2, z, z * (big ? .8 : 1));
+  }
+  g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(W / 2, oy + WH / 2 * s, 4, 0, 7); g.fill(); g.shadowBlur = 0;
+}
+// ---- animated hero sprite (until splash art exists) + embers ----
+let lsAnimOn = true;
+function lsFrame(t) {
+  requestAnimationFrame(lsFrame);
+  if (document.body.classList.contains("in-match")) return;
+  const r = heroDef(), c = $("heroSprite"), img = dir8[r.id];
+  if (!c.hidden && img?.naturalWidth) {
+    const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); g.imageSmoothingEnabled = false;
+    const col = lsAnimOn ? [0, 0, 1, 2, 3, 0][Math.floor(t / 380) % 6] : 0, row = 7, sc = 5;   // facing down-left, idle with a few steps
+    g.drawImage(img, col * D8.cellW, row * D8.cellH, D8.cellW, D8.cellH, c.width / 2 - D8.anchorX * sc, c.height - D8.feetY * sc - 6, D8.cellW * sc, D8.cellH * sc);
+  }
+  const e = $("lsEmbers"); if (!lsAnimOn) { if (e.width) { e.getContext("2d").clearRect(0, 0, e.width, e.height); } return; }
+  if (e.width !== innerWidth || e.height !== innerHeight) { e.width = innerWidth; e.height = innerHeight; }
+  const g = e.getContext("2d"); g.clearRect(0, 0, e.width, e.height); ls.embers = ls.embers || [];
+  while (ls.embers.length < 70) ls.embers.push({ x: Math.random() * e.width, y: e.height + Math.random() * e.height * .6, v: 20 + Math.random() * 50, s: 1 + Math.random() * 2.5, w: Math.random() * 6, a: .4 + Math.random() * .6 });
+  const dt = Math.min(.05, (t - (ls.last || t)) / 1000); ls.last = t;
+  g.globalCompositeOperation = "lighter";
+  for (const p of ls.embers) {
+    p.y -= p.v * dt; p.x += Math.sin(t / 900 + p.w) * 12 * dt;
+    if (p.y < -10) { p.y = e.height + 10; p.x = Math.random() * e.width; }
+    const k = Math.min(1, p.y / e.height + .2) * p.a; g.fillStyle = `rgba(255,${120 + (p.w * 20) | 0},40,${k})`; g.fillRect(p.x, p.y, p.s, p.s);
+  }
+  g.globalCompositeOperation = "source-over";
+}
+requestAnimationFrame(lsFrame);
+// mouse parallax: the hero and the scene lean a little toward the mouse
+addEventListener("pointermove", e => { if (!lsAnimOn || document.body.classList.contains("in-match")) return; const dx = e.clientX / innerWidth - .5, dy = e.clientY / innerHeight - .5;
+  $("lsHero").style.transform = `translate(${dx * -14}px,${dy * -8}px)`; $("lsScene").style.translate = `${dx * 18}px ${dy * 10}px`; });
+// background splash art (assets/hero/background.webp from ChatGPT) replaces the drawn skyline when it exists
+{ const im = new Image(); im.onload = () => { $("lsBgArt").src = im.src; $("lsBgArt").hidden = false; }; im.src = ["assets", "hero", "background.webp"].join("/"); }   // built at runtime: the file is optional (ChatGPT art)
+
+// ---- wiring ----
+document.querySelectorAll(".ls-nav button").forEach(b => b.onclick = () => setView(b.dataset.view));
+document.querySelectorAll(".ls-filters button").forEach(b => b.onclick = () => { ls.cat = b.dataset.cat; document.querySelectorAll(".ls-filters button").forEach(x => x.classList.toggle("on", x === b)); renderRoster(); });
+document.querySelectorAll(".ls-tabs button").forEach(b => b.onclick = () => { ls.tab = b.dataset.tab; renderSide(); });
+$("characterGrid").addEventListener("click", e => { const t = e.target.closest(".ls-tile[data-class]"); if (t) setSelectedClass(t.dataset.class, true); });
+$("rosterPrev").onclick = () => $("characterGrid").scrollBy({ left: -372 }); $("rosterNext").onclick = () => $("characterGrid").scrollBy({ left: 372 });
+addEventListener("keydown", e => {   // ← → pick the previous / next operator (lobby only, not while typing)
+  if (document.body.classList.contains("in-match") || ls.view !== "lobby" || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || "")) return;
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const list = ROSTER.filter(r => ls.cat === "all" || r.cat === ls.cat), i = list.findIndex(r => r.id === selectedClass), n = list[(i + (e.key === "ArrowRight" ? 1 : -1) + list.length) % list.length];
+  if (n) { setSelectedClass(n.id, true); document.querySelector(`.ls-tile[data-class="${n.id}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" }); }
+});
+$("copy").onclick = () => room && copyText(room.roomId, "Room code copied");
+$("lsEye").onclick = () => { ls.hideCode = !ls.hideCode; renderLobbyRoom(); };
+const invite = () => { if (!room) return toast("Create a room first, then invite your friends."); const { code, url } = inviteText(); copyText(url ? `Join my Survival Ascension squad! ${url}  (room code ${code})` : code, url ? "Invite link copied: paste it to your friends" : "Room code copied"); };
+$("lsInvite").onclick = invite; $("lsFriends").onclick = invite;
+$("lobbyPlayers").addEventListener("click", e => {
+  const k = e.target.closest("[data-kick]"); if (k) { room?.send(k.dataset.bot ? "removeBot" : "kick", { id: k.dataset.kick }); return; }
+  if (e.target.closest("[data-invite]")) { if (room && state?.hostId === myId) { room.send("addBot"); toast("AI teammate added"); } else invite(); }
+});
+$("lsParty").addEventListener("click", e => { const k = e.target.closest("[data-kick]"); if (k) room?.send(k.dataset.bot ? "removeBot" : "kick", { id: k.dataset.kick }); });
+$("lsRename").onclick = () => {
+  const cur = room && state ? state.players.get(myId)?.name : $("name").value;
+  if (!room) { $("name").focus(); $("name").select(); return; }
+  const box = document.createElement("input"); box.maxLength = 18; box.value = cur || ""; box.className = "ls-renamebox"; box.style.cssText = "position:absolute;left:14px;right:14px;top:46px;z-index:3";
+  const panel = $("lsRename").closest(".ls-panel"); panel.style.position = "relative"; panel.appendChild(box); box.focus(); box.select();
+  const done = ok => { if (ok && box.value.trim()) { room.send("setName", { name: box.value.trim() }); $("name").value = box.value.trim(); } box.remove(); };
+  box.onkeydown = e => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }; box.onblur = () => done(true);
+};
+const sendSettings = d => { if (room && state?.hostId === myId) room.send("settings", d); };
+$("mapPrev").onclick = () => sendSettings({ map: ((state?.mapSite || 0) + SITE_NAMES.length - 1) % SITE_NAMES.length });
+$("mapNext").onclick = () => sendSettings({ map: ((state?.mapSite || 0) + 1) % SITE_NAMES.length });
+document.querySelectorAll(".ls-set").forEach(b => b.onclick = () => {
+  if (!room) return toast("Create a room first."); if (state?.hostId !== myId) return toast("Only the host can change the mission settings.");
+  const k = b.dataset.set;
+  if (SETTING_OPTS[k]) { const o = SETTING_OPTS[k], cur = state[k] || o[0]; sendSettings({ [k]: o[(o.indexOf(cur) + 1) % o.length] }); }
+  else sendSettings({ [k]: !state[k] });
+});
+$("startGame").onclick = () => {
+  if (!room) { $("name").focus(); return toast("Type your name, then CREATE ROOM (or join with a code)."); }
+  if (state?.hostId === myId) room.send("start"); else room.send("ready");
+};
+$("exploreGame").onclick = () => { if (room && state?.hostId === myId) room.send("start", { explore: true }); };
+$("lsSettingsBtn").onclick = () => { $("lsSettings").hidden = !$("lsSettings").hidden; $("lsConfirm").hidden = true; };
+$("lsLeave").onclick = () => { if (!room) return toast("You're not in a room."); $("lsConfirm").hidden = false; $("lsSettings").hidden = true; };
+$("lsLeaveNo").onclick = () => { $("lsConfirm").hidden = true; }; $("lsLeaveYes").onclick = () => { $("lsConfirm").hidden = true; room?.leave(); };
+document.addEventListener("pointerdown", e => { if (!e.target.closest(".ls-pop,.ls-icons")) { $("lsSettings").hidden = true; $("lsConfirm").hidden = true; } });
+$("setNoCd").onchange = () => room?.send("testNoCd");
+$("setSfx").onchange = () => { sfxOn = $("setSfx").checked; savePrefs(); };
+$("setAmbient").onchange = () => { if ($("setAmbient").checked !== ambientOn) toggleAmbient(); };
+$("setMotion").onchange = () => { lsAnimOn = $("setMotion").checked; $("ls").classList.toggle("still", !lsAnimOn); savePrefs(); };
+function savePrefs() { try { localStorage.setItem("sa-prefs", JSON.stringify({ sfx: sfxOn, motion: lsAnimOn })); } catch {} }
+try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
+{ const q = new URLSearchParams(location.search).get("room"); if (q) { $("roomCode").value = q; toast("Type your name and press JOIN to enter your friend's room."); } }   // invite links
+setSelectedClass(selectedClass, false); renderLobbyRoom(); drawMapThumb();

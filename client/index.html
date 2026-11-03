@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Survival Ascension — Online Co-op</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow:wght@500;600;700&display=swap">
 <style>
 :root{color-scheme:dark;font-family:Inter,system-ui,Arial,sans-serif;background:#101914;color:#e8eee8}*{box-sizing:border-box}body{margin:0;padding:18px;background:radial-gradient(ellipse at top,#24372b,#101914 65%);min-height:100vh}.wrap{max-width:1100px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.muted{color:#a9b8aa}.tag{font-size:11px;letter-spacing:.15em;color:#a8d5a7}.brand{font-size:clamp(22px,4vw,32px);font-weight:950;letter-spacing:.08em}.card{background:#18251e;border:1px solid #35483a;border-radius:14px;padding:14px;margin:12px 0}.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.row>*{flex:1}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.stat{background:#1c2b22;border:1px solid #35483a;padding:10px;border-radius:10px;min-width:0}.stat small{display:block;color:#a9b8aa;font-size:10px}.stat b{font-size:18px}.button,input{border:1px solid #50634f;background:#24352a;color:#f1f5ef;padding:11px 13px;border-radius:9px;font:inherit}.button{cursor:pointer;font-weight:750}.button.primary{background:#397c50;border-color:#397c50}.button:disabled{opacity:.4;cursor:not-allowed}input{min-width:0;width:100%}canvas{display:block;width:100%;height:auto;background:#142119;border:1px solid #405443;border-radius:12px;touch-action:none}.game{position:relative}.scoreboard{position:absolute;top:12px;right:12px;z-index:4;max-width:min(360px,48%);background:#101aeee8;border:1px solid #d6b85c;border-radius:10px;padding:10px;color:#f4f0dc;font-size:12px;max-height:70%;overflow:auto}.scoreboard h3{margin:0 0 7px;color:#f4d36a}.scoreboard table{width:100%;border-collapse:collapse}.scoreboard td,.scoreboard th{padding:4px 6px;text-align:left;border-bottom:1px solid #ffffff20}.scoreboard .leader{color:#ffdf65;font-weight:900}.scorehint{font-size:11px;color:#b8c9b7;margin-top:6px}.minimap{position:absolute;left:12px;bottom:12px;width:180px;height:114px;border:1px solid #8fa28d;border-radius:8px;background:#07100bd9;z-index:3}details.guide{background:#18251e;border:1px solid #35483a;border-radius:12px;padding:12px;margin:12px 0}details.guide summary{cursor:pointer;font-weight:850;color:#d9e8d5}details.guide p,details.guide li{font-size:12px;color:#b9c8b9;line-height:1.55}.overlay{position:absolute;inset:0;background:#07100be9;border-radius:12px;display:flex;align-items:center;justify-content:center;padding:16px}.modal{max-width:480px;width:100%;background:#1a2a20;border:1px solid #526653;border-radius:14px;padding:22px;text-align:center}.hidden{display:none!important}.playerlist{display:flex;gap:8px;flex-wrap:wrap}.pill{background:#26392c;border:1px solid #415641;border-radius:99px;padding:6px 10px;font-size:12px}.bar{height:8px;background:#344438;border-radius:20px;overflow:hidden}.bar span{display:block;height:100%;background:#58ce8b}.upgrade{width:100%;text-align:left;margin:5px 0;background:#24352a}.notice{min-height:22px;font-size:13px;color:#b8c9b7}.footer{font-size:12px;color:#9eae9e;line-height:1.6}@media(max-width:600px){body{padding:10px}.stats{grid-template-columns:repeat(3,1fr)}.stat b{font-size:15px}}
 
@@ -207,44 +209,250 @@ button.bag-slot.sel{border-color:#f28b36;background:#2c2219;box-shadow:inset 0 0
 .hud-portrait{width:64px;height:64px;flex:0 0 64px;border:2px solid #f28b36;background-color:#111;background-position:center 25%;background-size:cover;background-repeat:no-repeat;image-rendering:pixelated;box-shadow:0 4px 14px #000a}
 .hud-me-stats{flex:1;min-width:0;display:grid;gap:3px}
 .ammo-row{display:flex;gap:12px;align-items:center}.dash-chip{font:700 10px ui-monospace,Menlo,monospace;color:#9aa8ad;letter-spacing:.06em;font-variant-numeric:tabular-nums}.dash-chip.ready{color:#7fd39a}
+
+/* ===== LOBBY / CHARACTER SELECT (full screen, matches the mockup) ===== */
+body.in-match #ls{display:none}
+.ls{--o:#ff7a1a;--o2:#ffb347;--ink:#f3eee9;--mut:#a59a92;--pan:rgba(14,13,14,.86);--line:rgba(255,140,60,.22);--line2:#3b302b;--ok:#3ccf6a;
+ position:fixed;inset:0;z-index:30;display:grid;grid-template-columns:minmax(300px,350px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:14px 18px;
+ padding:12px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));overflow:auto;color:var(--ink);font-family:"Barlow",Inter,system-ui,sans-serif;--cond:"Barlow Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif;background:#070606}
+.ls svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ls button{font:inherit;color:inherit;cursor:pointer}
+.ls [hidden]{display:none!important}
+.ls-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.ls-scene{position:absolute;inset:-4%;animation:lsDrift 38s ease-in-out infinite alternate;will-change:transform}
+.ls .ls-skyline,.ls .ls-bgart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;stroke:none}
+.ls-beacon{animation:lsBlink 1.6s steps(2) infinite}
+.ls-fire{position:absolute;inset:auto 0 0 0;height:55%;background:radial-gradient(ellipse 60% 70% at 70% 100%,rgba(255,90,20,.35),transparent 70%),radial-gradient(ellipse 40% 50% at 15% 100%,rgba(255,60,10,.22),transparent 70%);animation:lsFlicker 3.2s infinite;mix-blend-mode:screen}
+.ls-fog{position:absolute;inset:-20% -40%;background:radial-gradient(ellipse 30% 18% at 30% 70%,rgba(120,60,50,.25),transparent 70%),radial-gradient(ellipse 25% 15% at 70% 40%,rgba(90,40,35,.22),transparent 70%);filter:blur(18px)}
+.ls-fog1{animation:lsFog 46s linear infinite}.ls-fog2{animation:lsFog 70s linear infinite reverse;opacity:.7;top:10%}
+.ls-embers{position:absolute;inset:0;width:100%;height:100%}
+.ls-vignette{position:absolute;inset:0;background:radial-gradient(ellipse 85% 80% at 60% 40%,transparent 45%,rgba(0,0,0,.6)),linear-gradient(90deg,rgba(0,0,0,.65),transparent 30%),linear-gradient(0deg,rgba(0,0,0,.7),transparent 30%)}
+.ls.still .ls-scene,.ls.still .ls-fire,.ls.still .ls-fog,.ls.still .ls-hero canvas,.ls.still .ls-hero img{animation:none}
+@keyframes lsDrift{0%{transform:scale(1.04) translate(0,0)}100%{transform:scale(1.1) translate(-2%,-1.5%)}}
+@keyframes lsFlicker{0%,100%{opacity:.85}20%{opacity:1}35%{opacity:.7}50%{opacity:.95}70%{opacity:.75}85%{opacity:1}}
+@keyframes lsFog{from{transform:translateX(0)}to{transform:translateX(30%)}}
+@keyframes lsBlink{50%{opacity:.15}}
+@keyframes lsBreath{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.012)}}
+@keyframes lsPulse{0%,100%{box-shadow:0 0 0 1px var(--o),0 0 22px rgba(255,122,26,.45)}50%{box-shadow:0 0 0 1px var(--o2),0 0 38px rgba(255,140,40,.75)}}
+@media (prefers-reduced-motion:reduce){.ls-scene,.ls-fire,.ls-fog,.ls-hero canvas,.ls-hero img{animation:none!important}}
+.ls-top{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,350px) minmax(0,1fr) auto;align-items:center;gap:18px;position:relative}
+.ls-logo{display:flex;gap:10px;align-items:center}.ls-haz{font-size:44px;line-height:1;color:var(--o);text-shadow:0 0 18px rgba(255,100,20,.6)}
+.ls-logo b{display:block;font:italic 800 34px/.86 var(--cond);letter-spacing:.01em;color:#f6f1ec;text-shadow:0 2px 0 #000}.ls-logo b.o{color:var(--o);text-shadow:0 2px 0 #4a1400,0 0 18px rgba(255,110,20,.45)}
+.ls-logo small{display:block;margin-top:5px;font:600 10px/1 "Barlow",Inter,Arial,sans-serif;letter-spacing:.2em;color:var(--mut)}
+.ls-nav{display:flex;justify-content:center;gap:4px;border-bottom:1px solid var(--line2)}
+.ls-nav button{display:flex;gap:9px;align-items:center;background:none;border:0;padding:14px 22px;font:700 18px/1 var(--cond);letter-spacing:.06em;color:#d9d0c9;border-bottom:3px solid transparent;margin-bottom:-1px}
+.ls-nav button.on{color:#fff;border-color:var(--o);background:linear-gradient(0deg,rgba(255,122,26,.22),transparent);text-shadow:0 0 12px rgba(255,140,40,.6)}
+.ls-nav button:hover{color:#fff}
+.ls-icons{display:flex;gap:8px}.ls-icons button,.ls-ib{display:grid;place-items:center;width:42px;height:42px;background:rgba(20,18,18,.85);border:1px solid #4a3f39;border-radius:4px}.ls-icons button:hover,.ls-ib:hover{border-color:var(--o);color:var(--o2)}
+.ls-ib{width:34px;height:34px;flex:none}
+.ls-pop{position:absolute;right:0;top:64px;z-index:5;width:300px;padding:14px;background:#141112;border:1px solid var(--o);border-radius:4px;display:grid;gap:10px;box-shadow:0 18px 40px #000a}
+.ls-pop b{font:700 15px var(--cond);letter-spacing:.1em}.ls-pop p{margin:0;color:var(--mut);font-size:13px}
+.ls-switch{display:flex;gap:10px;align-items:center;font-size:14px;cursor:pointer}.ls-switch input{accent-color:var(--o);width:18px;height:18px}
+.ls-row{display:flex;gap:8px}.ls-row>*{flex:1;min-width:0}
+.ls-btn{background:#221b18;border:1px solid #5a4a40;border-radius:3px;padding:11px 14px;font:700 15px var(--cond)!important;letter-spacing:.08em}.ls-btn:hover{border-color:var(--o)}
+.ls-btn.hot{background:linear-gradient(180deg,#ff8a2a,#d4520c);border-color:#ffb36b;color:#1a0b04}.ls-btn.small{padding:8px 10px;font-size:13px!important}
+.ls-left{display:flex;flex-direction:column;gap:14px;min-width:0}
+.ls-panel{background:var(--pan);border:1px solid var(--line2);border-radius:6px;padding:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 30px #0008;backdrop-filter:blur(3px)}
+.ls-ph{display:flex;align-items:center;gap:10px;margin-bottom:12px}.ls-ph .ic{color:var(--o)}.ls-ph b{font:700 21px/1 var(--cond);letter-spacing:.03em;flex:1;white-space:nowrap}.ls-ph small{color:var(--mut);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.ls-connect{display:grid;gap:9px}.ls-lab{font-size:11px;letter-spacing:.14em;color:var(--mut)}
+.ls input{background:#0f0d0d;border:1px solid #4a3f39;border-radius:3px;color:#fff;padding:11px 12px;font:600 15px "Barlow",Inter,Arial,sans-serif;min-width:0}.ls input:focus{outline:none;border-color:var(--o)}
+.ls-or{text-align:center;font-size:12px;color:var(--mut);letter-spacing:.1em}
+.ls-code{display:flex;align-items:center;gap:10px}.ls-code>span{color:var(--mut);font-size:14px;white-space:nowrap}
+.ls-codebox{flex:1;display:flex;align-items:center;justify-content:space-between;border:1px solid #4a3f39;border-radius:3px;padding:3px 3px 3px 14px;background:#0f0d0d;min-width:0}
+.ls-codebox b{font:700 19px var(--cond);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ls-codebox .ls-ib{border:0;background:none}
+.ls-count{display:flex;align-items:center;gap:10px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--line2)}.ls-count b{flex:1;font:700 20px var(--cond)}
+.ls-invite{display:flex;gap:7px;align-items:center;background:rgba(40,160,80,.18);border:1px solid #3ccf6a;color:#8ef2ad;border-radius:3px;padding:7px 12px;font:700 14px var(--cond)!important;letter-spacing:.08em}
+.ls-players{display:grid;gap:4px}
+.ls-pl{display:grid;grid-template-columns:20px 42px minmax(0,1fr) auto;align-items:center;gap:8px;padding:2px 6px;min-height:34px;border-radius:3px;background:rgba(255,255,255,.02)}
+.ls-pl .cr{color:#ffc23a;font-size:14px;text-align:center}.ls-pl .av{width:42px;height:32px;background-color:#141010;background-size:cover;background-position:center 22%;border-radius:2px;border:1px solid #3a302b}
+.ls-pl .nm{font:600 16px "Barlow",Inter,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ls-pl .nm small{color:var(--mut);font-size:11px;margin-left:6px;letter-spacing:.08em}
+.ls-pl .st{display:flex;align-items:center;gap:6px;font:700 13px var(--cond);letter-spacing:.06em;color:var(--mut)}.ls-pl .st.ok{color:var(--ok)}
+.ls-pl .dot{width:15px;height:15px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font-size:10px}.ls-pl .st.ok .dot{background:var(--ok);color:#06200f;border-color:var(--ok)}
+.ls-pl .x{background:none;border:0;color:var(--mut);padding:0 0 0 6px;font-size:16px}.ls-pl .x:hover{color:#ff6b5b}
+.ls-pl.empty{grid-template-columns:42px minmax(0,1fr) auto;color:var(--mut);border:1px dashed #3a302b;background:none;cursor:pointer;padding:3px 8px;min-height:32px;text-align:left}.ls-pl.empty small{font:700 11px var(--cond);letter-spacing:.08em;color:#7fe08f}.ls-pl.empty:hover{border-color:var(--o);color:#fff}
+.ls-pl.empty .plus{width:24px;height:24px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;margin-left:8px}
+.ls-mission{display:grid;gap:2px}.ls-mission .ls-ph{margin-bottom:10px}
+.ls-map{position:relative;border:1px solid #4a3f39;border-radius:4px;overflow:hidden;margin-bottom:6px;aspect-ratio:320/112;max-width:100%}
+.ls-map canvas{display:block;width:100%;height:100%}
+.ls-mapname{position:absolute;inset:auto 0 0 0;padding:20px 8px 8px;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.85))}.ls-mapname b{display:block;font:800 19px var(--cond);letter-spacing:.03em}.ls-mapname small{color:#ddd}
+.ls-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.55);border:0;width:30px;height:44px;font-size:26px!important;line-height:1}.ls-arrow.l{left:4px}.ls-arrow.r{right:4px}.ls-arrow:hover{color:var(--o2)}
+.ls-set{display:flex;justify-content:space-between;align-items:center;background:none;border:0;border-bottom:1px solid rgba(255,255,255,.05);padding:7px 6px;text-align:left}
+.ls-set span{font:700 16px var(--cond);letter-spacing:.06em}.ls-set b{font:700 15px var(--cond);letter-spacing:.06em;color:#7fe08f}.ls-set b:after{content:"  ›";color:#fff}
+.ls-set:hover{background:rgba(255,122,26,.08)}.ls.guest .ls-set,.ls.guest .ls-arrow{pointer-events:none}.ls.guest .ls-set b:after{content:""}.ls.guest .host-only{display:none}
+.ls-main{min-width:0;min-height:0;display:flex;flex-direction:column}
+.ls-view[data-view=lobby]{display:grid;grid-template-rows:auto minmax(min-content,1fr) auto auto;gap:12px;min-height:100%}
+.ls-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.ls-head h1{margin:0;font:italic 800 clamp(26px,2.6vw,40px)/1 var(--cond);letter-spacing:.01em;text-shadow:0 2px 0 #000;transform:skewX(-4deg)}
+.ls-filters{display:flex;border:1px solid #4a3f39;border-radius:4px;overflow:hidden;background:rgba(10,9,9,.8)}
+.ls-filters button{display:flex;gap:7px;align-items:center;background:none;border:0;border-right:1px solid #2c2522;padding:9px 15px;font:700 15px var(--cond);letter-spacing:.06em;color:#cfc5bd}.ls-filters button:last-child{border:0}
+.ls-filters button.on{color:#fff;box-shadow:inset 0 0 0 2px var(--o);background:rgba(255,122,26,.16)}
+.ls-stage{display:grid;grid-template-columns:minmax(210px,.75fr) minmax(0,1.25fr) minmax(300px,1fr);gap:14px;min-height:0;align-items:stretch}
+.ls-info{align-self:center;min-width:0}
+.ls-info h2{margin:0;white-space:nowrap;font:italic 800 clamp(44px,4.8vw,86px)/.86 var(--cond);color:#fff;text-shadow:0 4px 0 #000,0 0 24px rgba(0,0,0,.6);transform:skewX(-6deg);overflow-wrap:anywhere}
+.ls-info h3{margin:4px 0 14px;font:italic 800 clamp(22px,2.2vw,36px)/1 var(--cond);color:var(--o);transform:skewX(-6deg);text-shadow:0 0 16px rgba(255,100,20,.45)}
+.ls-info p{margin:0 0 18px;color:#e6ddd6;font-size:15px;line-height:1.45;max-width:30ch}
+.ls-stats{display:grid;gap:9px}.ls-stat{display:grid;grid-template-columns:22px 46px 1fr;align-items:center;gap:6px;font:700 15px var(--cond);letter-spacing:.06em}.ls-stat svg{color:#ddd;width:16px;height:16px}
+.ls-bar{display:flex;gap:4px}.ls-bar i{height:9px;flex:1;max-width:22px;background:#3a2f2a;transform:skewX(-20deg)}.ls-bar i.on{background:linear-gradient(90deg,#ff9a2a,#ff6a10);box-shadow:0 0 8px rgba(255,110,20,.6)}
+.ls-hero{position:relative;min-height:260px;display:grid;place-items:end center}
+.ls-hero-glow{position:absolute;inset:8% 6% 0;background:radial-gradient(ellipse 50% 55% at 50% 60%,rgba(255,100,20,.35),transparent 70%);filter:blur(6px)}
+.ls-hero canvas,.ls-hero img{position:relative;max-width:100%;max-height:100%;animation:lsBreath 4.2s ease-in-out infinite;transition:transform .25s ease-out;filter:drop-shadow(0 0 22px rgba(255,90,20,.35))}
+.ls-hero canvas{background:none!important;border:0!important;box-shadow:none!important;image-rendering:pixelated;width:100%;height:100%;object-fit:contain}
+.ls-hero img{object-fit:contain;width:100%;height:100%;object-position:bottom}
+.ls-side{background:var(--pan);border:1px solid var(--line2);border-radius:6px;padding:10px;display:flex;flex-direction:column;min-height:0;min-width:0}
+.ls-tabs{display:flex;border-bottom:1px solid var(--line2);margin-bottom:10px}
+.ls-tabs button{flex:1;background:none;border:0;padding:10px 6px;font:italic 800 19px var(--cond);letter-spacing:.04em;color:#d7cec7}
+.ls-tabs button.on{color:#fff;background:linear-gradient(180deg,#ff8a2a,#c94a0a);clip-path:polygon(6% 0,100% 0,94% 100%,0 100%);text-shadow:0 1px 0 #6a2200}
+.ls-sidebody{display:grid;gap:8px;overflow:auto;min-height:0;align-content:start}
+.ls-ab{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;align-items:center;background:rgba(0,0,0,.35);border:1px solid #3a302b;border-radius:4px;padding:8px}
+.ls-ab .icon{width:76px;height:76px;border-radius:4px;border:1px solid #6a4a30;background-color:#1a1311;background-position:center;background-size:cover;background-repeat:no-repeat;display:grid;place-items:center;color:var(--o)}.ls-ab .icon svg{width:38px;height:38px}
+.ls-ab .t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ls-ab .k{background:var(--o);color:#1a0b04;font:800 13px var(--cond);padding:2px 7px;border-radius:2px;letter-spacing:.05em}
+.ls-ab .n{font:italic 800 20px var(--cond);letter-spacing:.02em;flex:1}.ls-ab .cd{font:700 14px var(--cond);color:#ddd;display:flex;gap:4px;align-items:center}.ls-ab .cd svg{width:14px;height:14px}
+.ls-ab p{margin:4px 0 0;font-size:13px;color:#d6cdc6;line-height:1.35}
+.ls-gear{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;padding:8px;background:rgba(0,0,0,.35);border:1px solid #3a302b;border-radius:4px}.ls-gear .gi{width:52px;height:52px;background-color:#1a1311;border-radius:3px;border:1px solid #4a3f39;display:grid;place-items:center;position:relative}.ls-gear .gi .ic{position:static;transform:none;width:38px;height:38px}
+.ls-gear b{font:700 17px var(--cond);letter-spacing:.04em}.ls-gear small{display:block;color:var(--mut);font-size:12px}
+.ls-skins{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.ls-skin{aspect-ratio:4/3;border:1px solid #4a3f39;border-radius:4px;background-color:#130f0e;background-position:center 22%;background-size:cover;position:relative;display:flex;align-items:flex-end;padding:6px;font:700 14px var(--cond);letter-spacing:.05em}
+.ls-skin.on{box-shadow:0 0 0 2px var(--o)}.ls-skin.locked{filter:grayscale(1) brightness(.45)}.ls-skin.locked:before{content:"🔒";position:absolute;inset:0;display:grid;place-items:center;font-size:24px;filter:none}
+.ls-roster{display:grid;grid-template-columns:28px minmax(0,1fr) 28px;align-items:center;gap:8px}
+.ls-rarrow{background:none;border:0;font-size:40px!important;line-height:1;color:var(--o)}.ls-rarrow:hover{color:var(--o2)}
+.ls-rtrack{display:flex;gap:8px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;padding:6px 2px}.ls-rtrack::-webkit-scrollbar{display:none}
+.ls-tile{flex:0 0 116px;height:146px;position:relative;border:1px solid #4a3f39;border-radius:5px;overflow:hidden;background-color:#141010;background-position:center 18%;background-size:cover;background-repeat:no-repeat;display:flex;flex-direction:column;justify-content:flex-end;padding:0;text-align:center;transition:transform .15s}
+.ls-tile:before{content:"";position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(0,0,0,.92))}
+.ls-tile b,.ls-tile small{position:relative}.ls-tile b{font:800 18px/1 var(--cond);letter-spacing:.03em}.ls-tile small{font:700 11px var(--cond);letter-spacing:.08em;color:var(--o);padding:2px 0 6px}
+.ls-tile:hover{transform:translateY(-3px);border-color:#8a6a50}.ls-tile.on{border-color:var(--o);animation:lsPulse 2s infinite;transform:translateY(-4px)}
+.ls-tile.lock{background:repeating-linear-gradient(135deg,#151212 0 8px,#1b1716 8px 16px);cursor:default}.ls-tile.lock:before{display:none}.ls-tile.lock span{position:absolute;inset:0;display:grid;place-items:center;font-size:30px;opacity:.55}.ls-tile.lock b{color:var(--mut)}
+.ls-tile.new:after{content:"NEW";position:absolute;top:5px;right:5px;background:var(--o);color:#1a0b04;font:800 10px var(--cond);padding:2px 5px;border-radius:2px;letter-spacing:.1em}
+.ls-bottom{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:16px;align-items:center;border-top:1px solid var(--line2);padding-top:12px}
+.ls-party{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px}
+.ls-pc{flex:0 0 205px;background:var(--pan);border:1px solid #4a3f39;border-radius:4px;overflow:hidden;position:relative}
+.ls-pc .top{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;align-items:center;height:76px}.ls-pc .av{height:76px;background-color:#141010;background-position:center 18%;background-size:cover}
+.ls-pc b{display:block;font:700 18px var(--cond);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ls-pc small{font:700 13px var(--cond);color:var(--o);letter-spacing:.06em}
+.ls-pc .cr{position:absolute;top:4px;left:5px;color:#ffc23a}.ls-pc .x{position:absolute;top:4px;right:5px;width:20px;height:20px;border-radius:50%;border:1px solid #888;background:#0008;font-size:13px;line-height:1;display:grid;place-items:center}.ls-pc .x:hover{border-color:#ff6b5b;color:#ff6b5b}
+.ls-pc .rs{display:flex;justify-content:center;gap:8px;align-items:center;padding:7px;font:700 15px var(--cond);letter-spacing:.08em;border-top:1px solid #3a302b;color:var(--mut);background:rgba(0,0,0,.4)}
+.ls-pc.ok{border-color:#2f9e55}.ls-pc.ok .rs{background:linear-gradient(180deg,#1f7a3f,#155a2d);color:#eaffef}
+.ls-ready{position:relative;height:84px;padding-right:76px!important;border:0;background:linear-gradient(180deg,#ff8f2e,#d2500b);clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 44px;box-shadow:0 0 30px rgba(255,110,20,.5)}
+.ls-ready span{white-space:nowrap;font:italic 800 clamp(22px,2vw,34px)/1 var(--cond);letter-spacing:.02em;text-shadow:0 2px 0 #7a2a00}.ls-ready i{position:absolute;right:28px;top:50%;transform:translateY(-50%);font:800 38px/1 var(--cond);color:#ffe0b0;font-style:normal}
+.ls-ready small{font:700 12px var(--cond);letter-spacing:.12em;color:#ffe7cf}
+.ls-ready:hover{filter:brightness(1.1)}.ls-ready.on{background:linear-gradient(180deg,#2ea85a,#17703a);box-shadow:0 0 30px rgba(40,200,90,.45)}.ls-ready:disabled{filter:grayscale(.8) brightness(.6);cursor:not-allowed}
+.ls-page{background:var(--pan);border:1px solid var(--line2);border-radius:6px;padding:20px;min-height:100%;overflow:auto}
+.ls-page h2{margin:0 0 4px;font:italic 800 34px var(--cond)}.ls-page h4{margin:18px 0 8px;font:700 17px var(--cond);letter-spacing:.1em;color:var(--o)}.ls-page p,.ls-page li{color:#d9d0c9;font-size:14px;line-height:1.55}
+.ls-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.ls-op{background:rgba(0,0,0,.35);border:1px solid #3a302b;border-radius:5px;padding:10px;display:grid;gap:8px;align-content:start}.ls-op .h{display:flex;gap:10px;align-items:center}.ls-op .h i{width:56px;height:42px;background-color:#141010;background-position:center 18%;background-size:cover;border-radius:3px;flex:none}
+.ls-op .h b{font:800 20px var(--cond)}.ls-op .h small{display:block;color:var(--o);font:700 12px var(--cond);letter-spacing:.08em}
+.ls-keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}.ls-keys div{display:flex;gap:10px;align-items:center;font-size:14px}.ls-keys kbd{min-width:72px;text-align:center;background:#221b18;border:1px solid #5a4a40;border-radius:3px;padding:4px 6px;font:700 13px var(--cond);letter-spacing:.05em}
+.ls-wtable{width:100%;border-collapse:collapse;font-size:14px}.ls-wtable th,.ls-wtable td{text-align:left;padding:8px;border-bottom:1px solid #2c2522}.ls-wtable th{font:700 13px var(--cond);letter-spacing:.1em;color:var(--mut)}.ls-wtable tr.mine td{color:#fff;background:rgba(255,122,26,.08)}
+.ls-toast{position:fixed;left:50%;top:84px;bottom:auto;transform:translateX(-50%) translateY(-180%);background:#141112;border:1px solid var(--o);border-radius:4px;padding:10px 16px;font-size:14px;max-width:min(560px,90vw);transition:transform .25s;z-index:40;pointer-events:none}.ls-toast.show{transform:translateX(-50%) translateY(0)}
+.ls-conn{position:fixed;left:14px;bottom:10px;font-size:11px;color:var(--mut);letter-spacing:.06em;z-index:31}
+@media (max-width:1180px){.ls{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto}.ls-top{grid-template-columns:1fr auto}.ls-nav{grid-column:1/-1;grid-row:2;overflow-x:auto;justify-content:flex-start}.ls-left{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+ .ls-stage{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ls-side{grid-column:1/-1}.ls-hero{min-height:240px}}
+@media (max-width:640px){.ls-stage{grid-template-columns:minmax(0,1fr)}.ls-bottom{grid-template-columns:minmax(0,1fr)}.ls-nav button{padding:10px 12px;font-size:15px}.ls-logo b{font-size:26px}.ls-filters{flex-wrap:wrap}}
+.ls canvas{background:transparent;border:0;border-radius:0}
 </style>
 </head>
 <body><main class="wrap">
-<header class="top"><div><div class="tag">8-PLAYER PRIVATE CO-OP · ZOMBIE SURVIVAL</div><div class="brand">☣ SURVIVAL ASCENSION</div></div><div id="connection" class="pill">Not connected</div></header>
-<details class="guide"><summary>HOW TO PLAY · FIELD MANUAL</summary>
- <p><b>Objective:</b> Protect the radio tower. If its health reaches zero, the team loses. Survive 50 waves and defeat the final boss on Wave 50.</p>
- <p><b>Waves:</b> Standard waves last 90 seconds, then a 10-second break before the next wave starts by itself (the host can start it sooner). Every fourth wave is a boss encounter; Wave 50 is the final boss. Boss waves continue until the boss is defeated.</p>
- <p><b>Combat:</b> Move with WASD or arrow keys. Aim with the mouse and hold the left button to shoot. Your survivor faces the way you walk. Each weapon has its own range: shotguns hit up to 3 close zombies, launchers damage an area, snipers reach furthest. Upgrades carry over when you switch weapons. Press Space to dash.</p>
- <p><b>Teamwork:</b> Press E near a downed teammate and stay close for 5 seconds to revive them. If nobody reaches them before the bleed-out timer ends (shorter each time you go down in a wave), they sit out until the next wave. Keep an eye on the tower and generator status.</p>
- <p><b>Build & maintain:</b> Use field-action buttons to repair the tower, repair/refuel the generator and build barricades, turrets, mines, electric fences and flame traps. Turrets, fences and flame traps need generator power.</p>
- <p><b>Day & night:</b> Night reduces visibility and increases zombie aggression. Check the HUD for current conditions.</p>
- <p><b>Level up:</b> A panel appears beside the map. Press 1–5 or click to pick; the fight keeps going while you choose.</p> <p><b>Scoreboard:</b> Press TAB to show or hide the live kill leaderboard. The current kill leader wears a golden crown.</p>
- </details>
- <section class="card" id="lobby">
- <h2 style="margin:0 0 8px">Private co-op room</h2><p class="muted" style="margin:0 0 14px;font-size:13px">Create a room and share its invitation code. Friends join using the code—rooms are not listed publicly.</p>
- <div class="row"><input id="name" maxlength="18" placeholder="Your survivor name" value="Survivor"><button class="button primary" id="create">Create room</button></div>
- <div class="row" style="margin-top:9px"><input id="roomCode" placeholder="Enter room code"><button class="button" id="join">Join room</button></div>
- <div id="invite" class="card hidden"><div class="muted" style="font-size:11px">YOUR ROOM INVITATION CODE</div><div id="codeDisplay" style="font-size:28px;font-weight:900;letter-spacing:.12em;margin:5px 0"></div><button class="button" id="copy">Copy code</button><span class="muted" id="roomCount" style="margin-left:8px"></span></div>
- <div class="card character-select" style="margin-top:12px"><div class="select-head"><div><b>CHOOSE YOUR SURVIVOR</b><div class="muted" style="font-size:11px;margin-top:5px">Select an operative. Each survivor has unique combat stats and a signature ability.</div></div><div class="selection-status" id="classSelectionStatus">ASSAULT SELECTED</div></div><div class="character-grid" id="characterGrid">
-  <button class="character-card selected" data-class="assault"><span class="portrait portrait-assault p-assault" role="img" aria-label="assault portrait"></span><span class="character-name">MARCUS</span><span class="character-role">ASSAULT</span><span class="character-desc">Balanced frontline fighter</span><span class="character-ability">ABILITY · COMBAT RUSH</span><span class="character-stats">HP 110 · DMG 17 · SPEED 190</span></button>
-  <button class="character-card" data-class="juggernaut"><span class="portrait portrait-juggernaut p-juggernaut" role="img" aria-label="juggernaut portrait"></span><span class="character-name">BRIGGS</span><span class="character-role">JUGGERNAUT</span><span class="character-desc">Shotgun tank: dome and war cry</span><span class="character-ability">E IRON BASTION · Q WAR CRY</span><span class="character-stats">HP 160 · DMG 14 · SPEED 150</span></button>
-  <button class="character-card" data-class="medic"><span class="portrait portrait-medic p-medic" role="img" aria-label="medic portrait"></span><span class="character-name">ELENA</span><span class="character-role">MEDIC</span><span class="character-desc">Keeps the squad alive</span><span class="character-ability">ABILITY · TEAM HEAL</span><span class="character-stats">HP 105 · DMG 15 · SPEED 185</span></button>
-  <button class="character-card" data-class="engineer"><span class="portrait portrait-engineer p-engineer" role="img" aria-label="engineer portrait"></span><span class="character-name">VIKTOR</span><span class="character-role">ENGINEER</span><span class="character-desc">Robots and a heavy turret</span><span class="character-ability">E ROBOT SQUAD · Q HEAVY TURRET</span><span class="character-stats">HP 110 · DMG 15 · SPEED 175</span></button>
-  <button class="character-card" data-class="scout"><span class="portrait portrait-scout p-scout" role="img" aria-label="scout portrait"></span><span class="character-name">RAVEN</span><span class="character-role">SCOUT</span><span class="character-desc">Katana, dash and vanish</span><span class="character-ability">E SHADOW PASS · Q BLADE STORM</span><span class="character-stats">HP 90 · DMG 15 · SPEED 225</span></button>
-  <button class="character-card" data-class="demolitionist"><span class="portrait portrait-demolitionist p-demolitionist" role="img" aria-label="demolitionist portrait"></span><span class="character-name">DANTE</span><span class="character-role">DEMOLITIONIST</span><span class="character-desc">Rockets and big blasts</span><span class="character-ability">E SKY BARRAGE · Q DEMO RIPPLE</span><span class="character-stats">HP 105 · DMG 18 · SPEED 175</span></button>
-  <button class="character-card" data-class="sniper"><span class="portrait portrait-sniper p-sniper" role="img" aria-label="sniper portrait"></span><span class="character-name">SIENNA</span><span class="character-role">SNIPER</span><span class="character-desc">Precision long-range damage</span><span class="character-ability">ABILITY · DEAD EYE</span><span class="character-stats">HP 95 · DMG 21 · SPEED 165</span></button>
-  <button class="character-card" data-class="commander"><span class="portrait portrait-commander p-commander" role="img" aria-label="commander portrait"></span><span class="character-name">HAYES</span><span class="character-role">COMMANDER</span><span class="character-desc">Strengthens nearby teammates</span><span class="character-ability">ABILITY · RALLY</span><span class="character-stats">HP 115 · DMG 15 · SPEED 180</span></button>
-  <button class="character-card new" data-class="operator"><span class="portrait portrait-operator p-operator" role="img" aria-label="operator portrait"></span><span class="character-name">SOFEA</span><span class="character-role">OPERATOR</span><span class="character-desc">Calls in a tank and a gunship</span><span class="character-ability">E STEEL CONVOY · Q SKY REIGN</span><span class="character-stats">HP 115 · DMG 15 · SPEED 180</span></button>
-  <button class="character-card new" data-class="dispatcher"><span class="portrait portrait-dispatcher p-dispatcher" role="img" aria-label="dispatcher portrait"></span><span class="character-name">ASTRA</span><span class="character-role">EMERGENCY CMDR</span><span class="character-desc">Calls in medics, police and a safehouse</span><span class="character-ability">E MEDICS · Q POLICE · R SAFEHOUSE</span><span class="character-stats">HP 120 · DMG 15 · SPEED 180</span></button>
- </div><div class="muted" style="font-size:11px;margin-top:9px">Click a survivor card to lock in your choice. You can change your selection while in the lobby.</div></div>
- <div id="lobbyPlayers" class="playerlist" style="margin-top:10px"></div>
- <div id="botControls" class="row hidden" style="margin-top:10px"><button class="button" id="addBot">+ Add AI teammate</button><button class="button" id="removeBot">Remove AI teammate</button></div>
- <button class="button primary hidden" id="startGame" style="width:100%;margin-top:12px">START THE APOCALYPSE</button>
- <button class="button hidden" id="exploreGame" style="width:100%;margin-top:8px" title="No zombies, no waves: walk around the map safely">EXPLORE THE MAP (NO ZOMBIES)</button>
- <div class="notice" id="lobbyMessage" style="margin-top:10px">Connect to a room to assemble your team.</div>
-</section>
+<div id="ls" class="ls">
+ <div class="ls-bg" aria-hidden="true">
+  <div class="ls-scene" id="lsScene">
+   <svg class="ls-skyline" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice">
+    <defs><linearGradient id="lsSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a0c08"/><stop offset=".45" stop-color="#9a2610"/><stop offset=".8" stop-color="#e2541a"/><stop offset="1" stop-color="#ff8a3a"/></linearGradient></defs>
+    <rect width="1600" height="600" fill="url(#lsSky)"/>
+    <g fill="#140706" opacity=".75"><path d="M0 470 L60 430 L120 452 L180 400 L260 420 L300 380 L380 410 L460 390 L520 430 L600 405 L700 440 L800 415 L900 445 L1000 420 L1100 448 L1200 410 L1300 435 L1400 400 L1500 430 L1600 415 L1600 600 L0 600 Z"/></g>
+    <g fill="#0b0403">
+     <path d="M0 520 L0 470 L40 470 L40 440 L90 440 L90 480 L150 480 L150 455 L170 450 L180 470 L240 470 L240 500 L330 500 L330 470 L360 462 L380 480 L470 480 L470 510 L600 510 L600 600 L0 600 Z"/>
+     <path d="M820 600 L820 505 L880 505 L880 470 L960 470 L960 490 L1010 490 L1010 455 L1035 448 L1060 460 L1060 500 L1150 500 L1150 470 L1200 470 L1200 490 L1600 490 L1600 600 Z"/>
+     <g transform="translate(1280,0)"><path d="M-46 500 L-6 150 L6 150 L46 500 L34 500 L4 215 L-4 215 L-34 500 Z"/><path d="M-30 360 L30 360 L28 372 L-28 372 Z M-20 270 L20 270 L18 280 L-18 280 Z M-38 440 L38 440 L36 452 L-36 452 Z"/><path d="M-3 120 L3 120 L3 150 L-3 150 Z"/><circle cx="0" cy="116" r="5" fill="#ff4a2a" class="ls-beacon"/></g>
+     <path d="M640 600 L640 540 L700 520 L760 540 L760 600 Z"/>
+    </g>
+    <g stroke="#0b0403" stroke-width="3" fill="none" opacity=".9"><path d="M470 520 L820 520 M500 505 L500 540 M560 505 L560 540 M620 505 L620 540 M680 505 L680 540 M740 505 L740 540 M800 505 L800 540"/></g>
+   </svg>
+   <img id="lsBgArt" class="ls-bgart" alt="" hidden>
+  </div>
+  <div class="ls-fire"></div><div class="ls-fog ls-fog1"></div><div class="ls-fog ls-fog2"></div>
+  <canvas id="lsEmbers" class="ls-embers"></canvas>
+  <div class="ls-vignette"></div>
+ </div>
 
-<p class="footer">Prototype note: the Node.js server is authoritative for room membership, movement, zombie AI, attacks, health, kills and stage state. Deploy the server publicly before friends can connect from other networks.</p>
+ <header class="ls-top">
+  <div class="ls-logo"><span class="ls-haz" aria-hidden="true">☣</span><div><b>SURVIVAL</b><b class="o">ASCENSION</b><small>ZOMBIE SURVIVAL · 8-PLAYER CO-OP</small></div></div>
+  <nav class="ls-nav" role="tablist">
+   <button class="on" data-view="lobby" role="tab"><svg viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 1a3 3 0 1 0 0-6M2 21c0-4 3-7 7-7s7 3 7 7m2-7c2.5.3 4 2.6 4 6"/></svg>LOBBY</button>
+   <button data-view="loadout" role="tab"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M4 12h16M10 12v3h4v-3"/></svg>LOADOUT</button>
+   <button data-view="skills" role="tab"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>SKILLS</button>
+   <button data-view="manual" role="tab"><svg viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5zM8 9h8M8 13h8M8 17h5"/></svg>FIELD MANUAL</button>
+  </nav>
+  <div class="ls-icons">
+   <button id="lsFriends" title="Invite friends (copy invite link)"><svg viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21c0-4 3-7 7-7s7 3 7 7M19 8v6M16 11h6"/></svg></button>
+   <button id="lsSettingsBtn" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+   <button id="lsLeave" title="Leave room"><svg viewBox="0 0 24 24"><path d="M12 2v9M6.3 6.3a8 8 0 1 0 11.4 0"/></svg></button>
+  </div>
+  <div id="lsSettings" class="ls-pop" hidden>
+   <b>SETTINGS</b>
+   <label class="ls-switch"><input type="checkbox" id="setSfx" checked><span>Sound effects</span></label>
+   <label class="ls-switch"><input type="checkbox" id="setAmbient"><span>Ambient music</span></label>
+   <label class="ls-switch"><input type="checkbox" id="setMotion" checked><span>Animated background</span></label>
+   <label class="ls-switch host-only"><input type="checkbox" id="setNoCd"><span>Test mode: no ultimate cooldowns</span></label>
+   <button class="ls-btn small host-only" id="exploreGame">EXPLORE THE MAP (NO ZOMBIES)</button>
+  </div>
+  <div id="lsConfirm" class="ls-pop" hidden><b>LEAVE THIS ROOM?</b><p>You can join again with the room code.</p><div class="ls-row"><button class="ls-btn small" id="lsLeaveNo">STAY</button><button class="ls-btn small hot" id="lsLeaveYes">LEAVE</button></div></div>
+ </header>
+
+ <aside class="ls-left">
+  <section class="ls-panel">
+   <div class="ls-ph"><svg viewBox="0 0 24 24" class="ic"><path d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z"/></svg><b>PRIVATE CO-OP LOBBY</b><button id="lsRename" class="ls-ib" title="Change your name"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button></div>
+   <div id="lsConnect" class="ls-connect">
+    <label class="ls-lab">YOUR NAME</label><input id="name" maxlength="18" placeholder="Your survivor name" value="Survivor">
+    <button class="ls-btn hot" id="create">CREATE ROOM</button>
+    <div class="ls-or">or join a friend</div>
+    <div class="ls-row"><input id="roomCode" placeholder="Room code"><button class="ls-btn" id="join">JOIN</button></div>
+   </div>
+   <div id="lsRoom" hidden>
+    <div class="ls-code"><span>Room Code</span><div class="ls-codebox"><b id="codeDisplay">—</b><button id="copy" class="ls-ib" title="Copy code"><svg viewBox="0 0 24 24"><path d="M9 9h11v11H9zM5 15H4V4h11v1"/></svg></button></div><button id="lsEye" class="ls-ib" title="Hide / show the code"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+    <div class="ls-count"><svg viewBox="0 0 24 24" class="ic"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 1a3 3 0 1 0 0-6M2 21c0-4 3-7 7-7s7 3 7 7m2-7c2.5.3 4 2.6 4 6"/></svg><b id="roomCount">1 / 8 PLAYERS</b><button class="ls-invite" id="lsInvite"><svg viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21c0-4 3-7 7-7s7 3 7 7M19 8v6M16 11h6"/></svg>INVITE</button></div>
+    <div id="lobbyPlayers" class="ls-players"></div>
+   </div>
+  </section>
+  <section class="ls-panel ls-mission">
+   <div class="ls-ph"><svg viewBox="0 0 24 24" class="ic"><path d="M14.7 6.3a4 4 0 0 0 3 6.7l-8.4 8.4a2 2 0 0 1-2.8-2.8l8.4-8.4a4 4 0 0 1-.2-3.9Z"/></svg><b>MISSION SETTINGS</b><small id="lsHostNote">host only</small></div>
+   <div class="ls-map"><canvas id="lsMapThumb" width="320" height="112"></canvas><button class="ls-arrow l" id="mapPrev" aria-label="Previous map">‹</button><div class="ls-mapname"><b id="mapName">ASCENSION SITE 01</b><small id="mapSub">Research Outpost</small></div><button class="ls-arrow r" id="mapNext" aria-label="Next map">›</button></div>
+   <button class="ls-set" data-set="difficulty"><span>DIFFICULTY</span><b id="setDifficulty">NORMAL</b></button>
+   <button class="ls-set" data-set="waveMode"><span>WAVE MODE</span><b id="setWaveMode">CAMPAIGN (50)</b></button>
+   <button class="ls-set" data-set="friendlyFire"><span>FRIENDLY FIRE</span><b id="setFriendlyFire">OFF</b></button>
+   <button class="ls-set" data-set="extraLoot"><span>EXTRA LOOT</span><b id="setExtraLoot">OFF</b></button>
+  </section>
+ </aside>
+
+ <main class="ls-main">
+  <section class="ls-view" data-view="lobby">
+   <div class="ls-head"><h1>CHOOSE YOUR OPERATOR</h1>
+    <div class="ls-filters" role="tablist">
+     <button class="on" data-cat="all">ALL</button>
+     <button data-cat="assault"><svg viewBox="0 0 24 24"><path d="M3 12h13l5-3v6l-5-3M7 12v4"/></svg>ASSAULT</button>
+     <button data-cat="tank"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/></svg>TANK</button>
+     <button data-cat="support"><svg viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>SUPPORT</button>
+     <button data-cat="specialist"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>SPECIALIST</button>
+    </div></div>
+   <div class="ls-stage">
+    <div class="ls-info">
+     <h2 id="heroName">MARCUS</h2><h3 id="heroRole">ASSAULT</h3>
+     <p id="heroDesc"></p>
+     <div class="ls-stats" id="heroStats"></div>
+    </div>
+    <div class="ls-hero" id="lsHero"><div class="ls-hero-glow"></div><img id="heroArt" alt="" hidden><canvas id="heroSprite" width="560" height="440"></canvas></div>
+    <div class="ls-side">
+     <div class="ls-tabs" role="tablist"><button class="on" data-tab="abilities">ABILITIES</button><button data-tab="gear">LOADOUT</button><button data-tab="skins">SKINS</button></div>
+     <div id="sideBody" class="ls-sidebody"></div>
+    </div>
+   </div>
+   <div class="ls-roster"><button class="ls-rarrow" id="rosterPrev" aria-label="Scroll left">‹</button><div class="ls-rtrack" id="characterGrid"></div><button class="ls-rarrow" id="rosterNext" aria-label="Scroll right">›</button></div>
+   <div class="ls-bottom"><div class="ls-party" id="lsParty"></div><button class="ls-ready" id="startGame"><span id="readyLabel">READY UP</span><i>»</i><small id="readySub"></small></button></div>
+  </section>
+  <section class="ls-view" data-view="loadout" hidden><div class="ls-page" id="loadoutPage"></div></section>
+  <section class="ls-view" data-view="skills" hidden><div class="ls-page" id="skillsPage"></div></section>
+  <section class="ls-view" data-view="manual" hidden><div class="ls-page" id="manualPage"></div></section>
+ </main>
+ <div id="lobbyMessage" class="ls-toast" role="status" aria-live="polite"></div>
+ <div id="connection" class="ls-conn">Not connected</div>
+</div>
+
 </main>
 <section id="gameArea" class="hidden" aria-label="Game">
  <canvas id="arena" width="1200" height="760"></canvas>

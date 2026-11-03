@@ -32,8 +32,8 @@ export function roads(WW, WH) {
   };
 }
 
-export function buildMapLayout(WW, WH) {
-  let seed = 1337; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+export function buildMapLayout(WW, WH, start = 1337) {   // start = the site's seed (lobby map picker)
+  let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const R = roads(WW, WH), cx = WW / 2, cy = WH / 2, out = [];
   const roadGap = (x, y) => Math.min(...R.h.map(r => Math.abs(y - r.y) - r.w / 2), ...R.v.map(r => Math.abs(x - r.x) - r.w / 2));
   const fits = (x, y, kind) => {
