@@ -729,6 +729,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.reloadLeft = 0; p.mag = 6; p.lastShot = 0; room.fireWeapon(p, 0, 120); const zx = zz.x;
   ok(zx > p.x + 120 + 40, `passive Forceful Blast: shotgun hits shove zombies back (${Math.round(zx - p.x - 120)}px)`);
   p.lastShot = 0; p.mag = 6; const bx0 = bb.x; room.fireWeapon(p, Math.PI / 4, 141); ok(bb.x > bx0 + 10, `...bosses too (${Math.round(bb.x - bx0)}px)`);
+  p.activeSlot = 2; p.weapon = "shotgun"; p.mag = 1; p.reloadLeft = 0; let shots = 0; const t0 = Date.now(); room.broadcast = ((orig) => (t, m) => { if (t === "shot") shots++; return orig.call(room, t, m); })(room.broadcast);
+  for (let i = 0; i < 6; i++) { p.lastShot = Date.now() - 1000 / (p.fireRate * 3) - 5; room.fireWeapon(p, 0, 100); }
+  ok(shots === 6 && p.mag === 1, `War Cry: shotgun fires 3x faster and uses no ammo (${shots} shots, mag still ${p.mag})`);
   room.ultInfo.get("A").summonedAt -= 10500; tick(1); ok(!p.ultReady && p.ultCd > 50, `after 10s the 60s cooldown runs (${p.ultCd}s left)`);
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

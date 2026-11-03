@@ -317,7 +317,7 @@ function renderHotbar(me) {
   if (hb !== hotbarHtml) { $("hotbar").innerHTML = hb; hotbarHtml = hb; }
   const dashLeft = Math.max(0, dashReadyAt - performance.now()) / 1000;
   $("dashChip").textContent = dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"; $("dashChip").classList.toggle("ready", dashLeft <= 0);
-  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? "  ·  press R" : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
+  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? "  ·  press R" : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
 }
 
 function renderScoreboard(players) {
@@ -647,7 +647,8 @@ function sendControls(t) {
       const cd = (MELEE_INFO[me.melee] || MELEE_INFO.knife).cd * 1000;
       if (me.melee !== "axe" && (firing || clicked) && t - lastMelee > cd) { room.send("attack", { a: aimAngle(me) }); lastMelee = t; clickShotAt = 0; }
     } else if (me.activeSlot === 2 || me.activeSlot === 3) {
-      const auto = WEAPON_INFO[me.weapon]?.auto, ready = t - lastShoot >= Math.max(55, 1000 / (me.fireRate || 1));
+      const rage = me.characterClass === "juggernaut" && me.weapon === "shotgun" && me.ultActive > 0;   // War Cry: shotgun spam (hold to fire, 3x faster, no ammo)
+      const auto = WEAPON_INFO[me.weapon]?.auto || rage, ready = t - lastShoot >= Math.max(55, 1000 / ((me.fireRate || 1) * (rage ? 3 : 1)));
       // full-auto (rifle, SMG): keep firing while held. Semi-auto: one shot per click.
       if (ready && ((auto && firing) || clicked)) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
     }

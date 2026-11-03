@@ -177,7 +177,8 @@ const SOFEA = {
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
   bastion: { cast: 0.4, life: 15, cd: 30, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
-  blast: { push: 24, bossMult: 0.5 },   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
+  blast: { push: 24, bossMult: 0.5 },
+  rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
@@ -725,17 +726,19 @@ export class SurvivalRoom extends Room {
     const now = Date.now();
     if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId)) return;
     if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility
+    const rage = this.shotgunRage(p, now);   // Briggs's War Cry: shotgun spam, no ammo
+    if (rage && p.reloadLeft > 0) p.reloadLeft = 0;
     if (p.reloadLeft > 0) return;
-    if (now - p.lastShot < 1000 / p.fireRate) return;
+    if (now - p.lastShot < 1000 / (p.fireRate * (rage ? BRIGGS.rage.rateMult : 1))) return;
     const w = WEAPONS[p.weapon] || WEAPONS.rifle;
-    if (p.mag <= 0) {
+    if (p.mag <= 0 && !rage) {
       if (!w.infinite && p.ammo <= 0) { // out of spare ammo: fall back to the pistol
         p.secondary = "pistol"; this.setSlot(p, 3); this.event(`${p.name} is out of ammo, switching to pistol.`);
       } else this.startReload(p);
       return;
     }
     p.lastShot = now;
-    p.mag -= 1;
+    if (!rage) p.mag -= 1;
     p.aim = aim;
     this.lastAimAt.set(p.sessionId, now);
     if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
@@ -1132,6 +1135,7 @@ export class SurvivalRoom extends Room {
     this.broadcast("briggs", { k: "cry", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: C.tauntR });
     this.state.message = `${p.name}: WAR CRY!`;
   }
+  shotgunRage(p, now = Date.now()) { if (p.characterClass !== "juggernaut" || p.weapon !== "shotgun") return false; const m = this.briggs.get(p.sessionId); return !!m && m.cryUntil > now; }
   cryBuff(p) { const m = this.briggs.get(p.sessionId); return m && m.buffUntil > Date.now() ? 1 + BRIGGS.cry.buff : 1; }
   tauntTarget(z, now) {   // a zombie Briggs roared at goes for him (while he's alive and the taunt lasts)
     const t = this.taunt.get(z.id); if (!t) return null;
