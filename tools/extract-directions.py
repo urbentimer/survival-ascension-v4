@@ -47,7 +47,25 @@ def squeeze(runs, n):               # join the closest neighbours until there ar
         i = int(np.argmin(gaps)); runs[i][1] = runs[i + 1][1]; del runs[i + 1]
     return runs
 
+PREKEYED = False
+def prekey(im):   # green-screen (#00FF00) or transparent sheets: remove the background here and hand the rest of the script plain magenta
+    global PREKEYED
+    a = np.array(im.convert('RGBA')).astype(int); r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+    c = a[2, 2]
+    if c[3] > 128 and not (c[1] > 180 and c[0] < 120 and c[2] < 120): return a[..., :3]   # plain magenta sheet: nothing to do
+    PREKEYED = True
+    bg = al < 128
+    core = (g > 170) & (g - np.maximum(r, b) > 90)
+    soft = (g > 110) & (g - np.maximum(r, b) > 45)
+    m = core.copy()
+    for _ in range(3): m = ndimage.binary_dilation(m) & (core | soft)
+    bg |= m | core
+    near = ndimage.binary_dilation(bg, iterations=2) & ~bg   # green spill on the outline -> neutral
+    mx = np.maximum(r, b); spill = near & (g > mx); a[..., 1][spill] = mx[spill]
+    rgb = a[..., :3].copy(); rgb[bg] = (255, 0, 255)
+    return rgb
 def foreground(src):
+    if PREKEYED: return ~((src[..., 0] == 255) & (src[..., 1] == 0) & (src[..., 2] == 255))
     r, g, b = src[..., 0], src[..., 1], src[..., 2]
     core = (r > 200) & (b > 200) & (g < 90)
     soft = (r > 140) & (b > 140) & (g < 130) & (abs(r - b) < (45 if TIGHT else 110))
@@ -149,7 +167,7 @@ if __name__ == '__main__':
         pitch, _, rpitch = pitch.partition('x')
         spec, _, order = spec.partition('@')   # "@U": rows on the sheet go U,UR,R,DR,D,DL,L,UL (instead of D,DR,R,UR,U,UL,L,DL)
         path, _, box = spec.partition('#')
-        parts = [Image.open(q).convert('RGB') for q in path.split('+')]   # "rifle-A.png+rifle-B.png": the kit's PART A (rows 1-4) and PART B (rows 5-8), stacked
+        parts = [Image.fromarray(prekey(Image.open(q)).astype(np.uint8)) for q in path.split('+')]   # green / transparent backgrounds are keyed first   # "rifle-A.png+rifle-B.png": the kit's PART A (rows 1-4) and PART B (rows 5-8), stacked
         if len(parts) > 1:
             wmax = max(q.width for q in parts); stack = Image.new('RGB', (wmax, sum(q.height for q in parts)), (255, 0, 255)); yy = 0
             for q in parts: stack.paste(q, (0, yy)); yy += q.height

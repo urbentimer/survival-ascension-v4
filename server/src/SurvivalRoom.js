@@ -192,7 +192,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }];
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
-const PICKABLE = ["assault", "juggernaut", "medic", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];
+const PICKABLE = ["assault", "juggernaut", "medic", "engineer", "scout", "demolitionist", "sniper", "commander", "operator", "dispatcher"];   // Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
   medic: { n: 3, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },

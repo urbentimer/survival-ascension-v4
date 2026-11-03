@@ -118,9 +118,9 @@ function connected() {
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("sofea", m => { const t = performance.now();
-    if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
+    if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
-  room.onMessage("boom", m => { if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
+  room.onMessage("boom", m => { if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
@@ -939,7 +939,7 @@ function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets 
 // ---------- SOFEA: tank (E) + helicopter (Q) ----------
 const sImgs = {};
 for (const [k, url] of Object.entries({ tank: "assets/sprites/zombies/dir8/sofea-tank.png", heli: "assets/sprites/zombies/dir8/sofea-heli.png", fx: "assets/sprites/fx/sofea-fx.png" })) { const im = new Image(); im.src = url; sImgs[k] = im; }
-const SOF = { tank: { cw: 150, ch: 140, lift: 10, tur: 16 }, heli: { cw: 190, ch: 150, alt: 46 }, fx: 128 };
+const SOF = { tank: { cw: 180, ch: 150, lift: 10, tur: 16, barrel: 70 }, heli: { cw: 190, ch: 150, alt: 46 }, fx: 128 };   // tank sheet: col 0 = hull, col 1 = cannon out (one whole tank per direction)
 const sofeaShotAt = new Map();
 function sofeaCell(im, cw, ch, col, row, x, y, alpha = 1, sc = 1) {
   if (!im?.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha = alpha;
@@ -959,8 +959,9 @@ function drawSofea(p, img, now) {
   if (v.kind === "tank") {
     const T = SOF.tank, gy = p.y + T.lift;
     ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, gy + 18, 62, 26, 0, 0, 7); ctx.fill(); ctx.restore();
-    sofeaCell(sImgs.tank, T.cw, T.ch, v.mv ? Math.floor(now / 90) % 4 : 0, rowOf(v.hull), p.x, gy);
-    sofeaCell(sImgs.tank, T.cw, T.ch, 4 + (fired < 110 ? 1 : fired < 240 ? 2 : fired < 380 ? 3 : 0), rowOf(aim), p.x, gy - T.tur);
+    const face = v.mv && fired > 900 ? v.hull : aim, kick = fired < 120 ? 3 * (1 - fired / 120) : 0;   // the whole tank swings to where she aims; it recoils when it fires
+    const tread = v.mv ? (Math.floor(now / 70) % 2 ? 1 : 0) : 0;
+    sofeaCell(sImgs.tank, T.cw, T.ch, 1, rowOf(face), p.x - Math.cos(face) * kick, gy - tread - Math.sin(face) * kick);
   } else {
     const H = SOF.heli, bob = Math.sin(now / 380) * 3;
     ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(p.x, p.y + 16, 46, 16, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -975,16 +976,22 @@ function drawSofeaFx(f, age) {   // false when finished
     const lift = f.kind === "heli" ? SOF.heli.alt * (1 - u) : SOF.tank.tur - SOF.tank.lift + 4 * (1 - u);
     const x = f.ox + (f.bx - f.ox) * u, y = f.oy + (f.by - f.oy) * u - lift, a = Math.atan2(f.by - f.oy + lift, f.bx - f.ox);
     const im = sImgs.fx; if (!im?.naturalWidth) return true;
-    const row = f.kind === "heli" ? 0 : 1, col = Math.floor(age / 60) % (f.kind === "heli" ? 6 : 4);
+    const row = f.kind === "heli" ? 1 : 0, col = Math.floor(age / 60) % 6;
     ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * F, row * F, F, F, -F / 2, -F / 2, F, F); ctx.restore();
     return true;
   }
-  if (f.k === "boom") {   // orange flash, fireball, debris, smoke, fade
-    if (s > .72) return false; const sc = (f.r || 100) / 70;
-    sofeaCell(sImgs.fx, F, F, Math.min(5, Math.floor(s / .12)), 2, f.x, f.y - 8 * sc, 1, sc);
+  if (f.k === "boom") {   // tank shell: big explosion; rocket: small one (flash, fireball, smoke, embers / crater)
+    const big = f.kind !== "hrocket", len = big ? .9 : .7; if (s > len) return false; const sc = (f.r || 100) / (big ? 82 : 64);
+    sofeaCell(sImgs.fx, F, F, Math.min(5, Math.floor(s / (len / 6))), big ? 3 : 4, f.x, f.y - F * sc / 2 + 10, s > len - .15 ? (len - s) / .15 : 1, sc);
     return true;
   }
-  if (f.k === "dust") { if (s > .6) return false; sofeaCell(sImgs.fx, F, F, Math.min(5, Math.floor(s / .1)), 3, f.x, f.y, 1, f.s || 1); return true; }
+  if (f.k === "muzzle") {   // cannon blast / rocket launch puff at the barrel, rotated to the shot
+    const big = f.kind === "tank", len = .24; if (s > len) return false; const im = sImgs.fx; if (!im?.naturalWidth) return true;
+    const col = (big ? 0 : 3) + Math.min(2, Math.floor(s / (len / 3))), sc = big ? .8 : .55;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.a); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * F, 2 * F, F, F, -F * sc / 2, -F * sc / 2, F * sc, F * sc); ctx.restore();
+    return true;
+  }
+  if (f.k === "dust") { if (s > .6) return false; sofeaCell(sImgs.fx, F, F, Math.min(5, Math.floor(s / .1)), 5, f.x, f.y, 1, f.s || 1); return true; }
   return false;
 }
 function drawDanteFx(f, age) {   // false when finished
@@ -2214,6 +2221,9 @@ const ROSTER = [
     skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "A huge shot at the nearest zombie in sight." }], gear: ["rifle", "pistol", "knife"] },
   { id: "commander", name: "HAYES", role: "COMMANDER", cat: "support", hp: 115, dmg: 15, spd: 180, def: 1, desc: "Veteran leader. Hardens the squad so they can hold the line.",
     skills: [{ k: "E", n: "Rally", cd: 40, t: "+4 defence for teammates within 220px for 8 seconds." }], gear: ["rifle", "pistol", "knife"] },
+  { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Heavy-metal specialist. Calls in her own tank and a rocket gunship and rolls straight over the horde.",
+    skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
+             { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a rocket gunship for 30s, above the horde: zombies can't reach you." }], gear: ["rifle", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "3 doctors for 20s, each healing a different teammate at 25 HP/s." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "7 armed officers fight beside you for 30s." },
@@ -2223,7 +2233,7 @@ const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<p
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", medic: "assets/hero/medic.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
-  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", commander: "assets/hero/commander.webp", dispatcher: "assets/hero/dispatcher.webp" };
+  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", commander: "assets/hero/commander.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };

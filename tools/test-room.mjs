@@ -821,8 +821,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(room.state.mapSite === 1 && room.state.mapLayout !== lay0 && room.mapGrid.size > 0, "host picks Site 02: a different map layout");
   ok(room.state.difficulty === "hard" && room.state.waveMode === "ascension" && room.state.friendlyFire && room.state.extraLoot, "difficulty / wave mode / friendly fire / extra loot saved");
   send(A, "settings", { difficulty: "nightmare" }); ok(room.state.difficulty === "hard", "...bad values are ignored");
-  send(A, "chooseClass", { id: "operator" }); ok(p.characterClass !== "operator", "Sofea can't be picked any more");
-  for (let i = 0; i < 6; i++) send(A, "addBot", {}); ok(![...room.state.players.values()].some(b => b.isBot && (b.characterClass === "operator" || b.characterClass === "slasher")) && [...room.state.players.values()].filter(b => b.isBot).every(b => b.ready), "bots never pick Sofea/Arshan and are always ready");
+  send(A, "chooseClass", { id: "slasher" }); ok(p.characterClass !== "slasher", "Arshan can't be picked yet");
+  send(A, "chooseClass", { id: "operator" }); ok(p.characterClass === "operator", "Sofea is back on the roster"); send(A, "chooseClass", { id: "assault" });
+  for (let i = 0; i < 6; i++) send(A, "addBot", {}); ok(![...room.state.players.values()].some(b => b.isBot && b.characterClass === "slasher") && [...room.state.players.values()].filter(b => b.isBot).every(b => b.ready), "bots never pick Arshan and are always ready");
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
   room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); ok(Math.abs(z.maxHp - 38 * 1.35) < .5, `hard: zombies have +35% HP (${z.maxHp.toFixed(1)})`);
   p.x = 1000; p.y = 1000; q.x = 1100; q.y = 1000; q.alive = true; const hq = q.hp; p.activeSlot = 2; p.weapon = "rifle"; p.mag = 30; p.reloadLeft = 0; p.lastShot = 0; p.stunned = 0;
