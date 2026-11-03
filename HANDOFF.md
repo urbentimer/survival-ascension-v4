@@ -3,7 +3,7 @@
 Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 
 ## Where things are
-- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = OLD; nothing from Viktor's rework onward is pushed yet.
+- Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-v4.onrender.com (client/config.js).
 - Claude's workspace copy: `/home/claude/sa` (git, branch `master`, ~72 commits). Exists only in the chat session it was made in.
 - **Backup on GitHub: branch `claude/game-backup`** of urbentimer/survival-ascension-v4 (everything except raw ChatGPT sheets in tools/art). `main` = what's live; don't touch it until the user says to go live.
 - Push routine: work in `/home/claude/sa`, then copy the tree (minus .git, node_modules, tools/dist, tools/art) into the clone `/home/claude/survival-ascension-v4` on `claude/game-backup`, commit, push. A new chat: clone the repo, check out `claude/game-backup`.
@@ -16,7 +16,7 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 - User designs; often says "dont code yet" → discuss only. Code when told ("u can code now", "code it", "lets go").
 - Art from ChatGPT on a flat magenta (#FF00FF) background, one action/weapon per sheet; Claude cuts it with tools/extract-*.py.
 - Every change: `node tools/test-room.mjs` (server tests, all must pass; "bots aim and shoot" test is randomly flaky) → `node tools/build-preview.mjs` → Playwright check → commit → publish preview artifact.
-- Push every change to `claude/game-backup` (GitHub linked 2026-11-03). Never push to `main` / deploy until the user asks.
+- **LIVE MODE (from 2026-11-03): every change goes to `main`** (user wants friends to try every change). Render (server, rootDir server) and Netlify (client folder) deploy from `main`. Keep `claude/game-backup` = `main`.
 - Sprite PNGs are palette-quantized (256 colours) to keep the preview under 16 MB (now ~13.5 MB).
 
 ## Controls / HUD
@@ -51,7 +51,6 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25%, kill boss (also kills Hivemind), hook speed toggle, unlock ultimate. In solo, ultimates are always unlocked.
 
 ## To do / ideas parked
-- Deploy live (merge `claude/game-backup` into `main`) when the user says.
 - Hivemind death sheet; Raven's whirlwind spin sheet; Dante launcher version 2 sheet (saved, unused).
 - Other survivors' 8-direction sheets + kits; other bosses' art and moves; walker 8-direction sheet.
 - Boss loot (Butcher's Locker), night vision size choice, update infographic.
