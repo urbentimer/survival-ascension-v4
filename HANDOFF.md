@@ -9,7 +9,7 @@ Last updated: 2026-11-03 (latest commit: "Butcher hook much faster")
 - Push routine: work in `/home/claude/sa`, then copy the tree (minus .git, node_modules, tools/dist, tools/art) into the clone `/home/claude/survival-ascension-v4` on `claude/game-backup`, commit, push. A new chat: clone the repo, check out `claude/game-backup`.
 - Older backup: `survival-ascension-code.zip` sent to the user.
 - Solo preview (playable, single-file): https://claude.ai/artifact/Ww26yfzXU93kuQVvFreUsy
-- Progress infographic: https://claude.ai/artifact/TbZ6oNk2DjaePnKAAc7Auo (out of date: before Viktor rework / Raven / Dante / Hivemind)
+- Progress infographic: https://claude.ai/artifact/TbZ6oNk2DjaePnKAAc7Auo (v4, updated 2026-11-03: live, Viktor/Raven/Dante, Hivemind)
 - Art prompts doc: project file `claude/chatgpt-art-prompts.md`
 
 - Connectors linked: Render (workspace tea-dbjk0fk9v7es73ab4tp0, service srv-dbkkpufb9u1s73fmj99g Singapore) and Netlify (site 3d671c3a-862a-48d6-8db6-42e536b9c8a8). Use them to check deploys/logs instead of asking for screenshots.
@@ -56,4 +56,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## To do / ideas parked
 - Hivemind death sheet; Raven's whirlwind spin sheet; Dante launcher version 2 sheet (saved, unused).
 - Other survivors' 8-direction sheets + kits; other bosses' art and moves; walker 8-direction sheet.
-- Boss loot (Butcher's Locker), night vision size choice, update infographic.
+- Boss loot (Butcher's Locker), night vision size choice.
