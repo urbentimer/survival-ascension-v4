@@ -64,14 +64,29 @@ function showOverlay(title, text) {
 function hideOverlay() { $("overlay").classList.add("hidden"); }
 function playerName() { return $("name").value.trim().slice(0, 18) || "Survivor"; }
 function joinOptions() { return { name: playerName(), profile: { ...loadProfile(), characterClass: selectedClass } }; }
+// The free Render server sleeps when nobody has played for ~15 min and takes up to a minute to wake up:
+// keep retrying for ~90s (with a message) before giving up. A wrong room code fails straight away.
+async function withWakeUp(label, attempt) {
+  const t0 = Date.now();
+  for (let i = 0; ; i++) {
+    try { return await attempt(); }
+    catch (e) {
+      const msg = String(e?.message || ""), noRoom = /not found|invalid|locked|full/i.test(msg);
+      if (noRoom || Date.now() - t0 > 90000) throw e;
+      status(i ? `Waking up the server… ${Math.round((Date.now() - t0) / 1000)}s` : label);
+      if (i === 0) message("The game server is waking up (it sleeps when nobody plays). This can take up to a minute — hang on…");
+      await new Promise(r => setTimeout(r, 4000));
+    }
+  }
+}
 async function createRoom() {
-  try { status("Connecting…"); room = await client.create(GAME_CONFIG.roomName, joinOptions()); connected(); }
-  catch (e) { status("Connection failed"); message(e.message || "Could not create room. Check the server URL and try again."); }
+  try { status("Connecting…"); room = await withWakeUp("Connecting…", () => client.create(GAME_CONFIG.roomName, joinOptions())); connected(); }
+  catch (e) { status("Connection failed"); message((e.message ? e.message + ". " : "") + "Could not reach the game server. Try again in a minute."); }
 }
 async function joinRoom() {
   const code = $("roomCode").value.trim();
   if (!code) return message("Enter the invitation code first.");
-  try { status("Joining…"); room = await client.joinById(code, joinOptions()); connected(); }
+  try { status("Joining…"); room = await withWakeUp("Joining…", () => client.joinById(code, joinOptions())); connected(); }
   catch (e) { status("Join failed"); message(e.message || "Could not join room. Check the code and server."); }
 }
 function connected() {
