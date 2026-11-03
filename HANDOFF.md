@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Briggs rage sprite")
+Last updated: 2026-11-03 (latest commit: "Briggs War Cry fire aura")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -54,7 +54,7 @@ Last updated: 2026-11-03 (latest commit: "Briggs rage sprite")
 - **Briggs (juggernaut)**: 160 HP, speed 150, shotgun + pistol + knife; art for shotgun/knife/bat/axe + E/Q cast poses (tools/art/briggs; cut with `extract-directions.py juggernaut shotgun=...%218x149.875 ... bastion=...!4%299x164 warcry=...!4%299x164` and tools/extract-briggs.py for fx + cards).
   - E Iron Bastion: 0.4s fist slam, then a steel dome for 15s: no damage, no stun/slow, no hook drag or knockback (guard restores hp + position each tick), can attack, 30% slower. Ends: shatters (40 dmg + 60px push within 150), then 30s cooldown. Zombie hits on the dome = sparks.
   - Passive Forceful Blast (card beside E on the hotbar): every shotgun pellet that hits shoves the zombie back 24px (less at range), bosses half.
-  - Q War Cry: 0.3s roar, then impact: hit-stop + big screen shake + shockwave ring (30 dmg + 45px push within 210), every zombie within 350 targets him (10s; bosses 3s), he takes 50% damage for 10s, teammates within 400 do +25% damage for 10s. 60s cooldown after. Red rage flames at his feet while active. While the rage lasts he's drawn from the glowing-red "rage" sheet (block 6; tools/fix-rage-aura.py turns its pink aura red after cutting) and his shotgun is full-auto (hold click), 3x faster and uses no ammo (reload cancelled).
+  - Q War Cry: 0.3s roar, then impact: hit-stop + big screen shake + shockwave ring (30 dmg + 45px push within 210), every zombie within 350 targets him (10s; bosses 3s), he takes 50% damage for 10s, teammates within 400 do +25% damage for 10s. 60s cooldown after. While active he burns: sprites/fx/briggs-fire.png (tools/extract-fire-aura.py, source tools/art/briggs/fire-aura.png; row 0 back flames drawn behind him, row 1 ground ring drawn in front) via briggsFire() — 70ms frames cross-faded, per-player clock, two-wave flicker, additive glow pass, ground light, embers; bursts in with the roar and dies down in the last 0.6s. His normal frames are underneath (the old "rage" block 6 is in the atlas but unused). Roar shockwave is hue-rotated to orange. His shotgun is full-auto (hold click), 3x faster and uses no ammo (reload cancelled).
   - PlayerState.skillT (E active seconds, generic) added: 63/64 schema fields used.
 - Others (Elena medic, Sienna sniper, Hayes commander): old side-view art, old simple skills, no ultimate yet.
 
