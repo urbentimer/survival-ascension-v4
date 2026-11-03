@@ -5,7 +5,7 @@
 #   sprites/zombies/dir8/sofea-tank.png   8 rows x 2 cols of 180x150 (col 0 hull + short turret, col 1 cannon pointing that way); pivot = cell centre
 #   sprites/zombies/dir8/sofea-heli.png   8 rows x 4 rotor frames, 190x150 (same layout as before)
 #   sprites/fx/sofea-fx.png               128px cells: 0 shell x6, 1 rocket x6, 2 muzzle big x3 + small x3, 3 big explosion x6, 4 small explosion x6, 5 dust x6 (kept)
-#   assets/hero/operator.webp (lobby), portraits/operator.webp (face card), icons/card-steelConvoy.png / card-skyReign.png
+#   assets/hero/operator.webp (lobby), portraits/operator.webp (face card, only if tools/art/faces/operator.png doesn't exist: extract-faces.py does that one), icons/card-steelConvoy.png / card-skyReign.png
 import sys, os, glob
 import numpy as np
 from PIL import Image, ImageFilter
@@ -105,7 +105,7 @@ fg = hero[..., 3] > 128; top = np.where(fg.any(1))[0][0]; band = fg[top:top + 38
 side = 900; x0 = hx - side // 2 + 30; y0 = max(0, top - int(side * .07))
 fig = Image.fromarray(hero); canvas = Image.new('RGBA', (side, side)); canvas.alpha_composite(fig.crop((max(0, x0), y0, min(fig.width, x0 + side), min(fig.height, y0 + side))), (max(0, -x0), 0))
 card = Image.fromarray(ns['backdrop'](side)); card.alpha_composite(canvas)
-card.convert('RGB').resize((360, 360), Image.LANCZOS).save(os.path.join(A, 'portraits', 'operator.webp'), quality=86, method=6)
+if not os.path.exists(os.path.join(here, 'art', 'faces', 'operator.png')): card.convert('RGB').resize((360, 360), Image.LANCZOS).save(os.path.join(A, 'portraits', 'operator.webp'), quality=86, method=6)
 
 # --- skill cards (octagon cards on black)
 for f, name in [('WhatsApp Image 2026-11-03 at 4.49.59 PM.jpeg', 'steelConvoy'), ('WhatsApp Image 2026-11-03 at 4.49.58 PM.jpeg', 'skyReign')]:

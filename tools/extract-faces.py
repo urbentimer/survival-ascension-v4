@@ -20,10 +20,11 @@ def backdrop(n):   # dark charcoal with a red-orange glow behind the head and a 
 for f in sorted(glob.glob(os.path.join(root, '*.png'))):
     name = os.path.splitext(os.path.basename(f))[0]
     a = np.array(Image.open(f).convert('RGB')).astype(int); r, g, b = a[..., 0], a[..., 1], a[..., 2]; H, W = r.shape
-    bg = (r > 170) & (b > 170) & (g < 110) & (abs(r - b) < 70)
+    pink = name == 'operator'   # pink hair: key only near-exact magenta so the hair edges survive
+    bg = (r > 200) & (b > 200) & (g < 70) & (abs(r - b) < 40) if pink else (r > 170) & (b > 170) & (g < 110) & (abs(r - b) < 70)
     lab, _ = ndimage.label(bg); edge = set(np.unique(np.concatenate([lab[0], lab[:, 0], lab[:, -1]]))) - {0}
     bg = np.isin(lab, list(edge)) | ((r > 205) & (b > 205) & (g < 85) & (abs(r - b) < 45))
-    soft = (r > 110) & (b > 110) & (g < 150) & (abs(r - b) < 90)
+    soft = (r > 150) & (b > 150) & (g < 95) & (abs(r - b) < 45) if pink else (r > 110) & (b > 110) & (g < 150) & (abs(r - b) < 90)
     for _ in range(3): bg |= ndimage.binary_dilation(bg) & soft
     near = ndimage.binary_dilation(bg, iterations=3) & ~bg; spill = np.clip(np.minimum(r, b) - g, 0, None)
     for c in (0, 2): a[..., c][near] -= (spill[near] * .85).astype(int)
