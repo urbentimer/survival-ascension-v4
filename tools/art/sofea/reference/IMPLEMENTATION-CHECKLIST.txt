@@ -1,0 +1,57 @@
+SOFEA THE OPERATOR - GAME INTEGRATION ACCEPTANCE CHECKLIST
+
+All items below are requirements to run in the real game; they are NOT marked tested.
+The source project was not supplied with the template.
+
+REGISTRATION AND ART
+[ ] Add one survivor ID, sofea_operator, with name Sofea the Operator and portrait.
+[ ] Register rifle/knife/bat/fire-axe sprites without removing other survivors.
+[ ] Prepare the final keyed/transparent atlases from ART-NOTES.txt and frame-map.json.
+[ ] Verify tan skin, pink hair, army outfit, all eight directions, correct feet/pivots.
+[ ] Register E Steel Convoy and Q Sky Reign cards with correct key labels.
+
+E - TANK
+[ ] E is available without Q's kill unlock; valid call boards Sofea automatically.
+[ ] Blocked spawn cancels without cooldown or moving her into a wall.
+[ ] Ride is 30.0 seconds from boarding; call/arrival time is not subtracted.
+[ ] WASD movement works; diagonal speed is normalized; hull faces travel.
+[ ] Turret follows mouse independently; click/held click fires no faster than 1.5s.
+[ ] Shell impact/falloff applies once per target per shell, including direct hits.
+[ ] Moving tracks damage zombies with a per-target 0.75s cooldown and swept contact.
+[ ] A stationary tank causes zero run-over damage; bosses use the 10-damage rule.
+[ ] Walls, tower, team barricades and solid bosses block tank travel.
+[ ] No friendly fire or accidental structure damage; no health reset on boarding.
+[ ] At expiry, safely exit, restore prior weapon and begin 30-second E cooldown.
+
+Q - HELICOPTER
+[ ] Locked at 99 non-boss kills; unlocked at 100; boss kills do not advance it.
+[ ] Once unlocked, future uses need the cooldown only, not another 100 kills.
+[ ] Call automatically boards Sofea; piloting lasts 30.0 seconds from boarding.
+[ ] WASD moves; mouse aims the nose; held click fires paired salvos every 1.5s.
+[ ] Rocket projectiles travel visibly to the clamped mouse point; no auto-aim.
+[ ] Each rocket deals one explosion hit per target; overlapping rockets can both hit.
+[ ] Ground melee misses; ranged/aerial-capable attacks use helicopter defense rules.
+[ ] Fly over low obstacles and zombies, but respect tall blockers and map bounds.
+[ ] At expiry, safely exit, restore prior weapon and begin 60-second Q cooldown.
+
+SHARED CONTROL AND LIFECYCLE
+[ ] Reject the other ability during radio call/ride, without consuming its cooldown.
+[ ] Repeated or held E/Q cannot extend rides, create duplicates or queue another ride.
+[ ] Personal weapons, dash, medkits, repairs, revives and equipment are disabled only
+    while mounted; inventory and ordinary control state return on dismount.
+[ ] Vehicle damage passes to current survivor health with exactly one defense multiplier.
+[ ] Fatal damage leads to normal downed/revive state on safe ground, not a free revive.
+[ ] Expiry inside obstacles/enemy groups uses safe exit search and fallback behavior.
+[ ] Short dismount protection expires and cannot be refreshed by duplicate events.
+[ ] No new shots at/after ride expiry; earlier shots finish with correct owner credit.
+[ ] Wave transitions preserve ride duration and cooldown; match end clears all state.
+[ ] Disconnect/despawn removes its vehicle and sound without affecting other players.
+
+ONLINE CO-OP AND SCOREBOARD
+[ ] Server validates input, start/end timestamps, collision, rate limits and damage.
+[ ] Test two then eight Sofea players; each has independent vehicles and cooldowns.
+[ ] Remote clients see correct driver, direction, turret, rotor, shots and dismount.
+[ ] Latency or duplicate input cannot produce free shots, health or duration extensions.
+[ ] All vehicle damage/kills credit the owning player; crown updates on kill-lead changes.
+[ ] Explosion/run-over kills do not incorrectly increment headshot statistics.
+[ ] Confirm friendly movement around vehicles, blocked exits and revive after fatal damage.

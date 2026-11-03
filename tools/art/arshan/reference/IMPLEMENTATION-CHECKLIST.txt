@@ -1,0 +1,54 @@
+ARSHAN THE SLASHER - IMPLEMENTATION AND ACCEPTANCE CHECKLIST
+
+The uploaded kit has no game source. These are tests for the developer to run;
+none are claimed to have passed in a live game.
+
+REGISTRATION / ART
+[ ] Add survivor ID arshan_slasher, name Arshan the Slasher, stats and portrait.
+[ ] Preserve other survivor entries, controls, UI and save compatibility.
+[ ] Prepare body/effect atlases and 1024-square card exports per ART-NOTES.txt.
+[ ] Confirm matching Marcus proportions and correct eight-direction A/B mapping.
+[ ] Confirm white hair, red oni mask, scarred body and no unintended exposed face.
+[ ] Register chain-axe as starting melee, with knife/bat/fire-axe pickup support.
+[ ] Inspect each walk/attack animation at gameplay size; fix pivot or pose jumps.
+
+E - REAPER'S REACH
+[ ] Aim toward mouse, no auto-aim, 1100px maximum range, 0.15s wind-up, 1400px/s outbound.
+[ ] Sweep collision so fast hooks cannot pass through thin walls/enemies.
+[ ] First eligible enemy receives 70 damage ONCE; success uses 12s cooldown.
+[ ] Valid walls/buildings/rocks/anchors latch without damaging environment.
+[ ] Pull ARSHAN to enemy/anchor at 900px/s; enemy never gets dragged.
+[ ] Stop outside contact radius; never place survivor inside wall or boss.
+[ ] Near-target hit damages once without unnecessary movement.
+[ ] Miss/invalid hit retracts with 4s cooldown and no movement/damage.
+[ ] Hook kill cancels pull, preserves kill credit and uses successful 12s cooldown.
+[ ] Target death/despawn, broken line of sight, overstretched tether or stun ends safely.
+[ ] Every pull movement tick checks collisions; no wall-crossing/teleport fallback.
+[ ] Do not anchor to allies, tower, friendly builds or decorative ground decals.
+[ ] Total E action ends within 3 seconds; repeat/held input cannot spawn extra hooks.
+[ ] Visible chain endpoints follow hand and axe during flight/pull/retraction.
+
+Q - CRIMSON CYCLONE
+[ ] Locked at 99 non-boss kills; unlocks at 100; boss kills do NOT increment unlock.
+[ ] Q unlock persists; next use needs cooldown, not another 100 kills.
+[ ] 0.6s wind-up does no damage; then 12 seconds of active 360-degree sweep.
+[ ] Radius 260px/diameter 520px; visible red axe orbit matches this world area.
+[ ] Damage 24 per target each 0.25s; maximum 48 tick slots per 12s activation.
+[ ] No double hit from axe blade and chain; no unintended burn/stun/passive heal.
+[ ] Targets near the center are damageable; solid walls occlude damage.
+[ ] Allies, tower and structures are undamaged; all outgoing damage credits correct owner.
+[ ] WASD movement 130px/s; normalized diagonals; no weapons/dash during Q.
+[ ] At end restore 175px/s and previous weapon; start 60s cooldown.
+[ ] Stun cancels Q/starts cooldown; downed/disconnect/match end clear orbit/sound.
+[ ] Held Q/kill gain/wave change cannot extend duration or reset cooldown.
+
+SHARED STATE AND ONLINE CO-OP
+[ ] E/Q are mutually exclusive, including wind-up/recovery; rejected input consumes nothing.
+[ ] Inventory, health and normal controls restore correctly after either action.
+[ ] Existing downed/revive behavior remains; neither ability grants invulnerability.
+[ ] Authority: server validates aim, anchors, range, rate, timing, movement and damage.
+[ ] Duplicate activation/hit packets cannot create double hits or stacked orbits.
+[ ] Test eight Arshan players: independently owned hooks, cooldowns, orbits and kill credit.
+[ ] Replicate hand/anchor endpoints and Q start/end times so all clients see consistent actions.
+[ ] Damage/kills count on scoreboard and crown; skill hits never count as headshots.
+[ ] Wave change leaves duration/cooldown intact; match end cleans all owned state/effects.

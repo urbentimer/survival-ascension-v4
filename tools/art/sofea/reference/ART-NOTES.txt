@@ -1,0 +1,94 @@
+SOFEA THE OPERATOR - SOURCE ART AND IMPORT NOTES
+
+ART STATUS
+Fourteen PNG files were generated with the built-in image tool, individually,
+in the order requested by the original kit. Portrait identity was reused for
+character sheets and occupied vehicles. All animation/effect images are on
+magenta; portrait and two-card artwork are on black. Only the skill-card image
+contains text. Labels are English. The original files are preserved at native
+resolution, without artificial upscaling or post-generation image edits.
+
+These are generated SOURCE sheets. They are not a validated engine atlas.
+Frame counts and separated source regions were checked. Their intended directions
+were visually inspected, but pixel-perfect pivots and temporal animation fidelity
+remain to be checked in the game's actual renderer.
+
+KNOWN SOURCE DEVIATIONS FROM THE TEMPLATE'S IDEAL EXPORT RULES
+1. Magenta is visually consistent but is not uniformly the exact RGB #FF00FF value.
+   Edge/background samples include approximately RGB (240,12,240) to (244,32,241).
+2. Several sprite sheets have gaps below the requested 40px minimum. Figures do not
+   intentionally overlap, but importing as a naive equally divided grid is unsafe.
+3. Frame widths, feet baselines and rendered size vary slightly. Source silhouettes
+   must be aligned before animation; neither per-frame bounding-box centers nor
+   automatic scaling of each individual pose are reliable animation pivots.
+4. Some diagonal views, especially bat and helicopter upper-right, are closer to
+   side views than a strict 45-degree turn. Verify and retouch in the art pass if
+   the game's direction changes expose a visible jump.
+5. Rotor and track poses are source variations, not a verified seamless animation.
+   Evaluate at the intended playback speed; retouch phases if they appear to wobble.
+
+IMPORT ROUTE
+- Use frame-map.json to locate source regions. Coordinates are absolute source
+  pixels: [x, y, width, height]; row and column numbers start at zero. Rectangles
+  use detected gaps and keep each pose/effect together. They are not engine pivots.
+- Background analysis in that JSON was for finding source geometry only. Do not
+  blindly apply its broad magenta threshold to erase pixels: it may damage pink
+  hair or anti-aliased edges. Use edge-connected background selection, careful
+  color tolerance and hair-edge review when producing keyed/transparent assets.
+- After keying, place aligned poses in equal export cells with at least 40px of
+  clear margin to neighboring art. Export exact #FF00FF backgrounds if retaining
+  the original kit's keying pipeline, or RGBA if the game importer supports it.
+- One scale per sheet/character set. Do not normalize every pose to its individual
+  bounding box: strides, weapon arcs and muzzle flashes legitimately change bounds.
+- Align survivor feet and pelvis across frames. Align vehicle ground origin, hull
+  turret ring and turret circular base. Use these same pivots across all directions.
+- Reconcile survivor scale between the different native source resolutions below.
+  Set the final tank and helicopter world sizes from character.txt, not raw PNG size.
+- Keep nearest-neighbor sampling and avoid bilinear enlargement. Increase gameplay
+  asset resolution through a new art pass if required; interpolation adds no detail.
+
+NATIVE SIZES AND LAYOUTS
+File                         | Pixels       | Intended grid | Frames
+portrait.png                 | 1024 x 1536  | single        | 1
+rifle.png                    | 887 x 1774   | 8 rows x 6    | 48
+knife.png                    | 1086 x 1448  | 8 rows x 6    | 48
+bat.png                      | 1086 x 1448  | 8 rows x 6    | 48
+fire-axe.png                 | 887 x 1774   | 8 rows x 6    | 48
+radio-call.png               | 1024 x 1536  | 8 rows x 4    | 32
+tank-hull.png                | 793 x 1983   | 8 rows x 4    | 32
+tank-turret.png              | 793 x 1983   | 8 rows x 4    | 32
+helicopter.png               | 1024 x 1536  | 8 rows x 4    | 32
+rocket.png                   | 2172 x 724   | 1 row x 6     | 6
+cannon-shell.png             | 2172 x 724   | 1 row x 4     | 4
+explosion.png                | 2172 x 724   | 1 row x 6     | 6
+deployment-dust.png          | 2172 x 724   | 1 row x 6     | 6
+skill-cards.png              | 1774 x 887   | 2 cards       | 2
+
+DIRECTION ORDER
+Row 1 down; row 2 down-right; row 3 right; row 4 up-right;
+row 5 up; row 6 up-left; row 7 left; row 8 down-left.
+
+SUGGESTED PLAYBACK (DESIGN DEFAULTS, NOT TESTED GAME VALUES)
+Weapon: hold idle column 1; walk loop columns 2,3,4,3 at 8 fps.
+Rifle: column 5 aiming, brief column 6 shot flash synchronized to actual fire events.
+Melee: columns 5 and 6 are wind-up/strike key poses; existing combat timing determines
+the contact frame. Use existing axe charge duration; do not let art alter damage timing.
+Radio: four columns over 0.8 seconds; same body action for E and Q.
+Hull: four columns at 8 fps while driving, column 1 while stationary.
+Turret: ready hold, flash about 0.08s, recoil about 0.10s, settle about 0.12s;
+then ready until the next allowed cannon shot. This is not a continuous firing loop.
+Helicopter: four rotor columns at about 12 fps, continuous while occupied.
+Rocket: six propulsion phases at about 12 fps. Cannon shell: four phases at 12 fps.
+Explosion: six frames over about 0.45s, once. Dust: six frames over about 0.6s, once.
+Gameplay damage is authoritative and independent of how many effect frames render.
+
+SKILL CARD CUT
+The two card regions occupy left and right halves of the 1774 x 887 image.
+Each half is 887 x 887 including its black padding. Left is E Steel Convoy;
+right is Q Sky Reign. Do not key black out of the card artwork.
+
+VERIFICATION BOUNDARY
+Verified: file presence/readability, image dimensions, template headings, required
+controls/durations, source counts (342 sprite/effect poses), and ZIP integrity.
+Not verified: final keyed atlas, pivot alignment, seamless playback, damage balance,
+collision, server replication, character-selection wiring or in-game visual quality.

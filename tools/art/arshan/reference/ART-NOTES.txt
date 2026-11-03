@@ -1,0 +1,98 @@
+ARSHAN THE SLASHER - ART STATUS AND IMPORT GUIDE
+
+STYLE AND PACKAGE
+The supplied NEW kit's Marcus guide/examples were inspected and used as references.
+Portrait defines identity; sprite sheets use chunky three-head-tall anatomy,
+large white hair/red oni mask, scarred bare torso/back, red sash and dark trousers.
+All body/effect sheets are landscape 1536 x 1024. Maximum 24 frames per image.
+Every 8-direction action is split into A/B files, even the four-column skills.
+Each skill card is a separate square file. Only cards contain labels, in English.
+Images were created with the built-in image tool. The crimson orbit was edited
+with the same tool to increase its spacing; originals are otherwise unresampled.
+
+COUNTS AND NATIVE DIMENSIONS
+Asset group                        | Native pixels | Layout       | Total poses
+chain-axe-A / chain-axe-B            | 1536 x 1024   | 4 x 6 each   | 48
+knife-A / knife-B                    | 1536 x 1024   | 4 x 6 each   | 48
+bat-A / bat-B                        | 1536 x 1024   | 4 x 6 each   | 48
+fire-axe-A / fire-axe-B              | 1536 x 1024   | 4 x 6 each   | 48
+grapple-A / grapple-B                | 1536 x 1024   | 4 x 4 each   | 32
+crimson-spin-A / crimson-spin-B      | 1536 x 1024   | 4 x 4 each   | 32
+hook-axe / chain-link / hook-impact  | 1536 x 1024   | 1 x 4 each   | 12
+crimson-orbit                        | 1536 x 1024   | 1 x 4        | 4
+portrait                            | 1024 x 1536   | one portrait | 1
+card-E / card-Q                      | 1254 x 1254   | one per file | 2
+
+The two card SOURCE files are 1254-square, above the requested 1024-square
+export size. Preserve the source and make the final UI exports 1024 x 1024
+during asset import. Do not claim their native sources are 1024-square.
+
+DIRECTION ORDER
+A rows: DOWN, DOWN-RIGHT, RIGHT, UP-RIGHT.
+B rows: UP, UP-LEFT, LEFT, DOWN-LEFT.
+Rows/columns in frame-map.json start at zero. Source rectangles are absolute
+pixels [x, y, width, height]. Measured boxes help isolate each pose without
+assuming perfect equal-cell placement. They are NOT tested animation pivots.
+
+SOURCE LIMITATIONS TO RESOLVE AT IMPORT
+- Generated backgrounds are visually magenta but have small RGB variations;
+  sample corner values are around (240,14,241), not uniformly exact #FF00FF.
+  Key/select connected background carefully, review halos, and export exact
+  magenta or alpha according to the existing game's importer.
+- Some body sheets have measured empty gutters below 40px (down to about26px
+  horizontally and32px vertically). The corrected orbit has wider clearance.
+  Repack aligned poses into uniform export cells with at least40px separation.
+- Source body sizes/feet anchors vary slightly across poses. Establish the
+  feet/pelvis anchor for each direction and keep it consistent; do not resize
+  individual frames based on attack-arc or weapon bounding-box width.
+- Inspect walk stride continuity, handedness and attack direction in playback.
+  Front/rear strike poses sometimes emphasize lateral swings; engine hitboxes
+  must still face the intended aim direction. Retouch any visible pose jumps.
+- The body spin loop and four orbit phases are separate layers. Align their
+  center/hand position and visually test together; no live compositing test
+  has been performed in the game renderer.
+
+READABILITY
+Target the same on-screen standing survivor height as Marcus (about54px).
+Use nearest-neighbor sampling; avoid bilinear blur. Portrait proportions must
+not determine sprite size. Bright mask, white hair, thick outlines and short
+legs are intended to preserve the silhouette at this scale.
+
+WEAPON ANIMATION
+Columns 1-6 are idle, walk1, walk2, walk3, wind-up and strike.
+Use walk columns 2,3,4,3 as the initial loop at approximately8fps and verify
+strides. Ordinary melee timing is owned by combat code, not number of frames.
+Fire-axe wind-up can be held for the existing1-second charge. White arcs are
+already drawn in strike frames; do not add duplicate hit effects/damage.
+
+E BODY/PROJECTILE CHOREOGRAPHY
+Column1 has the held axe; show it only before launch.
+At launch switch to column2 and spawn effects/hook-axe.png once.
+Use column3 during self-pull; column4 during arrival/retraction.
+Draw/tile effects/chain-link.png from the active hand to the projectile's eye;
+trim/overlap terminal links to avoid double caps, and use a consistent width.
+Rotate the RIGHT-facing axe/chain assets to the hook's direction. These effects
+do not require an eight-direction source sheet. Keep chain taut while pulling.
+Play hook-impact's four frames once at contact (about0.2s); no looping sparks.
+Never display an extra held axe during the launched-hook phases.
+
+Q BODY/ORBIT CHOREOGRAPHY
+Use four body columns as a subtle loop (about8fps), oriented to mouse heading.
+Use four orbit phases as a clockwise loop (starting about16fps), independent
+of body heading. Move the common pivot with Arshan. Visible red heat is
+cosmetic; it must not apply unintended burn stacks.
+Scale the effect to match the specified260px gameplay radius. The source
+ellipse represents perspective: do not infer damage radius from its height.
+The included orbit contains the red axe and a short chain/haft stub. If the
+hand-to-eye gap remains visible after compositing, complete it with the chain
+segment effect, matched to the current orbit phase. Do not draw a second axe.
+Draw the orbit's back part behind Arshan and front part in front, respecting
+the game's world occlusion. Use an existing renderer mask/clip where needed.
+Wind-up and cooldown are gameplay states, not extra damaging frames.
+
+VERIFICATION BOUNDARY
+Checked: all files readable, dimensions, <=24 frames per sheet, A/B pair count,
+272 separated source poses, required appearances, card text, character-sheet
+headings, requested controls and ZIP integrity.
+Not tested: final color-key/alpha exports, seamless playback, engine pivots,
+actual hook collision, damage balance, ultimate occlusion or multiplayer state.

@@ -841,7 +841,40 @@ function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   if (a.k === "cry" && s < .62) return { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };
   return null;
 }
-function briggsAura(p, now) { bfxFrame(Math.floor(now / 90) % 6, 4, p.x, p.y + SPR.feet + 10, .42, .9); }   // red rage flames at his feet (drawn under him)
+// War Cry fire aura: back flames behind him + a burning ring in front, only while the Q buff lasts.
+// What makes it look alive: frames swap fast (70ms), each player's fire runs on its own clock, the size/brightness
+// flickers on two out-of-step waves, an additive glow pass makes the core burn bright, and embers float up.
+const fireImg = new Image(); fireImg.src = "assets/sprites/fx/briggs-fire.png";
+const FIRE = { cw: 180, ch: 150, ms: 70, sc: .47 };
+function bFireFrame(col, row, x, y, sx, sy, alpha, add) {   // (x, y) = bottom-centre
+  ctx.save(); ctx.globalAlpha = alpha; if (add) ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(fireImg, col * FIRE.cw, row * FIRE.ch, FIRE.cw, FIRE.ch, Math.round(x - FIRE.cw * sx / 2), Math.round(y - FIRE.ch * sy), FIRE.cw * sx, FIRE.ch * sy); ctx.restore();
+}
+function briggsFire(p, now, front) {
+  if (!fireImg.naturalWidth) return;
+  const id = p.sessionId || "", seed = (id.charCodeAt(0) || 0) * 37 + (id.charCodeAt(1) || 0) * 11, t = now + seed;
+  const a = briggsAnim.get(p.sessionId), grow = a?.k === "cry" ? Math.min(1, Math.max(.15, (now - a.t0 - 120) / 260)) : 1;   // bursts up with the roar
+  const ending = p.ultActive < .6 ? Math.max(0, p.ultActive / .6) : 1;   // dies down in the last half second
+  const k = grow * ending, f = Math.floor(t / FIRE.ms) % 6, nf = (f + 1) % 6, mix = (t % FIRE.ms) / FIRE.ms;
+  const flick = 1 + .05 * Math.sin(t / 47) + .035 * Math.sin(t / 23 + 1.3), sx = FIRE.sc * k * (1 + .02 * Math.sin(t / 61)), sy = FIRE.sc * k * flick;
+  const feet = p.y + SPR.feet;
+  if (!front) {
+    ctx.save(); ctx.globalCompositeOperation = "lighter";   // warm light on the ground, pulsing
+    const gl = ctx.createRadialGradient(p.x, feet, 2, p.x, feet, 70 * k); gl.addColorStop(0, `rgba(255,140,40,${.35 * flick * k})`); gl.addColorStop(1, "rgba(255,60,0,0)");
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(p.x, feet, 70 * k, 26 * k, 0, 0, 7); ctx.fill(); ctx.restore();
+    bFireFrame(f, 0, p.x, feet + 6, sx, sy, (1 - mix) * k + .0, false); bFireFrame(nf, 0, p.x, feet + 6, sx, sy, mix * k, false);   // cross-fade = smooth motion
+    bFireFrame(f, 0, p.x, feet + 6, sx * 1.04, sy * 1.06, .3 * flick * k, true);   // bright additive glow pass
+    return;
+  }
+  bFireFrame(f, 1, p.x, feet + 24, sx * 1.1, sy * .72, .85 * k, false); bFireFrame(f, 1, p.x, feet + 24, sx * 1.1, sy * .72, .2 * flick * k, true);   // squashed low so his legs stay visible
+  ctx.save(); ctx.globalCompositeOperation = "lighter";   // embers drifting up
+  for (let i = 0; i < 9; i++) {
+    const ph = ((t / 1100 + i / 9) % 1), ex = p.x + Math.sin(i * 12.9 + seed) * 28 * k + Math.sin(t / 180 + i) * 5, ey = feet + 4 - ph * 80 * k;
+    ctx.fillStyle = i % 3 ? `rgba(255,${150 + (i * 13) % 80},40,${(1 - ph) * .9 * k})` : `rgba(255,240,170,${(1 - ph) * k})`;
+    const sz = i % 3 ? 2 : 3; ctx.fillRect(Math.round(ex), Math.round(ey), sz, sz);
+  }
+  ctx.restore();
+}
 function briggsDome(p, now) {   // the steel dome over him: forms, then a slow glowing loop; sparks where he gets hit
   const a = briggsAnim.get(p.sessionId) || {}, x = p.x, y = p.y + SPR.feet + 8, form = now - (a.domeAt || 0);
   if (form >= 0 && form < 300) return bfxFrame(Math.min(2, Math.floor(form / 100)), 0, x, y, .56, .85);
@@ -850,7 +883,7 @@ function briggsDome(p, now) {   // the steel dome over him: forms, then a slow g
 }
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
-  if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); return true; }
+  if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
   if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
   return false;
 }
@@ -1658,8 +1691,7 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "juggernaut") {
     const c = briggsCast(p, now);
     if (c) { blk = c.block; col = c.col; }
-    else if (p.ultActive > 0 && p.alive && p.weapon === "shotgun" && p.activeSlot === 2) { blk = 6; if (col >= 4) col = 0; }   // War Cry: the glowing red rage sheet (shots show as tracers)
-    if (p.ultActive > 0 && p.alive) briggsAura(p, now);
+    if (p.ultActive > 0 && p.alive) briggsFire(p, now, false);   // War Cry: back flames behind him, his normal frames on top
   }
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
@@ -1667,6 +1699,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
+  if (p.characterClass === "juggernaut" && p.ultActive > 0 && p.alive) briggsFire(p, now, true);   // burning ring in front
   if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsDome(p, now);
   return true;
 }
