@@ -120,7 +120,8 @@ const CLASS_STATS = {
   demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
   sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
   commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 },
-  operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
+  operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
+  slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
 };
 // Weapons are balanced around ~20 damage/second on a single zombie; each has a different strength.
 const WEAPONS = {
@@ -139,7 +140,8 @@ const MELEE = {
   knife:  { dmg:  8, cd: 0.35, range: 60, arc: 1.0 },
   bat:    { dmg: 14, cd: 0.60, range: 72, arc: 1.2 },
   axe:    { dmg: 26, cd: 0.90, range: 70, arc: 0.9 },
-  katana: { dmg: 18, cd: 0.50, range: 82, arc: 1.3 }
+  katana: { dmg: 18, cd: 0.50, range: 82, arc: 1.3 },
+  chainaxe: { dmg: 48, cd: 0.85, range: 160, arc: 0.87, targets: 4, walls: true }   // Arshan only: 100-degree sweep, 160px, up to 4
 };
 const MELEE_ORDER = ["knife", "bat", "axe", "katana"];
 // RAVEN (Scout): katana specialist. Starts with only her katana (stronger than anyone else's); can buy guns.
@@ -182,6 +184,13 @@ const BRIGGS = {
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
+// ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
+// Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
+const ARSHAN = {
+  hook: { wind: 0.15, speed: 1400, range: 1100, hitR: 10, dmg: 70, pull: 900, stop: 20, wallStop: 24, maxT: 3, cd: 12, missCd: 4 },
+  spin: { wind: 0.6, life: 12, cd: 60, r: 260, dmg: 24, every: 0.25, speed: 130 },
+};
+function arshanLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "chainaxe"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
 const DANTE = {
   sky: { cd: 8, range: 520, n: 3, gap: 0.15, flight: 0.85, spread: 80, dmg: 90, r: 75, push: 18 },
   rocketSpeed: 950,
@@ -256,7 +265,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map();
     this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -301,6 +310,7 @@ export class SurvivalRoom extends Room {
       if (this.state.players.size < 1) return;
       this.state.explore = !!data?.explore;
       for (const p of this.state.players.values()) if (p.characterClass === "scout") { ravenLoadout(p); ravenReset(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "slasher") { arshanLoadout(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
@@ -320,7 +330,7 @@ export class SurvivalRoom extends Room {
         if (veh.phase === "ride") this.moveVehicle(p, veh, clamp(Number(data?.dx) || 0, -1, 1), clamp(Number(data?.dy) || 0, -1, 1), dtv);
         return;
       }
-      if (p.stunned > 0 || this.shadowDash.has(client.sessionId)) { this.lastInputs.set(client.sessionId, Date.now()); return; }   // stunned / mid-dash: can't steer
+      if (p.stunned > 0 || this.shadowDash.has(client.sessionId) || this.hooks?.has(client.sessionId)) { this.lastInputs.set(client.sessionId, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
       const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
       const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
       const mag = Math.hypot(dx, dy) || 1;
@@ -328,7 +338,7 @@ export class SurvivalRoom extends Room {
       const previous = this.lastInputs.get(client.sessionId) || (now - 50);
       const dt = Math.min(0.1, Math.max(0, (now - previous) / 1000));
       this.lastInputs.set(client.sessionId, now);
-      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.skillT > 0 ? BRIGGS.bastion.slow : 1);   // in the dome: 30% slower
+      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && p.skillT > 0 ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
       if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(client.sessionId, now); return; }   // Briggs mid-cast (fist slam / roar)
       this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
       // Face the way you walk (left/right). Gun follows movement unless you're shooting.
@@ -339,7 +349,7 @@ export class SurvivalRoom extends Room {
     // Dash: a short 50px hop in the movement direction, once every 5 seconds.
     this.onMessage("dash", (client, data) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(client.sessionId)) return;
+      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(client.sessionId) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
       const now = Date.now();
       if (now - (this.lastDashAt.get(client.sessionId) || 0) < DASH_COOLDOWN * 1000) return;
       let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
@@ -362,7 +372,7 @@ export class SurvivalRoom extends Room {
 
     this.onMessage("chooseClass", (client,data) => {
       const p=this.state.players.get(client.sessionId); const id=String(data?.id||"");
-      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator"];
+      const classes=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher"];
       if(!p || this.state.phase!=="lobby" || !classes.includes(id)) return;
       p.characterClass=id;
       applyClassBase(p); p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
@@ -379,7 +389,7 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("meleeEquip",(client,data)=>{
       const p=this.state.players.get(client.sessionId),id=String(data?.id||"");
-      if(p&&["knife","bat","axe","katana"].includes(id)){p.melee=id;p.charging=false;if(p.alive)this.setSlot(p,1);}
+      if(p&&(["knife","bat","axe","katana"].includes(id)||(id==="chainaxe"&&p.characterClass==="slasher"))){p.melee=id;p.charging=false;if(p.alive)this.setSlot(p,1);}
     });
     const playing = id => { const p = this.state.players.get(id); return p && p.alive && this.state.phase === "playing" && !this.state.vehicles.has(id) ? p : null; };   // in a vehicle: normal actions are off
     const angle = data => { const a = Number(data?.a); return data?.a === undefined || data?.a === null || !Number.isFinite(a) ? null : a; };
@@ -581,7 +591,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
@@ -660,7 +670,7 @@ export class SurvivalRoom extends Room {
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
     p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
-    const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator"];
+    const classIds=["assault","juggernaut","medic","engineer","scout","demolitionist","sniper","commander","operator","slasher"];
     if(classIds.includes(profile.characterClass)) p.characterClass=profile.characterClass;
     applyClassBase(p);
     this.loadMag(p);
@@ -677,7 +687,7 @@ export class SurvivalRoom extends Room {
     const p = this.state.players.get(client.sessionId);
     if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
-    this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId);
+    this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId); this.hooks.delete(client.sessionId); this.spins.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       const next = [...this.state.players.values()].find(p => !p.isBot);
@@ -724,7 +734,7 @@ export class SurvivalRoom extends Room {
   // One shot from player p toward angle aim. Used by humans and AI bots alike.
   fireWeapon(p, aim, dist) {
     const now = Date.now();
-    if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId)) return;
+    if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
     if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility
     const rage = this.shotgunRage(p, now);   // Briggs's War Cry: shotgun spam, no ammo
     if (rage && p.reloadLeft > 0) p.reloadLeft = 0;
@@ -820,6 +830,7 @@ export class SurvivalRoom extends Room {
     p.charging = false;
     const raven = p.characterClass === "scout" && p.melee === "katana";
     if (raven && (p.storm > 0 || this.shadowDash.has(p.sessionId))) return;   // busy spinning / dashing
+    if (p.characterClass === "slasher" && this.arshanBusy(p)) return;   // Arshan: hooking / cyclone
     const base = raven ? ravenKatana(p) : MELEE[p.melee] || MELEE.knife;
     const m = heavy ? { ...base, dmg: base.dmg * AXE_HEAVY.dmgMult, range: AXE_HEAVY.range, arc: AXE_HEAVY.arc } : base;
     if (now - (this.lastMelee.get(p.sessionId) || 0) < m.cd * 1000) return;
@@ -839,17 +850,18 @@ export class SurvivalRoom extends Room {
     let dmg = Math.round(m.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
     let crit = false;
     if (raven && (p.katanaTier || 0) >= 5) { const n = (this.slashCount.get(p.sessionId) || 0) + 1; this.slashCount.set(p.sessionId, n); if (n % RAVEN.critEvery === 0) { dmg = Math.round(dmg * RAVEN.crit); crit = true; } }
-    let left = raven ? m.targets : Infinity;
+    let left = raven ? m.targets : (m.targets || Infinity);
     const inRange = [...this.state.zombies.values()].map(z => [z, distance(p, z)]).sort((a, b) => a[1] - b[1]);
     for (const [z, d] of inRange) {
       if (d > m.range + z.radius || left <= 0) continue;
+      if (m.walls && !this.lineClear(p, z)) continue;   // the chain-axe doesn't swing through walls
       let diff = Math.atan2(z.y - p.y, z.x - p.x) - aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) <= m.arc || d < z.radius + 10) {
         if (heavy && !z.boss && d > 0.1) {   // knock back (before the hit, so a killed zombie doesn't matter)
           const ka = Math.atan2(z.y - p.y, z.x - p.x);
           z.x = clamp(z.x + Math.cos(ka) * AXE_HEAVY.knockback, 5, ARENA.width - 5); z.y = clamp(z.y + Math.sin(ka) * AXE_HEAVY.knockback, 5, ARENA.height - 5); this.solveZombie(z);
         }
-        if (raven) { left--; this.katanaHit(z, p, dmg); } else this.hitZombie(z, p, dmg);
+        if (raven) { left--; this.katanaHit(z, p, dmg); } else { if (m.targets) left--; this.hitZombie(z, p, dmg); }
       }
     }
     this.broadcast("swing", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y - 4), a: aim, r: m.range, arc: m.arc, m: p.melee, heavy, fire: raven && p.fire > 0, crit });
@@ -874,7 +886,8 @@ export class SurvivalRoom extends Room {
   useAbility(p, data) {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
-      if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }   // cooldown starts when the dome breaks   // cooldown starts when she gets out
+      if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }
+      if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
@@ -997,6 +1010,7 @@ export class SurvivalRoom extends Room {
   ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd) r.left = r.alive ? r.active : 0; return r; }
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
+    if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
       const v = this.state.vehicles.get(p.sessionId), alive = v?.kind === "heli", active = !alive ? 0 : (v.phase === "call" ? SOFEA.heli.life : v.left) * 1000;
@@ -1009,7 +1023,11 @@ export class SurvivalRoom extends Room {
     return { info, alive, left, active };
   }
   useUlt(p) {
-    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "slasher") {
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || this.arshanBusy(p)) return;
+      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startCyclone(p, now); return;
+    }
     if (p.characterClass === "juggernaut") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0) return;
       info.summonedAt = now; info.readyAt = now + (BRIGGS.cry.life + BRIGGS.cry.cd) * 1000; this.ultInfo.set(p.sessionId, info); this.warCry(p, now); return;
@@ -1098,6 +1116,100 @@ export class SurvivalRoom extends Room {
       const { left, active, alive } = this.ultState(p, now), c = this.demoOf(p);
       p.ultCd = alive ? D.cd : Math.ceil(left / 100) / 10; p.ultActive = c ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
+  // ---------- ARSHAN: Reaper's Reach (E) + Crimson Cyclone (Q) ----------
+  arshanBusy(p) { return this.hooks.has(p.sessionId) || this.spins.has(p.sessionId); }
+  throwHook(p) {
+    const now = Date.now(), a = p.aim || 0;
+    this.hooks.set(p.sessionId, { phase: "wind", t0: now, a, ox: p.x, oy: p.y, d: 0, hx: p.x, hy: p.y, zid: "", stuck: 0 });
+    p.skillT = ARSHAN.hook.maxT; p.charging = false;
+    this.broadcast("arshan", { k: "throw", id: p.sessionId, a: Math.round(a * 1000) / 1000, x: Math.round(p.x), y: Math.round(p.y), sp: ARSHAN.hook.speed, w: ARSHAN.hook.wind });
+  }
+  endHook(p, h, now, cd) {
+    this.hooks.delete(p.sessionId); p.skillT = 0; p.abilityCooldown = cd;
+    this.broadcast("arshan", { k: "end", id: p.sessionId, x: Math.round(h.hx), y: Math.round(h.hy) });
+  }
+  updateHooks(dt, now) {
+    const H = ARSHAN.hook;
+    for (const [id, h] of [...this.hooks]) {
+      const p = this.state.players.get(id);
+      if (!p) { this.hooks.delete(id); continue; }
+      const latched = h.phase === "pull";
+      if (!p.alive || p.stunned > 0 || now - h.t0 > H.maxT * 1000 || this.state.phase !== "playing") { this.endHook(p, h, now, latched || h.hitAny ? H.cd : H.missCd); continue; }
+      p.skillT = Math.max(0, H.maxT - (now - h.t0) / 1000);
+      if (h.phase === "wind") { if (now - h.t0 >= H.wind * 1000) { h.phase = "out"; h.ox = p.x; h.oy = p.y; } continue; }
+      if (h.phase === "out") {   // the hook flies straight; swept test against zombies and walls this tick
+        const d0 = h.d, d1 = Math.min(H.range, d0 + H.speed * dt), c = Math.cos(h.a), s = Math.sin(h.a);
+        const wall = this.wallDist(h.ox, h.oy, h.a, H.range);
+        let best = null;
+        for (const z of this.state.zombies.values()) {
+          const vx = z.x - h.ox, vy = z.y - h.oy, t = vx * c + vy * s;
+          if (t < d0 - z.radius || t > d1 + z.radius || t > wall) continue;
+          if (Math.abs(vx * s - vy * c) <= z.radius + H.hitR && (!best || t < best.t)) best = { z, t };
+        }
+        if (best) {   // latch an enemy: 70 damage once, then pull Arshan to it (a kill releases without pulling)
+          const z = best.z, c2 = CLASS_STATS.slasher, scale = 1 + (this.state.stage - 1) * 0.08;
+          h.hx = z.x; h.hy = z.y; h.zid = z.id; h.hitAny = true;
+          this.hitZombie(z, p, H.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c2.dmgMult * scale);
+          this.broadcast("arshan", { k: "latch", id, x: Math.round(z.x), y: Math.round(z.y), z: z.id });
+          if (!this.state.zombies.has(z.id) || distance(p, z) <= z.radius + BODY_R + H.stop) { this.endHook(p, h, now, H.cd); continue; }
+          h.phase = "pull"; continue;
+        }
+        if (wall <= d1 && wall < H.range) {   // a wall / building / wreck: latch it and pull himself there
+          h.hx = h.ox + c * wall; h.hy = h.oy + s * wall; h.phase = "pull"; h.wall = true;
+          this.broadcast("arshan", { k: "latch", id, x: Math.round(h.hx), y: Math.round(h.hy) });
+          continue;
+        }
+        h.d = d1; h.hx = h.ox + c * d1; h.hy = h.oy + s * d1;
+        if (d1 >= H.range) this.endHook(p, h, now, H.missCd);   // missed: reel it back in
+        continue;
+      }
+      // pull: Arshan flies toward the hook point (a latched zombie keeps moving; he follows it), never through walls
+      let tx = h.hx, ty = h.hy, stop = H.wallStop;
+      if (h.zid) {
+        const z = this.state.zombies.get(h.zid);
+        if (!z || !this.lineClear(p, z) || distance(p, z) > H.range) { this.endHook(p, h, now, H.cd); continue; }
+        tx = h.hx = z.x; ty = h.hy = z.y; stop = z.radius + BODY_R + H.stop;
+      }
+      const dist = Math.hypot(tx - p.x, ty - p.y);
+      if (dist <= stop + 1) { this.endHook(p, h, now, H.cd); continue; }
+      const step = Math.min(H.pull * dt, dist - stop), ox = p.x, oy = p.y;
+      this.moveWithCollision(p, (tx - p.x) / dist * step, (ty - p.y) / dist * step);
+      if (Math.hypot(p.x - ox, p.y - oy) < step * 0.3) { if (++h.stuck >= 3) { this.endHook(p, h, now, H.cd); continue; } } else h.stuck = 0;
+      p.facing = tx > p.x ? 1 : -1; this.lastMoveAt.set(id, now);
+    }
+  }
+  startCyclone(p, now) {
+    const S = ARSHAN.spin; this.spins.set(p.sessionId, { start: now + S.wind * 1000, until: now + (S.wind + S.life) * 1000, nextTick: now + S.wind * 1000 });
+    p.charging = false;
+    this.broadcast("arshan", { k: "spin", id: p.sessionId, w: S.wind, life: S.life, r: S.r });
+    this.state.message = `${p.name}: CRIMSON CYCLONE!`;
+  }
+  endCyclone(p, now) {
+    this.spins.delete(p.sessionId); const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + ARSHAN.spin.cd * 1000; this.ultInfo.set(p.sessionId, info);
+    this.broadcast("arshan", { k: "spinEnd", id: p.sessionId });
+  }
+  updateArshan(dt, now) {
+    this.updateHooks(dt, now);
+    const S = ARSHAN.spin, scale = 1 + (this.state.stage - 1) * 0.08;
+    for (const [id, sp] of [...this.spins]) {
+      const p = this.state.players.get(id);
+      if (!p) { this.spins.delete(id); continue; }
+      if (!p.alive || p.stunned > 0 || now >= sp.until) { this.endCyclone(p, now); continue; }   // a stun cancels it (cooldown starts)
+      let ticks = 0;
+      while (now >= sp.nextTick && sp.nextTick < sp.until && ticks++ < 3) {   // every 0.25s: each zombie inside the circle (and in sight) takes a hit
+        sp.nextTick += S.every * 1000;
+        const c = CLASS_STATS.slasher, dmg = S.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * scale;
+        for (const z of [...this.state.zombies.values()]) if (distance(p, z) <= S.r + z.radius * 0.5 && this.lineClear(p, z)) this.hitZombie(z, p, dmg);
+      }
+    }
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "slasher") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? S.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0 && !this.hooks.has(p.sessionId);
     }
   }
   // ---------- BRIGGS: Iron Bastion (E) + War Cry (Q) ----------
@@ -1785,6 +1897,7 @@ export class SurvivalRoom extends Room {
     const pool = seen.length ? seen : zs;
     const near = pool.length ? pool.reduce((a, z) => distance(b, z) < distance(b, a) ? z : a) : null;
     const nearD = near ? distance(b, near) : Infinity;
+    if (this.hooks.has(b.sessionId)) { this.botBrain.set(b.sessionId, brain); return; }   // Arshan bot mid-hook: the chain is pulling him
     const ride = s.vehicles.get(b.sessionId);
     if (ride) { if (ride.phase === "ride") this.botVehicle(b, ride, near, nearD, brain, dt); this.botBrain.set(b.sessionId, brain); return; }
     // Rescue: go to the nearest downed teammate unless a zombie is right on top of us.
@@ -1846,6 +1959,12 @@ export class SurvivalRoom extends Room {
     }
     if (b.hp < b.maxHp * 0.4 && b.medkits > 0) this.useQuickItem(b);
     // Class ability when zombies are close.
+    if (b.characterClass === "slasher") {   // Arshan bot: chain-axe up close, hook to far zombies, cyclone in a crowd
+      if (near && nearD < 170 && b.activeSlot === 1 && !this.arshanBusy(b)) this.meleeAttack(b, Math.atan2(near.y - b.y, near.x - b.x));
+      const crowd = zs.filter(z => distance(b, z) < 260).length;
+      if (b.ultReady && crowd >= 5) this.useUlt(b);
+      else if (near && b.abilityCooldown <= 0 && nearD > 320 && nearD < 1000 && seen.includes(near) && !this.arshanBusy(b)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
+    }
     if (b.characterClass === "juggernaut") {   // Briggs bot: dome when it gets hairy, War Cry into a crowd
       const crowd = zs.filter(z => distance(b, z) < 350).length;
       if (b.ultReady && crowd >= 4) this.useUlt(b);
@@ -1855,7 +1974,7 @@ export class SurvivalRoom extends Room {
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
     }
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -1956,7 +2075,7 @@ export class SurvivalRoom extends Room {
     }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
-      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
       if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
         killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
@@ -2036,6 +2155,7 @@ export class SurvivalRoom extends Room {
     this.updateDante(dt, now);
     this.updateSofea(dt, now);
     this.updateBriggs(dt, now);
+    this.updateArshan(dt, now);
     this.separateZombies();
     for(const p of this.state.players.values()) if(p.reloadLeft>0){p.reloadLeft=Math.max(0,p.reloadLeft-dt);if(p.reloadLeft===0)this.finishReload(p);}
     for(const b of this.state.players.values()) if(b.isBot&&b.alive) this.botThink(b, dt, now);

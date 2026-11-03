@@ -734,4 +734,34 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(shots === 6 && p.mag === 1, `War Cry: shotgun fires 3x faster and uses no ammo (${shots} shots, mag still ${p.mag})`);
   room.ultInfo.get("A").summonedAt -= 10500; tick(1); ok(!p.ultReady && p.ultCd > 50, `after 10s the 60s cooldown runs (${p.ultCd}s left)`);
   room._dispose(); }
+// 37. ARSHAN (slasher): chain-axe, Reaper's Reach (E: hook + self-pull), Crimson Cyclone (Q: 260px spin, 12s)
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  const fast = n => { for (let i = 0; i < n; i++) { const h = room.hooks.get("A"); if (h) h.t0 -= 50; tick(1); } };   // hook timers use real time: wind them on with the fake ticks
+  room.state.phase = "lobby"; send(A, "chooseClass", { id: "slasher" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.maxHp === 135 && p.melee === "chainaxe" && p.activeSlot === 1 && !p.primary, "Arshan: 135 HP, chain-axe only");
+  p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
+  const zs = [0, 1, 2, 3, 4].map(i => placeZombie(room, p.x + 100 + i * 8, p.y - 40 + i * 20, 500));
+  room.lastMelee.set("A", 0); room.meleeAttack(p, 0); const hitN = zs.filter(z => z.hp < 500).length;
+  ok(hitN === 4 && Math.round(500 - zs[0].hp) === 48, `chain-axe: 48 dmg, 160px reach, max 4 per swing (${hitN} hit)`);
+  room.state.zombies.clear();
+  // E on a zombie far away
+  const far = placeZombie(room, p.x + 700, p.y, 500); const x0 = p.x; events.length = 0;
+  send(A, "ability", { a: 0 }); ok(room.hooks.has("A"), "E: Reaper's Reach throws the hook");
+  fast(14); ok(far.hp <= 500 - 69 && events.some(e => e.type === "arshan" && e.k === "latch"), `...hooks the zombie 700px away (${Math.round(500 - far.hp)} dmg)`);
+  fast(30); ok(!room.hooks.has("A") && p.x > x0 + 600 && Math.abs(far.x - (x0 + 700)) < 1, `...and pulls ARSHAN to it (he moved ${Math.round(p.x - x0)}px, the zombie didn't)`);
+  ok(p.abilityCooldown > 11, `12s cooldown after a latch (${p.abilityCooldown.toFixed(0)}s)`);
+  // E at a wall
+  room.state.zombies.clear(); p.abilityCooldown = 0; const wx = 1000; room.mapGrid = new Map(); room.mapBoxesNear = () => [{ x: wx + 50, y: 900, hw: 50, hh: 200 }]; p.x = 400; p.y = 900;
+  send(A, "ability", { a: 0 }); fast(40); ok(!room.hooks.has("A") && p.x > 900 && p.x < wx, `...or hooks a wall and pulls him up to it (x=${Math.round(p.x)}, wall at ${wx})`);
+  // miss
+  room.mapBoxesNear = () => []; p.abilityCooldown = 0; send(A, "ability", { a: Math.PI }); p.x = 2000; fast(40); ok(!room.hooks.has("A") && p.abilityCooldown > 2.5 && p.abilityCooldown <= 4, `a miss reels back: 4s cooldown (${p.abilityCooldown.toFixed(1)}s)`);
+  // Q
+  p.ultKills = 100; tick(1); send(A, "ult", {}); ok(room.spins.has("A"), "Q: Crimson Cyclone");
+  const z1 = placeZombie(room, p.x + 240, p.y, 1e4), z2 = placeZombie(room, p.x + 400, p.y, 1e4);
+  const sp = room.spins.get("A"); sp.start -= 600; sp.nextTick -= 600; sp.until -= 600; tick(1);
+  for (let i = 0; i < 4; i++) { sp.nextTick -= 250; tick(1); }
+  ok(z1.hp < 1e4 && z2.hp === 1e4, `...hits everything within 260px every 0.25s (${Math.round(1e4 - z1.hp)} dmg), not beyond`);
+  send(A, "ability", { a: 0 }); ok(!room.hooks.has("A"), "...E can't be used while spinning");
+  sp.until = Date.now() - 1; tick(1); ok(!room.spins.has("A") && p.ultCd > 59, `after 12s the 60s cooldown starts (${p.ultCd}s)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

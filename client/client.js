@@ -1625,7 +1625,7 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
-  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "rage"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
 };
@@ -1655,7 +1655,12 @@ function drawSurvivorDir8(p, pose, img) {
   else if (holdingGun && shotAge < 320) col = shotAge < 90 ? 5 : 4;             // shooting (5 = muzzle flash)
   else if (now - a.movedAt < 160) col = 1 + Math.floor(now / 130) % 3;          // walking
   let blk = block;
-  if (p.characterClass === "juggernaut") { const c = briggsCast(p, now); if (c) { blk = c.block; col = c.col; } if (p.ultActive > 0 && p.alive) briggsAura(p, now); }
+  if (p.characterClass === "juggernaut") {
+    const c = briggsCast(p, now);
+    if (c) { blk = c.block; col = c.col; }
+    else if (p.ultActive > 0 && p.alive && p.weapon === "shotgun" && p.activeSlot === 2) { blk = 6; if (col >= 4) col = 0; }   // War Cry: the glowing red rage sheet (shots show as tracers)
+    if (p.ultActive > 0 && p.alive) briggsAura(p, now);
+  }
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);
