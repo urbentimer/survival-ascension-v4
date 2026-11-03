@@ -840,7 +840,7 @@ function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
 // War Cry fire aura: back flames behind him + a burning ring in front, only while the Q buff lasts.
 // What makes it look alive: frames swap fast (70ms), each player's fire runs on its own clock, the size/brightness
 // flickers on two out-of-step waves, an additive glow pass makes the core burn bright, and embers float up.
-const fireImg = new Image(); fireImg.src = "assets/sprites/fx/briggs-fire.png";
+const fireImg = new Image(); fireImg.src = "assets/sprites/fx/briggs-fire.webp";
 const FIRE = { cw: 180, ch: 150, ms: 70, sc: .47 };
 function bFireFrame(col, row, x, y, sx, sy, alpha, add) {   // (x, y) = bottom-centre
   ctx.save(); ctx.globalAlpha = alpha; if (add) ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true;
@@ -1724,7 +1724,7 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
-  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "rage"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Astra: "radio" = his call for medics / police / workers (3 frames)
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
@@ -1760,7 +1760,7 @@ function drawSurvivorDir8(p, pose, img) {
     if (c) { blk = c.block; col = c.col; }
     if (p.ultActive > 0 && p.alive) briggsFire(p, now, false);   // War Cry: back flames behind him, his normal frames on top
   }
-  if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(2, Math.floor(s / 150)); } }   // radio call (E / Q / R)
+  if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);

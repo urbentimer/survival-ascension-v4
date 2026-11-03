@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Boss path-finding")
+Last updated: 2026-11-03 (latest commit: "Astra v2 look")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -99,3 +99,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Astra: 1 medic (was 3), 4 police (was 7), safehouse half 184 -> 130 (260x260 outside); client wall tiling adapts to the size.
 - Day/night: 180s cycle, night = the last 60s (was 240 / 120).
 - **Boss path-finding** (Butcher + Hivemind): bossMove(z, target, dist). Straight line when wideClear (3 parallel rays at his body width + safehouse boxes); otherwise a flow field (BFS over a 40px grid, PATH_CELL; pathGrid(r) caches blocked cells per map, flowField caches per target cell for 0.4s) and he walks to a committed waypoint (nextWaypoint: furthest visible of the next 8 steps; kept until reached / 1.5s / blocked) so he doesn't flip-flop between the two ways round a building. Before: greedy steering got him wedged next to buildings/cars ~1 in 10 spots. Check: node tools/check-boss-paths.mjs (after test-room builds the bundle) -> 0/78 stuck. ~1ms per tick with 120 zombies + both bosses.
+- **Astra v2 look (Nov 3)**: new sheets in tools/art/astra2 (rifle, knife, bat, radio 8x4, police, medic, builder; concept boards ref-*.png). Cut: extract-directions.py dispatcher gun=rifle.png%229x143.125 knife=knife.png%229x143.125 bat=bat.png%229x143.125 axe=knife.png%229x143.125 (NO fire-axe sheet yet: axe uses the knife frames) radio=radio.png!4%343.5x143.125; astra-police / astra-doctor / astra-worker from police/medic/builder.png%229x143.125; then depink.py and quantize to 256 colours. Radio call now 4 frames (112ms each). Lobby hero + face card are still the OLD look (waiting on art).
+- Preview size: briggs-fire is now .webp (148KB), juggernaut atlas lost its unused "rage" block (6 blocks now).

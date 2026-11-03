@@ -1,6 +1,6 @@
 # Cuts Briggs's War Cry fire aura sheet (2 rows x 6 frames on magenta):
 #   python3 tools/extract-fire-aura.py tools/art/briggs/fire-aura.png
-# Writes sprites/fx/briggs-fire.png: 6 columns x 2 rows of 180x150 cells.
+# Writes sprites/fx/briggs-fire.webp: 6 columns x 2 rows of 180x150 cells.
 #   row 0 = back flames (drawn BEHIND Briggs), row 1 = front ground ring (drawn IN FRONT of him).
 # Every frame is cut from the same fixed window of its column and scaled the same, so the loop doesn't wobble.
 # The glow painted over the magenta is "un-mixed" (alpha from how far it is from magenta) so it becomes a soft
@@ -45,5 +45,5 @@ for row, (y0, y1) in enumerate(bands):
         cx = c * CW + (CW - im.width) // 2
         cy = row * CH + (CH - 2 - im.height if row == 0 else (CH - im.height) // 2)   # back flames sit on the cell bottom; the ring is centred
         atlas.alpha_composite(im, (cx, cy))
-p = os.path.join(A, 'sprites', 'fx', 'briggs-fire.png'); atlas.save(p, optimize=True)
+p = os.path.join(A, 'sprites', 'fx', 'briggs-fire.webp'); atlas.save(p, quality=88, method=6)   # webp keeps the soft glow small
 print('fire aura:', bands, 'scale', round(sc, 3), '->', p, os.path.getsize(p) // 1024, 'KB')
