@@ -2,6 +2,7 @@ import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
 import { buildMapLayout, mapBoxes, packLayout } from "./mapLayout.js";
+import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
 const ARENA = { width: 3600, height: 2280 };
@@ -235,6 +236,11 @@ export class SurvivalRoom extends Room {
   patchRate = 50;
 
   onCreate(options = {}) {
+    // Every message handler is guarded: a bug logs an error (with the player and the message) instead of breaking the room.
+    const onMsg = this.onMessage.bind(this);
+    this.onMessage = (type, cb) => onMsg(type, (client, data) => {
+      try { cb(client, data); } catch (e) { this.logErr(`message "${type}"`, e, client); }
+    });
     this.autoDispose = true;
     this.solo = !!options.solo;   // set only by the single-player preview build (enables test helpers)
     this.axeSwing = new Map();
@@ -262,6 +268,7 @@ export class SurvivalRoom extends Room {
     this.state.bossDead = false;
     this.state.phase = "lobby";
     this.state.roomCode = this.roomId;
+    this.log("info", "room", `room created${options.solo ? " (solo preview)" : ""}`);
     this.state.hostId = "";
     this.state.message = "Waiting for survivors. Host can start when ready.";
     this.state.totalKills = 0;
@@ -421,9 +428,9 @@ export class SurvivalRoom extends Room {
       if (!this.solo || !p || !z) return;
       if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
     });
-    this.onMessage("clientError", (client, data) => {   // drawing errors from players' browsers, so they show up in the Render logs
-      const n = (this.errCount = (this.errCount || 0) + 1); if (n > 200) return;
-      const p = this.state.players.get(client.sessionId); console.log(`[client error] ${p?.name || client.sessionId} (${p?.characterClass || "?"}, wave ${this.state.stage}): ${String(data?.m || "").slice(0, 600)}`);
+    this.onMessage("clientError", (client, data) => {   // errors from players' browsers (drawing, UI, connection) -> the game log
+      const n = (this.errCount = (this.errCount || 0) + 1); if (n > 300) return;
+      this.log(data?.lv === "warn" ? "warn" : "error", "client", String(data?.m || ""), client, { browser: String(data?.ua || "").slice(0, 80) });
     });
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
@@ -620,6 +627,7 @@ export class SurvivalRoom extends Room {
   }
   spawnBoss() {
     const s = this.state; s.bossPhase = "fight"; s.bossIntro = ""; s.bossSpawned = true; this.spawnClock = BOSS_WAVE.escortEvery;
+    this.log("info", "boss", `boss fight started on wave ${s.stage}`);
     this.spawnZombie(true);
     const z = [...s.zombies.values()].find(q => q.boss), alive = [...s.players.values()].filter(p => p.alive);
     if (z && alive.length) {   // walk in from ~650px away from the team, not from the far side of the map
@@ -650,11 +658,14 @@ export class SurvivalRoom extends Room {
     p.color = COLORS[this.state.players.size % COLORS.length]; p.lastShot = 0; p.reviveProgress = 0; p.reviveTargetId = "";
     this.state.players.set(client.sessionId, p);
     if (!this.state.hostId) this.state.hostId = client.sessionId;
+    this.log("info", "join", `${p.name} joined (${this.state.players.size} in room${this.solo ? ", solo preview" : ""})`, client);
     this.state.message = `${p.name} joined (${this.state.players.size}/8).`;
   }
 
-  onLeave(client) {
+  onDispose() { this.log("info", "room", `room closed (reached wave ${this.state.stage}, ${this.state.totalKills || 0} kills)`); }
+  onLeave(client, consented) {
     const p = this.state.players.get(client.sessionId);
+    if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
     this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId);
@@ -1428,6 +1439,7 @@ export class SurvivalRoom extends Room {
   startAct(z, act, len, aim) { z.act = act; z.actLen = len; z.slam = len; if (aim !== undefined) z.aim = aim; }
   // ---------- The Hivemind (mini boss) ----------
   spawnHivemind() {
+    this.log("info", "boss", `the Hivemind arrived on wave ${this.state.stage}`);
     this.hiveSpawned = true; this.spawnZombie(false, "hivemind");
     const z = [...this.state.zombies.values()].pop(); if (!z || z.kind !== "hivemind") return null;
     const scale = 1 + (this.state.stage - 1) * 0.08, n = this.state.players.size;
@@ -1817,6 +1829,7 @@ export class SurvivalRoom extends Room {
 
   // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
   downPlayer(target) {
+    this.log("info", "player", `${target.name} went down (wave ${this.state.stage})`, target.sessionId);
     this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
     const downs = (this.downs.get(target.sessionId) || 0) + 1;
     this.downs.set(target.sessionId, downs);
@@ -1874,7 +1887,25 @@ export class SurvivalRoom extends Room {
     }
   }
 
+  // ---------- game log ----------
+  log(level, kind, msg, client = null, extra = {}) {
+    const p = client ? this.state.players.get(client.sessionId || client) : null;
+    return log(level, kind, msg, { room: this.state.roomCode || this.roomId, wave: this.state.phase === "lobby" ? 0 : this.state.stage, phase: this.state.phase, player: p?.name, cls: p?.characterClass, ...extra });
+  }
+  logErr(where, e, client = null) {   // the same error is logged at most 3 times per room (with its stack)
+    const key = where + (e?.message || e); this.errSeen = this.errSeen || new Map(); const n = (this.errSeen.get(key) || 0) + 1; this.errSeen.set(key, n);
+    if (n <= 3) this.log("error", "server", `${where}: ${e?.stack || e}`, client);
+    else if (n === 4) this.log("warn", "server", `${where}: same error keeps happening (not logging it again)`, client);
+  }
   tick() {
+    try { this.tickInner(); } catch (e) { this.logErr("game tick", e); }   // a bug skips one tick instead of freezing the room
+    if (this.state.phase !== this.logPhase || (this.state.phase === "playing" && this.state.stage !== this.logStage)) {   // wave start / cleared / defeat / victory
+      const ph = this.state.phase, alive = [...this.state.players.values()].filter(p => p.alive).length;
+      if (this.logPhase !== undefined) this.log(ph === "defeat" ? "warn" : "info", "game", ph === "playing" ? `wave ${this.state.stage} started (${this.state.waveType}, ${this.state.players.size} players)` : ph === "cleared" ? `wave ${this.state.stage} cleared (${alive} alive)` : ph === "defeat" ? `TEAM DEFEATED on wave ${this.state.stage}: ${this.state.message}` : ph === "victory" ? "VICTORY: all 50 waves" : `phase: ${ph}`);
+      this.logPhase = ph; this.logStage = this.state.stage;
+    }
+  }
+  tickInner() {
     const now = Date.now();
     const dt = Math.min(0.1, (now - this.lastTick) / 1000);
     this.lastTick = now;
@@ -1920,7 +1951,7 @@ export class SurvivalRoom extends Room {
       if(!rescuer.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85){rescuer.reviveTargetId="";rescuer.reviveProgress=0;}
       else {rescuer.reviveProgress+=dt;if(rescuer.reviveProgress>=5){target.alive=true;target.bleedout=0;target.hp=Math.max(30,Math.round(target.maxHp*.35));rescuer.revives++;rescuer.reviveTargetId="";rescuer.reviveProgress=0;this.state.message=`${rescuer.name} revived ${target.name}!`;}}
     }
-    for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;}}
+    for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
       if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun";p.ammo+=30;this.unlockWeapon(p,found);this.storeMag(p);p[WEAPONS[found].slot]=found;if(p.activeSlot===2||p.activeSlot===3)this.setSlot(p,p.activeSlot);else this.loadMag(p);this.state.message=`${p.name} found a ${item.rarity} ${found}!`;}
       this.state.loot.delete(item.id);

@@ -4,6 +4,7 @@
 import { fileURLToPath } from "node:url"; import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const { SurvivalRoom } = await import(join(here, "dist/room-test.mjs"));
+process.env.SA_QUIET = "1";
 const LAST = Number(process.argv[2] || 9);
 const room = new SurvivalRoom(); room.onCreate({}); const seenEv = {}; room._onBroadcast = (type, m) => { const k = type + (m?.k ? ":" + m.k : ""); seenEv[k] = (seenEv[k] || 0) + 1; };
 const H = { sessionId: "H" }; room.onJoin(H, { name: "Host" });

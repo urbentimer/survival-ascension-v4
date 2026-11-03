@@ -93,7 +93,7 @@ function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   $("invite").classList.remove("hidden"); $("codeDisplay").textContent = room.roomId; $("roomCount").textContent = "Room connected";
   message("Connected. Share the invitation code with your friends.");
-  room.onStateChange(s => { state = s; try { recordSnapshots(); renderState(); } catch (e) { reportError(e, "ui"); } });
+  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); renderState(); } catch (e) { reportError(e, "ui"); } });
   room.onMessage("shot", m => { fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
@@ -2025,12 +2025,21 @@ function drawScreen() {
 
 // A drawing bug must never freeze the game: errors are caught, sent to the server log (Render), and the next frame still runs.
 const reportedErrors = new Set();
-function reportError(e, where) {
-  const msg = `${where}: ${e?.message || e} | ${String(e?.stack || "").split("\n").slice(1, 4).map(s => s.trim()).join(" < ")}`;
-  if (reportedErrors.has(msg) || reportedErrors.size > 20) return; reportedErrors.add(msg);
-  console.error("[game]", msg); try { room?.send("clientError", { m: msg.slice(0, 600) }); } catch { /* not connected */ }
+function reportError(e, where, lv = "error") {
+  const me = state && me_(), msg = `${where}: ${e?.message || e}${e?.stack ? " | " + String(e.stack).split("\n").slice(1, 5).map(s => s.trim().replace(/https?:\/\/[^/]+\//, "")).join(" < ") : ""}${me ? ` [${me.alive ? "alive" : "down"}${state.vehicles?.get(myId) ? ", in vehicle" : ""}]` : ""}`;
+  if (reportedErrors.has(msg) || reportedErrors.size > 25) return; reportedErrors.add(msg);
+  console.error("[game]", msg); try { room?.send("clientError", { m: msg.slice(0, 900), lv, ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, "") }); } catch { /* not connected */ }
 }
 addEventListener("error", e => reportError(e.error || e.message, "window"));
+addEventListener("unhandledrejection", e => reportError(e.reason, "promise"));
+// Stall detector: in a game the server sends updates ~20 times a second. 6s of silence = lag / connection trouble.
+let lastStateAt = performance.now(), stallReported = false;
+setInterval(() => {
+  if (!room || !state || state.phase !== "playing") { lastStateAt = performance.now(); return; }
+  const gap = performance.now() - lastStateAt;
+  if (gap > 6000 && !stallReported) { stallReported = true; reportError(`no updates from the server for ${Math.round(gap / 1000)}s`, "connection", "warn"); }
+  if (gap < 1000) stallReported = false;
+}, 2000);
 function frame(t){
   if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);

@@ -1,6 +1,6 @@
 # Survival Ascension — handoff (keep updated after every change)
 
-Last updated: 2026-11-03 (latest commit: "Freeze-proof frame loop + client error reports")
+Last updated: 2026-11-03 (latest commit: "Game log")
 
 ## Where things are
 - Live game: Colyseus server on Render, client on Netlify, repo **urbentimer/survival-ascension-v4** (GitHub). Live = `main` (Viktor rework, Raven, Dante, Hivemind went live 2026-11-03). Server: wss://survival-ascension-sg.onrender.com (Render SINGAPORE, service srv-dbkkpufb9u1s73fmj99g; client/config.js). Old Virginia service srv-dbjm617b9u1s73eejs20 (survival-ascension-v4) is no longer used. Players open **https://survival-ascension-web.onrender.com** (Render static site srv-dbkmd7mk1f9s73dd8b40, publishes client/, auto-deploys from main; free). The old Netlify site lucent-lamington-40beed.netlify.app ran out of Netlify credits on 2026-11-03 (deploys paused) and is no longer updated.
@@ -16,6 +16,7 @@ Last updated: 2026-11-03 (latest commit: "Freeze-proof frame loop + client error
 - Free Render server sleeps after ~15 min idle; the client retries create/join for ~90s ("Waking up the server…").
 
 ## Debugging
+- **Game log**: https://survival-ascension-sg.onrender.com/logs?key=<LOG_KEY> (LOG_KEY is an env var on the Render server; current value in the chat 2026-11-03). Shows errors / warnings / events since the server last started: room created/closed, joins, disconnects ("lost connection"), wave start/cleared/defeat, boss + Hivemind arrivals, downs/bleed-outs, server errors (tick + message handlers are try/caught and logged with stack, same error max 3x per room), browser errors from players (frame/draw/ui/promise errors, 6s server-silence stalls) with player, class, wave, room and browser. Every entry is also printed as `[log] {json}` so Render's log search keeps it after restarts (search "[log]" with the Render connector). Code: server/src/logbook.js.
 - Client drawing errors no longer freeze the game (frame loop + each sprite draw is try/caught) and are sent to the server: search Render logs (service srv-dbkkpufb9u1s73fmj99g) for `[client error]`.
 - Every push restarts the game server (kicks rooms): batch pushes when the user is mid-game.
 

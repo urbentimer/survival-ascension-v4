@@ -1,6 +1,7 @@
 // Controlled server test: runs SurvivalRoom directly (no network) and places zombies by hand.
 // Usage: node tools/test-room.mjs   (bundles the room first with esbuild)
 import { build } from "esbuild";
+process.env.SA_QUIET = "1";   // no game-log lines in the test output
 import { fileURLToPath } from "node:url"; import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url)), root = join(here, "..");
 const out = join(here, "dist/room-test.mjs");
@@ -694,5 +695,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(B, "testNoCd"); ok(!room.state.noCd, "only the host can switch test mode");
   send(A, "testNoCd"); tick(1); ok(room.state.noCd && p.ultReady, "test mode: the ultimate is unlocked straight away");
   send(A, "ult", {}); ok(p.storm > 0, "...Blade Storm starts"); p.storm = 0.01; tick(3); ok(p.ultReady && p.ultCd === 0, "...and is ready again as soon as it ends (no cooldown)");
+  room._dispose(); }
+// 35. game log: a crash in the game tick or a message handler is logged and the room keeps running
+{ const { room, A, send } = makeRoom(); const logged = []; room.log = (lv, kind, msg) => logged.push([lv, kind, msg]);
+  const inner = room.tickInner.bind(room); room.tickInner = () => { throw new Error("test boom"); };
+  let threw = false; try { room.tick(); } catch { threw = true; }
+  ok(!threw && logged.some(([lv, k, m]) => lv === "error" && /game tick: Error: test boom/.test(m)), "a crash in the game tick is logged (with its stack) instead of killing the room");
+  room.tickInner = inner; room.tick(); ok(room.state.phase === "playing", "...and the next tick runs normally");
+  send(A, "clientError", { m: "frame: x is not a function" }); ok(logged.some(([lv, k, m]) => k === "client" && /x is not a function/.test(m)), "errors from a player's browser go into the log");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
