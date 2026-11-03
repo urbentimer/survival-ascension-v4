@@ -10,6 +10,7 @@
 #   e.g.  python3 tools/extract-directions.py assault gun=tools/art/marcus-v3-gun.png knife=tools/art/marcus-v3-knife.png \
 #             bat=tools/art/marcus-v3-bat.png axe=tools/art/marcus-v3-axe.png
 #   Optional crop if a sheet has labels/panels:  gun=<sheet>#x0,y0,x1,y1
+#   Two-part sheets from the character kit (PART A = rows 1-4, PART B = rows 5-8):  gun=rifle-A.png+rifle-B.png
 # Atlas layout: one block of 8 rows per weapon, in the order given. Missing melee weapons use the knife in game.
 import sys, os, json
 import numpy as np
@@ -148,7 +149,12 @@ if __name__ == '__main__':
         pitch, _, rpitch = pitch.partition('x')
         spec, _, order = spec.partition('@')   # "@U": rows on the sheet go U,UR,R,DR,D,DL,L,UL (instead of D,DR,R,UR,U,UL,L,DL)
         path, _, box = spec.partition('#')
-        full = np.array(Image.open(path).convert('RGB')).astype(int)
+        parts = [Image.open(q).convert('RGB') for q in path.split('+')]   # "rifle-A.png+rifle-B.png": the kit's PART A (rows 1-4) and PART B (rows 5-8), stacked
+        if len(parts) > 1:
+            wmax = max(q.width for q in parts); stack = Image.new('RGB', (wmax, sum(q.height for q in parts)), (255, 0, 255)); yy = 0
+            for q in parts: stack.paste(q, (0, yy)); yy += q.height
+            parts = [stack]
+        full = np.array(parts[0]).astype(int)
         if box: x0, y0, x1, y1 = map(int, box.split(',')); full = full[y0:y1, x0:x1]
         frames, nrows = cut_sheet(full, None, int(pitch) if pitch else None, float(rpitch) if rpitch else None)
         idle_h = np.median([frames[(r, 0)][3] for r in range(nrows) if (r, 0) in frames])

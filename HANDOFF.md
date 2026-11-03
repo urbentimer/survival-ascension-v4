@@ -70,3 +70,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Hivemind death sheet; Raven's whirlwind spin sheet; Dante launcher version 2 sheet (saved, unused).
 - Other survivors' 8-direction sheets + kits; other bosses' art and moves; walker 8-direction sheet.
 - Boss loot (Butcher's Locker), night vision size choice.
+- Character kit v2 (2026-11-03): max 24 frames per image (8 directions = PART A rows 1-4 + PART B rows 5-8; bosses 4 parts), one effect / one card per image, everyone matches Marcus's chibi proportions (reference/STYLE-AND-SIZE-GUIDE.png + EXAMPLE sheets in the kit). Cut two-part sheets with `gun=rifle-A.png+rifle-B.png`.
