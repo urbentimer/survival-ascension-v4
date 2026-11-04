@@ -1,5 +1,5 @@
 # R skill card for Sofea's mecha (no ChatGPT card yet): reuses the Sky Reign card's frame, new picture + title.
-#   python3 tools/make-card-aegis.py        (after extract-mecha.py)
+#   python3 tools/make-card-aegis.py   NOTE: written for the first, 3x-size mecha cut (224x192 cells); the card in the repo was made from that cut
 import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter

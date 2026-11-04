@@ -130,7 +130,7 @@ function connected() {
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
     else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
-    else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: 1.2, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
+    else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
   room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
@@ -1206,22 +1206,30 @@ function drawSofea(p, img, now) {
 // sofea-mecha.webp: 8 rows (dir8 order) x 6 cols (idle, walk 1-3, flame pose, saber slash), cells 224x192, feet at (112, 186)
 // sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
-const MECHA = { cw: 224, ch: 192, ax: 112, fy: 186, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,
-  nozzle: [[-2, -45], [66, -68], [64, -86], [40, -99], [12, -99], [-42, -99], [-59, -84], [-30, -42]],   // per direction, from the feet
+const MECHA = { cw: 112, ch: 88, ax: 56, fy: 80, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // her normal size (same cells as the survivors)
+  nozzle: [[-4, -23], [22, -26], [19, -30], [-6, -33], [-2, -33], [5, -33], [-19, -31], [-2, -17]],   // per direction, from the feet
   tfRow: [0, 0, 3, 4, 4, 4, 2, 1] };   // which transformation angle each facing uses
-const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaLate = [];   // per player: stepping out, last saber swing, flame state
+const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
+// draws frame f of a strip, cross-fading into frame f2 by k (0..1): smooth in-betweens for the transformation / flame
+function blendCells(im, sx, sy, cw, ch, f, f2, k, dx, dy, dw = cw, dh = ch) {
+  ctx.drawImage(im, sx + f * cw, sy, cw, ch, dx, dy, dw, dh);
+  if (k > .04 && f2 !== f) { const a = ctx.globalAlpha; ctx.globalAlpha = a * k; ctx.drawImage(im, sx + f2 * cw, sy, cw, ch, dx, dy, dw, dh); ctx.globalAlpha = a; }
+}   // per player: stepping out, last saber swing, flame state
 const mechaFiring = (p, v) => v.phase === "ride" && (p.sessionId === myId ? heliTrigger() && performance.now() - (mechaSlash.get(myId)?.t || 0) > MECHA.swing : !!v.fire);
 function drawMechaTf(p, row, u) {   // u: 0 = Sofea, 1 = mecha
   const im = sImgs.mechaTf; if (!im?.naturalWidth) return;
-  const f = Math.max(0, Math.min(7, Math.floor(u * 8))), tr = MECHA.tfRow[row], feet = Math.round(p.y + SPR.feet);
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 14 + 30 * u, 5 + 8 * u, 0, 0, 7); ctx.fill();
-  if (u > .1 && u < .95) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .5 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(p.x, feet - 50 * u, 4, p.x, feet - 50 * u, 40 + 60 * u); g.addColorStop(0, "#ffb27a"); g.addColorStop(1, "rgba(255,60,40,0)"); ctx.fillStyle = g; ctx.fillRect(p.x - 110, feet - 190, 220, 200); }
+  u = Math.max(0, Math.min(1, u)); const t = u * 7, f = Math.floor(t), tr = MECHA.tfRow[row], feet = Math.round(p.y + SPR.feet);
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 14 + 3 * u, 4 + u, 0, 0, 7); ctx.fill();
+  if (u > .05 && u < .97) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .55 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(p.x, feet - 26, 3, p.x, feet - 26, 34); g.addColorStop(0, "#ffb27a"); g.addColorStop(1, "rgba(255,60,40,0)"); ctx.fillStyle = g; ctx.fillRect(p.x - 40, feet - 64, 80, 70); }
   ctx.restore();
-  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, f * MECHA.cw, tr * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy, MECHA.cw, MECHA.ch); ctx.restore();
+  ctx.save(); ctx.imageSmoothingEnabled = false; blendCells(im, 0, tr * MECHA.ch, MECHA.cw, MECHA.ch, f, Math.min(7, f + 1), t - f, Math.round(p.x - MECHA.ax), feet - MECHA.fy); ctx.restore();
 }
 function drawMecha(p, v, aim, now) {
   const row = rowOf(aim);
-  if (v.phase === "call") { drawMechaTf(p, row, 1 - v.left / MECHA.call); return; }
+  if (v.phase === "call") {   // timed here (not from the synced v.left, which only updates ~20 times a second) so it plays smoothly
+    let c = mechaCall.get(p.sessionId); if (!c) { c = now - Math.max(0, 1 - v.left / MECHA.call) * MECHA.call * 1000; mechaCall.set(p.sessionId, c); }
+    drawMechaTf(p, row, (now - c) / (MECHA.call * 1000)); return; }
+  mechaCall.delete(p.sessionId);
   const im = sImgs.mecha, feet = Math.round(p.y + SPR.feet), sl = mechaSlash.get(p.sessionId), sAge = sl ? now - sl.t : 1e9;
   const fire = mechaFiring(p, v); let fs = mechaFlame.get(p.sessionId);
   if (!fs) { fs = { on: false, at: 0 }; mechaFlame.set(p.sessionId, fs); }
@@ -1230,19 +1238,21 @@ function drawMecha(p, v, aim, now) {
   let col = 0;
   if (sAge < 520) col = 5;
   else if (fire || now - fs.at < 200) col = 4;
-  else if (v.mv) col = 1 + Math.floor(now / 140) % 3;
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 46, 14, 0, 0, 7); ctx.fill(); ctx.restore();
+  let bob = 0;
+  if (col === 0 && v.mv) { const st = Math.floor(now / 115) % 4; col = [1, 2, 3, 2][st]; bob = st % 2 ? 0 : 1; }   // walk 1-2-3-2, a 1px bob on the heavy steps
+  else if (col === 0) bob = Math.sin(now / 420) > .6 ? 1 : 0;   // idle: slow breathing
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 17, 5, 0, 0, 7); ctx.fill(); ctx.restore();
   const flameBehind = Math.sin(aim) < -.35;
   if (flameBehind) drawMechaFlame(p, aim, row, feet, fs, now);
-  if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * MECHA.cw, swingRow * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy, MECHA.cw, MECHA.ch); ctx.restore(); }
+  if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * MECHA.cw, swingRow * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy + bob, MECHA.cw, MECHA.ch); ctx.restore(); }
   if (!flameBehind) mechaLate.push(() => drawMechaFlame(p, aim, row, feet, fs, now));   // over the zombies it's burning (drawn after all sprites)
   if (sAge < 480) drawSaberSweep(p, sl.a, sAge, feet);
 }
 function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm's nozzle to the ground 190px out where she aims
   const im = sImgs.flame; if (!im?.naturalWidth) return;
-  const age = now - fs.at; let f;
-  if (fs.on) f = age < 240 ? Math.floor(age / 30) : 8 + Math.floor((age - 240) / 55) % 6;
-  else { if (age > 320 || !fs.at) return; f = 14 + Math.min(7, Math.floor(age / 40)); }
+  const age = now - fs.at; let t, f, f2;   // t = position in frames; each frame cross-fades into the next
+  if (fs.on) { if (age < 200) { t = age / 25; f = Math.floor(t); f2 = Math.min(8, f + 1); } else { t = (age - 200) / 45; f = 8 + Math.floor(t) % 6; f2 = 8 + (Math.floor(t) + 1) % 6; } }
+  else { if (age > 300 || !fs.at) return; t = age / 37; f = 14 + Math.min(7, Math.floor(t)); f2 = Math.min(21, f + 1); }
   const [nx, ny] = MECHA.nozzle[row], ox = p.x + nx, oy = feet + ny;
   const tx = p.x + Math.cos(aim) * MECHA.range, ty = p.y + Math.sin(aim) * MECHA.range * .92;   // ground point at the end of the cone
   const L = Math.max(60, Math.hypot(tx - ox, ty - oy)), ang = Math.atan2(ty - oy, tx - ox), sc = L / 157;   // the full jet is ~157px long in the art
@@ -1250,14 +1260,14 @@ function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm'
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .35;   // hot glow on the ground under the jet
   const g = ctx.createRadialGradient(L * .6, 0, 4, L * .6, 0, L * .55); g.addColorStop(0, "#ff9a3c"); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.fillRect(0, -L * .6, L * 1.2, L * 1.2);
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
-  ctx.drawImage(im, f * 208, 0, 208, 112, -4 * sc, -56 * sc * 1.1, 208 * sc, 112 * sc * 1.1);
+  blendCells(im, 0, 0, 208, 112, f, f2, t - Math.floor(t), -4 * sc, -56 * sc * .85, 208 * sc, 112 * sc * .85);
   ctx.restore();
 }
 function drawSaberSweep(p, a, age, feet) {   // a bright green crescent sweeping 120 degrees, 155px
-  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 60, R = MECHA.saber;
+  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 58, R = MECHA.saber;
   const a0 = a - Math.PI / 3, a1 = a0 + (Math.PI * 2 / 3) * u;
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
-  for (const [w, c, al] of [[26, "#1fff6a", .22], [12, "#5dff9a", .55], [4, "#eafff0", .95]]) {
+  for (const [w, c, al] of [[18, "#1fff6a", .22], [8, "#5dff9a", .55], [3, "#eafff0", .95]]) {
     ctx.globalAlpha = al * fade; ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.ellipse(p.x, cy + 40, R * .92, R * .62, 0, Math.max(a0, a1 - 1.3), a1); ctx.stroke();
   }
   ctx.restore();
@@ -2033,7 +2043,7 @@ function drawSurvivorLabels(p) {
     ctx.restore();
   }
   ctx.fillStyle = "#f2ead9"; ctx.font = "11px monospace"; ctx.textAlign = "center";
-  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 116 * (rideV.phase === "ride" ? 1 : 1 - rideV.left) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
+  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
   ctx.fillText(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift);
   if (!p.alive) { ctx.fillStyle = "#ff7568"; ctx.fillText(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32); }
 }

@@ -754,7 +754,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   hold(6); ok(s1.hp < 420, "...then the flame carries on");
   // damage taken: normal
   room.state.zombies.clear(); send(A, "input", { a: 0, f: 0 });
-  { const hp = p.hp, z = placeZombie(room, p.x + 40, p.y, 9999); z.attackCooldown = 0; z.damage = 20; z.role = "hunter"; tick(1); ok(Math.abs((hp - p.hp) - 20) < 1.5, `she takes normal damage in it (${(hp - p.hp).toFixed(1)} of 20)`); room.state.zombies.clear(); }
+  { const hp = p.hp, z = placeZombie(room, p.x + 26, p.y, 9999); z.attackCooldown = 0; z.damage = 20; z.role = "hunter"; tick(1); ok(Math.abs((hp - p.hp) - 20) < 1.5, `she takes normal damage in it (${(hp - p.hp).toFixed(1)} of 20)`); room.state.zombies.clear(); }
   // R again: out early, cooldown 100s from getting out
   p.hp = p.maxHp; tick(1); send(A, "skill2"); tick(1);
   ok(!room.state.vehicles.has("A") && p.chargeCd > 99, `R again: she steps out; R cools down 100s (${p.chargeCd}s)`);
