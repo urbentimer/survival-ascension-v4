@@ -6,7 +6,7 @@
 #   row 2 heal burst (once)     cells 208x176  bottom of the ring      = cell bottom - 14
 # The glow painted over the magenta is "un-mixed" (alpha = how much green there is: magenta has none), so it becomes a
 # see-through neon glow instead of a pink halo. Every frame of a row is cut from the same window and scaled the same,
-# so the loops don't wobble.
+# so the loops don't wobble. Colours are graded to a bold deep-emerald neon; the client draws it normally + a light additive glow pass.
 import sys, os
 import numpy as np
 from PIL import Image
@@ -22,7 +22,12 @@ a[(r > .85) & (b > .85) & (g < .12)] = 0
 fx = np.clip((rgb - (1 - a)[..., None] * np.array([1, 0, 1])) / np.maximum(a, 1e-3)[..., None], 0, 1)
 fx[..., 0] = np.minimum(fx[..., 0], fx[..., 1] * .8)        # no pink / purple left in the halo
 fx[..., 2] = np.minimum(fx[..., 2], fx[..., 1] * .95)
-a[a < .05] = 0
+# BOLD grade (user's pick, Nov 4): deep emerald in the soft parts, white-hot core kept; the faint fog trimmed so it stays crisp
+lum = fx.max(-1, keepdims=True)
+deep = np.concatenate([np.zeros_like(lum), lum * .85, lum * .42], -1)
+core = np.clip((lum - .8) / .2, 0, 1)
+fx = deep * (1 - core) + fx * core
+a = np.clip((a - .07) / .93 * 1.15, 0, 1)
 rgba = np.dstack([fx * 255, a * 255]).astype(np.uint8)
 
 H, W = a.shape; occ = (a > .25).sum(1) > 4; ys = np.where(occ)[0]

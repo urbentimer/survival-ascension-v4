@@ -934,7 +934,7 @@ function drawAstraGround() {   // safehouse floor / footprint + green heal pulse
   for (const [, h] of healing()) { const pt = V(state.players.get(h.tgt)); if (pt) healCell(0, Math.floor(now / HEAL_FX.ms) % 6, pt.x, pt.y + 17, .9, HEAL_FX.ring); }   // neon heal circle at the patient's feet
 }
 // Astra's medic: neon healing effect (sprites/fx/astra-heal.webp, tools/extract-heal-fx.py). Row 0 ground circle (centred),
-// row 1 rising aura and row 2 heal burst (bottom-anchored). Drawn additively so it glows.
+// row 1 rising aura and row 2 heal burst (bottom-anchored). Bold emerald colour + a 30% additive glow pass.
 const HEAL_FX = { cells: [[176, 96], [144, 208], [208, 176]], ms: 180, burstMs: 100, ring: .95, aura: .64, burst: .85 };
 const healSeen = new Map();   // doctor id -> { tgt, t: when this heal started (burst), last: last frame seen healing }
 function healing() {   // doctors healing right now, with when each heal started
@@ -951,9 +951,11 @@ function healing() {   // doctors healing right now, with when each heal started
 function healCell(row, col, x, y, alpha, sc) {   // y = the oval's centre (row 0) or the feet (rows 1-2)
   const im = aImgs.heal; if (!im?.naturalWidth) return;
   const [cw, ch] = HEAL_FX.cells[row], oy = row === 0 ? 0 : row === 1 ? 96 : 304;
-  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = true;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = true;
   const w = cw * sc, h = ch * sc, top = row === 0 ? y - h / 2 : y - (ch - 22) * sc;
-  ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h); ctx.restore();
+  ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h);   // the bold emerald colour...
+  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * .3; ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h);   // ...plus a glow pass
+  ctx.restore();
 }
 function healOverlays(items) {   // aura + burst over each patient, sorted just in front of them
   const now = performance.now();
