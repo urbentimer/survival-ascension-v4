@@ -1186,7 +1186,7 @@ function drawSofea(p, img, now) {
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
-const HGUN = { cone: Math.PI / 2, range: 200, every: 16 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+const HGUN = { cone: Math.PI / 2, range: 250, every: 16 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
 function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
 const heliTrigger = () => firing && !anyPanelOpen() && !wheel;   // you're holding the helicopter gun's trigger (left mouse)
 function heliFiring(p) { const v = state?.vehicles?.get(p.sessionId); return !!v && v.phase === "ride" && (p.sessionId === myId ? heliTrigger() : !!v.fire); }   // yours: instant; others: from the server

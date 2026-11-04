@@ -174,9 +174,9 @@ const SOFEA = {
   tank: { life: 30, cd: 30, speed: 140, taken: 0.65, rate: 1.5, body: 34, reach: 30, hw: 50, hh: 32,
           shot: { dmg: 65, min: 30, r: 110, speed: 600, range: 650 }, crush: { dmg: 55, boss: 10, gap: 0.75, minSpeed: 40, push: 30 } },
   // helicopter: flies over everything (only the map edge stops it); its machine gun fires while she HOLDS the left mouse button, hitting every
-  // zombie in a 90-degree cone (200px) the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
+  // zombie in a 90-degree cone (250px) the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
-          gun: { cone: Math.PI / 2, range: 200, every: 0.1, dmg: 10, bossMult: 0.5 } },   // 100 dps per zombie on wave 1
+          gun: { cone: Math.PI / 2, range: 250, every: 0.1, dmg: 10, bossMult: 0.5 } },   // 100 dps per zombie on wave 1
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
