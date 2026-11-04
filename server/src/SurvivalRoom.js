@@ -199,7 +199,9 @@ const ASTRA = {
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
   police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 7, burst: 3, gap: .12, every: 3, range: 440, leash: 600, threat: 250 },
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
-  safe: { cd: 90, build: 5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
+  // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
+  // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
+  safe: { cd: 90, build: 8, hits: 6, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
@@ -281,7 +283,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.moveBudget = new Map(); this.inQ = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
     this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -1553,7 +1555,7 @@ export class SurvivalRoom extends Room {
       let site = c.site && this.safeFits(c.site.x, c.site.y) ? c.site : this.safeSite(p);   // check again: things move during the call
       if (!site) return this.astraNo(p, "no room for a safehouse here");
       const st = new StructureState(); st.id = `sh${++this.robotSeq}`; st.kind = "safehouse"; st.x = Math.round(site.x); st.y = Math.round(site.y); st.ownerId = p.sessionId;
-      st.deploy = ASTRA.safe.build; st.hp = st.maxHp = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
+      st.deploy = ASTRA.safe.build; st.hp = st.maxHp = ASTRA.safe.hits; st.life = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
       const H = ASTRA.safe.half - 30, spots = this.freeSpots(p.x, p.y, 2) || [{ x: p.x - 20, y: p.y }, { x: p.x + 20, y: p.y }];
       this.spawnUnit(p, "worker", spots[0], { site: st.id, goal: { x: st.x + H, y: st.y - H } });   // worker A: north + east walls
       this.spawnUnit(p, "worker", spots[1], { site: st.id, goal: { x: st.x - H, y: st.y + H } });   // worker B: south + west walls
@@ -1562,6 +1564,24 @@ export class SurvivalRoom extends Room {
     }
   }
   summonScale() { return 1 + (this.state.stage - 1) * 0.06; }   // same wave scaling as Viktor's machines
+  safeTouch(z) {   // the safehouse wall box this zombie is pressed against (or null)
+    const r = Math.min(z.radius, 34) * .8 + 14;
+    for (const b of this.safeBoxes) {
+      const qx = clamp(z.x, b.x - b.hw, b.x + b.hw), qy = clamp(z.y, b.y - b.hh, b.y + b.hh);
+      if (Math.hypot(z.x - qx, z.y - qy) < r) return { b, x: qx, y: qy };
+    }
+    return null;
+  }
+  hitSafe(w, z) {
+    const st = w.b.st; if (!st || !this.state.structures.has(st.id)) return;
+    st.hp = Math.max(0, st.hp - 1); this.safeHit.set(st.id, { x: w.x, y: w.y });
+    this.broadcast("astra", { k: "wallHit", x: Math.round(w.x), y: Math.round(w.y), hp: st.hp });
+    if (st.hp <= 0) {   // broken: gone at once
+      this.state.structures.delete(st.id); this.safeBoxes = this.safeBoxes.filter(b => b !== w.b);
+      this.broadcast("astra", { k: "safeDown", x: st.x, y: st.y });
+      const owner = this.state.players.get(st.ownerId); if (owner) this.state.message = `${owner.name}'s safehouse was BROKEN!`;
+    }
+  }
   cancelSafe(st, refund) {
     for (const r of [...this.state.robots.values()]) if (r.kind === "worker" && this.unitMem.get(r.id)?.site === st.id) this.removeUnit(r);
     this.state.structures.delete(st.id); this.broadcast("astra", { k: "safeCancel", x: st.x, y: st.y });
@@ -1584,11 +1604,11 @@ export class SurvivalRoom extends Room {
         this.broadcast("astra", { k: "built", x: st.x, y: st.y });
         continue;
       }
-      st.hp = Math.max(0, st.hp - dt);
-      if (st.hp <= 0) { this.state.structures.delete(st.id); this.broadcast("astra", { k: "safeDown", x: st.x, y: st.y }); }
+      st.life = Math.max(0, st.life - dt);
+      if (st.life <= 0 || st.hp <= 0) { this.state.structures.delete(st.id); this.broadcast("astra", { k: "safeDown", x: st.x, y: st.y }); }
     }
     this.safeBoxes = [];
-    for (const st of this.state.structures.values()) if (st.kind === "safehouse" && st.deploy <= 0) this.safeBoxes.push({ x: st.x, y: st.y, hw: H, hh: H });
+    for (const st of this.state.structures.values()) if (st.kind === "safehouse" && st.deploy <= 0) this.safeBoxes.push({ x: st.x, y: st.y, hw: H, hh: H, st });
   }
   keepOutOfSafehouses() {   // bosses jump / get pulled too: nothing hostile ends a tick inside a finished safehouse
     if (!this.safeBoxes.length) return;
@@ -1679,15 +1699,31 @@ export class SurvivalRoom extends Room {
     const sa = mem.slot * 2.4 + 2.2, sr = 70;   // a spot ~70px beside / behind the player he guards (officers on the same player spread out)
     this.unitStep(r, { x: lead.x + Math.cos(sa) * sr, y: lead.y + Math.sin(sa) * sr * .8 }, P.speed, dt);
   }
-  updateWorker(r, mem, now, dt) {
-    const st = this.state.structures.get(mem.site);
-    if (!st || st.deploy <= 0) {   // done (or cancelled): walk off and go home
+  updateWorker(r, mem, now, dt) {   // build the safehouse, then STAY inside (half speed) and slowly repair it until it's gone
+    const S = ASTRA.safe, st = this.state.structures.get(mem.site);
+    if (!st) {   // broken / expired / cancelled: walk off and go home
       mem.leaveAt = mem.leaveAt || now + 900; if (now >= mem.leaveAt) return this.removeUnit(r);
-      r.act = ""; const a = Math.atan2(r.y - (st?.y ?? r.y + 1), r.x - (st?.x ?? r.x)); this.unitStep(r, { x: r.x + Math.cos(a) * 40, y: r.y + Math.sin(a) * 40 }, ASTRA.safe.worker, dt); return;
+      r.act = ""; const a = Math.atan2(r.y - (mem.sy ?? r.y + 1), r.x - (mem.sx ?? r.x)); this.unitStep(r, { x: r.x + Math.cos(a) * 40, y: r.y + Math.sin(a) * 40 }, S.worker * S.stay, dt); return;
     }
-    const d = distance(r, mem.goal);
-    if (d > 14) { r.act = ""; this.unitStep(r, mem.goal, ASTRA.safe.worker * 1.6, dt); }   // they hurry to their wall, then build (5 seconds)
-    else { r.act = "build"; r.aim = Math.atan2(st.y - r.y, st.x - r.x); }
+    mem.sx = st.x; mem.sy = st.y;
+    if (st.deploy > 0) {
+      const d = distance(r, mem.goal);
+      if (d > 14) { r.act = ""; this.unitStep(r, mem.goal, S.worker * 1.6, dt); }   // they hurry to their wall, then build (8 seconds)
+      else { r.act = "build"; r.aim = Math.atan2(st.y - r.y, st.x - r.x); }
+      return;
+    }
+    const In = S.half - S.wall - 14, hit = this.safeHit.get(st.id);
+    if (st.hp < st.maxHp) {   // damaged: go to where it was hit (inside) and patch it up, 1 every repairEvery seconds
+      const spot = hit ? { x: clamp(hit.x, st.x - In, st.x + In) + (mem.goal.x > st.x ? 10 : -10), y: clamp(hit.y, st.y - In, st.y + In) } : mem.goal;
+      if (distance(r, spot) > 40) { r.act = ""; this.unitStep(r, spot, S.worker * S.stay, dt); return; }   // close enough (players often stand right at the wall)
+      if (distance(r, spot) > 12) this.unitStep(r, spot, S.worker * S.stay, dt);
+      r.act = "build"; r.aim = hit ? Math.atan2(hit.y - r.y, hit.x - r.x) : r.aim; mem.rep = (mem.rep || 0) + dt;
+      if (mem.rep >= S.repairEvery) { mem.rep = 0; st.hp = Math.min(st.maxHp, st.hp + 1); this.broadcast("astra", { k: "wallFix", x: Math.round(r.x), y: Math.round(r.y - 30), hp: st.hp }); }
+    } else {   // all fixed: wait at his corner
+      mem.rep = 0; r.act = "";
+      const corner = { x: clamp(mem.goal.x, st.x - In, st.x + In), y: clamp(mem.goal.y, st.y - In, st.y + In) };
+      if (distance(r, corner) > 12) this.unitStep(r, corner, S.worker * S.stay, dt);
+    }
   }
   updateAstra(dt, now) {
     this.updateSafehouses(dt, now);
@@ -2686,6 +2722,12 @@ export class SurvivalRoom extends Room {
         if (target.sessionId && d < SLAM.trigger && now >= (this.slamReady.get(z.id) || 0)) {
           z.slam = SLAM.total; this.slamReady.set(z.id, now + (SLAM.total + SLAM.cooldown) * 1000); continue;
         }
+      }
+      const wall = this.safeBoxes.length && target && this.sheltered(target) ? this.safeTouch(z) : null;
+      if (wall) {   // its prey is inside Astra's safehouse: hit the wall (1 per attack, 6 breaks it)
+        z.attackCooldown = Math.max(0, z.attackCooldown - dt);
+        if (z.attackCooldown <= 0) { this.hitSafe(wall, z); z.attackCooldown = z.boss ? 0.8 : 1.0; }
+        continue;
       }
       const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&distance(st,z)<30);
       if (barricade) {

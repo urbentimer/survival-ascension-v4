@@ -38,7 +38,7 @@ let js = result.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
 const html = readFileSync(join(root, "client/index.html"), "utf8");
 const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
 let body = html.match(/<body[^>]*>([\s\S]*)<\/body>/)[1];
-body = body.replace(/<script[^>]*src="\.\/client\.js"[^>]*><\/script>/, "");
+body = body.replace(/<script[^>]*src="\.\/client\.js[^"]*"[^>]*><\/script>/, "");
 
 const banner = `<div class="solo-banner" role="note"><b>SOLO TEST MODE</b><span>The game server runs in this tab, so it plays exactly like online, just without friends. Joining a room is off here.</span></div>`;
 body = body.replace(/<main class="wrap">/, `<main class="wrap">${banner}`);

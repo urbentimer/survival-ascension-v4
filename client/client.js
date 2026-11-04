@@ -304,7 +304,7 @@ function renderHotbar(me) {
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
   if (ast) {   // R: Safehouse, beside E
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
-    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s; zombies can't get in for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `UP ${Math.ceil(sh.hp)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 8s; zombies can't get in (6 hits break it, the workers repair) for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
@@ -990,13 +990,15 @@ function drawBriggsFx(f, age) {   // false when finished
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
 const aImgs = {};
 for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", heal: "assets/sprites/fx/astra-heal.webp", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
-const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 5, life: 45 }, astraCall = new Map();   // matches the server
+const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 8, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
   if (m.k === "call") astraCall.set(m.id, t);
   else if (m.k === "cancel") astraCall.delete(m.id);
   else if (m.k === "arrive" || m.k === "leave") fx.push({ type: "astra", k: m.k, x: m.x, y: m.y, t });
   else if (m.k === "safeDown" || m.k === "safeCancel") fx.push({ type: "astra", k: "dismantle", x: m.x, y: m.y, t });
+  else if (m.k === "wallHit") { fx.push({ type: "astra", k: "hit", x: m.x, y: m.y, t }); playSfx("zhit", m.x, m.y, 1.4); safeFlash.set(Math.round(m.x / 400) + "," + Math.round(m.y / 400), t); }
+  else if (m.k === "wallFix") { fx.push({ type: "astra", k: "fix", x: m.x, y: m.y, t }); playSfx("repair", m.x, m.y, .6); }
   else if (m.k === "built") { fx.push({ type: "astra", k: "lock", x: m.x, y: m.y, t }); const me = me_(); if (me && Math.hypot(m.x - me.x, m.y - me.y) < 700) shake(6, 220); }
 }
 function astraFx(col, row, x, y, alpha = 1, sc = 1) {   // 96x64 cells: row 0 arrival beacon (centred on y), row 1 heal pulse (bottom on y)
@@ -1006,17 +1008,26 @@ function astraFx(col, row, x, y, alpha = 1, sc = 1) {   // 96x64 cells: row 0 ar
 function drawAstraFx(f, age) {   // false when finished
   if (f.k === "arrive" || f.k === "leave") { if (age > 400) return false; const c = Math.min(3, Math.floor(age / 100)); astraFx(f.k === "arrive" ? c : 3 - c, 0, f.x, f.y + 14, .9, .7); return true; }
   if (f.k === "lock") { if (age > 380) return false; ctx.save(); ctx.strokeStyle = `rgba(120,240,255,${1 - age / 380})`; ctx.lineWidth = 4; ctx.strokeRect(f.x - SAFE.half, f.y - SAFE.half, SAFE.half * 2, SAFE.half * 2); ctx.restore(); return true; }
+  if (f.k === "hit") { if (age > 300) return false; const k = age / 300; ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = "#cfc6b4"; for (let i = 0; i < 5; i++) { const a = i * 1.3 + f.x; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * 18 * k, f.y - 10 + Math.sin(a) * 10 * k, 3 * (1 - k) + 1, 0, 7); ctx.fill(); } ctx.restore(); return true; }   // chips of concrete
+  if (f.k === "fix") { if (age > 800) return false; ctx.save(); ctx.globalAlpha = 1 - age / 800; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#7dff9a"; ctx.strokeStyle = "#0b2a14"; ctx.lineWidth = 3; ctx.strokeText("+1", f.x, f.y - age / 30); ctx.fillText("+1", f.x, f.y - age / 30); ctx.restore(); return true; }   // a builder patched the wall
   if (f.k === "dismantle") { if (age > 600) return false; for (const pc of safePieces(f.x, f.y, 3, 1 - age / 600)) pc.draw(); return true; }
   return false;
 }
+const safeFlash = new Map();   // recent wall hits (bar flashes red)
+function safeHpBar(st, cx, y) {   // 6 pips above the north wall: how many more hits the walls can take
+  const n = st.maxHp || SAFE.hits, w = 14, gap = 3, x0 = cx - (n * (w + gap) - gap) / 2, hit = performance.now() - Math.max(0, ...[...safeFlash.values()]) < 160;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x0 - 3, y - 3, n * (w + gap) - gap + 6, 12);
+  for (let i = 0; i < n; i++) { ctx.fillStyle = i < st.hp ? (hit ? "#ff8a7a" : st.hp <= 2 ? "#ff6b5b" : "#8ff0ff") : "rgba(255,255,255,.12)"; ctx.fillRect(x0 + i * (w + gap), y, w, 6); }
+  ctx.restore();
+}
 function safeFrame(st) { return st.deploy > 0 ? (st.deploy > SAFE.build / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
-function safeAlpha(st) { return st.deploy <= 0 && st.hp < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
+function safeAlpha(st) { return st.deploy <= 0 && st.life < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
 // The 4 walls as depth-sorted pieces (north/south: 4 tiles across; east/west: 3 tiles down), so people inside and outside sort right.
 function safePieces(cx, cy, frame, alpha, st = null) {
   const H = SAFE.half, T = SAFE.wall, out = [], h = aImgs.wallH, v = aImgs.wallV;
   const nH = Math.max(2, Math.round(2 * H / 90)), tw = 2 * H / nH;   // north/south walls: tiles across
   const tileH = (x, base, i) => out.push({ y: base, draw: () => { if (!h.naturalWidth) return; const w = tw, hh = 46; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.drawImage(h, frame * 112, 0, 112, 56, Math.round(x - w / 2), Math.round(base - hh), w, hh); ctx.restore();
-    if (st && i === Math.floor(nH / 2) && base < cy) { ctx.save(); ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.fillStyle = st.deploy > 0 ? "#ffd84d" : st.hp < 5 ? "#ff6b5b" : "#8ff0ff"; ctx.fillText(st.deploy > 0 ? "BUILDING…" : `SAFEHOUSE ${Math.ceil(st.hp)}s`, cx, base - 54); ctx.restore(); } } });
+    if (st && i === Math.floor(nH / 2) && base < cy) { ctx.save(); ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.fillStyle = st.deploy > 0 ? "#ffd84d" : st.life < 5 ? "#ff6b5b" : "#8ff0ff"; ctx.fillText(st.deploy > 0 ? `BUILDING… ${Math.ceil(st.deploy)}s` : `SAFEHOUSE ${Math.ceil(st.life)}s`, cx, base - 66); ctx.restore(); if (st.deploy <= 0) safeHpBar(st, cx, base - 58); } } });
   for (let i = 0; i < nH; i++) { const x = cx - H + tw / 2 + i * tw; tileH(x, cy - H + T, i); tileH(x, cy + H, i); }
   const nV = Math.max(2, Math.round((2 * H - 2 * T) / 104)), len = (2 * H - 2 * T) / nV;
   for (const x of [cx - H + T / 2, cx + H - T / 2]) for (let i = 0; i < nV; i++) { const base = cy - H + T + (i + 1) * len;
@@ -1029,7 +1040,7 @@ function drawAstraGround() {   // safehouse floor / footprint + green heal pulse
     if (st.kind !== "safehouse" || !inView(st.x, st.y, 260)) continue;
     const H = SAFE.half; ctx.save();
     if (st.deploy > 0) { ctx.setLineDash([10, 8]); ctx.strokeStyle = "rgba(120,240,255,.7)"; ctx.lineWidth = 2; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); }
-    else { ctx.fillStyle = "rgba(90,210,255,.07)"; ctx.fillRect(st.x - H + SAFE.wall, st.y - H + SAFE.wall, 2 * (H - SAFE.wall), 2 * (H - SAFE.wall)); if (st.hp < 5) { ctx.strokeStyle = `rgba(255,90,80,${.4 + .4 * (Math.floor(now / 200) % 2)})`; ctx.lineWidth = 3; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); } }
+    else { ctx.fillStyle = "rgba(90,210,255,.07)"; ctx.fillRect(st.x - H + SAFE.wall, st.y - H + SAFE.wall, 2 * (H - SAFE.wall), 2 * (H - SAFE.wall)); if (st.life < 5 || st.hp <= 1) { ctx.strokeStyle = `rgba(255,90,80,${.4 + .4 * (Math.floor(now / 200) % 2)})`; ctx.lineWidth = 3; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); } }
     ctx.restore();
   }
   for (const [, h] of healing()) { const pt = V(state.players.get(h.tgt)); if (pt) healCell(0, Math.floor(now / HEAL_FX.ms) % 6, pt.x, pt.y + 17, .9, HEAL_FX.ring); }   // neon heal circle at the patient's feet
@@ -2446,7 +2457,7 @@ const ROSTER = [
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (25 HP/s until full), then follows you." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "An armed officer for every living teammate: each one guards his player for 30s." },
-             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s. Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 8s, then stay to repair (6 hits break it). Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };

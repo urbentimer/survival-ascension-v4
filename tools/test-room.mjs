@@ -815,18 +815,25 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // R
   room.state.zombies.clear(); p.x = 1000; p.y = 700; const inside = placeZombie(room, p.x + 60, p.y + 30, 300);
   send(A, "skill2", {}); call(); const st = room.safeOf(p); const wk = room.unitsOf("A", "worker");
-  ok(st && st.deploy > 4.9 && wk.length === 2, "R: safehouse construction (5s), 2 workers");
+  ok(st && st.deploy > 7.9 && wk.length === 2 && st.hp === 6, "R: safehouse construction (8s), 2 workers, walls take 6 hits");
   ok(p.chargeCd > 89, `...90s cooldown starts at deployment (${p.chargeCd}s)`);
-  tick(60); ok(st.deploy > 0, "...still building after 3s"); tick(45); ok(st.deploy === 0 && room.safeBoxes.length === 1, "...all 4 walls finish together after 5s");
+  tick(140); ok(st.deploy > 0, "...still building after 7s"); tick(25); ok(st.deploy === 0 && room.safeBoxes.length === 1, "...all 4 walls finish together after 8s");
   ok(Math.abs(inside.x - st.x) >= 130 || Math.abs(inside.y - st.y) >= 130, "...a zombie caught inside is moved outside (no damage)");
   ok(inside.hp === 300, "...unhurt");
-  tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...the workers leave");
+  tick(20); ok(room.unitsOf("A", "worker").length === 2, "...the workers stay inside after building");
   const out = placeZombie(room, st.x + 130 + 20, p.y, 1e4); out.role = "hunter"; out.damage = 40; out.speed = 200; out.attackCooldown = 0;
   p.x = st.x + 95; p.y = st.y; const hp0 = p.hp; tick(40);
   ok(Math.abs(out.x - st.x) >= 130 && p.hp === hp0, `zombies can't get in or hurt him inside (zombie stuck at the wall, ${hp0 - p.hp} dmg)`);
   q.x = st.x + 300; q.y = st.y; room.moveWithCollision(q, -230, 0); ok(Math.abs(q.x - (st.x + 70)) < 2, "teammates walk straight through the walls");
   p.reloadLeft = 0; p.mag = 30; p.lastShot = 0; p.activeSlot = 2; p.weapon = "rifle"; const ohp = out.hp; room.fireWeapon(p, Math.atan2(out.y - p.y, out.x - p.x), 100); ok(out.hp < ohp, "...and shoot out through them");
-  st.hp = 0.01; tick(1); ok(!room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together");
+  { for (const z0 of [...room.state.zombies.values()]) if (z0 !== out) room.state.zombies.delete(z0.id); st.hp = 6; const h0 = st.hp; out.attackCooldown = 0; tick(21); ok(st.hp === h0 - 2, `a zombie whose prey is inside hits the wall: 1 per attack, 1 per second (${h0} -> ${st.hp} in 1s)`); }
+  { const wk2 = room.unitsOf("A", "worker"); room.state.zombies.clear(); placeZombie(room, 3000, 2000, 1e6); const h1 = st.hp; tick(160); ok(st.hp > h1 && st.hp <= h1 + 2, `...the workers walk over (half speed) and patch it up slowly, +1 per 5s each (${h1} -> ${st.hp} in 8s)`);
+    ok(wk2.every(r => room.unitMem.get(r.id).rep !== undefined), "...both workers repair"); }
+  { const zz = placeZombie(room, st.x + 130 + 20, p.y, 1e4); zz.role = "hunter"; zz.speed = 200; zz.damage = 40; st.hp = 2; zz.attackCooldown = 0; tick(50);
+    ok(!room.safeOf(p) && !room.safeBoxes.length, `6 hits in total break the walls (broke with ${st.hp} left)`); room.state.zombies.clear(); }
+  tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...and the workers go home");
+  { const m2 = room.amemOf(p); m2.safeReady = 0; send(A, "skill2", {}); call(); const s2 = room.safeOf(p); tick(170); ok(s2 && s2.deploy === 0, "a new safehouse");
+    s2.life = 0.01; tick(1); ok(!room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together"); }
   // no room: boss in the way -> refused, no cooldown
   const m = room.amemOf(p); m.safeReady = 0; room.state.zombies.clear(); const boss = placeZombie(room, p.x + 60, p.y, 1e5); boss.boss = true; boss.radius = 40;
   send(A, "skill2", {}); call(); ok(!room.safeOf(p) && m.safeReady === 0, "R with a boss in the way: refused, no cooldown used");
