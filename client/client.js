@@ -734,6 +734,17 @@ function releaseAxe() {
   if (!room || !me?.alive || me.activeSlot !== 1 || me.melee !== "axe" || state?.phase !== "playing") { room?.send("charge", { on: false }); return; }
   room.send("attack", { a: aimAngle(me), heavy: held >= AXE_CHARGE_MS }); lastMelee = performance.now();
 }
+// Auto-update: every minute, look at the live index.html; if it loads a newer client.js?v=..., reload when not in a room, else say so.
+{ const mine = (document.querySelector('script[src*="client.js"]')?.getAttribute("src") || "").match(/v=([\w-]+)/)?.[1];
+  if (mine && typeof __SOLO__ === "undefined") setInterval(async () => {
+    try {
+      const html = await (await fetch("./index.html?t=" + Date.now(), { cache: "no-store" })).text(), live = html.match(/client\.js\?v=([\w-]+)/)?.[1];
+      if (!live || live === mine) return;
+      if (!room) location.reload();   // not in a room (e.g. the update restarted the server and dropped us): load the new version
+      else if (!window.__saUpdateToast) { window.__saUpdateToast = 1; toast("A new version of the game is out: refresh the page after this game."); }
+    } catch {}
+  }, 60000);
+}
 // true only in the solo preview build (tools/build-preview.mjs defines __SOLO__): enables test keys like N = night view
 const SOLO_PREVIEW = typeof __SOLO__ !== "undefined" && __SOLO__ === true;
 const DASH_CD_MS = 5000;   // matches DASH_COOLDOWN on the server
