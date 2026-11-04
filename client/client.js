@@ -1727,7 +1727,9 @@ const DIR8 = {
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
-  dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Astra: "radio" = his call for medics / police / workers (3 frames)
+  dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
+    // his sheets' diagonals were drawn facing the wrong way: row -> [row to use, mirrored?] (bat's are fine except up-right)
+    fix: { all: { 3: [4, 0], 5: [4, 1], 7: [1, 1] }, bat: { 3: [5, 1] } } },
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
 };
 const D8 = { cellW: 112, cellH: 88, anchorX: 56, feetY: 80 };
@@ -1746,7 +1748,7 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "scout" && drawRavenSpecial(p, img, now)) return true;
   if (p.characterClass === "demolitionist" && drawDantePlacing(p, now)) return true;
   if (p.characterClass === "operator" && p.alive && drawSofea(p, img, now)) return true;
-  const oct = ((Math.round(pose.aim / (Math.PI / 4)) % 8) + 8) % 8, row = ROW_OF_OCT[oct];
+  const oct = ((Math.round(pose.aim / (Math.PI / 4)) % 8) + 8) % 8; let row = ROW_OF_OCT[oct];
   const holdingGun = p.activeSlot === 2 || p.activeSlot === 3, shotAge = now - a.shotAt;
   const block = Math.max(0, dir8Block(p)), melee = p.activeSlot === 1 && !["gun", "launcher", "rifle", "shotgun"].includes(DIR8[p.characterClass].blocks[block]), swingAge = now - (a.swingAt || 0);
   let col = 0;                                                                   // idle
@@ -1762,9 +1764,12 @@ function drawSurvivorDir8(p, pose, img) {
     if (p.ultActive > 0 && p.alive) briggsFire(p, now, false);   // War Cry: back flames behind him, his normal frames on top
   }
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
+  let flip = 0; const fix = DIR8[p.characterClass].fix, rowFix = fix && (fix[DIR8[p.characterClass].blocks[blk]] || fix.all);
+  if (rowFix?.[row]) [row, flip] = rowFix[row];
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);
+  if (flip) ctx.scale(-1, 1);   // mirrored diagonal (the cell is centred on the feet, so it flips in place)
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();

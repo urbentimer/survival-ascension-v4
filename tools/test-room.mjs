@@ -803,7 +803,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); ok(cops.length === 4, `Q: exactly 4 police (${cops.length})`);
   send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 4, "...no second squad while they're out");
   const z = placeZombie(room, p.x + 300, p.y, 400); const k0 = p.kills; for (let i = 0; i < 40; i++) { for (const r of room.unitsOf("A", "police")) { const m = room.unitMem.get(r.id); m.nextBurst = Math.min(m.nextBurst, Date.now()); m.nextShot = 0; } tick(1); }
-  ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (10 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
+  ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (7 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
   ok(q.hp === q.maxHp, "...they never shoot teammates");
   for (const r of room.unitsOf("A", "police")) room.unitMem.get(r.id).until = 0; tick(1); tick(1);
   ok(!room.unitsOf("A", "police").length && !p.ultReady && p.ultCd > 59, `after 30s they go home and the 60s cooldown starts (${p.ultCd}s)`);

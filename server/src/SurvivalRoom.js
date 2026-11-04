@@ -196,8 +196,9 @@ const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a tea
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
-  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 205, heal: 25, range: 70, stuck: 2 },
-  police: { n: 4, life: 30, cd: 60, hp: 110, speed: 195, dmg: 10, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
+  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2 },
+  police: { n: 4, life: 30, cd: 60, hp: 110, speed: 160, dmg: 7, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
+  catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   safe: { cd: 90, build: 2, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
@@ -1640,6 +1641,7 @@ export class SurvivalRoom extends Room {
   }
   unitStep(r, goal, speed, dt) {
     const gd = distance(r, goal); if (gd <= 8) return;
+    if (gd > ASTRA.catchUp.far) speed *= ASTRA.catchUp.mult;
     const a = Math.atan2(goal.y - r.y, goal.x - r.x); this.steerMove(r, r.id, a, Math.min(gd, speed * dt), e => this.solveRobot(e));
     if (!r.act) r.aim = a;
   }
