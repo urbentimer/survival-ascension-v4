@@ -120,7 +120,6 @@ const CLASS_STATS = {
   scout:         { hp:  90, speed: 225, defence: 0, dmgMult: 1.03, rateMult: 1.20 },
   demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
   sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
-  commander:     { hp: 115, speed: 180, defence: 1, dmgMult: 1.00, rateMult: 1.00 },
   operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   dispatcher:    { hp: 120, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
@@ -195,7 +194,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }];
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
-const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
+const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
@@ -934,7 +933,7 @@ export class SurvivalRoom extends Room {
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
-      const cooldown=cls==="medic"?35:cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="commander"?40:cls==="juggernaut"?28:25;
+      const cooldown=cls==="medic"?35:cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="juggernaut"?28:25;
     p.abilityCooldown=cooldown;
     if(cls==="medic"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<190)a.hp=Math.min(a.maxHp,a.hp+45);}
     else if(cls==="engineer") this.summonRobot(p, data?.kind);
@@ -942,7 +941,6 @@ export class SurvivalRoom extends Room {
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="sniper"){const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<650).sort((a,b)=>distance(p,a)-distance(p,b)).find(z=>this.lineClear(p,z));if(z){const hit=Math.min(z.hp,p.damage*12);z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
-    else if(cls==="commander"){for(const a of this.state.players.values())if(a.alive&&distance(p,a)<220){a.defence+=4;setTimeout(()=>{if(this.state.players.has(a.sessionId))a.defence=Math.max(0,a.defence-4);},8000);}}
     else {p.buffDamage=50;applyLoadout(p);setTimeout(()=>{if(this.state.players.has(p.sessionId)){p.buffDamage=0;applyLoadout(p);}},6000);}
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
   }

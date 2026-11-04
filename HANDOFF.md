@@ -76,7 +76,7 @@ Last updated: 2026-11-04 (latest commit: "Smooth netcode: client prediction + se
   - Passive Forceful Blast (card beside E on the hotbar): every shotgun pellet that hits shoves the zombie back 24px (less at range), bosses half.
   - Q War Cry: 0.3s roar, then impact: hit-stop + big screen shake + shockwave ring (30 dmg + 45px push within 210), every zombie within 350 targets him (10s; bosses 3s), he takes 50% damage for 10s, teammates within 400 do +25% damage for 10s. 60s cooldown after. While active he burns: sprites/fx/briggs-fire.png (tools/extract-fire-aura.py, source tools/art/briggs/fire-aura.png; row 0 back flames drawn behind him, row 1 ground ring drawn in front) via briggsFire() — 70ms frames cross-faded, per-player clock, two-wave flicker, additive glow pass, ground light, embers; bursts in with the roar and dies down in the last 0.6s. His normal frames are underneath (the old "rage" block 6 is in the atlas but unused). Roar shockwave is hue-rotated to orange. His shotgun is full-auto (hold click), 3x faster and uses no ammo (reload cancelled).
   - PlayerState.skillT (E active seconds, generic) added: 63/64 schema fields used.
-- Others (Elena medic, Sienna sniper, Hayes commander): old side-view art, old simple skills, no ultimate yet.
+- Others (Elena medic, Sienna sniper): old side-view art, old simple skills, no ultimate yet. Hayes (commander) was REMOVED from the game on Nov 4 (roster, PICKABLE, CLASS_STATS, Rally, art files).
 
 ## Downed / spectating
 - When you're down or bled out there is no dark screen: a small bar shows the bleed-out timer and the camera follows a living teammate (bots too). Space / ← → / click switches who you watch. Night light follows the watched teammate.

@@ -35,7 +35,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 25 }, medic: { name: "Team Heal", cd: 35 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, commander: { name: "Rally", cd: 40 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_WHEEL = [
@@ -1874,7 +1874,7 @@ function drawCrosshair(){
 }
 // ---------- Side-view survivor sprites for heroes without 8-direction art (client/assets/sprites/<class>.png, 3 rows x 3 frames: idle / walk / shoot) ----------
 const SPRITE_URLS = {   // heroes with 8-direction art (dir8 below) don't need these
-  medic: "assets/sprites/medic.png", sniper: "assets/sprites/sniper.png", commander: "assets/sprites/commander.png",
+  medic: "assets/sprites/medic.png", sniper: "assets/sprites/sniper.png",
 };
 const SPR = { cellW: 128, cellH: 72, anchorX: 44, scale: 0.82, feet: 17 };
 const sprites = {};
@@ -2516,8 +2516,6 @@ const ROSTER = [
              { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }], gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
     skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "A huge shot at the nearest zombie in sight." }], gear: ["rifle", "pistol", "knife"] },
-  { id: "commander", name: "HAYES", role: "COMMANDER", cat: "support", hp: 115, dmg: 15, spd: 180, def: 1, desc: "Veteran leader. Hardens the squad so they can hold the line.",
-    skills: [{ k: "E", n: "Rally", cd: 40, t: "+4 defence for teammates within 220px for 8 seconds." }], gear: ["rifle", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (5 HP/s, up to 6s each), then follows you." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "An armed officer for every living teammate: each one guards his player for 30s." },
@@ -2527,7 +2525,7 @@ const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<p
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", medic: "assets/hero/medic.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
-  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", commander: "assets/hero/commander.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
+  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
