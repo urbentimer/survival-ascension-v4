@@ -794,7 +794,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "ability", { a: 0 }); ok(!room.hooks.has("A"), "...E can't be used while spinning");
   sp.until = Date.now() - 1; tick(1); ok(!room.spins.has("A") && p.ultCd > 59, `after 12s the 60s cooldown starts (${p.ultCd}s)`);
   room._dispose(); }
-// 38. ASTRA (dispatcher): E = 3 doctors (25 HP/s, never stacked), Q = 7 police, R = safehouse (walls zombies can't cross)
+// 38. ASTRA (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (walls zombies can't cross)
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.mapBoxesNear = () => []; room.mapGrid = new Map();   // open ground for this test
   const call = () => { const m = room.amemOf(p); if (m.cast) m.cast.at = 0; tick(1); };
@@ -805,11 +805,11 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   call(); const docs = room.unitsOf("A", "doctor"); ok(docs.length === 1 && p.abilityCooldown === 30, `...then exactly 1 doctor, E cooldown 30s (${docs.length})`);
   send(A, "ability", {}); p.abilityCooldown = 0; send(A, "ability", {}); call(); ok(room.unitsOf("A", "doctor").length === 1, "...can't call a second doctor while one is on duty");
   q.hp = 10; p.hp = 10; tick(14); const h0 = q.hp, a0 = p.hp; tick(20);
-  ok(Math.abs((p.hp - a0) - 25) < 1.5 && q.hp - h0 < 1, `the medic treats Astra first at 25 HP/s, the teammate waits (${(p.hp - a0).toFixed(1)}, ${(q.hp - h0).toFixed(1)})`);
+  ok(Math.abs((p.hp - a0) - 5) < 0.5 && q.hp - h0 < 1, `the medic treats Astra first at 5 HP/s, the teammate waits (${(p.hp - a0).toFixed(1)}, ${(q.hp - h0).toFixed(1)})`);
   ok(room.docRes.size === 1, "...one patient at a time (reservation)");
-  tick(90); ok(p.hp === p.maxHp, "...Astra healed to full");
-  tick(20); const h1 = q.hp; tick(20); ok(q.hp - h1 > 20 && q.hp - h1 <= 25.5, `...then he goes to the next ally (${(q.hp - h1).toFixed(1)} HP/s)`);
-  tick(100); ok(q.hp === q.maxHp, "...and healing stops at max HP");
+  tick(110); ok(p.hp > 35 && p.hp < 45, `...one treatment lasts up to 6s (Astra 10 -> ${Math.round(p.hp)})`);
+  tick(30); const h1 = q.hp; tick(20); ok(q.hp - h1 > 4 && q.hp - h1 <= 5.5, `...then he goes to the next ally (${(q.hp - h1).toFixed(1)} HP/s)`);
+  tick(140); const h2 = q.hp; tick(20); ok(q.hp === h2, "...and stops after their 6s too");
   q.hp = 50; p.hp = 50; tick(40); ok(q.hp === 50 && p.hp === 50, `each person is treated only ONCE per call (no stacking) (${Math.round(q.hp)}, ${Math.round(p.hp)})`);
   { const d = room.unitsOf("A", "doctor")[0]; p.x = 1400; tick(60); const dd = Math.hypot(d.x - p.x, d.y - p.y); ok(dd < 120, `everyone treated: he follows Astra (${Math.round(dd)}px)`); p.x = 1000; tick(60); }
   q.hp = 50; q.alive = false; tick(10); ok(q.hp === 50, "...doctors can't revive a downed player"); q.alive = true;

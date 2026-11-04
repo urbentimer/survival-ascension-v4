@@ -2508,7 +2508,7 @@ const ROSTER = [
   { id: "commander", name: "HAYES", role: "COMMANDER", cat: "support", hp: 115, dmg: 15, spd: 180, def: 1, desc: "Veteran leader. Hardens the squad so they can hold the line.",
     skills: [{ k: "E", n: "Rally", cd: 40, t: "+4 defence for teammates within 220px for 8 seconds." }], gear: ["rifle", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
-    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (25 HP/s until full), then follows you." },
+    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (5 HP/s, up to 6s each), then follows you." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "An armed officer for every living teammate: each one guards his player for 30s." },
              { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
 ];

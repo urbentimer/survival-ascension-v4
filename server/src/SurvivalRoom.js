@@ -190,7 +190,7 @@ const BRIGGS = {
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
-// Astra (dispatcher): E = 3 doctors (25 HP/s each, one per patient), Q = 7 police, R = safehouse (4 walls zombies can't cross).
+// Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }];
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
@@ -198,7 +198,7 @@ const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a tea
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
-  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
+  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
   police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 7, burst: 3, gap: .12, every: 3, range: 440, leash: 600, threat: 250 },
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
