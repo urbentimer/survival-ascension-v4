@@ -453,7 +453,7 @@ let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus =
 const SFX = {
   turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
   rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
-  gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .42 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
+  gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .25 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
   pistol:   { url: "assets/audio/pistol_shot.mp3", vol: .32, max: 4, gap: 40 },
   shotgun:  { url: "assets/audio/shotgun_blast.mp3", vol: .4, max: 3, gap: 60 },
   boom:     { url: "assets/audio/explosion.mp3", vol: .5, max: 4, gap: 60 },
@@ -571,7 +571,8 @@ function audioWatch() {
   aw.brutes.clear(); for (const z of s.zombies.values()) if (z.kind === "brute") aw.brutes.add(z.id);
 }
 window.__saAudio = () => ({ ctx: audioContext?.state, music: music.cur?.name || "", played: Object.keys(SFX).filter(k => SFX[k].lastAt), ready: Object.keys(SFX).filter(k => SFX[k].raw).length });   // read-only hook for tests
-// Sofea's helicopter gatling: press = wind-up (0-0.4s), hold = loop 0.45-4.2s, release = quick fade. Volume follows the distance.
+// Sofea's helicopter gatling: press = wind-up (0-0.4s), hold = loop 0.45-4.2s, release = the clip's own spin-down (4.2s to the end)
+// while the loop fades out fast. Volume follows the distance.
 const heliLoops = new Map();   // heli id -> { src, gain }
 function heliLoop(p, on) {
   const ac = audioContext, s = SFX.gatling, cur = heliLoops.get(p.sessionId);
@@ -581,7 +582,14 @@ function heliLoop(p, on) {
     const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true; src.loopStart = .45; src.loopEnd = Math.min(4.2, buf.duration - .05);
     gain.gain.value = vol; src.connect(gain); gain.connect(sfxBus); src.start(); heliLoops.set(p.sessionId, { src, gain });
   } else if (cur && on) cur.gain.gain.setTargetAtTime(vol, ac.currentTime, .05);
-  else if (cur && !on) { cur.gain.gain.setTargetAtTime(0, ac.currentTime, .04); const src = cur.src; setTimeout(() => { try { src.stop(); } catch {} }, 250); heliLoops.delete(p.sessionId); }
+  else if (cur && !on) {
+    const now = ac.currentTime, buf = cur.src.buffer, src = cur.src, g = cur.gain.gain.value;
+    cur.gain.gain.setTargetAtTime(0, now, .02); setTimeout(() => { try { src.stop(); } catch {} }, 150); heliLoops.delete(p.sessionId);
+    if (sfxOn && buf && buf.duration > 4.3 && g > .01) {   // spin-down: the opposite of the wind-up
+      const tail = ac.createBufferSource(), tg = ac.createGain(); tail.buffer = buf; tg.gain.value = 0; tg.gain.setTargetAtTime(g, now, .01);
+      tail.connect(tg); tg.connect(sfxBus); tail.start(now, 4.2);
+    }
+  }
 }
 function stopLostHeliLoops() {   // every frame: landed / left -> stop; off screen (not drawn) -> keep the volume and on/off up to date here
   for (const id of [...heliLoops.keys()]) { const v = state?.vehicles?.get(id), p = state?.players?.get(id);
