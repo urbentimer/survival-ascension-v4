@@ -1,7 +1,7 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS } from "./mapLayout.js";   // same collision rules as the server (movement prediction)
+import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout } from "./mapLayout.js";   // same collision rules as the server (movement prediction)
 
 const $ = id => document.getElementById(id);
 const serverInput = new URLSearchParams(location.search).get("server");
@@ -1751,7 +1751,7 @@ for (const [k, url] of Object.entries(ZDIR8_URLS)) { const img = new Image(); im
 const zang = new Map();   // zombie id -> { x, y, a }: which way it's moving
 function zombieAngle(z) {
   let st = zang.get(z.id);
-  if (!st) { st = { x: z.x, y: z.y, a: Math.atan2(worldH() / 2 - z.y, worldW() / 2 - z.x) }; zang.set(z.id, st); }
+  if (!st) { st = { x: z.x, y: z.y, a: Math.atan2(towerY() - z.y, towerX() - z.x) }; zang.set(z.id, st); }
   const dx = z.x - st.x, dy = z.y - st.y;
   if (dx * dx + dy * dy > 4) { st.a = Math.atan2(dy, dx); st.x = z.x; st.y = z.y; }
   return st.a;
@@ -1761,7 +1761,7 @@ for (const [k, url] of Object.entries(ZOMBIE_URLS)) { const img = new Image(); i
 const zface = new Map(); // zombie id -> last facing (1 right, -1 left)
 function zombieFacing(z) {
   // face the player they're chasing, otherwise the radio tower
-  const t = state.players.get(z.targetId), cx = worldW() / 2;
+  const t = state.players.get(z.targetId), cx = towerX();
   const tx = t && Math.hypot(t.x - z.x, t.y - z.y) < 380 ? t.x : cx;
   let f = zface.get(z.id) || 1;
   if (Math.abs(tx - z.x) > 6) f = tx > z.x ? 1 : -1;
@@ -2219,6 +2219,8 @@ function drawStructure(st) {
 // The map is bigger than the screen. The camera follows you smoothly and leans ahead
 // in the direction you're walking. World size comes from the server (worldW / worldH).
 const worldW = () => state?.worldW || 3600, worldH = () => state?.worldH || 2280;
+const towerX = () => state?.towerX || worldW() / 2, towerY = () => state?.towerY || worldH() / 2;   // the radio tower (painted maps: where it's painted)
+const paintedMap = () => { const s = state?.mapLayout; return s && s.startsWith("P:") ? PAINTED[s.slice(2)] || null : null; };
 const cam = { x: 0, y: 0, ready: false, last: 0 };
 window.__saCam = cam; window.__saPred = () => { const m = me_(); return { id: myId, px: PRED.x, ex: PRED.ex, sx: m?.x, ack: m?.ack, seq: PRED.seq, n: PRED.pending.length, sp: m?.speed }; }; if (SOLO_PREVIEW) window.__saState = () => ({ state, me: me_(), scorches, corpses }); // read-only hook used by automated smoothness tests
 // ===================== OWN-PLAYER PREDICTION =====================
@@ -2229,7 +2231,7 @@ const PRED = { seq: 0, pending: [], x: 0, y: 0, ok: false, ex: 0, ey: 0, grid: n
 const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_SOLID = { barricade: 20, turret: 16, fence: 18 }, P_DASH = 50;
 function predGrid() {
   const src = state?.mapLayout || ""; if (PRED.src === src && PRED.grid) return PRED.grid;
-  const layout = src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
+  const pm = paintedMap(), layout = pm ? paintedLayout(pm) : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
   const grid = new Map();
   for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
     const k = gx + "," + gy; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
@@ -2237,7 +2239,7 @@ function predGrid() {
   PRED.src = src; PRED.grid = grid; return grid;
 }
 function predSolve(p) {   // same as the server's solveCollisions for a survivor
-  const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2, boxes = [{ x: cx, y: cy, hw: P_TOWER_HALF, hh: P_TOWER_HALF }, { x: cx + GEN_OFF.x, y: cy + GEN_OFF.y, hw: P_GEN_H, hh: P_GEN_H }];
+  const WW = worldW(), WH = worldH(), cx = towerX(), cy = towerY(), boxes = [{ x: cx, y: cy, hw: P_TOWER_HALF, hh: P_TOWER_HALF }, { x: cx + GEN_OFF.x, y: cy + GEN_OFF.y, hw: P_GEN_H, hh: P_GEN_H }];
   for (const st of state.structures.values()) { if (P_SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: P_SOLID[st.kind], hh: P_SOLID[st.kind] }); else if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 }); }
   const grid = predGrid(), gx = Math.floor(p.x / 160), gy = Math.floor(p.y / 160), seen = new Set();
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (!seen.has(b)) { seen.add(b); boxes.push(b); }
@@ -2347,7 +2349,7 @@ function updateCamera(t) {
   if (!state) { cam.ready = false; return; }
   updateSmooth();
   const me = V(viewTarget());
-  const fx_ = me ? me.x : worldW() / 2, fy_ = me ? me.y : worldH() / 2;
+  const fx_ = me ? me.x : towerX(), fy_ = me ? me.y : towerY();
   cam.x = Math.max(0, Math.min(worldW() - W, fx_ - W / 2));
   cam.y = Math.max(0, Math.min(worldH() - H, fy_ - H / 2));
   cam.ready = true;
@@ -2402,7 +2404,7 @@ const MAP_FLAT = { blood: 1, manhole: 1 };
 let decor = null, decorSrc = "";
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
-  decor = src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
+  decor = src.startsWith("P:") ? [] : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
 }
 const STREETLIGHT_LAMP = { x: 0.36, y: -0.83 };   // lamp position relative to the sprite (x from centre, y from the base), in sprite widths/heights
 function drawDecor(d) {
@@ -2418,6 +2420,7 @@ function drawDecor(d) {
 }
 
 function drawWorld(){
+  const pm = state && paintedMap(); if (pm) return drawPaintedWorld(pm);
   const x0 = Math.floor(cam.x / 32) * 32, y0 = Math.floor(cam.y / 32) * 32;
   const grassP = pattern("grass"), asphaltP = pattern("asphalt"), plazaP = pattern("plaza"), walkP = pattern("plaza", .5);
   if (grassP && asphaltP && plazaP && state) return drawWorldArt(grassP, asphaltP, plazaP, walkP);
@@ -2437,6 +2440,89 @@ function drawWorld(){
   syncDecor();
   for (const d of decor) if (inView(d.x, d.y)) drawDecor(d);
   drawWorldObjects([]);
+}
+// ---------- Painted maps (one picture is the ground: mapLayout.js PAINTED) ----------
+const PAINT_URLS = { "fallen-dynasty": "assets/map/fallen-dynasty.webp" }, paintImgs = {};
+for (const [k, url] of Object.entries(PAINT_URLS)) { const im = new Image(); im.src = url; paintImgs[k] = im; }
+function drawPaintedWorld(pm) {
+  const WW = worldW(), WH = worldH(), im = paintImgs[pm.art];
+  syncDecor();   // (empties the city decor: minimap / night lights)
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(cam.x - 2, cam.y - 2, W + 4, H + 4);
+  if (im?.naturalWidth) {   // only the part on screen
+    const sx = Math.max(0, Math.floor(cam.x)), sy = Math.max(0, Math.floor(cam.y)), sw = Math.min(WW, Math.ceil(cam.x + W)) - sx, sh = Math.min(WH, Math.ceil(cam.y + H)) - sy;
+    if (sw > 0 && sh > 0) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, sx, sy, sw, sh, sx, sy, sw, sh); ctx.restore(); }
+  }
+  drawPaintedGround(pm);
+  drawWorldObjects([]);
+}
+// living scenery on the painting: flickering lamps, car headlights, the tower's warning lights, fires with smoke
+function drawPaintedGround(pm) {
+  const t = performance.now() / 1000, F = sImgs.flame;
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  pm.lights.forEach(([x, y], i) => {   // street lamps: a soft glow that breathes; now and then one stutters
+    if (!inView(x, y, 40)) return;
+    const stutter = Math.sin(t * 9 + i * 7.3) > .985 || (i % 5 === 2 && Math.sin(t * 1.7 + i) > .97) ? .25 : 1, k = (.55 + .15 * Math.sin(t * 2.1 + i * 1.7)) * stutter;
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 30); g.addColorStop(0, `rgba(255,214,140,${.38 * k})`); g.addColorStop(1, "rgba(255,180,90,0)"); ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60);
+    const gg = ctx.createRadialGradient(x, y + 34, 2, x, y + 34, 46); gg.addColorStop(0, `rgba(255,190,110,${.12 * k})`); gg.addColorStop(1, "rgba(255,170,90,0)");   // pool on the wet road
+    ctx.save(); ctx.translate(x, y + 34); ctx.scale(1, .45); ctx.fillStyle = gg; ctx.fillRect(-46, -46, 92, 92); ctx.restore();
+  });
+  pm.beams.forEach(([x, y, a], i) => {   // flickering headlight beams
+    if (!inView(x, y, 140)) return;
+    const fl = Math.sin(t * 3.5 + i * 2.3) + Math.sin(t * 13 + i * 5), al = fl < -1.2 ? .05 : .2 + Math.max(0, Math.sin(t * 2.4 + i)) * .12;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.globalAlpha = al;
+    const lg = ctx.createLinearGradient(0, 0, 120, 0); lg.addColorStop(0, "rgba(255,244,200,.9)"); lg.addColorStop(.6, "rgba(255,230,160,.2)"); lg.addColorStop(1, "rgba(255,220,120,0)");
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(120, -34); ctx.lineTo(120, 34); ctx.lineTo(0, 5); ctx.fill(); ctx.restore();
+  });
+  pm.beacons.forEach(([x, y], i) => {   // tower warning lights blink in turn
+    if (!inView(x, y, 30)) return;
+    const on = Math.sin(t * 3.2 - i * .9) > .2 ? 1 : .25, g = ctx.createRadialGradient(x, y, 0, x, y, 16);
+    g.addColorStop(0, `rgba(255,70,50,${.85 * on})`); g.addColorStop(1, "rgba(255,30,30,0)"); ctx.fillStyle = g; ctx.fillRect(x - 16, y - 16, 32, 32);
+  });
+  if ((state.towerHp || 0) < (state.towerMaxHp || 1) * .25 && Math.sin(t * 8) > 0) { ctx.fillStyle = "rgba(255,60,40,.10)"; ctx.fillRect(towerX() - 70, towerY() - 280, 140, 320); }   // tower critical
+  pm.fires.forEach(([x, y, sc], i) => {   // fires: a pulsing glow + live flame tongues (the flame-jet frames, pointing up)
+    if (!inView(x, y, 120)) return;
+    const k = .8 + .2 * Math.sin(t * 7 + i * 1.9) + .1 * Math.sin(t * 17 + i);
+    const g = ctx.createRadialGradient(x, y - 8, 2, x, y - 8, 70 * sc); g.addColorStop(0, `rgba(255,150,50,${.34 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70 * sc, y - 78 * sc, 140 * sc, 140 * sc);
+    if (F?.naturalWidth) for (let j = 0; j < 3; j++) {
+      const ft = t * 16 + i * 3 + j * 2.2, f = 8 + Math.floor(ft) % 6, f2 = 8 + (Math.floor(ft) + 1) % 6, w = (34 + 8 * Math.sin(t * 3 + i + j)) * sc;
+      ctx.save(); ctx.translate(x + (j - 1) * 10 * sc, y + 4); ctx.rotate(-Math.PI / 2 + (j - 1) * .22 + Math.sin(t * 2 + j + i) * .08); ctx.globalAlpha = .55;
+      blendCells(F, 0, 0, 208, 112, f, f2, ft - Math.floor(ft), 0, -w * .27, w, w * .54); ctx.restore();
+    }
+  });
+  ctx.restore();
+  pm.fires.forEach(([x, y, sc], i) => {   // smoke rolling up from each fire
+    if (!inView(x, y - 80, 140)) return;
+    ctx.save();
+    for (let j = 0; j < 5; j++) {
+      const u = (t * .09 + j * .2 + i * .13) % 1, px_ = x + Math.sin(u * 4 + i + j) * 10 * sc + u * 26, py_ = y - 14 - u * 110 * sc, r = (7 + u * 18) * sc;
+      ctx.globalAlpha = .26 * Math.sin(u * Math.PI); ctx.fillStyle = "#2c2a30"; ctx.beginPath(); ctx.arc(px_, py_, r, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+// over everything (painted maps): rain, drifting blossom petals, embers floating up from the fires
+function drawPaintedOverlay(pm) {
+  const t = performance.now() / 1000;
+  ctx.save();
+  ctx.strokeStyle = "rgba(170,190,230,.16)"; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; i < 90; i++) {   // rain streaks (screen-wide, slanted)
+    const x = cam.x + ((i * 137.7 + t * 90) % (W + 60)) - 30, y = cam.y + ((i * 91.3 + t * 620 + (i % 7) * 40) % (H + 40)) - 20;
+    ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 14);
+  }
+  ctx.stroke();
+  for (let i = 0; i < 26; i++) {   // cherry blossom petals tumbling across
+    const x = cam.x + ((i * 211.3 + t * (18 + i % 5 * 4)) % (W + 40)) - 20, y = cam.y + ((i * 127.9 + t * (10 + i % 3 * 5) + Math.sin(t * .8 + i) * 18) % (H + 40)) - 20;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(t * (1 + i % 3) + i); ctx.globalAlpha = .7; ctx.fillStyle = i % 3 ? "#f2a6c8" : "#ffd0e4"; ctx.fillRect(-2.5, -1.5, 5, 3); ctx.restore();
+  }
+  ctx.globalCompositeOperation = "lighter";
+  pm.fires.forEach(([x, y, sc], i) => {   // embers
+    if (!inView(x, y - 60, 120)) return;
+    for (let j = 0; j < 6; j++) {
+      const u = (t * (.35 + j * .05) + j * .17 + i * .31) % 1, ex = x + Math.sin(u * 6 + j * 2 + i) * 16 * sc + u * 20, ey = y - u * 120 * sc;
+      ctx.globalAlpha = .9 * (1 - u); ctx.fillStyle = j % 2 ? "#ffb347" : "#ffe08a"; ctx.fillRect(ex, ey, 2, 2);
+    }
+  });
+  ctx.restore();
 }
 function drawWorldArt(grassP, asphaltP, plazaP, walkP) {
   const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2, R = roads();
@@ -2463,10 +2549,10 @@ function drawWorldArt(grassP, asphaltP, plazaP, walkP) {
   drawWorldObjects(tall);
 }
 function drawWorldObjects(extra) {
-  const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2;
+  const WW = worldW(), WH = worldH(), cx = towerX(), cy = towerY();
   // ---- objects + characters, depth-sorted so things further down the screen are drawn in front ----
   const items = extra;
-  items.push({ y: cy + 34, draw: () => drawTower(cx, cy) });
+  if (!paintedMap()) items.push({ y: cy + 34, draw: () => drawTower(cx, cy) });   // painted maps: the tower is in the picture
   items.push({ y: cy + GEN_OFF.y + 16, draw: () => drawGenerator(cx + GEN_OFF.x, cy + GEN_OFF.y) });
   for (const item of state.loot.values()) if (inView(item.x, item.y)) items.push({ y: item.y - 30, draw: () => drawLoot(item) });
   for (const st of state.structures.values()) if (st.kind === "safehouse") { if (inView(st.x, st.y, 260)) safePieces(st.x, st.y, safeFrame(st), safeAlpha(st), st).forEach(pc => items.push(pc)); } else if (inView(st.x, st.y)) items.push({ y: st.y + (st.kind === "mine" || st.kind === "flameTrap" ? -40 : 10), draw: () => drawStructure(st) });
@@ -2483,6 +2569,7 @@ function drawWorldObjects(extra) {
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
+  const pmOver = paintedMap(); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
   for (const f of mechaLate.splice(0)) { const d = ctxDepth; ctx.save(); try { f(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }     // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
@@ -2517,6 +2604,12 @@ function drawNight() {
   if (decor && sl?.naturalWidth) for (const d of decor) {
     if (d.kind !== "streetlight" || !inView(d.x, d.y, NIGHT.lightR)) continue;
     lightHole(d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, d.y - 24 - cam.y, NIGHT.lightR, NIGHT.lightAlpha);
+  }
+  const pmN = paintedMap();
+  if (pmN) {   // painted map: its lamps and fires light the night
+    for (const [x, y] of pmN.lights) if (inView(x, y, NIGHT.lightR)) lightHole(x - cam.x, y + 20 - cam.y, NIGHT.lightR * .7, NIGHT.lightAlpha);
+    for (const [x, y, sc] of pmN.fires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 150 * sc, .85);
+    for (const [x, y] of pmN.beacons.slice(0, 1)) lightHole(x - cam.x, y + 200 - cam.y, 170, .7);   // the tower compound's floodlights
   }
   const me = V(me_()), view = V(viewTarget());
   if (me) lightHole(me.x - cam.x, me.y - 10 - cam.y, me.alive ? NIGHT.playerR : NIGHT.playerR * .5, me.alive ? 1 : .8);   // only YOUR light (smaller while downed)
@@ -2563,7 +2656,7 @@ function drawScreen() {
     }
     ctx.restore();
   }
-  const targets = [{ x: worldW() / 2, y: worldH() / 2, label: 'TOWER', color: '#f2a15b' }];
+  const targets = [{ x: towerX(), y: towerY(), label: 'TOWER', color: '#f2a15b' }];
   for (const p of state.players.values()) if (!p.alive && !p.bledOut && p.sessionId !== myId) targets.push({ x: p.x, y: p.y, label: 'REVIVE ' + p.name.toUpperCase(), color: '#ff7568' });
   for (const z of state.zombies.values()) if (z.boss || z.kind === "hivemind") targets.push({ x: z.x, y: z.y, label: z.boss ? 'BOSS' : 'HIVEMIND', color: '#ff3737' });
   for (const tg of targets) {
@@ -2581,9 +2674,11 @@ function drawScreen() {
   // minimap: whole world, your view as a box
   const mini = $('minimap'), m = mini.getContext('2d'), MW = 360, MH = 228, sx = MW / worldW(), sy = MH / worldH(), R = roads();
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
-  m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH);
+  const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
+  if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
+  else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
-  m.fillStyle = '#d58b45'; m.fillRect(worldW() / 2 * sx - 5, worldH() / 2 * sy - 5, 10, 10);
+  m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
   for (const st of state.structures.values()) { m.fillStyle = '#c19a5c'; m.fillRect(st.x * sx - 2, st.y * sy - 2, 4, 4); }
   for (const z of state.zombies.values()) { if (!z.boss && !litAt(z.x, z.y)) continue; m.fillStyle = z.boss ? '#ff3737' : '#a9bd78'; const r = z.boss ? 4 : 2; m.fillRect(z.x * sx - r / 2, z.y * sy - r / 2, r, r); }
   for (const pl of state.players.values()) { m.fillStyle = pl.alive ? pl.color : '#ff7568'; m.fillRect(pl.x * sx - 3, pl.y * sy - 3, 6, 6); }
@@ -2633,7 +2728,7 @@ const ROSTER = [
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
              { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
-             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into a giant mecha for 30s. Hold click: flame jet (190px cone). Right click: lightsaber sweep (155px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px cone). Right click: lightsaber sweep (155px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
@@ -2655,7 +2750,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Burning Plaza"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -2750,6 +2845,15 @@ function renderLobbyRoom() {
 }
 function drawMapThumb() {   // a little satellite view of the chosen map (from the layout the server sent)
   const c = $("lsMapThumb"), g = c.getContext("2d"), W = c.width, H = c.height, WW = 3600, WH = 2280, s = W / WW, oy = (H - WH * s) / 2;
+  const src = ls.mapSrc || "", pm = src.startsWith("P:") ? PAINTED[src.slice(2)] : null;
+  if (pm) {   // painted map: the picture itself (the tower's patch of it, as wide as the box)
+    const im = paintImgs[pm.art]; g.fillStyle = "#1b1f1a"; g.fillRect(0, 0, W, H);
+    if (!im?.naturalWidth) { im?.addEventListener("load", drawMapThumb, { once: true }); return; }
+    const k = W / pm.w, sh = H / k, sy = Math.max(0, Math.min(pm.h - sh, pm.tower[1] - sh * .62));
+    g.imageSmoothingEnabled = true; g.drawImage(im, 0, sy, pm.w, sh, 0, 0, W, H);
+    g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
+    return;
+  }
   g.fillStyle = "#1b1f1a"; g.fillRect(0, 0, W, H);
   const grad = g.createRadialGradient(W * .7, 0, 10, W * .7, 0, W); grad.addColorStop(0, "rgba(255,90,30,.25)"); grad.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = grad; g.fillRect(0, 0, W, H);
   g.fillStyle = "#2c2f2c"; g.fillRect(0, oy + WH / 2 * s - 6, W, 12); g.fillRect(W / 2 - 7, 0, 14, H);

@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, mapBoxes, packLayout } from "./mapLayout.js";
+import { buildMapLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -196,7 +196,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }];
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { painted: "dynasty" }];   // painted: one picture is the map (mapLayout.js PAINTED)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -302,12 +302,16 @@ export class SurvivalRoom extends Room {
   loadSite(i) {   // build the chosen map and its collision grid
     this.pathGrids = new Map(); this.flowCache = new Map();
     this.state.mapSite = i;
-    const layout = buildMapLayout(ARENA.width, ARENA.height, SITES[i].seed);
-    this.state.mapLayout = packLayout(layout);
+    const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
+    this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: ARENA.width, height: ARENA.height, cx: ARENA.width / 2, cy: ARENA.height / 2, sx: ARENA.width / 2, sy: ARENA.height / 2, sh: 100 };   // sx, sy, sh: where survivors appear
+    this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
+    const layout = P ? paintedLayout(P) : buildMapLayout(ARENA.width, ARENA.height, SITES[i].seed);
+    this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.mapGrid = new Map();               // 160px cells -> solid boxes touching that cell (fast lookups)
     for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
       const k = gx + "," + gy; if (!this.mapGrid.has(k)) this.mapGrid.set(k, []); this.mapGrid.get(k).push(b);
     }
+    if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
   }
   onCreateRest(options) {
     this.steer = new Map();                 // zombie/bot id -> which way they go around obstacles
@@ -327,7 +331,6 @@ export class SurvivalRoom extends Room {
     this.state.dayTime = 0; this.state.isNight = false;
     this.state.generatorMaxHp = 1200; this.state.generatorHp = 1200; this.state.generatorFuel = 100;
     this.state.waveType = "normal"; this.state.remaining = 0; this.state.matchTime = 0; this.state.countdown = 0;
-    this.state.worldW = ARENA.width; this.state.worldH = ARENA.height;
     this.spawnClock = 0;
     this.structureSequence = 0;
     this.lootSequence = 0;
@@ -434,12 +437,12 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
       if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind"].includes(kind)) return;
-      if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, ARENA.width - 60); z.y = p.y; this.solveZombie(z); } return; }
+      if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
       const was = this.state.explore; this.state.explore = false;
       for (let i = 0; i < 5; i++) {
         this.spawnZombie(false, kind);
         const z = [...this.state.zombies.values()].pop(), a = Math.random() * Math.PI * 2, d = 320 + Math.random() * 120;
-        z.x = clamp(p.x + Math.cos(a) * d, 30, ARENA.width - 30); z.y = clamp(p.y + Math.sin(a) * d, 30, ARENA.height - 30); this.solveZombie(z);
+        z.x = clamp(p.x + Math.cos(a) * d, 30, this.A.width - 30); z.y = clamp(p.y + Math.sin(a) * d, 30, this.A.height - 30); this.solveZombie(z);
       }
       this.state.explore = was;
       this.state.message = `Test: 5 ${kind}s spawned near you`;
@@ -551,7 +554,7 @@ export class SurvivalRoom extends Room {
       let bx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, by = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y;
       const bd = Math.hypot(bx - p.x, by - p.y);
       if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
-      st.x = clamp(bx, 30, ARENA.width-30); st.y = clamp(by, 30, ARENA.height-30);
+      st.x = clamp(bx, 30, this.A.width-30); st.y = clamp(by, 30, this.A.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
       this.state.structures.set(st.id, st); p.structuresBuilt++;
       this.state.message = `${p.name} built a ${kind}.`;
@@ -637,7 +640,7 @@ export class SurvivalRoom extends Room {
     s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
-      p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
+      p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
       p.level = 1; p.xp = 0; p.xpNext = 30;
       p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
       p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
@@ -695,7 +698,7 @@ export class SurvivalRoom extends Room {
     const z = [...s.zombies.values()].find(q => q.boss), alive = [...s.players.values()].filter(p => p.alive);
     if (z && alive.length) {   // walk in from ~650px away from the team, not from the far side of the map
       const cx = alive.reduce((a, p) => a + p.x, 0) / alive.length, cy = alive.reduce((a, p) => a + p.y, 0) / alive.length, ang = Math.random() * Math.PI * 2;
-      z.x = clamp(cx + Math.cos(ang) * 650, 60, ARENA.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, ARENA.height - 60); this.solveZombie(z);
+      z.x = clamp(cx + Math.cos(ang) * 650, 60, this.A.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, this.A.height - 60); this.solveZombie(z);
     }
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
     s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
@@ -706,7 +709,7 @@ export class SurvivalRoom extends Room {
     const p = new PlayerState();
     p.sessionId = client.sessionId;
     p.name = cleanName(options.name) || `Survivor ${this.state.players.size + 1}`;
-    p.x = ARENA.width / 2 + rand(-170, 170); p.y = ARENA.height / 2 + rand(-100, 100); this.solveCollisions(p);
+    p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
     p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
@@ -753,9 +756,15 @@ export class SurvivalRoom extends Room {
   spawnZombie(boss = false, forceKind = "") {
     if (this.state.explore) return;
     // appear somewhere on a ring around the radio tower, out of the players' view
-    const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
-    const x = clamp(ARENA.width / 2 + Math.cos(ang) * dist, 20, ARENA.width - 20);
-    const y = clamp(ARENA.height / 2 + Math.sin(ang) * dist, 20, ARENA.height - 20);
+    let x, y;
+    if (this.painted) {   // painted map: they walk in where the streets leave the picture
+      const sp = this.painted.spawns, tot = sp.reduce((t, q) => t + q[2], 0); let r = Math.random() * tot, q = sp[0];
+      for (const c of sp) { r -= c[2]; if (r <= 0) { q = c; break; } }
+      x = clamp(q[0] + rand(-24, 24), 20, this.A.width - 20); y = clamp(q[1] + rand(-24, 24), 20, this.A.height - 20);
+    } else {
+      const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
+      x = clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20); y = clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20);
+    }
 
     const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
@@ -912,7 +921,7 @@ export class SurvivalRoom extends Room {
       if (Math.abs(diff) <= m.arc || d < z.radius + 10) {
         if (heavy && !z.boss && d > 0.1) {   // knock back (before the hit, so a killed zombie doesn't matter)
           const ka = Math.atan2(z.y - p.y, z.x - p.x);
-          z.x = clamp(z.x + Math.cos(ka) * AXE_HEAVY.knockback, 5, ARENA.width - 5); z.y = clamp(z.y + Math.sin(ka) * AXE_HEAVY.knockback, 5, ARENA.height - 5); this.solveZombie(z);
+          z.x = clamp(z.x + Math.cos(ka) * AXE_HEAVY.knockback, 5, this.A.width - 5); z.y = clamp(z.y + Math.sin(ka) * AXE_HEAVY.knockback, 5, this.A.height - 5); this.solveZombie(z);
         }
         if (raven) { left--; this.katanaHit(z, p, dmg); } else { if (m.targets) left--; this.hitZombie(z, p, dmg); }
       }
@@ -988,12 +997,12 @@ export class SurvivalRoom extends Room {
         const [ex, ey] = exits.sort((m, n) => Math.hypot(...m) - Math.hypot(...n))[0];
         p.x += ex; p.y += ey;
       } else { p.x = cx + dx / d * r; p.y = cy + dy / d * r; }
-      p.x = clamp(p.x, 18, ARENA.width - 18); p.y = clamp(p.y, 18, ARENA.height - 18);
+      p.x = clamp(p.x, 18, this.A.width - 18); p.y = clamp(p.y, 18, this.A.height - 18);
     }
   }
   // Survivors: blocked by the tower base, the generator, solid structures and the map pieces.
   solveCollisions(p) {
-    const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }, { x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h }];
+    const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }, { x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h }];
     for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
     for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
     for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
@@ -1045,7 +1054,7 @@ export class SurvivalRoom extends Room {
         const dx = z.x - o.x, dy = z.y - o.y, d = Math.hypot(dx, dy), min = (Math.min(z.radius, 30) + Math.min(o.radius, 30)) * .75;
         if (d >= min) continue;
         const push = (min - d) * .25, ux = d > .01 ? dx / d : Math.random() - .5, uy = d > .01 ? dy / d : Math.random() - .5;
-        z.x = clamp(z.x + ux * push, 5, ARENA.width - 5); z.y = clamp(z.y + uy * push, 5, ARENA.height - 5);
+        z.x = clamp(z.x + ux * push, 5, this.A.width - 5); z.y = clamp(z.y + uy * push, 5, this.A.height - 5);
       }
     }
   }
@@ -1053,7 +1062,7 @@ export class SurvivalRoom extends Room {
   deployHeavyTurret(p) {
     for (const st of [...this.state.structures.values()]) if (st.kind === "heavyTurret" && st.ownerId === p.sessionId) this.destroyMachine(st, "turret");   // one at a time
     const st = new StructureState(); st.id = `s${++this.structureSequence}`; st.kind = "heavyTurret";
-    const a = p.aim || 0; st.x = clamp(p.x + Math.cos(a) * 46, 30, ARENA.width - 30); st.y = clamp(p.y + Math.sin(a) * 46, 30, ARENA.height - 30);
+    const a = p.aim || 0; st.x = clamp(p.x + Math.cos(a) * 46, 30, this.A.width - 30); st.y = clamp(p.y + Math.sin(a) * 46, 30, this.A.height - 30);
     if (this.blockedByMap(st.x, st.y, 16)) { st.x = p.x; st.y = p.y + 30; }
     st.hp = st.maxHp = HEAVY_TURRET.hp; st.ownerId = p.sessionId; st.aim = a; st.deploy = HEAVY_TURRET.deploy;
     this.state.structures.set(st.id, st); this.state.message = `${p.name} deployed a HEAVY TURRET!`;
@@ -1103,10 +1112,10 @@ export class SurvivalRoom extends Room {
   // ---------- DANTE ----------
   skyBarrage(p, dist) {   // 3 rockets up, one by one; they come down at random spots around the aimed point
     const K = DANTE.sky, a = p.aim || 0, d = Math.max(60, Math.min(K.range, Number.isFinite(dist) ? dist : K.range * .6));
-    const cx = clamp(p.x + Math.cos(a) * d, 20, ARENA.width - 20), cy = clamp(p.y + Math.sin(a) * d, 20, ARENA.height - 20), now = Date.now(), pts = [];
+    const cx = clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20), cy = clamp(p.y + Math.sin(a) * d, 20, this.A.height - 20), now = Date.now(), pts = [];
     for (let i = 0; i < K.n; i++) {
       const ang = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * K.spread;
-      const x = clamp(cx + Math.cos(ang) * rr, 10, ARENA.width - 10), y = clamp(cy + Math.sin(ang) * rr, 10, ARENA.height - 10);
+      const x = clamp(cx + Math.cos(ang) * rr, 10, this.A.width - 10), y = clamp(cy + Math.sin(ang) * rr, 10, this.A.height - 10);
       pts.push([Math.round(x), Math.round(y)]);
       this.ripples.push({ kind: "sky", owner: p.sessionId, x, y, t: now, at: i * K.gap + K.flight, dmg: K.dmg, r: K.r, flat: 1, push: K.push, scaled: true });
     }
@@ -1116,7 +1125,7 @@ export class SurvivalRoom extends Room {
   demoOf(p) { for (const st of this.state.structures.values()) if (st.kind === "demoCharge" && st.ownerId === p.sessionId) return st; return null; }
   placeDemo(p) {
     const st = new StructureState(), a = p.aim || 0; st.id = `s${++this.structureSequence}`; st.kind = "demoCharge";
-    st.x = clamp(p.x + Math.cos(a) * DANTE.demo.place, 30, ARENA.width - 30); st.y = clamp(p.y + Math.sin(a) * DANTE.demo.place * .7 + 8, 30, ARENA.height - 30);
+    st.x = clamp(p.x + Math.cos(a) * DANTE.demo.place, 30, this.A.width - 30); st.y = clamp(p.y + Math.sin(a) * DANTE.demo.place * .7 + 8, 30, this.A.height - 30);
     if (this.blockedByMap(st.x, st.y, 14)) { st.x = p.x; st.y = p.y + 10; }
     st.hp = st.maxHp = 1; st.ownerId = p.sessionId; st.aim = a; st.deploy = DANTE.demo.arm;
     this.state.structures.set(st.id, st);
@@ -1131,7 +1140,7 @@ export class SurvivalRoom extends Room {
     D.rings.forEach((ring, ri) => {
       for (let i = 0; i < ring.n; i++) {
         const ang = seed + (i + rand(-.35, .35)) / ring.n * Math.PI * 2, R = ring.R * rand(.75, 1.2);
-        const gx = clamp(st.x + Math.cos(ang) * R, 10, ARENA.width - 10), gy = clamp(st.y + Math.sin(ang) * R * D.flat, 10, ARENA.height - 10);
+        const gx = clamp(st.x + Math.cos(ang) * R, 10, this.A.width - 10), gy = clamp(st.y + Math.sin(ang) * R * D.flat, 10, this.A.height - 10);
         const big = !ring.small || (ring.bigEvery && i % ring.bigEvery === 0);
         this.ripples.push({ kind: "demo", owner: st.ownerId, x: gx, y: gy, t: now, at: ring.at + D.flight, dmg: ring.small && big ? ring.bigDmg : ring.dmg, r: ring.small && big ? ring.bigR : ring.r, scaled: true, bossMult: D.bossMult, push: D.push, flat: D.flat });
         pts.push([Math.round(gx), Math.round(gy), ri, big ? 1 : 0]);
@@ -1325,8 +1334,8 @@ export class SurvivalRoom extends Room {
   // ---------- SOFEA: tank (E) + helicopter (Q) ----------
   vmem(p) { let m = this.vmemory.get(p.sessionId); if (!m) { m = { shotAt: 0, crush: new Map(), movingUntil: 0, protectUntil: 0, safe: { x: p.x, y: p.y } }; this.vmemory.set(p.sessionId, m); } return m; }
   vehicleFits(x, y, r) {
-    const cx = ARENA.width / 2, cy = ARENA.height / 2;
-    return x > r + 20 && y > r + 20 && x < ARENA.width - r - 20 && y < ARENA.height - r - 20 && !this.blockedByMap(x, y, r)
+    const cx = this.A.cx, cy = this.A.cy;
+    return x > r + 20 && y > r + 20 && x < this.A.width - r - 20 && y < this.A.height - r - 20 && !this.blockedByMap(x, y, r)
       && !(Math.abs(x - cx) < TOWER_HALF + r && Math.abs(y - cy) < TOWER_HALF + r) && !(Math.abs(x - cx - GEN_OFF.x) < GEN_OFF.h + r && Math.abs(y - cy - GEN_OFF.y) < GEN_OFF.h + r);
   }
   // nearest clear spot around (x, y) within `max` px (rings of 12 points), or null
@@ -1356,7 +1365,7 @@ export class SurvivalRoom extends Room {
     if (mag < 0.01 || dt <= 0) return;
     const ox = p.x, oy = p.y, step = K.speed * dt, n = Math.max(1, Math.ceil(step / 8));
     for (let i = 0; i < n; i++) {
-      p.x = clamp(p.x + dx / mag * step / n, K.body, ARENA.width - K.body); p.y = clamp(p.y + dy / mag * step / n, K.body, ARENA.height - K.body);
+      p.x = clamp(p.x + dx / mag * step / n, K.body, this.A.width - K.body); p.y = clamp(p.y + dy / mag * step / n, K.body, this.A.height - K.body);
       this.solveVehicle(p, v);
     }
     const moved = Math.hypot(p.x - ox, p.y - oy);
@@ -1367,9 +1376,9 @@ export class SurvivalRoom extends Room {
   // tank / mecha: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
   solveVehicle(p, v) {
     if (v.kind === "heli") return;
-    const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }];
+    const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }];
     {   // tank and mecha
-      boxes.push({ x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
+      boxes.push({ x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
       for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
       for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
     }
@@ -1471,7 +1480,7 @@ export class SurvivalRoom extends Room {
     if (v.phase === "ride") {
       const zfree = (x, y) => ![...this.state.zombies.values()].some(z => Math.hypot(z.x - x, z.y - y) < z.radius + BODY_R);
       const side = v.kind === "tank" ? { x: v.x - Math.sin(v.hull) * 52, y: v.y + Math.cos(v.hull) * 52 } : { x: v.x, y: v.y };
-      const spot = this.clearSpot(side.x, side.y, BODY_R + 2, 180, zfree) || this.clearSpot(v.x, v.y, BODY_R + 2, 240) || (this.vehicleFits(m.safe.x, m.safe.y, BODY_R) ? m.safe : { x: ARENA.width / 2, y: ARENA.height / 2 + TOWER_HALF + 40 });
+      const spot = this.clearSpot(side.x, side.y, BODY_R + 2, 180, zfree) || this.clearSpot(v.x, v.y, BODY_R + 2, 240) || (this.vehicleFits(m.safe.x, m.safe.y, BODY_R) ? m.safe : { x: this.A.cx, y: this.A.cy + TOWER_HALF + 40 });
       p.x = spot.x; p.y = spot.y; this.solveCollisions(p);
       if (v.kind === "tank") p.abilityCooldown = SOFEA.tank.cd;
       else if (v.kind === "mecha") m.mechaReady = now + SOFEA.mecha.cd * 1000;
@@ -1561,8 +1570,8 @@ export class SurvivalRoom extends Room {
     return out.length >= n ? out : null;
   }
   safeFits(cx, cy, self = null) {
-    const H = ASTRA.safe.half, X = ARENA.width / 2, Y = ARENA.height / 2, over = (b, pad = 0) => Math.abs(b.x - cx) < b.hw + H + pad && Math.abs(b.y - cy) < b.hh + H + pad;
-    if (cx - H < 12 || cy - H < 12 || cx + H > ARENA.width - 12 || cy + H > ARENA.height - 12) return false;
+    const H = ASTRA.safe.half, X = this.A.cx, Y = this.A.cy, over = (b, pad = 0) => Math.abs(b.x - cx) < b.hw + H + pad && Math.abs(b.y - cy) < b.hh + H + pad;
+    if (cx - H < 12 || cy - H < 12 || cx + H > this.A.width - 12 || cy + H > this.A.height - 12) return false;
     if (over({ x: X, y: Y, hw: TOWER_HALF, hh: TOWER_HALF }) || over({ x: X + GEN_OFF.x, y: Y + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h })) return false;
     for (const st of this.state.structures.values()) {
       if (st === self) continue;
@@ -1905,7 +1914,7 @@ export class SurvivalRoom extends Room {
     if (mine.length >= ROBOT_MAX) this.state.robots.delete(mine[0].id);   // oldest goes
     const r = new RobotState(), a = p.aim || 0;
     r.id = `r${++this.robotSeq}`; r.kind = kind; r.ownerId = p.sessionId;
-    r.x = clamp(p.x + Math.cos(a) * 60, 20, ARENA.width - 20); r.y = clamp(p.y + Math.sin(a) * 60, 20, ARENA.height - 20);
+    r.x = clamp(p.x + Math.cos(a) * 60, 20, this.A.width - 20); r.y = clamp(p.y + Math.sin(a) * 60, 20, this.A.height - 20);
     r.hp = r.maxHp = ROBOT[kind].hp; r.uses = ROBOT[kind].visits || 0; r.aim = a; r.face = a; /* hunter: its 70-degree firing cone points where Viktor aimed */ r.act = ""; this.solveRobot(r); r.hx = r.x; r.hy = r.y;
     this.state.robots.set(r.id, r);
     this.broadcast("summon", { x: Math.round(r.x), y: Math.round(r.y) });
@@ -2064,7 +2073,7 @@ export class SurvivalRoom extends Room {
       const n = Math.min(H.spawn.max, 1 + Math.floor(this.state.stage / 8)), was = this.state.explore; this.state.explore = false;
       for (let i = 0; i < n; i++) {
         this.spawnZombie(false, "walker"); const w = [...this.state.zombies.values()].pop(), a = Math.random() * Math.PI * 2;
-        w.x = clamp(z.x + Math.cos(a) * (z.radius + 22), 20, ARENA.width - 20); w.y = clamp(z.y + Math.sin(a) * (z.radius + 22) * .7, 20, ARENA.height - 20); w.attackCooldown = 1.2; this.solveZombie(w);
+        w.x = clamp(z.x + Math.cos(a) * (z.radius + 22), 20, this.A.width - 20); w.y = clamp(z.y + Math.sin(a) * (z.radius + 22) * .7, 20, this.A.height - 20); w.attackCooldown = 1.2; this.solveZombie(w);
         this.broadcast("hive", { k: "spawn", x: Math.round(w.x), y: Math.round(w.y) });
       }
       this.state.explore = was; m.spawnAt = now + H.spawn.every * 1000;
@@ -2095,7 +2104,7 @@ export class SurvivalRoom extends Room {
       return;
     }
     if (!players.length) {   // nobody reachable: crawl toward the radio tower instead of freezing
-      const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x); z.aim = ta; z.targetId = "";
+      const tw = { x: this.A.cx, y: this.A.cy }, ta = Math.atan2(tw.y - z.y, tw.x - z.x); z.aim = ta; z.targetId = "";
       if (distance(z, tw) > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
       return;
     }
@@ -2105,7 +2114,7 @@ export class SurvivalRoom extends Room {
     if (d < H.slam.range && now >= m.slamReady) { this.startAct(z, "slam", H.slam.total, a); m.slamReady = now + H.slam.cd * 1000; return; }
     if (d > H.jump.min && d < H.jump.max && now >= m.jumpReady) {   // leap at a survivor far away: lands just short of them
       const land = Math.max(0, d - z.radius - 30);
-      m.jx0 = z.x; m.jy0 = z.y; m.jx1 = clamp(z.x + Math.cos(a) * land, 40, ARENA.width - 40); m.jy1 = clamp(z.y + Math.sin(a) * land, 40, ARENA.height - 40);
+      m.jx0 = z.x; m.jy0 = z.y; m.jx1 = clamp(z.x + Math.cos(a) * land, 40, this.A.width - 40); m.jy1 = clamp(z.y + Math.sin(a) * land, 40, this.A.height - 40);
       if (this.blockedByMap(m.jx1, m.jy1, z.radius * .6)) m.jumpReady = now + 1500;
       else { this.startAct(z, "jump", H.jump.total, a); m.jumpReady = now + H.jump.cd * 1000; this.broadcast("hive", { k: "jump", id: z.id, x0: Math.round(m.jx0), y0: Math.round(m.jy0), x1: Math.round(m.jx1), y1: Math.round(m.jy1) }); return; }
     }
@@ -2124,7 +2133,7 @@ export class SurvivalRoom extends Room {
       return;
     }
     if (!players.length) {   // nobody he can reach (Sofea flying, Raven hidden, everyone in a safehouse): he goes for the radio tower instead of standing still
-      const tw = { x: ARENA.width / 2, y: ARENA.height / 2 }, ta = Math.atan2(tw.y - z.y, tw.x - z.x), td = distance(z, tw); z.aim = ta; z.targetId = "";
+      const tw = { x: this.A.cx, y: this.A.cy }, ta = Math.atan2(tw.y - z.y, tw.x - z.x), td = distance(z, tw); z.aim = ta; z.targetId = "";
       if (td > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
       else if (now >= m.chopReady) { m.chopReady = now + BUTCHER.chop.cd * 1000; this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2); this.broadcast("chop", { x: Math.round(z.x + Math.cos(ta) * 55), y: Math.round(z.y + Math.sin(ta) * 55), r: BUTCHER.chop.rings, d: BUTCHER.chop.ringDelay });
         if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } }
@@ -2292,7 +2301,7 @@ export class SurvivalRoom extends Room {
   }
   pathGrid(r) {   // which 40px cells a body of radius r can't stand in (map pieces, tower, generator); cached per map
     const k = Math.round(r); let g = this.pathGrids?.get(k); if (g) return g;
-    const C = PATH_CELL, GW = Math.ceil(ARENA.width / C), GH = Math.ceil(ARENA.height / C), blocked = new Uint8Array(GW * GH), X = ARENA.width / 2, Y = ARENA.height / 2;
+    const C = PATH_CELL, GW = Math.ceil(this.A.width / C), GH = Math.ceil(this.A.height / C), blocked = new Uint8Array(GW * GH), X = this.A.cx, Y = this.A.cy;
     for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
       const x = (gx + .5) * C, y = (gy + .5) * C;
       blocked[gy * GW + gx] = this.blockedByMap(x, y, r * .85) || (Math.abs(x - X) < TOWER_HALF + r && Math.abs(y - Y) < TOWER_HALF + r) || (Math.abs(x - X - GEN_OFF.x) < GEN_OFF.h + r && Math.abs(y - Y - GEN_OFF.y) < GEN_OFF.h + r) ? 1 : 0;
@@ -2327,6 +2336,7 @@ export class SurvivalRoom extends Room {
       let best = null, bd = dist[y * GW + x];
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx, ny = y + dy; if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+        if (dx && dy && (dist[y * GW + nx] === Infinity || dist[ny * GW + x] === Infinity)) continue;   // no cutting round a corner (it would walk into it)
         const d = dist[ny * GW + nx]; if (d < bd) { bd = d; best = [nx, ny]; }
       }
       if (!best) break; [x, y] = best; const wp = { x: (x + .5) * C, y: (y + .5) * C };
@@ -2343,7 +2353,7 @@ export class SurvivalRoom extends Room {
     if (!m.wp || distance(z, m.wp) < 14 || now > m.until) { m.wp = this.nextWaypoint(z, t, r); m.until = now + 1500; }
     if (!m.wp) { this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
     const a = Math.atan2(m.wp.y - z.y, m.wp.x - z.x), x0 = z.x, y0 = z.y, step = Math.min(dist, distance(z, m.wp));
-    z.x = clamp(z.x + Math.cos(a) * step, 5, ARENA.width - 5); z.y = clamp(z.y + Math.sin(a) * step, 5, ARENA.height - 5); this.solveZombie(z);
+    z.x = clamp(z.x + Math.cos(a) * step, 5, this.A.width - 5); z.y = clamp(z.y + Math.sin(a) * step, 5, this.A.height - 5); this.solveZombie(z);
     if (Math.hypot(z.x - x0, z.y - y0) < step * .3) m.wp = null;   // blocked (another zombie, a new structure): plan again next tick
   }
   // Walk toward angle `ang`; if something solid is in the way, slide around it (keeps going round the same side for a while).
@@ -2351,7 +2361,7 @@ export class SurvivalRoom extends Room {
     const st = this.steer.get(key) || { side: Math.random() < .5 ? 1 : -1, until: 0, off: 0 }; this.steer.set(key, st);
     const now = Date.now(), x0 = e.x, y0 = e.y;
     const tryDir = (a) => {
-      e.x = clamp(x0 + Math.cos(a) * dist, 5, ARENA.width - 5); e.y = clamp(y0 + Math.sin(a) * dist, 5, ARENA.height - 5); solve(e);
+      e.x = clamp(x0 + Math.cos(a) * dist, 5, this.A.width - 5); e.y = clamp(y0 + Math.sin(a) * dist, 5, this.A.height - 5); solve(e);
       return Math.hypot(e.x - x0, e.y - y0);
     };
     const offs = now < st.until ? [st.off, 0] : [0];
@@ -2370,7 +2380,7 @@ export class SurvivalRoom extends Room {
   moveWithCollision(p, dx, dy) {
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
     for (let i = 0; i < steps; i++) {
-      p.x = clamp(p.x + dx / steps, 18, ARENA.width - 18); p.y = clamp(p.y + dy / steps, 18, ARENA.height - 18);
+      p.x = clamp(p.x + dx / steps, 18, this.A.width - 18); p.y = clamp(p.y + dy / steps, 18, this.A.height - 18);
       this.solveCollisions(p);
     }
   }
@@ -2384,7 +2394,7 @@ export class SurvivalRoom extends Room {
   botThink(b, dt, now) {
     if (b.stunned > 0) return;
     const brain = this.botBrain.get(b.sessionId) || { strafe: 1 };
-    const s = this.state, center = { x: ARENA.width / 2, y: ARENA.height / 2 };
+    const s = this.state, center = { x: this.A.cx, y: this.A.cy };
     // Level-ups: bots pick a random upgrade.
     while (b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * 5)]);
     const zs = [...s.zombies.values()];
@@ -2430,7 +2440,7 @@ export class SurvivalRoom extends Room {
       else if (d <= 0.01) { mx += rand(-1, 1); my += rand(-1, 1); }
     }
     // Swap strafe direction when hugging a wall.
-    if (b.x < 40 || b.x > ARENA.width - 40 || b.y < 40 || b.y > ARENA.height - 40) brain.strafe *= -1;
+    if (b.x < 40 || b.x > this.A.width - 40 || b.y < 40 || b.y > this.A.height - 40) brain.strafe *= -1;
     const mag = Math.hypot(mx, my);
     if (mag > 0.01) {
       this.steerMove(b, b.sessionId, Math.atan2(my, mx), b.speed * 0.9 * (b.slowed > 0 ? 0.5 : 1) * dt, e => this.solveCollisions(e));
@@ -2493,7 +2503,7 @@ export class SurvivalRoom extends Room {
 
   // Bot driving Sofea's vehicle: the tank rolls into the nearest zombies, the helicopter keeps its distance and circles; both fire at the nearest.
   botVehicle(b, v, near, nearD, brain, dt) {
-    const center = { x: ARENA.width / 2, y: ARENA.height / 2 }; let mx = 0, my = 0;
+    const center = { x: this.A.cx, y: this.A.cy }; let mx = 0, my = 0;
     if (near) {
       const ax = (near.x - b.x) / nearD, ay = (near.y - b.y) / nearD;
       if (v.kind === "tank") { mx = ax; my = ay; }
@@ -2771,7 +2781,7 @@ export class SurvivalRoom extends Room {
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;
-      const tower = {x: ARENA.width/2, y: ARENA.height/2};
+      const tower = {x: this.A.cx, y: this.A.cy};
       let target = taunted ? taunted : z.boss ? nearestPlayer   // War Cry: Briggs first; bosses hunt survivors only
         : z.role === "hunter" ? (nearestPlayer || tower) : tower;
       if (z.role === "hunter" && !z.boss && !taunted) {   // hunters also go for Viktor's turret and robots if they're closer
@@ -2818,7 +2828,8 @@ export class SurvivalRoom extends Room {
         // Spitters keep their distance and lob acid from range.
         if (d < ACID.backOff) this.steerMove(z, z.id, a + Math.PI, z.speed * dt, e => this.solveZombie(e));
       } else if (d > (z.kind === "mutant" ? z.radius + 10 : z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) - 4)) {
-        this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
+        if (this.painted) this.bossMove(z, target, z.speed * dt);   // painted maps have walls and dead ends: walk the flow field like the bosses
+        else this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
       }
       z.attackCooldown = Math.max(0, z.attackCooldown - dt);   // stops at 0: no network traffic while it just walks
       if (d < z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) && z.attackCooldown <= 0) {

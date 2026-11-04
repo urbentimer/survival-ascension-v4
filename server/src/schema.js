@@ -52,7 +52,7 @@ defineTypes(GameState, {
   towerHp: "number", towerMaxHp: "number", scrap: "number", electronics: "number",
   explosives: "number", fuel: "number", isNight: "boolean",
   generatorHp: "number", generatorMaxHp: "number", generatorFuel: "number",
-  waveType: "string", countdown: "number", worldW: "number", worldH: "number", explore: "boolean", mapLayout: "string",
+  waveType: "string", countdown: "number", worldW: "number", worldH: "number", towerX: "number", towerY: "number", explore: "boolean", mapLayout: "string",
   bossPhase: "string", bossIntro: "string", introNeed: "number", introReady: "number", hookSpeed: "number", noCd: "boolean",
   mapSite: "number", difficulty: "string", waveMode: "string", friendlyFire: "boolean", extraLoot: "boolean"   // lobby mission settings (host)
 });
