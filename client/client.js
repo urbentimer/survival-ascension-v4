@@ -33,7 +33,7 @@ const WEAPON_INFO = {
 };
 const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd: 0.6 }, axe: { name: "Fire axe", cd: 0.9 }, katana: { name: "Katana", cd: 0.5 } };
 const SKILLS = {
-  assault: { name: "Combat Rush", cd: 25 }, medic: { name: "Team Heal", cd: 35 },
+  assault: { name: "Combat Rush", cd: 25 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
   sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
@@ -1874,7 +1874,7 @@ function drawCrosshair(){
 }
 // ---------- Side-view survivor sprites for heroes without 8-direction art (client/assets/sprites/<class>.png, 3 rows x 3 frames: idle / walk / shoot) ----------
 const SPRITE_URLS = {   // heroes with 8-direction art (dir8 below) don't need these
-  medic: "assets/sprites/medic.png", sniper: "assets/sprites/sniper.png",
+  sniper: "assets/sprites/sniper.png",
 };
 const SPR = { cellW: 128, cellH: 72, anchorX: 44, scale: 0.82, feet: 17 };
 const sprites = {};
@@ -2136,7 +2136,10 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
   const steps = Math.max(1, Math.ceil(Math.hypot(mx, my) / 8)), WW = worldW(), WH = worldH();
   for (let i = 0; i < steps; i++) { p.x = Math.max(18, Math.min(WW - 18, p.x + mx / steps)); p.y = Math.max(18, Math.min(WH - 18, p.y + my / steps)); predSolve(p); }
 }
-const predicting = me => !!(me && me.alive && state?.phase === "playing" && !state.vehicles?.get(myId) && !(me.stunned > 0));
+// not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
+// the server's smooth updates instead, and prediction picks up again right after
+const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
+const predicting = me => !!(me && me.alive && state?.phase === "playing" && !state.vehicles?.get(myId) && !(me.stunned > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
   if (!PRED.ok) { PRED.x = me.x; PRED.y = me.y; PRED.ok = true; PRED.ex = PRED.ey = 0; }
@@ -2482,12 +2485,12 @@ setInterval(() => {
 function frame(t){
   if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);
-  let saved = 0; unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
+  unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
     sendControls(t); updateFeel(); updateCamera(t); updateMusic();
     ctx.clearRect(0, 0, W, H);
     const off = shakeOffset();
-    ctx.save(); saved = 1; ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore(); saved = 0;
+    ctx.save(); ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore();
     drawScreen(); drawBuildWheel(); drawSquadWheel(); drawHurt();
     if (performance.now() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - performance.now()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
   } catch (e) { unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
@@ -2524,7 +2527,7 @@ const ROSTER = [
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
-const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", medic: "assets/hero/medic.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
+const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
@@ -2574,7 +2577,7 @@ function renderSide() {
   }
 }
 function renderPages() {
-  const me = room && state?.players?.get(myId), r = heroDef();
+  const r = heroDef();
   $("loadoutPage").innerHTML = `<h2>LOADOUT · ${r.name}</h2><p>What ${r.name[0] + r.name.slice(1).toLowerCase()} starts every match with. Buy more in the shop between waves (gold drops from zombies).</p>
     <h4>STARTING GEAR</h4><div class="ls-grid">${r.gear.map(g => `<div class="ls-gear">${gearIcon(g) || '<span class="gi"></span>'}<div><b>${(WEAPON_INFO[g]?.name || MELEE_INFO[g]?.name || g).toUpperCase()}</b><small>${GEAR[g] || ""}</small></div></div>`).join("")}</div>
     <h4>ALL GUNS</h4><div style="overflow-x:auto"><table class="ls-wtable"><tr><th>GUN</th><th>MAGAZINE</th><th>RELOAD</th><th>FIRE</th></tr>${Object.entries(WEAPON_INFO).map(([k, w]) => `<tr class="${r.gear.includes(k) ? "mine" : ""}"><td>${w.name}</td><td>${w.infinite ? "∞" : w.mag}</td><td>${w.reload}s</td><td>${w.auto ? "full auto" : "single"}</td></tr>`).join("")}</table></div>

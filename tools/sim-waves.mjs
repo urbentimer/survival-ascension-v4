@@ -10,7 +10,7 @@ const room = new SurvivalRoom(); room.onCreate({}); const seenEv = {}; room._onB
 const H = { sessionId: "H" }; room.onJoin(H, { name: "Host" });
 const send = (c, t, d) => room._handlers[t](c, d);
 for (let i = 0; i < 7; i++) send(H, "addBot");
-const classes = ["engineer", "scout", "demolitionist", "assault", "medic", "juggernaut", "dispatcher", "operator", "sniper"]; let ci = 0;
+const classes = ["engineer", "scout", "demolitionist", "assault", "juggernaut", "dispatcher", "operator", "sniper"]; let ci = 0;
 for (const p of room.state.players.values()) { p.characterClass = classes[ci++ % classes.length]; }
 const host = room.state.players.get("H"); host.isBot = true; room.botBrain.set("H", { strafe: 1, nextThink: 0 });
 send(H, "start", {});
@@ -19,13 +19,13 @@ function scan(tag) {
   for (const [what, map] of [["player", room.state.players], ["zombie", room.state.zombies], ["robot", room.state.robots], ["structure", room.state.structures], ["vehicle", room.state.vehicles]])
     for (const e of map.values()) for (const k of ["x", "y", "hp"]) if (e[k] !== undefined && !Number.isFinite(e[k])) bad.push(`${tag}: ${what} ${e.id || e.sessionId} ${e.kind || e.characterClass} ${k}=${e[k]}`);
 }
-let t = Date.now(); const stats = {};
+let t = Date.now(); const stats = {}; const tickMs = [];   // real CPU time of every tick (a slow tick = everyone lags)
 for (let wave = 1; wave <= LAST; wave++) {
   let ticks = 0;
   while (room.state.phase === "playing" && ticks < 20 * 600) {
     t += 50; room.lastTick = t - 50; const real = Date.now; Date.now = () => t;
-    try { room.tick(); } catch (e) { Date.now = real; console.log(`CRASH wave ${room.state.stage}:`, e.stack.split("\n").slice(0, 4).join(" | ")); process.exit(1); }
-    Date.now = real;
+    const c0 = performance.now(); try { room.tick(); } catch (e) { Date.now = real; console.log(`CRASH wave ${room.state.stage}:`, e.stack.split("\n").slice(0, 4).join(" | ")); process.exit(1); }
+    Date.now = real; tickMs.push(performance.now() - c0);
     for (const p of room.state.players.values()) { if (!p.alive && p.bleedout > 0) { p.alive = true; p.hp = p.maxHp; } p.hp = Math.max(p.hp, p.maxHp * .5); }   // keep the team alive so every wave plays out
     room.state.towerHp = Math.max(room.state.towerHp, 2000);
     if (ticks % 40 === 0) scan(`wave ${room.state.stage}`);
@@ -33,6 +33,7 @@ for (let wave = 1; wave <= LAST; wave++) {
     if (room.state.waveType === "boss" && room.state.bossPhase === "fight" && ticks > 20 * 120) for (const z of room.state.zombies.values()) if (z.boss) room.hitZombie(z, host, 1e6);
     ticks++;
   }
+  { const w = tickMs.splice(0).sort((a, b) => a - b); stats[wave + 'ms'] = w; console.log(`  tick cost: avg ${(w.reduce((a, b) => a + b, 0) / w.length).toFixed(2)}ms, p99 ${w[Math.floor(w.length * .99)].toFixed(1)}ms, max ${w[w.length - 1].toFixed(1)}ms (budget 50ms)`); if (w[w.length - 1] > 200) bad.push(`wave ${wave}: a ${Math.round(w[w.length - 1])}ms tick`); }
   const kinds = {}; stats[wave] = { phase: room.state.phase, secs: Math.round(ticks / 20), kills: room.state.totalKills };
   console.log(`wave ${wave}: ${room.state.phase} after ${Math.round(ticks / 20)}s game time, total kills ${room.state.totalKills}, robots ${room.state.robots.size}, ult kills ${[...room.state.players.values()].map(p => p.characterClass[0] + (p.ultKills ?? "-")).join(" ")}`);
   if (room.state.phase !== "cleared") { bad.push(`wave ${wave} ended as ${room.state.phase}`); break; }
