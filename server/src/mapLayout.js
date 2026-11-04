@@ -1,6 +1,8 @@
 // The city map: roads + where every map piece (building, car, tree...) stands.
 // Made once on the server with a fixed seed and sent to every player (GameState.mapLayout),
 // so everyone sees the same map and the server knows what is solid.
+// TWO IDENTICAL COPIES: server/src/mapLayout.js and client/mapLayout.js (the client predicts your movement with the same
+// collision boxes; Render can't read files outside each service's folder). Edit both; tools/test-room.mjs checks they match.
 //
 // Each piece: { kind, x, y, flip }  (x, y = bottom centre of its picture, i.e. where it touches the ground)
 

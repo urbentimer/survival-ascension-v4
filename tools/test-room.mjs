@@ -29,12 +29,29 @@ function placeZombie(room, x, y, hp = 500) {
 }
 const freeze = (P) => { P.x = 600; P.y = 380; };
 
+// 0. the client's copy of the map layout (used for movement prediction) must match the server's
+{ const { readFileSync } = await import("node:fs");
+  ok(readFileSync(join(root, "server/src/mapLayout.js"), "utf8") === readFileSync(join(root, "client/mapLayout.js"), "utf8"), "client/mapLayout.js is identical to server/src/mapLayout.js"); }
+
 // 1. facing from movement
 { const { room, A, send, P } = makeRoom(); freeze(P(A));
   send(A, "input", { dx: -1, dy: 0 }); ok(P(A).facing === -1, "walking left flips character to face left");
   send(A, "input", { dx: 1, dy: 0 }); ok(P(A).facing === 1, "walking right faces right");
   await W(300); P(A).lastShot = 0; placeZombie(room, 450, 380);
   send(A, "shoot", { a: Math.PI }); ok(P(A).facing === -1, "standing still + shooting left turns to face the aim");
+  room._dispose(); }
+
+// 1b. queued movement (the real client sends s + dt): applied at a steady rate in the tick, ack follows what was applied
+{ const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p); p.x = 600; p.y = 600; const x0 = p.x, sp = p.speed;
+  const T = () => { room.lastInputs.set("A", Date.now() - 50); room.lastTick = Date.now() - 50; room.tick(); };   // one tick, 50ms of real time
+  for (let s = 1; s <= 3; s++) send(A, "input", { dx: 1, dy: 0, s, dt: 50 });   // 3 inputs arrive at once (network bunching)
+  ok(p.x === x0 && (p.ack || 0) === 0, "queued inputs don't move you until the tick");
+  T(); ok(Math.abs(p.x - x0 - sp * .05) < 1 && p.ack === 1, `one tick applies one input's worth (${Math.round(p.x - x0)}px, ack ${p.ack})`);
+  T(); ok(p.ack === 2, "next tick: the next input"); T();
+  ok(p.ack === 3 && Math.abs(p.x - x0 - sp * .15) < 2, `all 3 applied, total = 150ms of walking (${Math.round(p.x - x0)}px)`);
+  for (let s = 4; s <= 9; s++) send(A, "input", { dx: 1, dy: 0, s, dt: 50 }); T(); ok(p.ack === 5, `fallen behind: catches up faster (ack ${p.ack})`);
+  T(); T(); T(); T(); room.lastDashAt.clear(); send(A, "input", { dx: 0, dy: 1, s: 10, dt: 50 }); send(A, "dash", { dx: 0, dy: 1, s: 11 }); const y0 = p.y;
+  T(); ok(p.ack === 11 && p.y - y0 > 55, "a dash queued behind a step goes in the same tick, in order");
   room._dispose(); }
 
 // 2. aimed shots per weapon

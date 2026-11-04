@@ -1,6 +1,7 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
+import { mapBoxes, MAP_KINDS } from "./mapLayout.js";   // same collision rules as the server (movement prediction)
 
 const $ = id => document.getElementById(id);
 const serverInput = new URLSearchParams(location.search).get("server");
@@ -101,8 +102,8 @@ async function joinRoom() {
 function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
-  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); renderState(); } catch (e) { reportError(e, "ui"); } });
-  room.onMessage("shot", m => { fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
+  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); } catch (e) { reportError(e, "ui"); } });
+  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
   room.onMessage("heal", m => fx.push({ type: "healfx", t: performance.now(), ...m }));
@@ -629,7 +630,9 @@ function sendControls(t) {
   const ride = state.vehicles?.get(myId);
   if (t - lastInput > 45) {
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
-    room.send("input", ride ? { dx, dy, a: aimAngle(me) } : { dx, dy }); lastInput = t;   // in a vehicle the gun follows the mouse
+    const dt = Math.min(100, t - lastInput), seq = ++PRED.seq; lastInput = t;
+    if (ride) room.send("input", { dx, dy, a: aimAngle(me), s: seq });   // in a vehicle the gun follows the mouse (no prediction: the server drives it)
+    else { room.send("input", { dx, dy, s: seq, dt: Math.round(dt) }); predictInput(me, { seq, dx, dy, dt: dt / 1000 }); }
   }
   if (ride) {   // Sofea's tank / helicopter: hold or click to fire (the server allows one shot every 1.5s)
     const clicked = clickShotAt && performance.now() - clickShotAt < 300;
@@ -653,7 +656,7 @@ function sendControls(t) {
     dashQueued = false;
     dashReady = false; dashReadyAt = performance.now() + DASH_CD_MS; setTimeout(() => dashReady = true, DASH_CD_MS);
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
-    room.send("dash", { dx, dy });
+    const seq = ++PRED.seq; room.send("dash", { dx, dy, s: seq }); predictInput(me, { seq, dx, dy, dash: true });
   }
 }
 // --- Pixel-art world renderer: hand-drawn Canvas sprites, buildings and props ---
@@ -1661,11 +1664,9 @@ function drawCrosshair(){
   for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ctx.beginPath();ctx.moveTo(mouse.x+dx*12,mouse.y+dy*12);ctx.lineTo(mouse.x+dx*17,mouse.y+dy*17);ctx.stroke();}
   ctx.restore();
 }
-// ---------- Survivor sprites (art: client/assets/sprites/<class>.png, 3 rows x 3 frames: idle / walk / shoot) ----------
-const SPRITE_URLS = {
-  assault: "assets/sprites/assault.png", juggernaut: "assets/sprites/juggernaut.png", medic: "assets/sprites/medic.png",
-  engineer: "assets/sprites/engineer.png", scout: "assets/sprites/scout.png", demolitionist: "assets/sprites/demolitionist.png",
-  sniper: "assets/sprites/sniper.png", commander: "assets/sprites/commander.png",
+// ---------- Side-view survivor sprites for heroes without 8-direction art (client/assets/sprites/<class>.png, 3 rows x 3 frames: idle / walk / shoot) ----------
+const SPRITE_URLS = {   // heroes with 8-direction art (dir8 below) don't need these
+  medic: "assets/sprites/medic.png", sniper: "assets/sprites/sniper.png", commander: "assets/sprites/commander.png",
 };
 const SPR = { cellW: 128, cellH: 72, anchorX: 44, scale: 0.82, feet: 17 };
 const sprites = {};
@@ -1882,15 +1883,84 @@ function drawStructure(st) {
 // in the direction you're walking. World size comes from the server (worldW / worldH).
 const worldW = () => state?.worldW || 3600, worldH = () => state?.worldH || 2280;
 const cam = { x: 0, y: 0, ready: false, last: 0 };
-window.__saCam = cam; if (SOLO_PREVIEW) window.__saState = () => ({ state, me: me_(), scorches, corpses }); // read-only hook used by automated smoothness tests
+window.__saCam = cam; window.__saPred = () => { const m = me_(); return { id: myId, px: PRED.x, ex: PRED.ex, sx: m?.x, ack: m?.ack, seq: PRED.seq, n: PRED.pending.length, sp: m?.speed }; }; if (SOLO_PREVIEW) window.__saState = () => ({ state, me: me_(), scorches, corpses }); // read-only hook used by automated smoothness tests
+// ===================== OWN-PLAYER PREDICTION =====================
+// Your survivor moves the instant you press a key (same speed + wall rules as the server), instead of waiting a round trip.
+// Every input has a number; the server sends back the last number it applied (player.ack). On each update we start from the
+// server's position and replay the inputs it hasn't applied yet. Small differences fade out over ~0.1s instead of snapping.
+const PRED = { seq: 0, pending: [], x: 0, y: 0, ok: false, ex: 0, ey: 0, grid: null, src: null };
+const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_SOLID = { barricade: 20, turret: 16, fence: 18 }, P_DASH = 50;
+function predGrid() {
+  const src = state?.mapLayout || ""; if (PRED.src === src && PRED.grid) return PRED.grid;
+  const layout = src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
+  const grid = new Map();
+  for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
+    const k = gx + "," + gy; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
+  }
+  PRED.src = src; PRED.grid = grid; return grid;
+}
+function predSolve(p) {   // same as the server's solveCollisions for a survivor
+  const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2, boxes = [{ x: cx, y: cy, hw: P_TOWER_HALF, hh: P_TOWER_HALF }, { x: cx + GEN_OFF.x, y: cy + GEN_OFF.y, hw: P_GEN_H, hh: P_GEN_H }];
+  for (const st of state.structures.values()) { if (P_SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: P_SOLID[st.kind], hh: P_SOLID[st.kind] }); else if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 }); }
+  const grid = predGrid(), gx = Math.floor(p.x / 160), gy = Math.floor(p.y / 160), seen = new Set();
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (!seen.has(b)) { seen.add(b); boxes.push(b); }
+  for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
+    const qx = Math.max(b.x - b.hw, Math.min(p.x, b.x + b.hw)), qy = Math.max(b.y - b.hh, Math.min(p.y, b.y + b.hh));
+    let dx = p.x - qx, dy = p.y - qy, d = Math.hypot(dx, dy); if (d >= P_BODY_R) continue;
+    if (d < .001) { const ex = [[b.x - b.hw - P_BODY_R - p.x, 0], [b.x + b.hw + P_BODY_R - p.x, 0], [0, b.y - b.hh - P_BODY_R - p.y], [0, b.y + b.hh + P_BODY_R - p.y]].sort((m, n) => Math.hypot(...m) - Math.hypot(...n))[0]; p.x += ex[0]; p.y += ex[1]; }
+    else { p.x = qx + dx / d * P_BODY_R; p.y = qy + dy / d * P_BODY_R; }
+    p.x = Math.max(18, Math.min(WW - 18, p.x)); p.y = Math.max(18, Math.min(WH - 18, p.y));
+  }
+}
+function predApply(p, inp, me) {   // one input -> moved position (mirrors the server's "input" / "dash" handlers)
+  let mx, my;
+  if (inp.dash) { let dx = inp.dx, dy = inp.dy; if (!dx && !dy) dx = me.facing || 1; const m = Math.hypot(dx, dy); mx = dx / m * P_DASH; my = dy / m * P_DASH; }
+  else {
+    if (!inp.dx && !inp.dy) return;
+    const m = Math.hypot(inp.dx, inp.dy), sp = me.speed * (me.charging ? .6 : 1) * (me.slowed > 0 ? .5 : 1) * (me.characterClass === "juggernaut" && me.skillT > 0 ? .7 : 1);
+    mx = inp.dx / m * sp * inp.dt; my = inp.dy / m * sp * inp.dt;
+  }
+  const steps = Math.max(1, Math.ceil(Math.hypot(mx, my) / 8)), WW = worldW(), WH = worldH();
+  for (let i = 0; i < steps; i++) { p.x = Math.max(18, Math.min(WW - 18, p.x + mx / steps)); p.y = Math.max(18, Math.min(WH - 18, p.y + my / steps)); predSolve(p); }
+}
+const predicting = me => !!(me && me.alive && state?.phase === "playing" && !state.vehicles?.get(myId) && !(me.stunned > 0));
+function predictInput(me, inp) {
+  if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
+  if (!PRED.ok) { PRED.x = me.x; PRED.y = me.y; PRED.ok = true; PRED.ex = PRED.ey = 0; }
+  PRED.pending.push(inp); if (PRED.pending.length > 60) PRED.pending.shift();
+  const p = { x: PRED.x, y: PRED.y }; predApply(p, inp, me); PRED.x = p.x; PRED.y = p.y;
+}
+function reconcile() {   // on every server update: server position + the inputs it hasn't applied yet
+  const me = me_(); if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
+  const ack = me.ack || 0; PRED.pending = PRED.pending.filter(i => i.seq > ack);
+  const p = { x: me.x, y: me.y }; for (const inp of PRED.pending) predApply(p, inp, me);
+  if (!PRED.ok) { PRED.x = p.x; PRED.y = p.y; PRED.ok = true; PRED.ex = PRED.ey = 0; return; }
+  const ox = PRED.x + PRED.ex, oy = PRED.y + PRED.ey;   // where you're drawn now
+  PRED.x = p.x; PRED.y = p.y;
+  if (Math.hypot(ox - p.x, oy - p.y) > 90) { PRED.ex = PRED.ey = 0; return; }   // hooked / knocked far: jump
+  PRED.ex = ox - p.x; PRED.ey = oy - p.y;   // otherwise glide the difference away
+}
+let predLast = 0;
+function predDraw(now) {   // the drawn position this frame (null = not predicting)
+  if (!PRED.ok) return null;
+  const k = Math.exp(-Math.min(.1, (now - predLast) / 1000) / .08); predLast = now; PRED.ex *= k; PRED.ey *= k;
+  const me = me_(), q = { x: PRED.x, y: PRED.y };   // + the keys held since the last input packet (that packet covers the same time, so nothing is counted twice)
+  const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+  if ((dx || dy) && predicting(me)) predApply(q, { dx, dy, dt: Math.max(0, Math.min(.1, (now - lastInput) / 1000)) }, me);
+  return { x: q.x + PRED.ex, y: q.y + PRED.ey };
+}
 // Smooth movement (snapshot interpolation): the server sends positions 20x a second.
 // We remember the last few positions with the time they arrived, and draw everything
 // ~70ms in the past, sliding evenly between two known positions. Motion is perfectly
 // steady, and the camera locks onto your drawn position: no lag, no lean, no wobble.
-const smooth = new Map(), INTERP_DELAY = 70;
+const smooth = new Map(), INTERP_DELAY = 100;   // two updates of slack: a late packet doesn't make everything stop
+window.__saSmooth = smooth;   // read-only hook for the smoothness tests
+let snapT = 0;
 function recordSnapshots() {
   if (!state) return;
-  const now = performance.now(), seen = new Set();
+  // even out arrival jitter: each update is stamped ~50ms after the last one, drifting slowly toward when it really arrived
+  const arrived = performance.now(), expect = snapT + 50, now = !snapT || Math.abs(arrived - expect) > 120 ? arrived : expect + (arrived - expect) * .2; snapT = now;
+  const seen = new Set();
   const rec = (key, e) => {
     seen.add(key); let sm = smooth.get(key);
     if (!sm || sm.src !== e) {
@@ -1907,16 +1977,19 @@ function recordSnapshots() {
   for (const key of smooth.keys()) if (!seen.has(key)) smooth.delete(key);
 }
 function updateSmooth() {
-  const rt = performance.now() - INTERP_DELAY;
+  const now = performance.now(), rt = now - INTERP_DELAY;
   for (const sm of smooth.values()) {
     const b = sm.buf; if (!b.length) continue;
     if (rt <= b[0].t) { sm.x = b[0].x; sm.y = b[0].y; continue; }
     let i = b.length - 1; while (i > 0 && b[i - 1].t > rt) i--;
     const p1 = b[i], p0 = b[i - 1] || p1;
-    if (rt >= p1.t) { sm.x = p1.x; sm.y = p1.y; continue; }                 // waiting for the next update: hold still
+    if (rt >= p1.t) {   // the next update is late: keep gliding on the last velocity for up to 60ms, then hold
+      const ex = Math.min(rt - p1.t, 60) / Math.max(1, p1.t - p0.t); sm.x = p1.x + (p1.x - p0.x) * ex; sm.y = p1.y + (p1.y - p0.y) * ex; continue;
+    }
     const f = (rt - p0.t) / Math.max(1, p1.t - p0.t);
     sm.x = p0.x + (p1.x - p0.x) * f; sm.y = p0.y + (p1.y - p0.y) * f;
   }
+  const mine = smooth.get("p" + myId), pd = predDraw(now); if (mine && pd) { mine.x = pd.x; mine.y = pd.y; }   // you: the predicted position, no delay
 }
 // V(entity) = the same entity, but with its smoothed on-screen position.
 function V(e) { if (!e) return e; return smooth.get(e.sessionId !== undefined ? "p" + e.sessionId : "z" + e.id)?.proxy || e; }
@@ -1985,7 +2058,6 @@ function drawMapObj(d) {
 }
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
-const MAP_KINDS = ["car", "burntCar", "bus", "police", "building", "ruin", "streetlight", "dumpster", "blood", "manhole", "rubble", "tree"];
 const MAP_FLAT = { blood: 1, manhole: 1 };
 let decor = null, decorSrc = "";
 function syncDecor() {
@@ -2247,7 +2319,6 @@ const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toast
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
 const heroDef = () => rosterOf(selectedClass);
 const setHtml = (id, html) => { const el = $(id); if (el._h !== html) { el._h = html; el.innerHTML = html; } };   // only touch the DOM when something changed (state updates ~20x/s)
-const portraitUrl = id => `assets/portraits/${id}.webp`;
 function toast(text) { const t = $("lobbyMessage"); t.textContent = text; t.classList.add("show"); ls.toastAt = Date.now(); setTimeout(() => { if (Date.now() - ls.toastAt >= 2900) t.classList.remove("show"); }, 3000); }
 function inviteText() { const code = room?.roomId || ""; let url = location.origin + location.pathname; if (/^https?:/.test(url)) url += "?room=" + encodeURIComponent(code); else url = ""; return { code, url }; }
 async function copyText(text, done) { try { await navigator.clipboard.writeText(text); toast(done); } catch { toast(text); } }

@@ -280,7 +280,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = [];
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.moveBudget = new Map(); this.inQ = new Map();
     this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -344,44 +344,29 @@ export class SurvivalRoom extends Room {
       if (this.state.explore) this.state.message = "EXPLORE MODE: no zombies. Walk around freely. Host: Esc menu to start the waves.";
     });
 
+    // Movement. Inputs from the game client carry a sequence number (s) and the time they cover (dt): they're queued and
+    // applied at a steady rate in tick() (see drainInputs), so a player's position advances evenly every tick however
+    // unevenly their packets arrive, and teammates see them move smoothly. Inputs without s (tests) apply at once.
     this.onMessage("input", (client, data) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !p.alive || this.state.phase !== "playing") return;
+      if (!p) return;
       const veh = this.state.vehicles.get(client.sessionId);
-      if (veh) {   // Sofea in her tank / helicopter: WASD drives it, the mouse aims the gun
+      if (veh) {   // Sofea in her tank / helicopter: WASD drives it, the mouse aims the gun (not predicted: applied at once)
+        const seq = Number(data?.s); if (Number.isFinite(seq) && seq > (p.ack || 0)) p.ack = seq;
+        if (!p.alive || this.state.phase !== "playing") return;
         const t = Date.now(), dtv = Math.min(0.1, Math.max(0, (t - (this.lastInputs.get(client.sessionId) || t - 50)) / 1000)); this.lastInputs.set(client.sessionId, t);
         const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { veh.aim = a; p.aim = a; }
         if (veh.phase === "ride") this.moveVehicle(p, veh, clamp(Number(data?.dx) || 0, -1, 1), clamp(Number(data?.dy) || 0, -1, 1), dtv);
         return;
       }
-      if (p.stunned > 0 || this.shadowDash.has(client.sessionId) || this.hooks?.has(client.sessionId)) { this.lastInputs.set(client.sessionId, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
-      const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
-      const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
-      const mag = Math.hypot(dx, dy) || 1;
-      const now = Date.now();
-      const previous = this.lastInputs.get(client.sessionId) || (now - 50);
-      const dt = Math.min(0.1, Math.max(0, (now - previous) / 1000));
-      this.lastInputs.set(client.sessionId, now);
-      const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && p.skillT > 0 ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
-      if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(client.sessionId, now); return; }   // Briggs mid-cast (fist slam / roar)
-      this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
-      // Face the way you walk (left/right). Gun follows movement unless you're shooting.
-      if (dx !== 0) { p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(client.sessionId, now); }
-      if ((dx !== 0 || dy !== 0) && now - (this.lastAimAt.get(client.sessionId) || 0) > 400) p.aim = Math.atan2(dy, dx);
+      if (this.queueInput(client.sessionId, data, false)) return;
+      this.applyMove(client.sessionId, p, data);
     });
 
-    // Dash: a short 50px hop in the movement direction, once every 5 seconds.
+    // Dash: a short 50px hop in the movement direction, once every 5 seconds (queued in order with the movement inputs).
     this.onMessage("dash", (client, data) => {
-      const p = this.state.players.get(client.sessionId);
-      if (!p || !p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(client.sessionId) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
-      const now = Date.now();
-      if (now - (this.lastDashAt.get(client.sessionId) || 0) < DASH_COOLDOWN * 1000) return;
-      let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
-      if (!dx && !dy) dx = p.facing || 1;
-      const mag = Math.hypot(dx, dy);
-      this.lastDashAt.set(client.sessionId, now);
-      this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
-      if (dx) p.facing = dx > 0 ? 1 : -1;
+      const p = this.state.players.get(client.sessionId); if (!p) return;
+      if (!this.queueInput(client.sessionId, data, true)) this.applyDash(client.sessionId, p, data);
     });
 
     this.onMessage("shoot", (client, data) => {
@@ -498,7 +483,6 @@ export class SurvivalRoom extends Room {
       if (typeof data.extraLoot === "boolean") this.state.extraLoot = data.extraLoot;
     });
     this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
-    this.onMessage("useItem", client => { const p = playing(client.sessionId); if (p) this.useQuickItem(p); });
     this.onMessage("upgrade", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !p.alive) return;
@@ -730,7 +714,7 @@ export class SurvivalRoom extends Room {
     if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
     this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId); this.hooks.delete(client.sessionId); this.spins.delete(client.sessionId);
-    this.lastInputs.delete(client.sessionId);
+    this.lastInputs.delete(client.sessionId); this.inQ?.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       const next = [...this.state.players.values()].find(p => !p.isBot);
       this.state.hostId = next ? next.sessionId : "";
@@ -1497,10 +1481,6 @@ export class SurvivalRoom extends Room {
       out.push({ x, y });
     }
     return out.length >= n ? out : null;
-  }
-  safeWalls(cx, cy) {   // the 4 collision rectangles: north/south 368x24, east/west 24x320
-    const H = ASTRA.safe.half, t = ASTRA.safe.wall / 2;
-    return [{ x: cx, y: cy - H + t, hw: H, hh: t }, { x: cx, y: cy + H - t, hw: H, hh: t }, { x: cx - H + t, y: cy, hw: t, hh: H - 2 * t }, { x: cx + H - t, y: cy, hw: t, hh: H - 2 * t }];
   }
   safeFits(cx, cy, self = null) {
     const H = ASTRA.safe.half, X = ARENA.width / 2, Y = ARENA.height / 2, over = (b, pad = 0) => Math.abs(b.x - cx) < b.hw + H + pad && Math.abs(b.y - cy) < b.hh + H + pad;
@@ -2509,6 +2489,57 @@ export class SurvivalRoom extends Room {
     if (n <= 3) this.log("error", "server", `${where}: ${e?.stack || e}`, client);
     else if (n === 4) this.log("warn", "server", `${where}: same error keeps happening (not logging it again)`, client);
   }
+  queueInput(sid, data, dash) {   // true = queued for drainInputs
+    const seq = Number(data?.s); if (!Number.isFinite(seq)) return false;
+    let q = this.inQ.get(sid); if (!q) this.inQ.set(sid, q = { list: [], credit: 0 });
+    if (q.list.length < 12) q.list.push({ dx: data?.dx, dy: data?.dy, dt: data?.dt, s: seq, dash });   // a flood beyond ~0.6s is dropped (the client gets corrected)
+    return true;
+  }
+  drainInputs(dt) {   // each tick, apply about one tick's worth of each player's queued inputs (a bit more if they've fallen behind)
+    for (const [sid, q] of this.inQ) {
+      const p = this.state.players.get(sid); if (!p) { this.inQ.delete(sid); continue; }
+      const backlog = q.list.reduce((t, i) => t + (i.dash ? 0 : clamp(Number(i.dt) || 50, 0, 100) / 1000), 0);
+      q.credit += dt * (backlog > 0.16 ? 1.5 : 1);   // > ~3 inputs waiting: catch up
+      while (q.list.length && (q.credit > 0 || q.list[0].dash)) {
+        const i = q.list.shift(); if (!i.dash) q.credit -= clamp(Number(i.dt) || 50, 0, 100) / 1000;
+        if (i.s > (p.ack || 0)) p.ack = i.s;
+        if (i.dash) this.applyDash(sid, p, i); else this.applyMove(sid, p, i);
+      }
+      if (!q.list.length) q.credit = Math.min(q.credit, 0);   // ran dry: don't bank time (the next packet then waits a tick, which becomes the jitter buffer)
+    }
+  }
+  applyMove(sid, p, data) {
+    if (!p.alive || this.state.phase !== "playing" || this.state.vehicles.has(sid)) return;
+    if (p.stunned > 0 || this.shadowDash.has(sid) || this.hooks?.has(sid)) { this.lastInputs.set(sid, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
+    const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
+    const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
+    const mag = Math.hypot(dx, dy) || 1;
+    const now = Date.now();
+    const previous = this.lastInputs.get(sid) || (now - 50);
+    this.lastInputs.set(sid, now);
+    // Move by the time the CLIENT measured (so its prediction matches exactly, however unevenly the messages arrive),
+    // but never more than real time allows: a budget that refills with real time, capped at 0.25s (no speed hacks).
+    const bud = Math.min(0.25, (this.moveBudget.get(sid) ?? 0.1) + Math.max(0, (now - previous) / 1000));
+    const want = Number.isFinite(Number(data?.dt)) ? clamp(Number(data.dt) / 1000, 0, 0.1) : Math.min(0.1, Math.max(0, (now - previous) / 1000));
+    const dt = Math.min(want, bud); this.moveBudget.set(sid, bud - dt);
+    const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && p.skillT > 0 ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
+    if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(sid, now); return; }   // Briggs mid-cast (fist slam / roar)
+    this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
+    // Face the way you walk (left/right). Gun follows movement unless you're shooting.
+    if (dx !== 0) { p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(sid, now); }
+    if ((dx !== 0 || dy !== 0) && now - (this.lastAimAt.get(sid) || 0) > 400) p.aim = Math.atan2(dy, dx);
+  }
+  applyDash(sid, p, data) {
+    if (!p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(sid) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
+    const now = Date.now();
+    if (now - (this.lastDashAt.get(sid) || 0) < DASH_COOLDOWN * 1000) return;
+    let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
+    if (!dx && !dy) dx = p.facing || 1;
+    const mag = Math.hypot(dx, dy);
+    this.lastDashAt.set(sid, now);
+    this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
+    if (dx) p.facing = dx > 0 ? 1 : -1;
+  }
   tick() {
     try { this.tickInner(); } catch (e) { this.logErr("game tick", e); }   // a bug skips one tick instead of freezing the room
     if (this.state.phase !== this.logPhase || (this.state.phase === "playing" && this.state.stage !== this.logStage)) {   // wave start / cleared / defeat / victory
@@ -2521,6 +2552,7 @@ export class SurvivalRoom extends Room {
     const now = Date.now();
     const dt = Math.min(0.1, (now - this.lastTick) / 1000);
     this.lastTick = now;
+    this.drainInputs(dt);
     for (const p of this.state.players.values()) if (p.charging && (!p.alive || p.activeSlot !== 1 || p.melee !== "axe" || this.state.phase !== "playing")) p.charging = false;
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
     if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
@@ -2649,7 +2681,7 @@ export class SurvivalRoom extends Room {
       }
       const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&distance(st,z)<30);
       if (barricade) {
-        z.attackCooldown -= dt;
+        z.attackCooldown = Math.max(0, z.attackCooldown - dt);
         if(z.attackCooldown<=0){barricade.hp-=z.damage;z.attackCooldown=1;if(barricade.hp<=0)this.state.structures.delete(barricade.id);}
       } else if (z.kind === "spitter" && d < ACID.hold) {
         // Spitters keep their distance and lob acid from range.
@@ -2657,7 +2689,7 @@ export class SurvivalRoom extends Room {
       } else if (d > (z.kind === "mutant" ? z.radius + 10 : z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) - 4)) {
         this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
       }
-      z.attackCooldown -= dt;
+      z.attackCooldown = Math.max(0, z.attackCooldown - dt);   // stops at 0: no network traffic while it just walks
       if (d < z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) && z.attackCooldown <= 0) {
         if (isMachine) {
           if (this.state.robots.has(target.id) || this.state.structures.has(target.id)) this.damageMachine(target, z.damage * (z.kind === "mutant" ? 1.6 : 1));
