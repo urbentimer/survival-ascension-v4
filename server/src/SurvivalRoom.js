@@ -781,7 +781,7 @@ export class SurvivalRoom extends Room {
       return;
     }
     p.lastShot = now;
-    if (!rage) p.mag -= 1;
+    if (!rage) { p.mag -= 1; if (p.mag <= 0) this.startReload(p); }   // automatic reload the moment the magazine runs dry (R is everyone's 3rd skill now)
     p.aim = aim;
     this.lastAimAt.set(p.sessionId, now);
     if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
@@ -845,6 +845,7 @@ export class SurvivalRoom extends Room {
     if (n === 3) p.weapon = p.secondary;
     this.loadMag(p);
     applyLoadout(p);
+    if ((n === 2 || n === 3) && p.mag <= 0) this.startReload(p);   // switched to an empty gun: reload it straight away
   }
   storeMag(p) { if (p.weapon) this.mags.set(p.sessionId + ":" + p.weapon, p.mag); p.reloadLeft = 0; }
   loadMag(p) {
