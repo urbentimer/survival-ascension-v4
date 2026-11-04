@@ -1936,8 +1936,9 @@ const DIR8 = {
   juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
-    // his sheets' diagonals were drawn facing the wrong way: row -> [row to use, mirrored?] (bat's are fine except up-right)
-    fix: { all: { 3: [4, 0], 5: [4, 1], 7: [1, 1] }, bat: { 3: [5, 1] } } },
+    // his sheets' diagonals were drawn facing the wrong way: row -> [row to use, mirrored?]. The rifle has real up-right / up-left
+    // frames now (tools/add-astra-diagonals.py); knife / bat / axe / radio still borrow the back view (bat's up-left is fine)
+    fix: { gun: { 7: [1, 1] }, all: { 3: [4, 0], 5: [4, 1], 7: [1, 1] }, bat: { 3: [5, 1] } } },
   demolitionist: { url: "assets/sprites/dir8/demolitionist.png", blocks: ["launcher", "rifle", "shotgun", "knife", "bat", "axe"] },   // guns by name; other guns use the rifle   // Raven: "fire" = her burning katana
 };
 const D8 = { cellW: 112, cellH: 88, anchorX: 56, feetY: 80 };
