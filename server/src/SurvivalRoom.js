@@ -196,7 +196,7 @@ const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a tea
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "commander", "dispatcher"];   // Sofea took Elena's (medic) slot; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
-  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2 },
+  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
   police: { n: 4, life: 30, cd: 60, hp: 110, speed: 160, dmg: 7, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   safe: { cd: 90, build: 2, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
@@ -1613,27 +1613,31 @@ export class SurvivalRoom extends Room {
     for (const q of this.state.players.values()) if (q.alive) { const d = distance(q, owner); if (d < bd) { bd = d; best = q; } }
     return best || owner;
   }
+  // The medic treats each person ONCE per call (no stacking): Astra first, then the nearest injured ally, then the next...
+  // A treatment lasts until they're at full HP (max ASTRA.medic.session seconds). Nobody left to treat: he follows Astra.
+  // Someone at full HP when he looks keeps their turn for later (if they get hurt during his 20s).
   updateDoctor(r, mem, owner, now, dt) {
     const M = ASTRA.medic, ok = q => q && q.alive && q.hp < q.maxHp;
+    mem.done = mem.done || new Set(); mem.skip = mem.skip || {};
     let pt = mem.patient ? this.state.players.get(mem.patient) : null;
-    if (mem.patient && !ok(pt)) { if (this.docRes.get(mem.patient) === r.id) this.docRes.delete(mem.patient); mem.patient = ""; pt = null; }
-    if (!pt) {   // nearest injured teammate nobody else is treating; Astra himself only if nobody else needs it (8 players max: cheap every tick)
-      mem.skip = mem.skip || {};
-      const c = [...this.state.players.values()].filter(q => ok(q) && !this.docRes.has(q.sessionId) && !(mem.skip[q.sessionId] > now));
-      c.sort((a, b) => (a.sessionId === r.ownerId) - (b.sessionId === r.ownerId) || distance(r, a) - distance(r, b) || (a.sessionId < b.sessionId ? -1 : 1));
+    const release = () => { if (this.docRes.get(mem.patient) === r.id) this.docRes.delete(mem.patient); mem.patient = ""; pt = null; };
+    if (mem.patient && (!ok(pt) || mem.healT >= M.session)) { if (mem.healT > 0) mem.done.add(mem.patient); release(); }   // full (or treated long enough): done with them
+    if (!pt) {
+      const c = [...this.state.players.values()].filter(q => ok(q) && !mem.done.has(q.sessionId) && !this.docRes.has(q.sessionId) && !(mem.skip[q.sessionId] > now));
+      c.sort((a, b) => (b.sessionId === r.ownerId) - (a.sessionId === r.ownerId) || distance(r, a) - distance(r, b) || (a.sessionId < b.sessionId ? -1 : 1));   // Astra first, then nearest
       pt = c[0] || null;
-      if (pt) { this.docRes.set(pt.sessionId, r.id); mem.patient = pt.sessionId; mem.best = distance(r, pt); mem.progAt = now; }
+      if (pt) { this.docRes.set(pt.sessionId, r.id); mem.patient = pt.sessionId; mem.best = distance(r, pt); mem.progAt = now; mem.healT = 0; }
     }
     r.act = ""; r.tgt = "";
     let goal;
     if (pt) {
       const d = distance(r, pt);
       if (d < mem.best - 8) { mem.best = d; mem.progAt = now; }
-      if (d > M.range && now - mem.progAt > M.stuck * 1000) { this.docRes.delete(pt.sessionId); mem.skip[pt.sessionId] = now + 2000; mem.patient = ""; return; }   // can't get there: let someone else try
+      if (d > M.range && now - mem.progAt > M.stuck * 1000) { if (mem.healT > 0) mem.done.add(pt.sessionId); else mem.skip[pt.sessionId] = now + 2000; release(); return; }   // can't get there: try someone else
       r.aim = Math.atan2(pt.y - r.y, pt.x - r.x);
-      if (d <= M.range && this.lineClear(r, pt)) { pt.hp = Math.min(pt.maxHp, pt.hp + M.heal * dt); r.act = "heal"; r.tgt = pt.sessionId; mem.progAt = now; }
+      if (d <= M.range && this.lineClear(r, pt)) { pt.hp = Math.min(pt.maxHp, pt.hp + M.heal * dt); mem.healT += dt; r.act = "heal"; r.tgt = pt.sessionId; mem.progAt = now; }
       goal = d > 46 ? pt : r;
-    } else {   // nobody to treat: stay near Astra
+    } else {   // everyone treated (or nobody hurt): follow Astra
       const a = (mem.idx || 0) * 2.1 + 1, lead = this.leaderOf(owner);
       goal = { x: lead.x + Math.cos(a) * 60, y: lead.y + Math.sin(a) * 45 };
     }
