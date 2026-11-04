@@ -27,8 +27,8 @@ const BUTCHER = {
   speed: 130, armour: 0.5, armourArc: 1.05,
   chop: { trigger: 150, windup: .7, comboWindup: .38, after: .65, cd: 2.6, offset: 55, rings: [95, 185, 275], ringDelay: .12, stun: 1.0, slow: 2.0 },
   hook: { range: 480, minRange: 170, aim: .5, lock: .08, speed: 2100, cd: [10, 15], enragedCd: [8, 10], first: 5, hitR: 34, pullSpeed: 640, hold: .55, dmg: 8 },
-  spin: { every: 8, dur: 3, radius: 115, tick: .35, dmgMult: .45, speedMult: 1.15 },
-  enrageAt: .3, enrageSpeed: 1.2,
+  spin: { every: 8, dur: 3, radius: 115, tick: .35, dmgMult: .35, speedMult: .8 },   // slower while spinning so you can run from it
+  enrageAt: .3, enrageSpeed: 1.05,
 };
 // DEFLECT: only the FIRE AXE. Swing it toward the incoming hook as it arrives (tip within `reach` of you),
 // or up to `window` seconds before it touches you -> the hook breaks and the Butcher staggers (armour down).
