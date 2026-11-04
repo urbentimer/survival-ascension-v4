@@ -1161,7 +1161,7 @@ function drawSofea(p, img, now) {
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
-const HGUN = { cone: Math.PI / 2, range: 672, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+const HGUN = { cone: Math.PI / 2, range: 200, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
 function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
 function heliGunFx(p, a, now, bob, under) {
   const im = sImgs.gun, mz = heliMuzzle(p, a, bob); let g = heliShots.get(p.sessionId);
@@ -1175,7 +1175,7 @@ function heliGunFx(p, a, now, bob, under) {
     for (const z0 of state.zombies.values()) { const z = V(z0), d = Math.hypot(z.x - p.x, z.y - p.y); let da = Math.atan2(z.y - p.y, z.x - p.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (d < HGUN.range && Math.abs(da) < HGUN.cone / 2) inCone.push(z); }
     let tx, ty;
     if (inCone.length && Math.random() < .75) { const z = inCone[Math.floor(Math.random() * inCone.length)]; tx = z.x + (Math.random() - .5) * 16; ty = z.y + (Math.random() - .5) * 10; }
-    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 120 + Math.random() * (HGUN.range - 140); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
+    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 50 + Math.random() * (HGUN.range - 60); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
     g.list.push({ t: now, tx, ty }); if (g.list.length > 24) g.list.shift();
   }
   if (now - g.snd > HGUN.sound) { g.snd = now; playSfx("mg", p.x, p.y, p.sessionId === myId ? 1 : .6); }   // the rattle
