@@ -304,7 +304,7 @@ function renderHotbar(me) {
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
   if (ast) {   // R: Safehouse, beside E
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
-    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 8s; zombies can't get in (6 hits break it, the workers repair) for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (you can't be hurt while they build); zombies can't get in (6 hits break it, the workers repair) for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
@@ -638,7 +638,7 @@ window.addEventListener("keydown", e => {
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me) }); } }
   else if (k === "r") { if (me_()?.characterClass === "dispatcher") room.send("skill2"); else room.send("reload"); }   // Astra: R = Safehouse (he reloads with C)
   else if (k === "c" && me_()?.characterClass === "dispatcher") room.send("reload");   // Astra reloads with C (his R is the Safehouse)
-  else if (k === "f") tryRevive();
+  else if (k === "f" && !e.repeat) tryRevive();
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
   else if (k === "v" && SOLO_PREVIEW) { const i = (VISION_STEPS.indexOf(NIGHT.playerR / W) + 1) % VISION_STEPS.length; NIGHT.playerR = Math.round(VISION_STEPS[i] * W); feed.unshift({ text: `Test: night vision ${Math.round(VISION_STEPS[i] * 100)}% (${NIGHT.playerR}px) · V to switch`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
@@ -646,11 +646,21 @@ window.addEventListener("keydown", e => {
   else if ((k === "]" || k === "[") && SOLO_PREVIEW && state) room.send("debugWave", { n: Math.max(1, Math.min(50, (state.stage || 1) + (k === "]" ? 1 : -1))) });
   else if (k === "n" && SOLO_PREVIEW) { forceNight = !forceNight; feed.unshift({ text: forceNight ? "Test: night view ON (press N to turn off)" : "Test: night view OFF", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
 });
-window.addEventListener("keyup", e => { const k = e.key.toLowerCase(); keys[k === " " ? "space" : k] = false; if (k === "e") closeSquadWheel(); });
+window.addEventListener("keyup", e => { const k = e.key.toLowerCase(); keys[k === " " ? "space" : k] = false; if (k === "e") closeSquadWheel(); if (k === "f" && reviving) { reviving = null; room?.send("reviveStop"); } });
+// Revive: hold F next to a downed teammate for 5s (the server times it; letting go or walking off cancels). reviving = what we show.
+let reviving = null;   // { id, t0 }
 function tryRevive() {
-  const me = me_(); if (!me?.alive) return;
+  const me = me_(); if (!me?.alive || !state) return;
   const target = [...state.players.values()].find(p => !p.alive && !p.bledOut && Math.hypot(p.x - me.x, p.y - me.y) < 85);
-  if (target) room.send("revive", { targetId: target.sessionId });
+  if (target) { room.send("revive", { targetId: target.sessionId }); reviving = { id: target.sessionId, t0: performance.now() }; }
+}
+function drawReviveRing() {   // progress ring around the teammate you're reviving
+  if (!reviving || !state) return; const me = V(me_()), t = V(state.players.get(reviving.id));
+  if (!me || !t || !me_()?.alive || state.players.get(reviving.id)?.alive || Math.hypot(t.x - me.x, t.y - me.y) > 85) { reviving = null; return; }   // done, or walked off (the server cancels too)
+  const k = Math.min(1, (performance.now() - reviving.t0) / 5000);
+  ctx.save(); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, 0, 7); ctx.stroke();
+  ctx.strokeStyle = "#7dff9a"; ctx.shadowColor = "#7dff9a"; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = "#eaffef"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.fillText(`REVIVING ${Math.ceil(5 - k * 5)}s`, t.x, t.y - 38); ctx.restore();
 }
 
 // build wheel: hold right-click, move toward an option, release
@@ -991,7 +1001,7 @@ function drawBriggsFx(f, age) {   // false when finished
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
 const aImgs = {};
 for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", heal: "assets/sprites/fx/astra-heal.webp", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
-const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 8, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
+const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 5, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
   if (m.k === "call") astraCall.set(m.id, t);
@@ -1020,6 +1030,14 @@ function safeHpBar(st, cx, y) {   // 6 pips above the north wall: how many more 
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x0 - 3, y - 3, n * (w + gap) - gap + 6, 12);
   for (let i = 0; i < n; i++) { ctx.fillStyle = i < st.hp ? (hit ? "#ff8a7a" : st.hp <= 2 ? "#ff6b5b" : "#8ff0ff") : "rgba(255,255,255,.12)"; ctx.fillRect(x0 + i * (w + gap), y, w, 6); }
   ctx.restore();
+}
+function drawAstraShield() {   // Astra can't be hurt while his safehouse is being built: a cyan shield ring
+  if (!state) return; const now = performance.now();
+  for (const st of state.structures.values()) {
+    if (st.kind !== "safehouse" || !(st.deploy > 0)) continue; const p = V(state.players.get(st.ownerId)); if (!p || !p.alive || !inView(p.x, p.y)) continue;
+    ctx.save(); ctx.globalAlpha = .55 + .2 * Math.sin(now / 160); ctx.strokeStyle = "#8ff0ff"; ctx.lineWidth = 2.5; ctx.shadowColor = "#8ff0ff"; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y - 8, 24, 30, 0, 0, 7); ctx.stroke(); ctx.restore();
+  }
 }
 function safeFrame(st) { return st.deploy > 0 ? (st.deploy > SAFE.build / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
 function safeAlpha(st) { return st.deploy <= 0 && st.life < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
@@ -1131,7 +1149,7 @@ function drawSofea(p, img, now) {
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
-const HGUN = { cone: Math.PI / 2, range: 420, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+const HGUN = { cone: Math.PI / 2, range: 1680, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
 function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
 function heliGunFx(p, a, now, bob, under) {
   const im = sImgs.gun, mz = heliMuzzle(p, a, bob); let g = heliShots.get(p.sessionId);
@@ -1140,16 +1158,12 @@ function heliGunFx(p, a, now, bob, under) {
     if (!im?.naturalWidth) return; const f = 3 + Math.floor(Math.random() * 5);
     ctx.save(); ctx.translate(mz.x, mz.y); ctx.rotate(a); ctx.drawImage(im, f * 128, 0, 128, 64, -4, -20, 80, 40); ctx.restore(); return;
   }
-  if (p.sessionId === myId) {   // the pilot sees the gun's cone on the ground
-    ctx.save(); ctx.fillStyle = "rgba(255,190,90,.06)"; ctx.strokeStyle = "rgba(255,190,90,.22)"; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, HGUN.range, a - HGUN.cone / 2, a + HGUN.cone / 2); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-  }
   if (now - g.at > HGUN.every) {   // new tracer: at a zombie in the cone most of the time, otherwise at the ground
     g.at = now; const inCone = [];
     for (const z0 of state.zombies.values()) { const z = V(z0), d = Math.hypot(z.x - p.x, z.y - p.y); let da = Math.atan2(z.y - p.y, z.x - p.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (d < HGUN.range && Math.abs(da) < HGUN.cone / 2) inCone.push(z); }
     let tx, ty;
     if (inCone.length && Math.random() < .75) { const z = inCone[Math.floor(Math.random() * inCone.length)]; tx = z.x + (Math.random() - .5) * 16; ty = z.y + (Math.random() - .5) * 10; }
-    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 120 + Math.random() * (HGUN.range - 120); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
+    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 120 + Math.random() * 600; tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
     g.list.push({ t: now, tx, ty }); if (g.list.length > 24) g.list.shift();
   }
   if (now - g.snd > HGUN.sound) { g.snd = now; playSfx("mg", p.x, p.y, p.sessionId === myId ? 1 : .6); }   // the rattle
@@ -2334,6 +2348,7 @@ function drawWorldObjects(extra) {
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
   if (leader && leader.kills > 0) { ctx.save(); ctx.font = 'bold 22px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 12; ctx.fillStyle = '#ffd84d'; ctx.fillText('♛', leader.x, leader.y - 60); ctx.restore(); }
   drawShotFx();
+  drawReviveRing(); drawAstraShield();
   drawCrosshair();
 }
 
@@ -2494,7 +2509,7 @@ const ROSTER = [
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (25 HP/s until full), then follows you." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "An armed officer for every living teammate: each one guards his player for 30s." },
-             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 8s, then stay to repair (6 hits break it). Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s. (Astra reloads with C.)" }], gear: ["rifle", "pistol", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", shotgun: "Shotgun · 6 shells, wide spread", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };

@@ -176,9 +176,9 @@ const SOFEA = {
   tank: { life: 30, cd: 30, speed: 140, taken: 0.65, rate: 1.5, body: 34, reach: 30, hw: 50, hh: 32,
           shot: { dmg: 65, min: 30, r: 110, speed: 600, range: 650 }, crush: { dmg: 55, boss: 10, gap: 0.75, minSpeed: 40, push: 30 } },
   // helicopter: flies over everything (only the map edge stops it); its machine gun fires the WHOLE ride, hitting every
-  // zombie in a 90-degree cone the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
+  // zombie in a 90-degree cone (1680px) the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
-          gun: { cone: Math.PI / 2, range: 420, every: 0.1, dmg: 6, bossMult: 0.5 } },
+          gun: { cone: Math.PI / 2, range: 1680, every: 0.1, dmg: 6, bossMult: 0.5 } },
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
@@ -203,7 +203,7 @@ const ASTRA = {
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
   // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
-  safe: { cd: 90, build: 8, hits: 6, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
+  safe: { cd: 90, build: 5, hits: 6, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
@@ -498,9 +498,11 @@ export class SurvivalRoom extends Room {
       const rescuer=this.state.players.get(client.sessionId);
       const target=this.state.players.get(String(data?.targetId||""));
       if(!rescuer?.alive||this.state.vehicles.has(client.sessionId)||!target||target.alive||target.bledOut||distance(rescuer,target)>85)return;
+      if(rescuer.reviveTargetId===target.sessionId)return;   // already reviving them (held key / repeat): keep the progress
       rescuer.reviveTargetId=target.sessionId;rescuer.reviveProgress=0;
       this.state.message=`${rescuer.name} is reviving ${target.name}...`;
     });
+    this.onMessage("reviveStop", client => { const r = this.state.players.get(client.sessionId); if (r) { r.reviveTargetId = ""; r.reviveProgress = 0; } });   // let go of F
     this.onMessage("repairTower", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       const amount = Math.max(0, Math.min(2000, Number(data?.amount) || 0));
@@ -1635,9 +1637,10 @@ export class SurvivalRoom extends Room {
       if (Math.abs(z.x - b.x) < b.hw + r && Math.abs(z.y - b.y) < b.hh + r) this.pushOut(z, [b], r);
     }
   }
-  shelterGuard() {
-    const g = [];
-    if (this.safeBoxes.length) for (const p of this.state.players.values()) if (p.alive && this.sheltered(p)) g.push({ p, hp: p.hp, x: p.x, y: p.y, st: p.stunned, sl: p.slowed });
+  shelterGuard() {   // inside a finished safehouse, or Astra while his is being built: nothing can hurt them this tick
+    const g = [], building = new Set();
+    for (const st of this.state.structures.values()) if (st.kind === "safehouse" && st.deploy > 0) building.add(st.ownerId);
+    if (this.safeBoxes.length || building.size) for (const p of this.state.players.values()) if (p.alive && (building.has(p.sessionId) || this.sheltered(p))) g.push({ p, hp: p.hp, x: p.x, y: p.y, st: p.stunned, sl: p.slowed });
     return g;
   }
   applyShelter(g) {   // undo anything a zombie did this tick to a sheltered survivor (hits, slams, hook drags, stuns)
