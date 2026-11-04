@@ -26,6 +26,12 @@ Last updated: 2026-11-04 (latest commit: "Smooth netcode: client prediction + se
 - Everything else (zombies, teammates) is interpolated 100ms behind (INTERP_DELAY) with arrival-jitter-filtered stamps and up to 60ms extrapolation when a packet is late.
 - Measured with a fake 60ms+25ms-jitter connection: key-press to movement on screen 240ms -> 17ms (1 frame); own movement 0 frozen frames; teammate view ~20% unevenness vs 50-80% before. Test hooks: window.__saCam, __saPred(), __saSmooth.
 
+## Sound (2026-11-04)
+- Audio pack from the user (ChatGPT, original synth, no lyrics): originals tools/art/audio/*.wav (+README), game copies client/assets/audio/*.mp3 (ffmpeg: music 56k stereo, sfx 48k mono; 744 KB total). player_footstep not used (near-silent).
+- client.js SOUND section: SFX table (vol, max voices, min gap ms), playSfx(name, x, y, mult) with distance falloff (900px), sfxBus / musicBus gains. Music: MUSIC tracks menu / day / night / boss, musicScene() picks (lobby = menu; Hivemind alive or boss intro/fight = boss; isNight = night; else day; defeat/victory = silence), updateMusic() every frame crossfades 1s, loops skip 30ms of mp3 padding. audioWatch() after each state update turns changes into sounds (wave start, wave cleared = victory, defeat = game over, night = thunder, tower/generator repaired or refuelled = repair, tower < 25% and dropping = alarm max every 10s, revive, loot picked up near you, fence / safehouse placed or finished = build, brute appears near you = roar, random nearby groan every 5-11s). Messages: shot -> shotSound (rifle/pistol/shotgun by weapon; yours 1.0, teammates .6, police/robots .45; minigun = turret sound), boom / demo rings = explosion, roar = brute roar, slam + Hivemind land = heavy footstep, Hivemind slam = electric AoE; zombie HP drop (updateFeel) = zombie hit; lobby clicks = ui select; Esc menu = ui pause. Everything is decoded as soon as the first click unlocks audio (warmAudio).
+- Toggles: lobby settings "Sound effects" / "Music" checkboxes and the Esc-menu buttons; saved in localStorage sa-prefs (sfx, music). Test hook window.__saAudio().
+- Solo preview: music is left out (build-preview skips audio/music_*; the preview is ~15.85 MB of its 16 MB limit). Sound effects are in it.
+
 ## How we work
 - User designs; often says "dont code yet" → discuss only. Code when told ("u can code now", "code it", "lets go").
 - Art from ChatGPT on a flat magenta (#FF00FF) background, one action/weapon per sheet; Claude cuts it with tools/extract-*.py.

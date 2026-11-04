@@ -47,6 +47,7 @@ const extraCss = `.solo-banner{display:flex;flex-wrap:wrap;gap:6px 12px;align-it
 
 // Inline art (client/assets/...) as data URIs so the single-file preview shows it.
 const inlineAssets = (text) => text.replace(/assets\/[\w\/.-]+\.(webp|png|jpg|mp3)/g, (rel) => {
+  if (rel.includes("audio/music_")) return "";   // music stays out of the preview (16 MB limit): the live game has it
   const ext = rel.split(".").pop(); const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
   return `data:${mime};base64,` + readFileSync(join(root, "client", rel)).toString("base64");
 });

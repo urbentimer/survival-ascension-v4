@@ -102,14 +102,14 @@ async function joinRoom() {
 function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
-  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); } catch (e) { reportError(e, "ui"); } });
-  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); if (m.w === "minigun") turretSound(m.id, m.x, m.y); });
+  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
+  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
   room.onMessage("heal", m => fx.push({ type: "healfx", t: performance.now(), ...m }));
   room.onMessage("summon", m => fx.push({ type: "summon", t: performance.now(), ...m }));
   room.onMessage("sky", m => { const t = performance.now(); skyAnim.set(m.id, { t0: t, a: m.a }); fx.push({ ...m, type: "dante", k: "sky", t }); });
-  room.onMessage("demo", m => { const t = performance.now(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
+  room.onMessage("demo", m => { const t = performance.now(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); playSfx("boom", m.x, m.y); DEMO.rings.forEach(rg => setTimeout(() => playSfx("boom", m.x, m.y, .8), (rg.at + DEMO.flight) * 1000)); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
   room.onMessage("shadow", m => { const t = performance.now(); fx.push({ ...m, type: "raven", k: m.k, t }); if (m.k === "dash") ravenDash.set(m.id, { t0: t, a: m.a }); if (m.k === "ignite" && m.id === myId) shake(4, 160); });
   room.onMessage("chop", m => { fx.push({ type: "chop", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 420) shake(11, 380); });
   room.onMessage("deflect", m => {
@@ -117,19 +117,19 @@ function connected() {
     const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 600) shake(m.heavy ? 14 : 10, 320);
   });
   room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
-  room.onMessage("roar", () => shake(12, 700));
+  room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
   room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
   room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
-  room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
+  room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
-  room.onMessage("boom", m => { if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
+  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
@@ -443,38 +443,139 @@ function aimAngle(me) { const v = V(me); return Math.atan2(mouse.y - v.y, mouse.
 function aimDist(me) { const v = V(me); return Math.round(Math.hypot(mouse.y - v.y, mouse.x - v.x)); }   // rockets fly to the mouse
 let mouse = { x: W / 2, y: H / 2, sx: W / 2, sy: H / 2 };
 const fx = [];
-let audioContext = null, ambientGain = null, ambientOn = false, sfxOn = true;
-// Sound effects (Web Audio). The browser only allows sound after the first click/key, so the context starts then.
-const SFX = { turret: { url: "assets/sfx/turret-shoot.mp3", vol: .45 } };
+let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus = null;
+// ===================== SOUND =====================
+// Sound effects + music (Web Audio). Files: assets/audio (the user's ChatGPT audio pack; originals in tools/art/audio).
+// The browser only allows sound after the first click/key, so the context starts then. Each sound has a voice limit (max
+// playing at once) and a minimum gap, so 8 players + police shooting doesn't become a wall of noise; positional sounds
+// fade out with distance from you (gone at 900px).
+const SFX = {
+  turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
+  rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
+  pistol:   { url: "assets/audio/pistol_shot.mp3", vol: .32, max: 4, gap: 40 },
+  shotgun:  { url: "assets/audio/shotgun_blast.mp3", vol: .4, max: 3, gap: 60 },
+  boom:     { url: "assets/audio/explosion.mp3", vol: .5, max: 4, gap: 60 },
+  zhit:     { url: "assets/audio/zombie_hit.mp3", vol: .2, max: 3, gap: 70 },
+  groan:    { url: "assets/audio/zombie_groan.mp3", vol: .16, max: 1 },
+  roar:     { url: "assets/audio/brute_roar.mp3", vol: .5, max: 1, gap: 1500 },
+  stomp:    { url: "assets/audio/heavy_footstep.mp3", vol: .65, max: 2, gap: 150 },
+  zap:      { url: "assets/audio/electric_aoe.mp3", vol: .55, max: 2 },
+  build:    { url: "assets/audio/wall_construction.mp3", vol: .5, max: 2, gap: 300 },
+  repair:   { url: "assets/audio/tower_repair.mp3", vol: .55, max: 1, gap: 400 },
+  alarm:    { url: "assets/audio/tower_low_health_alarm.mp3", vol: .45, max: 1 },
+  revive:   { url: "assets/audio/revive_success.mp3", vol: .55, max: 2 },
+  pickup:   { url: "assets/audio/pickup.mp3", vol: .4, max: 2, gap: 60 },
+  wave:     { url: "assets/audio/wave_start.mp3", vol: .6, max: 1 },
+  thunder:  { url: "assets/audio/thunder.mp3", vol: .55, max: 1 },
+  victory:  { url: "assets/audio/victory.mp3", vol: .6, max: 1 },
+  gameover: { url: "assets/audio/game_over.mp3", vol: .65, max: 1 },
+  select:   { url: "assets/audio/ui_select.mp3", vol: .35, max: 2, gap: 60 },
+  pause:    { url: "assets/audio/ui_pause.mp3", vol: .5, max: 1 },
+};
+// Music loops (empty in the solo preview: it has to stay under 16 MB). Crossfade 1s between scenes.
+const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3" };
+const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
-  if (!audioContext) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; audioContext = new AC(); }
+  if (!audioContext) {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; audioContext = new AC();
+    sfxBus = audioContext.createGain(); sfxBus.gain.value = sfxOn ? 1 : 0; sfxBus.connect(audioContext.destination);
+    musicBus = audioContext.createGain(); musicBus.gain.value = musicOn ? 1 : 0; musicBus.connect(audioContext.destination);
+  }
   if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
-  return audioContext;
+  warmAudio(); return audioContext;
 }
-for (const s of Object.values(SFX)) {
+function warmAudio() { if (audioContext) for (const s of [...Object.values(SFX), ...Object.values(musicTracks)]) decoded(s, audioContext); }   // decode everything early so no sound is silent the first time
+function loadRaw(s) {
+  if (!s.url) return;
   if (s.url.startsWith("data:")) { try { const bin = atob(s.url.split(",")[1]), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); s.raw = u.buffer; } catch {} }   // preview: inlined
-  else fetch(s.url).then(r => r.arrayBuffer()).then(b => { s.raw = b; }).catch(() => {});
+  else fetch(s.url).then(r => r.arrayBuffer()).then(b => { s.raw = b; warmAudio(); }).catch(() => {});
 }
-function playSfx(name, x, y) {
-  const s = SFX[name], ac = sfxContext(); if (!s || !ac) return;
-  if (!s.buf) { if (s.raw && !s.decoding) { s.decoding = true; ac.decodeAudioData(s.raw.slice(0)).then(b => { s.buf = b; }).catch(() => {}); } return; }
-  const me = V(me_()); let vol = s.vol;
-  if (me && Number.isFinite(x)) { const d = Math.hypot(x - me.x, y - me.y); vol *= Math.max(0, 1 - d / 900); if (vol < .02) return; }   // quieter far away
-  if (!sfxOn) return; const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = s.buf; g.gain.value = vol; src.connect(g); g.connect(ac.destination); src.start();
-  return s.buf.duration;
+function decoded(s, ac) {   // the AudioBuffer once ready (decoding starts on first use)
+  if (s.buf) return s.buf;
+  if (s.raw && !s.decoding) { s.decoding = true; ac.decodeAudioData(s.raw.slice(0)).then(b => { s.buf = b; }).catch(() => {}); }
+  return null;
+}
+for (const s of Object.values(SFX)) loadRaw(s);
+const musicTracks = Object.fromEntries(Object.entries(MUSIC).map(([k, url]) => [k, { url }]));
+for (const t of Object.values(musicTracks)) loadRaw(t);
+// play one sound. x, y = where it happens (optional: omitted = not positional). mult scales the volume.
+function playSfx(name, x, y, mult = 1) {
+  if (!sfxOn) return; const s = SFX[name], ac = audioContext; if (!s || !ac || ac.state !== "running") return;
+  const buf = decoded(s, ac); if (!buf) return;
+  const now = performance.now(); if (now - (s.lastAt || 0) < (s.gap || 0) || (s.playing || 0) >= (s.max || 4)) return;
+  let vol = s.vol * mult; const me = V(me_());
+  if (me && Number.isFinite(x)) { const d = Math.hypot(x - me.x, y - me.y); vol *= Math.max(0, 1 - d / 900); }   // quieter far away
+  if (vol < .02) return;
+  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = buf; g.gain.value = vol; src.connect(g); g.connect(sfxBus);
+  s.playing = (s.playing || 0) + 1; s.lastAt = now; src.onended = () => { s.playing--; }; src.start();
+  return buf.duration;
 }
 addEventListener("pointerdown", sfxContext, { once: true }); addEventListener("keydown", sfxContext, { once: true });
 function turretSound(id, x, y) { playSfx("turret", x, y); }   // the server fires the turret once per clip length, so every attack = one burst sound
-function toggleAmbient() {
-  if (!ambientGain) {
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    audioContext = audioContext || new AC(); ambientGain = audioContext.createGain(); ambientGain.gain.value = 0; ambientGain.connect(audioContext.destination);
-    [55, 82.4, 110].forEach((freq, i) => { const o = audioContext.createOscillator(), g = audioContext.createGain(); o.type = i === 1 ? "triangle" : "sine"; o.frequency.value = freq; o.detune.value = (i - 1) * 7; g.gain.value = [.18, .07, .04][i]; o.connect(g); g.connect(ambientGain); o.start(); });
-  }
-  ambientOn = !ambientOn; ambientGain.gain.setTargetAtTime(ambientOn ? .16 : 0, audioContext.currentTime, .8);
-  $("musicToggle").textContent = "Ambient music: " + (ambientOn ? "ON" : "OFF");
+const music = { want: "", cur: null };   // cur = { name, src, gain }
+function musicScene() {   // which music fits right now
+  if (!room || !state || state.phase === "lobby") return "menu";
+  if (state.phase === "defeat" || state.phase === "victory") return "";
+  const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
+  if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
+  return state.isNight ? "night" : "day";
 }
-$("musicToggle").onclick = toggleAmbient;
+function updateMusic() {   // called every frame: crossfades to the scene's track
+  const ac = audioContext; if (!ac || ac.state !== "running") return;
+  const want = musicScene(); if (want === music.want && (music.cur || !want)) return;
+  const t = want && musicTracks[want], buf = t && decoded(t, ac);
+  if (want && !buf) return;   // still loading: try again next frame
+  music.want = want;
+  if (music.cur) { const old = music.cur; old.gain.gain.setTargetAtTime(0, ac.currentTime, MUSIC_FADE / 3); setTimeout(() => { try { old.src.stop(); } catch {} }, MUSIC_FADE * 1500); music.cur = null; }
+  if (!want) return;
+  const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true; src.loopStart = .03; src.loopEnd = buf.duration - .03;   // skip the mp3's silent padding so the loop is seamless
+  gain.gain.value = 0; gain.gain.setTargetAtTime(MUSIC_VOL, ac.currentTime, MUSIC_FADE / 3); src.connect(gain); gain.connect(musicBus); src.start(0, .03);
+  music.cur = { name: want, src, gain };
+}
+function setMusicOn(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .2); $("musicToggle").textContent = "Music: " + (on ? "ON" : "OFF"); $("setAmbient").checked = on; savePrefs(); }
+function setSfxOn(on) { sfxOn = on; if (sfxBus) sfxBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .05); $("sfxToggle").textContent = "Sound effects: " + (on ? "ON" : "OFF"); $("setSfx").checked = on; savePrefs(); }
+$("musicToggle").onclick = () => setMusicOn(!musicOn);
+$("sfxToggle").onclick = () => setSfxOn(!sfxOn);
+// Game-state changes -> sounds (wave start / cleared / defeat, night, tower repairs and alarm, revives, pickups, building, brutes)
+const aw = { phase: null, stage: 0, night: false, tower: 0, gen: 0, fuel: 0, alive: new Map(), loot: new Map(), structs: new Map(), brutes: new Set(), alarmAt: 0, groanAt: 0 };
+function audioWatch() {
+  const s = state; if (!s) return; const now = performance.now(), me = V(me_()), same = aw.phase === s.phase && aw.stage === s.stage;
+  if (aw.phase !== null) {
+    if (s.phase === "playing" && !same) playSfx("wave");
+    else if (s.phase === "cleared" && aw.phase === "playing") playSfx("victory", undefined, undefined, .8);
+    else if (s.phase === "victory" && aw.phase !== "victory") playSfx("victory");
+    else if (s.phase === "defeat" && aw.phase !== "defeat") playSfx("gameover");
+    if (s.isNight && !aw.night && s.phase === "playing") playSfx("thunder");
+    if (same && (s.towerHp > aw.tower + 3 || s.generatorHp > aw.gen + 3 || s.generatorFuel > aw.fuel + 3)) playSfx("repair");
+    if (s.phase === "playing" && s.towerHp < s.towerMaxHp * .25 && s.towerHp < aw.tower && now - aw.alarmAt > 10000) { aw.alarmAt = now; playSfx("alarm"); }
+    for (const p of s.players.values()) if (same && s.phase === "playing" && aw.alive.get(p.sessionId) === false && p.alive) playSfx("revive", p.x, p.y);
+    if (me) for (const [id, l] of aw.loot) if (!s.loot.has(id) && Math.hypot(l.x - me.x, l.y - me.y) < 90) playSfx("pickup");
+    for (const st of s.structures.values()) {
+      const was = aw.structs.get(st.id);
+      if (!was && (st.kind === "fence" || st.kind === "safehouse")) playSfx("build", st.x, st.y);
+      else if (was && st.kind === "safehouse" && was.deploy > 0 && st.deploy <= 0) playSfx("build", st.x, st.y);   // finished
+    }
+    for (const z of s.zombies.values()) if (z.kind === "brute" && !aw.brutes.has(z.id) && me && Math.hypot(z.x - me.x, z.y - me.y) < 700) playSfx("roar", z.x, z.y, .7);
+    if (s.phase === "playing" && me && now > aw.groanAt) {   // now and then a nearby zombie groans
+      aw.groanAt = now + 5000 + Math.random() * 6000; let near = null, nd = 450;
+      for (const z of s.zombies.values()) { const d = Math.hypot(z.x - me.x, z.y - me.y); if (d < nd && !z.boss) { nd = d; near = z; } }
+      if (near) playSfx("groan", near.x, near.y);
+    }
+  }
+  aw.phase = s.phase; aw.stage = s.stage; aw.night = !!s.isNight; aw.tower = s.towerHp; aw.gen = s.generatorHp; aw.fuel = s.generatorFuel;
+  aw.alive.clear(); for (const p of s.players.values()) aw.alive.set(p.sessionId, p.alive);
+  aw.loot.clear(); for (const l of s.loot.values()) aw.loot.set(l.id, { x: l.x, y: l.y });
+  aw.structs.clear(); for (const st of s.structures.values()) aw.structs.set(st.id, { deploy: st.deploy });
+  aw.brutes.clear(); for (const z of s.zombies.values()) if (z.kind === "brute") aw.brutes.add(z.id);
+}
+window.__saAudio = () => ({ ctx: audioContext?.state, music: music.cur?.name || "", played: Object.keys(SFX).filter(k => SFX[k].lastAt), ready: Object.keys(SFX).filter(k => SFX[k].raw).length });   // read-only hook for tests
+// gunshot sound for a "shot" message (yours loudest, teammates' quieter, police / robots quieter still)
+function shotSound(m) {
+  if (m.w === "launcher") return;   // the rocket's explosion makes the noise
+  if (m.w === "minigun") return turretSound(m.id, m.x, m.y);
+  const name = m.w === "shotgun" ? "shotgun" : m.w === "pistol" ? "pistol" : "rifle";
+  playSfx(name, m.x, m.y, m.id === myId ? 1 : state?.players?.has(m.id) ? .6 : .45);
+}
 let scoreboardOpen = false, firing = false, wheel = null, lastWheelScroll = 0;
 const me_ = () => state?.players.get(myId);
 function selectSlot(n, cycle = true) { if (room && inMatch()) room.send("slot", { n, cycle }); }
@@ -520,7 +621,7 @@ window.addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   if (!inMatch()) return;
   if (k === "enter" && state?.bossPhase === "intro" && !introAcked) { e.preventDefault(); ackBoss(); return; }
-  if (k === "escape") { e.preventDefault(); if (anyPanelOpen()) closePanels(); else togglePanel("menu"); return; }
+  if (k === "escape") { e.preventDefault(); if (anyPanelOpen()) closePanels(); else { togglePanel("menu"); playSfx("pause"); } return; }
   if (k === "tab") { e.preventDefault(); scoreboardOpen = !scoreboardOpen; return; }
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (me_() && !me_().alive && [" ", "arrowleft", "arrowright"].includes(k) && !e.repeat) { switchSpectate(k === "arrowleft" ? -1 : 1); return; }
@@ -755,8 +856,8 @@ function drawHivemind(z) {
 function onHive(m) {
   const t = performance.now();
   if (m.k === "arrive") { shake(8, 900); const el = $("hiveWarn"); if (el) { el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); } }
-  else if (m.k === "slam") { fx.push({ ...m, type: "hive", k: "slam", t }); shake(9, 320); }
-  else if (m.k === "land") { fx.push({ ...m, type: "hive", k: "land", t }); shake(11, 380); }
+  else if (m.k === "slam") { fx.push({ ...m, type: "hive", k: "slam", t }); shake(9, 320); playSfx("zap", m.x, m.y); }
+  else if (m.k === "land") { fx.push({ ...m, type: "hive", k: "land", t }); shake(11, 380); playSfx("stomp", m.x, m.y); }
   else if (m.k === "spawn") fx.push({ ...m, type: "hive", k: "spawn", t });
 }
 function drawHiveFx(f, age) {   // false when finished
@@ -1612,7 +1713,7 @@ function updateFeel(){
  if(!state)return;const now=performance.now(),seen=new Set();
  for(const z of state.zombies.values()){
   seen.add(z.id);const prev=feel.hp.get(z.id);
-  if(prev!==undefined&&z.hp<prev-0.5){const dmg=prev-z.hp;feel.flash.set(z.id,now);feel.last.set(z.id,now);
+  if(prev!==undefined&&z.hp<prev-0.5){const dmg=prev-z.hp;feel.flash.set(z.id,now);feel.last.set(z.id,now);playSfx("zhit",z.x,z.y);
    const n=feel.nums.find(n=>n.id===z.id&&now-n.t<120);if(n){n.v+=dmg;n.t=now;}else feel.nums.push({id:z.id,x:z.x+(Math.random()-.5)*14,y:z.y-z.radius-8,v:dmg,t:now,boss:z.boss});
    if(z.boss&&dmg>=40)shake(3,120);}
   feel.hp.set(z.id,z.hp);feel.pos=feel.pos||new Map();feel.pos.set(z.id,{x:z.x,y:z.y,r:z.radius,boss:z.boss,low:z.hp<z.maxHp*.35,kind:z.kind,facing:zface.get(z.id)||1});
@@ -2308,7 +2409,7 @@ function frame(t){
   requestAnimationFrame(frame);
   let saved = 0; unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
-    sendControls(t); updateFeel(); updateCamera(t);
+    sendControls(t); updateFeel(); updateCamera(t); updateMusic();
     ctx.clearRect(0, 0, W, H);
     const off = shakeOffset();
     ctx.save(); saved = 1; ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore(); saved = 0;
@@ -2537,10 +2638,11 @@ $("lsLeave").onclick = () => { if (!room) return toast("You're not in a room.");
 $("lsLeaveNo").onclick = () => { $("lsConfirm").hidden = true; }; $("lsLeaveYes").onclick = () => { $("lsConfirm").hidden = true; room?.leave(); };
 document.addEventListener("pointerdown", e => { if (!e.target.closest(".ls-pop,.ls-icons")) { $("lsSettings").hidden = true; $("lsConfirm").hidden = true; } });
 $("setNoCd").onchange = () => room?.send("testNoCd");
-$("setSfx").onchange = () => { sfxOn = $("setSfx").checked; savePrefs(); };
-$("setAmbient").onchange = () => { if ($("setAmbient").checked !== ambientOn) toggleAmbient(); };
+$("setSfx").onchange = () => setSfxOn($("setSfx").checked);
+$("setAmbient").onchange = () => setMusicOn($("setAmbient").checked);
+document.addEventListener("click", e => { if (!inMatch() && e.target.closest?.("button, [data-class], [data-hero], .ls-hero, .ls-card")) { sfxContext(); playSfx("select"); } });   // lobby clicks
 $("setMotion").onchange = () => { lsAnimOn = $("setMotion").checked; $("ls").classList.toggle("still", !lsAnimOn); savePrefs(); };
-function savePrefs() { try { localStorage.setItem("sa-prefs", JSON.stringify({ sfx: sfxOn, motion: lsAnimOn })); } catch {} }
-try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
+function savePrefs() { try { localStorage.setItem("sa-prefs", JSON.stringify({ sfx: sfxOn, music: musicOn, motion: lsAnimOn })); } catch {} }
+try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; $("sfxToggle").textContent = "Sound effects: OFF"; } if (pr.music === false) { musicOn = false; $("setAmbient").checked = false; $("musicToggle").textContent = "Music: OFF"; } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
 { const q = new URLSearchParams(location.search).get("room"); if (q) { $("roomCode").value = q; toast("Type your name and press JOIN to enter your friend's room."); } }   // invite links
 setSelectedClass(selectedClass, false); renderLobbyRoom(); drawMapThumb();
