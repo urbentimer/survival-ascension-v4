@@ -216,8 +216,8 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 
 // 10. full-auto rebalance, % upgrades, solid structures, human-like bots
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
-  ok(p.damage === 9.9 && p.fireRate > 4.5, `rifle is full-auto: ${p.damage} dmg x ${p.fireRate.toFixed(1)}/s (assault)`);
-  p.xp = 999; send(A, "upgrade", { id: "damage" }); ok(p.damage === 11.9, `damage upgrade is +20% (${p.damage})`);
+  ok(p.damage === 16.5 && p.fireRate > 4.5, `rifle is full-auto: ${p.damage} dmg x ${p.fireRate.toFixed(1)}/s (assault), more than the pistol`);
+  p.xp = 999; send(A, "upgrade", { id: "damage" }); ok(p.damage === 19.8, `damage upgrade is +20% (${p.damage})`);
   send(A, "slot", { n: 3 }); ok(p.weapon === "pistol" && p.damage === 18.5, `...and carries over to the pistol (${p.damage})`);
   ok(p.ammo === 240, "you start with 240 spare ammo");
   room._dispose(); }
@@ -352,7 +352,8 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   room._handlers.debugWave(A, { n: 12 }); ok(room.state.stage === 12 && room.state.waveType === "boss" && room.state.bossPhase === "horde", "solo: jump to wave 12 starts the boss wave (horde first)");
   room._handlers.debugWave(A, { n: 6 }); ok(room.state.stage === 6 && room.state.waveType === "normal" && room.state.zombies.size === 0, "solo: jump to wave 6");
   room._dispose(); }
-{ const { room, A } = makeRoom(); room._handlers.debugWave(A, { n: 30 }); ok(room.state.stage === 1, "online rooms ignore the wave jump");
+{ const { room, A, B } = makeRoom(); room._handlers.debugWave(B, { n: 30 }); ok(room.state.stage === 1, "online: only the host can skip waves");
+  room._handlers.debugWave(A, { n: 7 }); ok(room.state.stage === 7, "...the host skips to wave 7");
   room._handlers.debugGold(A); ok(room.state.players.get("A").currency === 0, "online rooms ignore the gold cheat"); room._dispose(); }
 // 20. wave mixes: runners from wave 1, ~20% brutes in wave 3, every wave a different mix
 { const { room } = makeRoom(); const mixOf = st => { room.state.zombies.clear(); room.state.stage = st; for (let i = 0; i < 1000; i++) room.spawnZombie(); const c = {}; for (const z of room.state.zombies.values()) c[z.kind] = (c[z.kind] || 0) + 1; return c; };

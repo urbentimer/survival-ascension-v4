@@ -131,7 +131,7 @@ const WEAPONS = {
   // auto: hold the mouse to keep firing (otherwise one shot per click). jitter = random spread in radians.
   pistol:   { slot: "secondary", dmg: 14, rate: 4.0, range: 450, mag: 12, reload: 1.0, infinite: true },          // semi-auto, never runs dry
   smg:      { slot: "secondary", dmg:  6, rate: 8.0, range: 360, mag: 30, reload: 1.4, auto: true, jitter: 0.07 }, // full-auto spray, short range
-  rifle:    { slot: "primary",   dmg:  9, rate: 4.5, range: 520, mag: 30, reload: 1.6, auto: true, jitter: 0.03 }, // full-auto, accurate
+  rifle:    { slot: "primary",   dmg: 15, rate: 4.5, range: 520, mag: 30, reload: 1.6, auto: true, jitter: 0.03 }, // full-auto, accurate
   shotgun:  { slot: "primary",   dmg: 12, rate: 1.1, range: 260, mag: 6,  reload: 2.0, pellets: 5, spread: 0.21, pelletMult: 0.5 }, // pump, 5-pellet cone
   sniper:   { slot: "primary",   dmg: 55, rate: 0.8, range: 760, mag: 5,  reload: 2.2, pierce: 3 },  // bolt-action, goes through up to 3 zombies
   launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 2.6, splash: 80 } // explodes on first hit
@@ -422,8 +422,8 @@ export class SurvivalRoom extends Room {
     this.onMessage("explore", (client, data) => { if (client.sessionId === this.state.hostId && this.state.phase === "playing") this.setExplore(!!data?.on); });
     // Solo preview only: jump straight to any wave (1-50) to test it.
     this.onMessage("debugWave", (client, data) => {
-      const n = Math.round(Number(data?.n)); if (!this.solo || !(n >= 1 && n <= 50) || this.state.phase === "lobby") return;
-      this.jumpToWave(n); this.state.message = `Test: jumped to wave ${n}` + (this.state.waveType === "boss" ? " (BOSS WAVE)" : "");
+      const n = Math.round(Number(data?.n)); if (!(this.solo || this.state.hostId === client.sessionId) || !(n >= 1 && n <= 50) || this.state.phase === "lobby") return;   // the host can skip to any wave
+      this.jumpToWave(n); this.state.message = (this.solo ? "Test: jumped" : "The host skipped") + ` to wave ${n}` + (this.state.waveType === "boss" ? " (BOSS WAVE)" : "");
     });
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {

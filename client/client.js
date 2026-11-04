@@ -197,7 +197,8 @@ function renderState() {
   if (me?.characterClass && me.characterClass !== selectedClass) setSelectedClass(me.characterClass, false);
   renderLobbyRoom();
   $("exploreToggle").classList.toggle("hidden", !host || state.phase !== "playing");
-  $("waveJump").classList.toggle("hidden", !SOLO_PREVIEW || state.phase === "lobby");
+  $("waveJump").classList.toggle("hidden", !(SOLO_PREVIEW || state.hostId === myId) || state.phase === "lobby");   // the host can skip to any wave
+  for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates with no cooldown: ${state.noCd ? "ON" : "OFF"}`;
   if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
@@ -643,7 +644,7 @@ window.addEventListener("keydown", e => {
   else if (k === "u") togglePanel("levelUp");
   else if (k === "v" && SOLO_PREVIEW) { const i = (VISION_STEPS.indexOf(NIGHT.playerR / W) + 1) % VISION_STEPS.length; NIGHT.playerR = Math.round(VISION_STEPS[i] * W); feed.unshift({ text: `Test: night vision ${Math.round(VISION_STEPS[i] * 100)}% (${NIGHT.playerR}px) · V to switch`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
   else if (k === "g" && SOLO_PREVIEW) room.send("debugGold");
-  else if ((k === "]" || k === "[") && SOLO_PREVIEW && state) room.send("debugWave", { n: Math.max(1, Math.min(50, (state.stage || 1) + (k === "]" ? 1 : -1))) });
+  else if ((k === "]" || k === "[") && state && (SOLO_PREVIEW || state.hostId === myId)) room.send("debugWave", { n: Math.max(1, Math.min(50, (state.stage || 1) + (k === "]" ? 1 : -1))) });
   else if (k === "n" && SOLO_PREVIEW) { forceNight = !forceNight; feed.unshift({ text: forceNight ? "Test: night view ON (press N to turn off)" : "Test: night view OFF", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
 });
 window.addEventListener("keyup", e => { const k = e.key.toLowerCase(); keys[k === " " ? "space" : k] = false; if (k === "e") closeSquadWheel(); if (k === "f" && reviving) { reviving = null; room?.send("reviveStop"); } });
