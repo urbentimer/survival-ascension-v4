@@ -167,7 +167,7 @@ function ravenKatana(p) {
 // E SKY BARRAGE (8s cd): fires 3 rockets into the sky one by one (0.15s apart); they come down at random spots around the mouse and explode.
 // Q DEMO RIPPLE (100 kills): first Q places a demo charge crate (arms in 1s); Q again detonates it any time (or it blows by itself after
 //   30s, or if Dante goes down). Big blast at the crate, then 3 rings of grenades fly out and explode: 4 big, 8, then 36 small. 60s cooldown.
-// SOFEA (operator): E = Steel Convoy (drive a tank 30s), Q = Sky Reign (fly a rocket helicopter 30s).
+// SOFEA (operator): E = Steel Convoy (drive a tank 30s), Q = Sky Reign (fly a rocket helicopter 30s), R = Crimson Aegis (pilot a mecha 30s).
 // Both start with a 0.8s radio call. Ride time starts when she boards; the cooldown starts when she gets out.
 const SOFEA = {
   call: 0.8, protect: 0.75,
@@ -177,6 +177,12 @@ const SOFEA = {
   // zombie in a 90-degree cone (250px) the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
           gun: { cone: Math.PI / 2, range: 250, every: 0.1, dmg: 10, bossMult: 0.5 } },   // 100 dps per zombie on wave 1
+  // mecha (R): she transforms (1s) and pilots it on foot-speed WASD. HOLD left click = flame jet (190px, 42-degree cone, 12 dmg to every
+  // zombie in it every 0.25s); right click = lightsaber sweep (155px, 120 degrees, 80 dmg once per zombie, the swing takes 0.9s).
+  // Flame pulses and swings share one attack timer. Both stop at walls. She takes normal damage; no run-over. 100s cooldown from getting out.
+  mecha: { life: 30, cd: 100, call: 1, speed: 150, taken: 1, body: 28, reach: 16,
+           flame: { range: 190, cone: 42 * Math.PI / 180, every: 0.25, dmg: 12 },
+           saber: { range: 155, cone: 120 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
@@ -360,7 +366,7 @@ export class SurvivalRoom extends Room {
         const t = Date.now(), dtv = Math.min(0.1, Math.max(0, (t - (this.lastInputs.get(client.sessionId) || t - 50)) / 1000)); this.lastInputs.set(client.sessionId, t);
         const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { veh.aim = a; p.aim = a; }
         if (veh.phase === "ride") this.moveVehicle(p, veh, clamp(Number(data?.dx) || 0, -1, 1), clamp(Number(data?.dy) || 0, -1, 1), dtv);
-        if (veh.kind === "heli") this.vmem(p).fireUntil = data?.f ? t + 300 : 0;   // helicopter gun: fires while she holds the left mouse button (each input says so; stops if they stop coming)
+        if (veh.kind === "heli" || veh.kind === "mecha") this.vmem(p).fireUntil = data?.f ? t + 300 : 0;   // helicopter gun / mecha flame: fires while she holds the left mouse button (each input says so; stops if they stop coming)
         return;
       }
       if (this.queueInput(client.sessionId, data, false)) return;
@@ -468,7 +474,12 @@ export class SurvivalRoom extends Room {
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
-    this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (p?.alive && this.state.phase === "playing" && p.characterClass === "dispatcher") this.astraCast(p, "R"); });   // Astra's R: safehouse
+    this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
+      if (p.characterClass === "dispatcher") this.astraCast(p, "R");   // Astra's R: safehouse
+      else if (p.characterClass === "operator") this.mechaKey(p); });   // Sofea's R: get in / out of the mecha
+    // Sofea's mecha: right click = lightsaber swing
+    this.onMessage("mechaSlash", (client, data) => { const p = this.state.players.get(client.sessionId), a = Number(data?.a);
+      if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
     // ---- lobby: name, READY UP, mission settings (host) ----
     this.onMessage("setName", (client, data) => { const p = this.state.players.get(client.sessionId), n = cleanName(data?.name); if (p && n && this.state.phase === "lobby") p.name = n; });
     this.onMessage("ready", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && this.state.phase === "lobby" && !p.isHost) p.ready = data?.on == null ? !p.ready : !!data.on; });
@@ -1330,14 +1341,14 @@ export class SurvivalRoom extends Room {
   // E / Q: radio call (0.8s), then the vehicle arrives and she boards it. Returns false (no cooldown used) if it can't come.
   callVehicle(p, kind) {
     if (this.state.vehicles.has(p.sessionId) || !p.alive) return false;
-    const spot = kind === "tank" ? this.clearSpot(p.x, p.y, SOFEA.tank.body + 6, 160) : { x: p.x, y: p.y };
-    if (!spot) { this.state.message = `${p.name}: no room for the tank here.`; return false; }
+    const spot = kind === "heli" ? { x: p.x, y: p.y } : this.clearSpot(p.x, p.y, SOFEA[kind].body + 6, 160);
+    if (!spot) { this.state.message = `${p.name}: no room for the ${kind} here.`; return false; }
     const v = new VehicleState(); v.id = p.sessionId; v.kind = kind; v.phase = "call"; v.x = spot.x; v.y = spot.y;
-    v.hull = (p.facing || 1) < 0 ? Math.PI : 0; v.aim = p.aim || 0; v.left = SOFEA.call; v.mv = false; v.shots = 0;
-    this.state.vehicles.set(v.id, v); const m = this.vmem(p); m.shotAt = 0; m.crush.clear(); m.safe = { x: p.x, y: p.y };
+    v.hull = (p.facing || 1) < 0 ? Math.PI : 0; v.aim = p.aim || 0; v.left = SOFEA[kind].call ?? SOFEA.call; v.mv = false; v.shots = 0; v.fire = false;
+    this.state.vehicles.set(v.id, v); const m = this.vmem(p); m.shotAt = 0; m.crush.clear(); m.safe = { x: p.x, y: p.y }; m.fireUntil = 0; m.wait = 0; m.swing = 0; m.slashHit = 0; m.slashWant = 0;
     p.charging = false; if (p.reloadLeft > 0) p.reloadLeft = 0;
     this.broadcast("sofea", { k: "call", id: p.sessionId, kind });
-    this.state.message = kind === "tank" ? `${p.name}: "Requesting armour!"` : `${p.name}: "Air support, inbound!"`;
+    this.state.message = kind === "tank" ? `${p.name}: "Requesting armour!"` : kind === "mecha" ? `${p.name}: "Crimson Aegis, online!"` : `${p.name}: "Air support, inbound!"`;
     return true;
   }
   moveVehicle(p, v, dx, dy, dt) {
@@ -1353,11 +1364,11 @@ export class SurvivalRoom extends Room {
     if (moved / dt >= SOFEA.tank.crush.minSpeed) { this.vmem(p).movingUntil = now + 160; if (v.kind === "tank") this.tankCrush(p, v, now, ox, oy); }
     if (dx) p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(p.sessionId, now);
   }
-  // tank: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
+  // tank / mecha: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
   solveVehicle(p, v) {
     if (v.kind === "heli") return;
     const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }];
-    if (v.kind === "tank") {
+    {   // tank and mecha
       boxes.push({ x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
       for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
       for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
@@ -1382,7 +1393,7 @@ export class SurvivalRoom extends Room {
   }
   vehicleFire(p, a, dist) {
     const v = this.state.vehicles.get(p.sessionId); if (!v || v.phase !== "ride" || v.left <= 0 || !p.alive) return;
-    if (v.kind === "heli") { v.aim = a; p.aim = a; this.vmem(p).fireUntil = Date.now() + 400; return; }   // bots: keep the helicopter gun firing (players hold the mouse: "input" f)
+    if (v.kind === "heli" || v.kind === "mecha") { v.aim = a; p.aim = a; this.vmem(p).fireUntil = Date.now() + 400; return; }   // bots: keep the helicopter gun / flame firing (players hold the mouse: "input" f)
     const K = SOFEA[v.kind], W = K.shot, now = Date.now(), m = this.vmem(p);
     if (now - m.shotAt < K.rate * 1000) return;
     m.shotAt = now; v.aim = a; p.aim = a; v.shots++; this.lastAimAt.set(p.sessionId, now);
@@ -1412,6 +1423,47 @@ export class SurvivalRoom extends Room {
       }
     }
   }
+  // ---- R: Crimson Aegis (mecha) ----
+  mechaReadyIn(p, now = Date.now()) { return this.state.noCd ? 0 : Math.max(0, (this.vmem(p).mechaReady || 0) - now); }
+  mechaKey(p) {   // R on foot: summon it (if R is ready and there's room); R inside: step out early
+    const v = this.state.vehicles.get(p.sessionId), now = Date.now();
+    if (v) { if (v.kind === "mecha" && v.phase === "ride") this.dismount(p, v, now); return; }
+    if (p.stunned > 0 || p.hp <= 0 || this.mechaReadyIn(p, now) > 0) return;
+    this.callVehicle(p, "mecha");
+  }
+  mechaSlash(p, a) {   // right click: queued if the flame is mid-pulse (shared attack timer), dropped if not used within 0.4s
+    const v = this.state.vehicles.get(p.sessionId); if (v?.kind !== "mecha" || v.phase !== "ride") return;
+    const m = this.vmem(p); m.slashWant = 0.4; m.slashWantA = a;
+  }
+  zombiesInCone(v, a, range, cone) {   // every zombie in the cone that she can see (walls block it)
+    const out = [];
+    for (const z of this.state.zombies.values()) {
+      const d = Math.hypot(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > range) continue;
+      let da = Math.atan2(z.y - v.y, z.x - v.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(da) > cone / 2 && d > z.radius + 6) continue;
+      if (!this.lineClear(v, z)) continue;
+      out.push(z);
+    }
+    return out;
+  }
+  mechaWeapons(p, v, dt) {   // timers in seconds (wait = shared attack timer)
+    const M = SOFEA.mecha, m = this.vmem(p), scale = 1 + (this.state.stage - 1) * 0.08;
+    m.wait = Math.max(0, (m.wait || 0) - dt); m.swing = Math.max(0, (m.swing || 0) - dt); m.slashWant = Math.max(0, (m.slashWant || 0) - dt);
+    if (m.slashHit > 0 && (m.slashHit -= dt) <= 0) {   // the blade crosses: one hit per zombie per swing
+      m.slashHit = 0;
+      for (const z of this.zombiesInCone(v, m.slashA, M.saber.range, M.saber.cone)) this.hitZombie(z, p, M.saber.dmg * scale);
+    }
+    if (m.slashWant > 0 && m.wait <= 0) {
+      const a = m.slashWantA; m.slashWant = 0; m.slashA = a; v.aim = a; p.aim = a;
+      m.wait = m.swing = M.saber.swing; m.slashHit = M.saber.hitAt;
+      this.broadcast("sofea", { k: "slash", id: p.sessionId, a: Math.round(a * 100) / 100 });
+    }
+    v.fire = Date.now() < (m.fireUntil || 0) && m.swing <= 0;
+    if (v.fire && m.wait <= 0) {
+      m.wait = M.flame.every;
+      for (const z of this.zombiesInCone(v, v.aim, M.flame.range, M.flame.cone)) this.hitZombie(z, p, M.flame.dmg * scale);
+    }
+  }
   // get out: next to the vehicle on clear ground, 0.75s of protection, cooldown starts (not if the call never finished)
   dismount(p, v, now) {
     this.state.vehicles.delete(v.id);
@@ -1422,6 +1474,7 @@ export class SurvivalRoom extends Room {
       const spot = this.clearSpot(side.x, side.y, BODY_R + 2, 180, zfree) || this.clearSpot(v.x, v.y, BODY_R + 2, 240) || (this.vehicleFits(m.safe.x, m.safe.y, BODY_R) ? m.safe : { x: ARENA.width / 2, y: ARENA.height / 2 + TOWER_HALF + 40 });
       p.x = spot.x; p.y = spot.y; this.solveCollisions(p);
       if (v.kind === "tank") p.abilityCooldown = SOFEA.tank.cd;
+      else if (v.kind === "mecha") m.mechaReady = now + SOFEA.mecha.cd * 1000;
       else { const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 }; info.readyAt = now + SOFEA.heli.cd * 1000; this.ultInfo.set(p.sessionId, info); }
       m.protectUntil = now + SOFEA.protect * 1000;
     } else if (v.kind === "heli") { const info = this.ultInfo.get(p.sessionId); if (info) info.summonedAt = 0; }
@@ -1437,7 +1490,7 @@ export class SurvivalRoom extends Room {
         v.left = Math.max(0, v.left - dt);
         if (v.left <= 0) {
           v.phase = "ride"; v.left = SOFEA[v.kind].life;
-          if (v.kind === "tank") { p.x = v.x; p.y = v.y; } else { v.x = p.x; v.y = p.y; }
+          if (v.kind !== "heli") { p.x = v.x; p.y = v.y; } else { v.x = p.x; v.y = p.y; }
           this.vmem(p).safe = { x: p.x, y: p.y };
           this.broadcast("sofea", { k: "board", id: p.sessionId, kind: v.kind, x: Math.round(v.x), y: Math.round(v.y) });
         }
@@ -1446,6 +1499,7 @@ export class SurvivalRoom extends Room {
       p.stunned = 0; p.slowed = 0; p.charging = false;   // vehicles shrug off stuns and slows
       v.x = p.x; v.y = p.y; v.mv = now < this.vmem(p).movingUntil;
       if (v.kind === "heli") this.heliGun(p, v, dt);
+      else if (v.kind === "mecha") this.mechaWeapons(p, v, dt);
       v.left = Math.max(0, v.left - dt);
       if (v.left <= 0) this.dismount(p, v, now);
     }
@@ -1456,6 +1510,7 @@ export class SurvivalRoom extends Room {
       const { left, active, alive } = this.ultState(p, now);
       p.ultCd = alive ? SOFEA.heli.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+      p.chargeCd = Math.ceil(this.mechaReadyIn(p, now) / 100) / 10;   // HUD: R cooldown
     }
   }
   // damage taken while riding: tank 65%, helicopter 80%, none for 0.75s after getting out
@@ -1471,7 +1526,7 @@ export class SurvivalRoom extends Room {
       }
       if (p.characterClass !== "operator") continue;
       const v = this.state.vehicles.get(p.sessionId), m = this.vmemory.get(p.sessionId);
-      const k = m && now < m.protectUntil ? 0 : v?.phase === "ride" ? SOFEA[v.kind].taken : 1;
+      const k = m && now < m.protectUntil ? 0 : v?.phase === "ride" ? SOFEA[v.kind].taken : 1;   // mecha: 1 (normal damage)
       if (k < 1) g.set(p, { hp: p.hp, k });
     }
     return g;
@@ -2419,6 +2474,7 @@ export class SurvivalRoom extends Room {
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
+      else if (!this.state.vehicles.has(b.sessionId) && this.mechaReadyIn(b) <= 0 && nearD < 220 && zs.filter(z => distance(b, z) < 300).length >= 4) this.mechaKey(b);
     }
     if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
@@ -2441,9 +2497,13 @@ export class SurvivalRoom extends Room {
     if (near) {
       const ax = (near.x - b.x) / nearD, ay = (near.y - b.y) / nearD;
       if (v.kind === "tank") { mx = ax; my = ay; }
+      else if (v.kind === "mecha") {   // walks into flame range, slashes when they're close
+        if (nearD > 150) { mx = ax; my = ay; } else if (nearD < 70) { mx = -ax; my = -ay; }
+        if (nearD < SOFEA.mecha.saber.range - 20 && Math.random() < dt * 1.5) this.mechaSlash(b, Math.atan2(near.y - b.y, near.x - b.x));
+      }
       else if (nearD < 220) { mx = -ax; my = -ay; } else if (nearD > 420) { mx = ax; my = ay; } else { mx = -ay * brain.strafe; my = ax * brain.strafe; }
       const ft = distance(b, center); if (ft > 520) { mx += (center.x - b.x) / ft; my += (center.y - b.y) / ft; }
-      if (nearD < (v.kind === "heli" ? SOFEA.heli.gun.range + 150 : SOFEA.tank.shot.range)) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
+      if (nearD < (v.kind === "heli" ? SOFEA.heli.gun.range + 150 : v.kind === "mecha" ? SOFEA.mecha.flame.range + 10 : SOFEA.tank.shot.range)) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
     } else if (distance(b, center) > 200) { mx = center.x - b.x; my = center.y - b.y; }
     const ox = b.x, oy = b.y; this.moveVehicle(b, v, mx, my, dt);
     if (Math.hypot(b.x - ox, b.y - oy) < 0.5 && (mx || my)) brain.strafe = -(brain.strafe || 1);
@@ -2720,7 +2780,7 @@ export class SurvivalRoom extends Room {
       }
       const isMachine = !!target.maxHp && !target.sessionId;
       z.targetId = target.sessionId || "";
-      const d = distance(z, target) - (target.sessionId && this.state.vehicles.get(target.sessionId)?.phase === "ride" ? SOFEA.tank.reach : 0);   // the tank is big: they hit its side
+      const tv = target.sessionId && this.state.vehicles.get(target.sessionId), d = distance(z, target) - (tv?.phase === "ride" ? SOFEA[tv.kind].reach || 0 : 0);   // the tank / mecha is big: they hit its side
       const a = Math.atan2(target.y - z.y, target.x - z.x);
       if (z.kind === "mutant") {
         if (z.slam > 0) {                                  // mid-attack

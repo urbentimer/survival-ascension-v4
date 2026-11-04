@@ -128,6 +128,9 @@ function connected() {
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
+    else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
+    else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
+    else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: 1.2, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
   room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
@@ -287,7 +290,7 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? "in helicopter" : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
@@ -306,6 +309,10 @@ function renderHotbar(me) {
   if (ast) {   // R: Safehouse, beside E
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
     slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (you can't be hurt while they build); zombies can't get in (6 hits break it, the workers repair) for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+  }
+  if (op) {   // R: Crimson Aegis mecha, beside E
+    const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
+    slots.splice(2, 0, { n: 9, key: "R", card: "crimsonAegis", name: "Crimson Aegis: pilot a mecha for 30s. Hold click = flame jet, right click = lightsaber, R = step out. 100s cooldown", sub: mv ? (mv.phase === "call" ? "TRANSFORMING…" : `MECHA ${Math.ceil(mv.left)}s · R out`) : rc > 0 ? "cooldown" : "READY", active: mv ? (mv.phase === "call" ? 1 : mv.left / 30) : 0, frac: !mv && rc > 0 ? rc / 100 : 0, cd: !mv && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
@@ -625,6 +632,8 @@ canvas.addEventListener("mousedown", e => {
     else if (me?.activeSlot === 1 && me.melee === "axe") { if (!axeChargeAt) { axeChargeAt = performance.now(); room.send("charge", { on: true }); } }
     else { firing = true; clickShotAt = performance.now(); }
   }
+  if (e.button === 2 && state.vehicles?.get(myId)) { e.preventDefault(); const v = state.vehicles.get(myId), me = me_();   // in a vehicle: no build wheel; the mecha swings its saber
+    if (v.kind === "mecha" && v.phase === "ride" && me && !anyPanelOpen()) room.send("mechaSlash", { a: aimAngle(me) }); return; }
   if (e.button === 2) { e.preventDefault(); firing = false; wheel = { x: mouse.x, y: mouse.y, cx: Math.max(WHEEL_R + 30, Math.min(W - WHEEL_R - 30, mouse.sx)), cy: Math.max(WHEEL_R + 30, Math.min(H - WHEEL_R - 30, mouse.sy)), pick: -1 }; }
 });
 window.addEventListener("mouseup", e => {
@@ -668,7 +677,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me) }); } }
-  else if (k === "r") { if (me_()?.characterClass === "dispatcher") room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse; others get theirs later). Reloading is automatic
+  else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "f" && !e.repeat) tryRevive();
   else if (k === "t") togglePanel("equip");
@@ -786,12 +795,12 @@ function sendControls(t) {
   if (t - lastInput > 45) {
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
     const dt = Math.min(100, t - lastInput), seq = ++PRED.seq; lastInput = t;
-    if (ride) room.send("input", { dx, dy, a: aimAngle(me), s: seq, f: ride.kind === "heli" && heliTrigger() ? 1 : 0 });   // in a vehicle the gun follows the mouse (no prediction: the server drives it)
+    if (ride) room.send("input", { dx, dy, a: aimAngle(me), s: seq, f: (ride.kind === "heli" || ride.kind === "mecha") && heliTrigger() ? 1 : 0 });   // in a vehicle the gun follows the mouse (no prediction: the server drives it)
     else { room.send("input", { dx, dy, s: seq, dt: Math.round(dt) }); predictInput(me, { seq, dx, dy, dt: dt / 1000 }); }
   }
   if (ride) {   // Sofea's tank / helicopter: hold or click to fire (the server allows one shot every 1.5s)
     const clicked = clickShotAt && performance.now() - clickShotAt < 300;
-    if (ride.phase === "ride" && ride.kind !== "heli" && !anyPanelOpen() && (firing || clicked) && t - lastShoot > 120) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
+    if (ride.phase === "ride" && ride.kind === "tank" && !anyPanelOpen() && (firing || clicked) && t - lastShoot > 120) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
     dashQueued = false; return;
   }
   if (!wheel && !squadWheel && !anyPanelOpen() && !(me.stunned > 0)) {
@@ -1157,7 +1166,8 @@ function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets 
 }
 // ---------- SOFEA: tank (E) + helicopter (Q) ----------
 const sImgs = {};
-for (const [k, url] of Object.entries({ tank: "assets/sprites/zombies/dir8/sofea-tank.png", heli: "assets/sprites/zombies/dir8/sofea-heli.png", fx: "assets/sprites/fx/sofea-fx.png", gun: "assets/sprites/fx/sofea-gun.webp" })) { const im = new Image(); im.src = url; sImgs[k] = im; }
+for (const [k, url] of Object.entries({ tank: "assets/sprites/zombies/dir8/sofea-tank.png", heli: "assets/sprites/zombies/dir8/sofea-heli.png", fx: "assets/sprites/fx/sofea-fx.png", gun: "assets/sprites/fx/sofea-gun.webp",
+  mecha: "assets/sprites/dir8/sofea-mecha.webp", mechaTf: "assets/sprites/dir8/sofea-mecha-tf.webp", flame: "assets/sprites/fx/sofea-flame.webp" })) { const im = new Image(); im.src = url; sImgs[k] = im; }
 const SOF = { tank: { cw: 180, ch: 150, lift: 10, tur: 16, barrel: 70 }, heli: { cw: 190, ch: 150, alt: 46 }, fx: 128 };   // tank sheet: col 0 = hull, col 1 = cannon out (one whole tank per direction)
 const sofeaShotAt = new Map();
 function sofeaCell(im, cw, ch, col, row, x, y, alpha = 1, sc = 1) {
@@ -1166,8 +1176,10 @@ function sofeaCell(im, cw, ch, col, row, x, y, alpha = 1, sc = 1) {
 }
 // Sofea calling on the radio, or riding her tank / helicopter, instead of the normal walking sprite. p = smoothed player.
 function drawSofea(p, img, now) {
-  const v = state?.vehicles?.get(p.sessionId); if (!v) return false;
+  const v = state?.vehicles?.get(p.sessionId);
+  if (!v) { const o = mechaOut.get(p.sessionId); if (!o || now - o.t > MECHA.outMs) return false; drawMechaTf(p, o.row, 1 - (now - o.t) / MECHA.outMs); return true; }   // stepping out: the transformation backwards
   const aim = p.sessionId === myId ? aimAngle(p) : v.aim;
+  if (v.kind === "mecha") { drawMecha(p, v, aim, now); return true; }
   if (v.phase === "call") {   // radio call: reach, radio, confirm, release
     const col = Math.min(3, Math.floor((1 - v.left / .8) * 4)), row = ROW_OF_OCT[((Math.round(aim / (Math.PI / 4)) % 8) + 8) % 8];
     ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.imageSmoothingEnabled = false;
@@ -1189,6 +1201,66 @@ function drawSofea(p, img, now) {
     if (v.phase === "ride") heliGunFx(p, aim, now, bob, false);   // muzzle flash on top
   }
   return true;
+}
+// ---- Sofea's R mecha "Crimson Aegis" (art: tools/extract-mecha.py) ----
+// sofea-mecha.webp: 8 rows (dir8 order) x 6 cols (idle, walk 1-3, flame pose, saber slash), cells 224x192, feet at (112, 186)
+// sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
+// sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
+const MECHA = { cw: 224, ch: 192, ax: 112, fy: 186, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,
+  nozzle: [[-2, -45], [66, -68], [64, -86], [40, -99], [12, -99], [-42, -99], [-59, -84], [-30, -42]],   // per direction, from the feet
+  tfRow: [0, 0, 3, 4, 4, 4, 2, 1] };   // which transformation angle each facing uses
+const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaLate = [];   // per player: stepping out, last saber swing, flame state
+const mechaFiring = (p, v) => v.phase === "ride" && (p.sessionId === myId ? heliTrigger() && performance.now() - (mechaSlash.get(myId)?.t || 0) > MECHA.swing : !!v.fire);
+function drawMechaTf(p, row, u) {   // u: 0 = Sofea, 1 = mecha
+  const im = sImgs.mechaTf; if (!im?.naturalWidth) return;
+  const f = Math.max(0, Math.min(7, Math.floor(u * 8))), tr = MECHA.tfRow[row], feet = Math.round(p.y + SPR.feet);
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 14 + 30 * u, 5 + 8 * u, 0, 0, 7); ctx.fill();
+  if (u > .1 && u < .95) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .5 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(p.x, feet - 50 * u, 4, p.x, feet - 50 * u, 40 + 60 * u); g.addColorStop(0, "#ffb27a"); g.addColorStop(1, "rgba(255,60,40,0)"); ctx.fillStyle = g; ctx.fillRect(p.x - 110, feet - 190, 220, 200); }
+  ctx.restore();
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, f * MECHA.cw, tr * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy, MECHA.cw, MECHA.ch); ctx.restore();
+}
+function drawMecha(p, v, aim, now) {
+  const row = rowOf(aim);
+  if (v.phase === "call") { drawMechaTf(p, row, 1 - v.left / MECHA.call); return; }
+  const im = sImgs.mecha, feet = Math.round(p.y + SPR.feet), sl = mechaSlash.get(p.sessionId), sAge = sl ? now - sl.t : 1e9;
+  const fire = mechaFiring(p, v); let fs = mechaFlame.get(p.sessionId);
+  if (!fs) { fs = { on: false, at: 0 }; mechaFlame.set(p.sessionId, fs); }
+  if (fire !== fs.on) { fs.on = fire; fs.at = now; }
+  const swingRow = sAge < MECHA.swing ? rowOf(sl.a) : row;
+  let col = 0;
+  if (sAge < 520) col = 5;
+  else if (fire || now - fs.at < 200) col = 4;
+  else if (v.mv) col = 1 + Math.floor(now / 140) % 3;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 46, 14, 0, 0, 7); ctx.fill(); ctx.restore();
+  const flameBehind = Math.sin(aim) < -.35;
+  if (flameBehind) drawMechaFlame(p, aim, row, feet, fs, now);
+  if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * MECHA.cw, swingRow * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy, MECHA.cw, MECHA.ch); ctx.restore(); }
+  if (!flameBehind) mechaLate.push(() => drawMechaFlame(p, aim, row, feet, fs, now));   // over the zombies it's burning (drawn after all sprites)
+  if (sAge < 480) drawSaberSweep(p, sl.a, sAge, feet);
+}
+function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm's nozzle to the ground 190px out where she aims
+  const im = sImgs.flame; if (!im?.naturalWidth) return;
+  const age = now - fs.at; let f;
+  if (fs.on) f = age < 240 ? Math.floor(age / 30) : 8 + Math.floor((age - 240) / 55) % 6;
+  else { if (age > 320 || !fs.at) return; f = 14 + Math.min(7, Math.floor(age / 40)); }
+  const [nx, ny] = MECHA.nozzle[row], ox = p.x + nx, oy = feet + ny;
+  const tx = p.x + Math.cos(aim) * MECHA.range, ty = p.y + Math.sin(aim) * MECHA.range * .92;   // ground point at the end of the cone
+  const L = Math.max(60, Math.hypot(tx - ox, ty - oy)), ang = Math.atan2(ty - oy, tx - ox), sc = L / 157;   // the full jet is ~157px long in the art
+  ctx.save(); ctx.translate(ox, oy); ctx.rotate(ang);
+  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .35;   // hot glow on the ground under the jet
+  const g = ctx.createRadialGradient(L * .6, 0, 4, L * .6, 0, L * .55); g.addColorStop(0, "#ff9a3c"); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.fillRect(0, -L * .6, L * 1.2, L * 1.2);
+  ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  ctx.drawImage(im, f * 208, 0, 208, 112, -4 * sc, -56 * sc * 1.1, 208 * sc, 112 * sc * 1.1);
+  ctx.restore();
+}
+function drawSaberSweep(p, a, age, feet) {   // a bright green crescent sweeping 120 degrees, 155px
+  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 60, R = MECHA.saber;
+  const a0 = a - Math.PI / 3, a1 = a0 + (Math.PI * 2 / 3) * u;
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  for (const [w, c, al] of [[26, "#1fff6a", .22], [12, "#5dff9a", .55], [4, "#eafff0", .95]]) {
+    ctx.globalAlpha = al * fade; ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.ellipse(p.x, cy + 40, R * .92, R * .62, 0, Math.max(a0, a1 - 1.3), a1); ctx.stroke();
+  }
+  ctx.restore();
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
@@ -1437,7 +1509,7 @@ function drawSquadWheel() {
 }
 // ---------- THE BUTCHER (boss art: tools/extract-zombie-dirs.py + tools/extract-butcher.py) ----------
 const butcherImgs = {};
-for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/butcher-walk.png", chop: "assets/sprites/zombies/dir8/butcher-chop.png", hook: "assets/sprites/zombies/dir8/butcher-hook.png",
+for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/butcher-walk.webp", chop: "assets/sprites/zombies/dir8/butcher-chop.webp", hook: "assets/sprites/zombies/dir8/butcher-hook.webp",
   spin: "assets/sprites/zombies/dir8/butcher-spin.png", stagger: "assets/sprites/zombies/dir8/butcher-stagger.png",
   hookBreak: "assets/sprites/fx/hook-break.png", burst: "assets/sprites/fx/deflect-burst.png", deflected: "assets/sprites/fx/deflected.png", death: "assets/sprites/zombies/dir8/butcher-death.png", hookFx: "assets/sprites/fx/butcher-hook.png",
   chain: "assets/sprites/fx/butcher-chain.png", shock: "assets/sprites/fx/butcher-shock.png" })) { const im = new Image(); im.src = url; butcherImgs[k] = im; }
@@ -1961,7 +2033,7 @@ function drawSurvivorLabels(p) {
     ctx.restore();
   }
   ctx.fillStyle = "#f2ead9"; ctx.font = "11px monospace"; ctx.textAlign = "center";
-  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter
+  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 116 * (rideV.phase === "ride" ? 1 : 1 - rideV.left) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
   ctx.fillText(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift);
   if (!p.alive) { ctx.fillStyle = "#ff7568"; ctx.fillText(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32); }
 }
@@ -2400,7 +2472,8 @@ function drawWorldObjects(extra) {
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
-  items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });   // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
+  items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
+  for (const f of mechaLate.splice(0)) { const d = ctxDepth; ctx.save(); try { f(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }     // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
   if (leader && leader.kills > 0) { ctx.save(); ctx.font = 'bold 22px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 12; ctx.fillStyle = '#ffd84d'; ctx.fillText('♛', leader.x, leader.y - 60); ctx.restore(); }
@@ -2547,9 +2620,10 @@ const ROSTER = [
     skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
              { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." },
              { k: "PASSIVE", n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too." }], gear: ["shotgun", "pistol", "knife"] },
-  { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a rocket gunship and rolls straight over the horde.",
+  { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
-             { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into a giant mecha for 30s. Hold click: flame jet (190px cone). Right click: lightsaber sweep (155px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },

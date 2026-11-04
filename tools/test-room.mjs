@@ -723,6 +723,45 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.abilityCooldown = 0; send(A, "ability", {}); tick(18); room.vmemory.get("A").protectUntil = 0; p.hp = 1; const killer = placeZombie(room, p.x + 30, p.y, 9999); killer.attackCooldown = 0; killer.damage = 500; killer.role = "hunter"; tick(3);
   ok(!p.alive && !room.state.vehicles.has("A"), "if she goes down, the tank goes away (normal downed rules)");
   room._dispose(); }
+// 33b. SOFEA R: Crimson Aegis mecha (transform 1s, 30s ride, flame held / saber right click, shared timer, 100s cooldown from getting out)
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.phase = "lobby"; room.allowAllClasses = true; send(A, "chooseClass", { id: "operator" }); room.state.phase = "playing";
+  p.x = 900; p.y = 900; q.x = 3000; q.y = 2000; room.mapBoxesNear = () => []; room.state.zombies.clear(); room.spawnClock = 9999;
+  send(A, "skill2"); const v = room.state.vehicles.get("A");
+  ok(v && v.kind === "mecha" && v.phase === "call" && Math.abs(v.left - 1) < .01, "R on foot: she starts transforming (1s)");
+  tick(21); ok(v.phase === "ride" && Math.abs(v.left - 30) < 0.2, `...then she pilots the mecha for 30s (${v.left.toFixed(1)}s left)`);
+  send(A, "ability", {}); send(A, "ult", {}); ok(room.state.vehicles.get("A") === v, "E / Q do nothing while she's in it");
+  const x0 = p.x; for (let i = 0; i < 10; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0, a: 0 }); }
+  ok(p.x - x0 > 135 && p.x - x0 < 160, `WASD walks it at 150 px/s (${Math.round(p.x - x0)}px in 1s)`);
+  // no run-over
+  { const z = placeZombie(room, p.x + 40, p.y, 500); z.damage = 0; for (let i = 0; i < 3; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0, a: 0 }); } ok(z.hp === 500, "walking into a zombie does no run-over damage"); room.state.zombies.clear(); }
+  // flame: held, cone 42 degrees, 190px, 12 dmg every 0.25s
+  const mk = (dx, dy) => { const z = placeZombie(room, p.x + dx, p.y + dy, 500); z.damage = 0; z.speed = 0; return z; };
+  const a1 = mk(120, 0), a2 = mk(180, 20), wide = mk(100, 70), far = mk(240, 0), back = mk(-120, 0);
+  const hold = (n, a = 0) => { for (let i = 0; i < n; i++) { send(A, "input", { dx: 0, dy: 0, a, f: 1 }); tick(1); } };
+  tick(10); ok(a1.hp === 500 && !v.fire, "no flame unless she holds left click");
+  hold(20); ok(a1.hp === 500 - 48 && a2.hp === 500 - 48 && v.fire, `holding: 12 dmg every 0.25s to everything in the cone (${500 - a1.hp}, ${500 - a2.hp} dmg in 1s)`);
+  ok(wide.hp === 500 && far.hp === 500 && back.hp === 500, "...42 degrees wide, 190px long (not 35 degrees off, 240px away or behind her)");
+  { send(A, "input", { dx: 0, dy: 0, a: 0, f: 0 }); const h = a1.hp; tick(10); ok(a1.hp === h && !v.fire, "...let go: it stops"); }
+  // walls block it
+  { room.mapBoxesNear = () => [{ x: p.x + 60, y: p.y, hw: 10, hh: 60 }]; const h = a1.hp; hold(8); ok(a1.hp === h, "the flame doesn't go through a wall"); room.mapBoxesNear = () => []; send(A, "input", { a: 0, f: 0 }); tick(10); }
+  // saber: right click, 155px 120 degrees, 80 dmg once per zombie, 0.9s swing, shares the timer with the flame
+  room.state.zombies.clear(); const s1 = mk(100, 0), s2 = mk(60, 90), s3 = mk(200, 0), s4 = mk(-100, 0); events.length = 0;
+  send(A, "mechaSlash", { a: 0 }); tick(8);
+  ok(events.some(e => e.type === "sofea" && e.k === "slash") && s1.hp === 420 && s2.hp === 420, `right click: the saber sweeps 120 degrees for 80 (${500 - s1.hp}, ${500 - s2.hp})`);
+  ok(s3.hp === 500 && s4.hp === 500, "...155px reach, nothing behind her");
+  hold(8); ok(s1.hp === 420, "...once per swing; no flame until the 0.9s swing is over");
+  hold(6); ok(s1.hp < 420, "...then the flame carries on");
+  // damage taken: normal
+  room.state.zombies.clear(); send(A, "input", { a: 0, f: 0 });
+  { const hp = p.hp, z = placeZombie(room, p.x + 40, p.y, 9999); z.attackCooldown = 0; z.damage = 20; z.role = "hunter"; tick(1); ok(Math.abs((hp - p.hp) - 20) < 1.5, `she takes normal damage in it (${(hp - p.hp).toFixed(1)} of 20)`); room.state.zombies.clear(); }
+  // R again: out early, cooldown 100s from getting out
+  p.hp = p.maxHp; tick(1); send(A, "skill2"); tick(1);
+  ok(!room.state.vehicles.has("A") && p.chargeCd > 99, `R again: she steps out; R cools down 100s (${p.chargeCd}s)`);
+  send(A, "skill2"); ok(!room.state.vehicles.has("A"), "...R does nothing during the cooldown");
+  room.vmemory.get("A").mechaReady = 0; send(A, "skill2"); tick(21); const v2 = room.state.vehicles.get("A"); v2.left = 0.05; tick(2);
+  ok(!room.state.vehicles.has("A") && p.chargeCd > 99, "after 30s the ride ends and the 100s cooldown starts");
+  room._dispose(); }
 // 34. test mode (host toggle): ultimates unlocked, no cooldown after they end
 { const { room, A, B, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.state.phase = "lobby"; send(A, "chooseClass", { id: "scout" }); room.state.phase = "playing"; p.ultKills = 0;
