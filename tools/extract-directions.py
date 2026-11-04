@@ -24,7 +24,8 @@ CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside 
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
 TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
 MIRROR_OF = {5: 3, 6: 2, 7: 1}      # up-left <- up-right, left <- right, down-left <- down-right
-LEFT_ATTACKS = os.environ.get('MIRROR_LEFT_ATTACKS') == '1'   # 8-row sheets whose left-side attack frames were drawn facing RIGHT (Sofea v2): use mirrored right-side ones
+LEFT_ATTACKS = os.environ.get('MIRROR_LEFT_ATTACKS') == '1'
+NORM_ROWS = os.environ.get('NORM_ROWS') == '1'   # scale every direction on its own so the idle height is the same in all 8 (sheets drawn at uneven sizes)   # 8-row sheets whose left-side attack frames were drawn facing RIGHT (Sofea v2): use mirrored right-side ones
 out_dir = os.path.join(here, '..', 'client', 'assets', 'sprites', 'dir8'); os.makedirs(out_dir, exist_ok=True)
 
 def runs_of(occ, min_gap, min_len):
@@ -191,21 +192,22 @@ if __name__ == '__main__':
         frames, nrows = cut_sheet(full, None, float(pitch) if pitch else None, float(rpitch) if rpitch else None, vlook)
         idle_h = np.median([frames[(r, 0)][3] for r in range(nrows) if (r, 0) in frames])
         scale = TARGET_H / idle_h
+        rscale = {r: (TARGET_H / frames[(r, 0)][3] if NORM_ROWS and (r, 0) in frames else scale) for r in range(nrows)}   # per source row
         remap = [4, 3, 2, 1, 0, 7, 6, 5] if order == 'U' else list(range(8))
         for (r, c), (img, bc, feet, _) in frames.items():
-            place(sheet, img, bc, feet, scale, bi * 8 + remap[r], c)
+            place(sheet, img, bc, feet, rscale[r], bi * 8 + remap[r], c)
         if nrows == 8 and LEFT_ATTACKS and COLS == 6:
             for r, src_r in MIRROR_OF.items():
                 for c in (4, 5):
                     if (src_r, c) not in frames: continue
                     x0, y0 = c * CELL_W, (bi * 8 + r) * CELL_H; sheet.paste((0, 0, 0, 0), (x0, y0, x0 + CELL_W, y0 + CELL_H))
-                    img, bc, feet, _ = frames[(src_r, c)]; place(sheet, img, bc, feet, scale, bi * 8 + r, c, flip=True)
+                    img, bc, feet, _ = frames[(src_r, c)]; place(sheet, img, bc, feet, rscale[src_r], bi * 8 + r, c, flip=True)
         if nrows == 5:
             for r, src_r in MIRROR_OF.items():
                 for c in range(COLS):
                     if (src_r, c) in frames:
                         img, bc, feet, _ = frames[(src_r, c)]
-                        place(sheet, img, bc, feet, scale, bi * 8 + r, c, flip=True)
+                        place(sheet, img, bc, feet, rscale[src_r], bi * 8 + r, c, flip=True)
         names.append(name)
         print(f'  {name}: {nrows} rows{" (left side mirrored)" if nrows == 5 else ""}, scale {scale:.3f}')
     sheet.save(os.path.join(out_dir, cls + '.png'))

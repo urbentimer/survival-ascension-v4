@@ -1,5 +1,5 @@
 # Sofea v2 art (Nov 2026, green-screen sheets) -> game assets. Afterwards quantize dir8/operator.png to 256 colours (preview size). Her body sheets go through extract-directions.py
-# (exact, Nov 4: A=tools/art/sofea2; MIRROR_LEFT_ATTACKS=1 PINK_HAIR=1 SPRITE_H=48 python3 tools/extract-directions.py operator
+# (exact, Nov 4: A=tools/art/sofea2; NORM_ROWS=1 MIRROR_LEFT_ATTACKS=1 PINK_HAIR=1 SPRITE_H=51 python3 tools/extract-directions.py operator
 #  gun=$A/ak.png%229x143.125~ knife=$A/knife.png%229x143.125~ bat=$A/bat.png%229x143.125~ axe=$A/axe.png%229x143.125~ radio=$A/radio-even.png!4%260x200
 #  radio-even.png from even-grid.py).
 #   python3 tools/extract-sofea2.py tools/art/sofea2
