@@ -803,8 +803,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (const r of room.unitsOf("A", "doctor")) room.unitMem.get(r.id).until = 0; tick(1); ok(!room.unitsOf("A", "doctor").length, "doctors leave after 20s");
   // Q
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
-  send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); ok(cops.length === 4, `Q: exactly 4 police (${cops.length})`);
-  send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 4, "...no second squad while they're out");
+  send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); ok(cops.length === 2, `Q: one officer per living player (2 players -> ${cops.length})`);
+  ok(new Set(cops.map(r => room.unitMem.get(r.id).guard)).size === 2, "...each officer guards a different player");
+  { const cq = cops.find(r => room.unitMem.get(r.id).guard === "B"); q.x = 1500; q.y = 900; tick(80); const dq = Math.hypot(cq.x - q.x, cq.y - q.y); ok(dq < 140, `...and stays with that player (${Math.round(dq)}px from B)`); q.x = 1060; q.y = 700; tick(60); }
+  send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 2, "...no second squad while they're out");
   const z = placeZombie(room, p.x + 300, p.y, 400); const k0 = p.kills; for (let i = 0; i < 40; i++) { for (const r of room.unitsOf("A", "police")) { const m = room.unitMem.get(r.id); m.nextBurst = Math.min(m.nextBurst, Date.now()); m.nextShot = 0; } tick(1); }
   ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (7 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
   ok(q.hp === q.maxHp, "...they never shoot teammates");
@@ -813,9 +815,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // R
   room.state.zombies.clear(); p.x = 1000; p.y = 700; const inside = placeZombie(room, p.x + 60, p.y + 30, 300);
   send(A, "skill2", {}); call(); const st = room.safeOf(p); const wk = room.unitsOf("A", "worker");
-  ok(st && st.deploy > 1.9 && wk.length === 2, "R: safehouse construction, 2 workers");
+  ok(st && st.deploy > 4.9 && wk.length === 2, "R: safehouse construction (5s), 2 workers");
   ok(p.chargeCd > 89, `...90s cooldown starts at deployment (${p.chargeCd}s)`);
-  tick(45); ok(st.deploy === 0 && room.safeBoxes.length === 1, "...all 4 walls finish together after 2s");
+  tick(60); ok(st.deploy > 0, "...still building after 3s"); tick(45); ok(st.deploy === 0 && room.safeBoxes.length === 1, "...all 4 walls finish together after 5s");
   ok(Math.abs(inside.x - st.x) >= 130 || Math.abs(inside.y - st.y) >= 130, "...a zombie caught inside is moved outside (no damage)");
   ok(inside.hp === 300, "...unhurt");
   tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...the workers leave");

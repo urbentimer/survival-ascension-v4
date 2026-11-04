@@ -197,9 +197,9 @@ const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "dem
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 25, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
-  police: { n: 4, life: 30, cd: 60, hp: 110, speed: 160, dmg: 7, burst: 3, gap: .12, every: 1.5, range: 440, leash: 600, threat: 250 },
+  police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 7, burst: 3, gap: .12, every: 3, range: 440, leash: 600, threat: 250 },
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
-  safe: { cd: 90, build: 2, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
+  safe: { cd: 90, build: 5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
@@ -1507,7 +1507,7 @@ export class SurvivalRoom extends Room {
     const m = this.amemOf(p), now = Date.now();
     if (m.cast || p.stunned > 0 || !p.alive) return false;   // one radio call at a time: repeated key presses can't double up
     if (k === "E") { if (this.unitsOf(p.sessionId, "doctor").length) return this.astraNo(p, "the medics are still on duty"); if (!this.freeSpots(p.x, p.y, ASTRA.medic.n)) return this.astraNo(p, "no room for the medics here"); }
-    if (k === "Q" && !this.freeSpots(p.x, p.y, ASTRA.police.n)) return this.astraNo(p, "no room for the police here");
+    if (k === "Q" && !this.freeSpots(p.x, p.y, 1)) return this.astraNo(p, "no room for the police here");
     let site = null;
     if (k === "R") {
       if (this.safeOf(p)) return this.astraNo(p, "your safehouse is still up");
@@ -1541,9 +1541,11 @@ export class SurvivalRoom extends Room {
       m.medUntil = now + ASTRA.medic.life * 1000; p.abilityCooldown = ASTRA.medic.cd;
       this.state.message = `${p.name} called in the EMERGENCY MEDICS!`;
     } else if (c.k === "Q") {
-      const spots = this.freeSpots(p.x, p.y, ASTRA.police.n), info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
-      if (!spots) { info.summonedAt = 0; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return this.astraNo(p, "no room for the police here"); }
-      spots.forEach((s, i) => this.spawnUnit(p, "police", s, { hp: ASTRA.police.hp, until: now + ASTRA.police.life * 1000, slot: i, nextBurst: now + rand(100, 1500), burstLeft: 0, nextShot: 0, think: 0 }));
+      // one officer per living player (Astra included), each arriving next to the player he guards
+      const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 }, guards = [...this.state.players.values()].filter(q => q.alive);
+      const spots = guards.map(q => (this.freeSpots(q.x, q.y, 1) || this.freeSpots(p.x, p.y, 1) || [null])[0]);
+      if (!guards.length || spots.some(s => !s)) { info.summonedAt = 0; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return this.astraNo(p, "no room for the police here"); }
+      spots.forEach((s, i) => this.spawnUnit(p, "police", s, { hp: ASTRA.police.hp, until: now + ASTRA.police.life * 1000, slot: i, guard: guards[i].sessionId, nextBurst: now + rand(100, 1500), burstLeft: 0, nextShot: 0, think: 0 }));
       for (const r of this.unitsOf(p.sessionId, "police")) r.hp = r.maxHp = ASTRA.police.hp * this.summonScale();
       m.polUntil = now + ASTRA.police.life * 1000; m.polOut = true; info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info);
       this.state.message = `${p.name} called POLICE BACKUP!`;
@@ -1649,8 +1651,8 @@ export class SurvivalRoom extends Room {
     const a = Math.atan2(goal.y - r.y, goal.x - r.x); this.steerMove(r, r.id, a, Math.min(gd, speed * dt), e => this.solveRobot(e));
     if (!r.act) r.aim = a;
   }
-  updatePolice(r, mem, owner, now, dt) {
-    const P = ASTRA.police, lead = this.leaderOf(owner);
+  updatePolice(r, mem, owner, now, dt) {   // each officer guards ONE player (mem.guard); if that player is down or gone: the nearest living one
+    const P = ASTRA.police, g = this.state.players.get(mem.guard), lead = g?.alive ? g : this.leaderOf(g || owner);
     let z = mem.target ? this.state.zombies.get(mem.target) : null;
     if (z && (distance(r, z) > P.range || distance(z, lead) > P.leash || !this.lineClear(r, z))) z = null;
     if (!z || now >= mem.think) {   // pick: zombies threatening a teammate first, then the nearest one in sight
@@ -1674,7 +1676,7 @@ export class SurvivalRoom extends Room {
         this.broadcast("shot", { id: r.id, x: Math.round(r.x + Math.cos(a) * 16), y: Math.round(r.y - 14), a: [a], len: [Math.round(len)], w: "rifle" });
       }
     } else mem.burstLeft = 0;
-    const sa = mem.slot / P.n * Math.PI * 2 + .3, sr = 85 + (mem.slot % 2) * 60;   // loose ring 70-160px around the leader
+    const sa = mem.slot * 2.4 + 2.2, sr = 70;   // a spot ~70px beside / behind the player he guards (officers on the same player spread out)
     this.unitStep(r, { x: lead.x + Math.cos(sa) * sr, y: lead.y + Math.sin(sa) * sr * .8 }, P.speed, dt);
   }
   updateWorker(r, mem, now, dt) {
@@ -1684,7 +1686,7 @@ export class SurvivalRoom extends Room {
       r.act = ""; const a = Math.atan2(r.y - (st?.y ?? r.y + 1), r.x - (st?.x ?? r.x)); this.unitStep(r, { x: r.x + Math.cos(a) * 40, y: r.y + Math.sin(a) * 40 }, ASTRA.safe.worker, dt); return;
     }
     const d = distance(r, mem.goal);
-    if (d > 14) { r.act = ""; this.unitStep(r, mem.goal, ASTRA.safe.worker * 1.6, dt); }   // they hurry: building only takes 2 seconds
+    if (d > 14) { r.act = ""; this.unitStep(r, mem.goal, ASTRA.safe.worker * 1.6, dt); }   // they hurry to their wall, then build (5 seconds)
     else { r.act = "build"; r.aim = Math.atan2(st.y - r.y, st.x - r.x); }
   }
   updateAstra(dt, now) {
