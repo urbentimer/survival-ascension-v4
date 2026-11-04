@@ -1186,7 +1186,7 @@ function drawSofea(p, img, now) {
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
-const HGUN = { cone: Math.PI / 2, range: 200, every: 45 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+const HGUN = { cone: Math.PI / 2, range: 200, every: 16 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
 function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
 const heliTrigger = () => firing && !anyPanelOpen() && !wheel;   // you're holding the helicopter gun's trigger (left mouse)
 function heliFiring(p) { const v = state?.vehicles?.get(p.sessionId); return !!v && v.phase === "ride" && (p.sessionId === myId ? heliTrigger() : !!v.fire); }   // yours: instant; others: from the server
@@ -1199,22 +1199,29 @@ function heliGunFx(p, a, now, bob, under) {
     if (!im?.naturalWidth) return; const f = 3 + Math.floor(Math.random() * 5);
     ctx.save(); ctx.translate(mz.x, mz.y); ctx.rotate(a); ctx.drawImage(im, f * 128, 0, 128, 64, -4, -20, 80, 40); ctx.restore(); return;
   }
-  if (on && now - g.at > HGUN.every) {   // new tracer: at a zombie in the cone most of the time, otherwise at the ground
+  if (on && now - g.at > HGUN.every) {   // a burst: 2 tracers (slight spread), mostly at zombies in the cone, otherwise at the ground
     g.at = now; const inCone = [];
     for (const z0 of state.zombies.values()) { const z = V(z0), d = Math.hypot(z.x - p.x, z.y - p.y); let da = Math.atan2(z.y - p.y, z.x - p.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (d < HGUN.range && Math.abs(da) < HGUN.cone / 2) inCone.push(z); }
-    let tx, ty;
-    if (inCone.length && Math.random() < .75) { const z = inCone[Math.floor(Math.random() * inCone.length)]; tx = z.x + (Math.random() - .5) * 16; ty = z.y + (Math.random() - .5) * 10; }
-    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 50 + Math.random() * (HGUN.range - 60); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
-    g.list.push({ t: now, tx, ty }); if (g.list.length > 24) g.list.shift();
+    for (let k = 0; k < 2; k++) {
+      let tx, ty;
+      if (inCone.length && Math.random() < .75) { const z = inCone[Math.floor(Math.random() * inCone.length)]; tx = z.x + (Math.random() - .5) * 18; ty = z.y + (Math.random() - .5) * 12; }
+      else { const aa = a + (Math.random() - .5) * HGUN.cone * .8, d = 50 + Math.random() * (HGUN.range - 60); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
+      g.list.push({ t: now + k * 8, tx, ty, imp: Math.random() < .5, f0: Math.floor(Math.random() * 3) }); if (g.list.length > 80) g.list.shift();
+    }
   }
   if (!im?.naturalWidth) return;
-  for (const s of g.list) {
-    const age = now - s.t; if (age > 360) continue;
-    if (age < 120) {   // tracer streaking from the gun to where it lands
-      const L = Math.hypot(s.tx - mz.x, s.ty - mz.y), ang = Math.atan2(s.ty - mz.y, s.tx - mz.x), f = Math.min(7, Math.floor(age / 15));
-      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(mz.x, mz.y); ctx.rotate(ang); ctx.drawImage(im, f * 192, 64, 192, 40, 0, -10, L, 20); ctx.restore();
-    }
-    if (age > 60) { const f = Math.min(7, Math.floor((age - 60) / 38)); ctx.drawImage(im, f * 96, 104, 96, 72, s.tx - 24, s.ty - 33, 48, 36); }   // dust + sparks where it hits
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (const s of g.list) {   // tracers + a bright bullet streak racing along each one
+    const age = now - s.t; if (age < 0 || age > 110) continue;
+    const L = Math.hypot(s.tx - mz.x, s.ty - mz.y), ang = Math.atan2(s.ty - mz.y, s.tx - mz.x), f = Math.min(7, s.f0 + Math.floor(age / 14));
+    ctx.save(); ctx.translate(mz.x, mz.y); ctx.rotate(ang); ctx.globalAlpha = .85; ctx.drawImage(im, f * 192, 64, 192, 40, 0, -8, L, 16);
+    const u = Math.min(1, age / 55), hx = L * u; if (u < 1) { ctx.globalAlpha = 1; ctx.fillStyle = "#fff3c4"; ctx.fillRect(hx - 20, -1.6, 20, 3.2); ctx.fillStyle = "#ffb347"; ctx.fillRect(hx - 38, -1.1, 18, 2.2); }
+    ctx.restore();
+  }
+  ctx.restore();
+  for (const s of g.list) {   // dust + sparks where about half of them hit
+    const age = now - s.t; if (!s.imp || age < 55 || age > 360) continue;
+    const f = Math.min(7, Math.floor((age - 55) / 38)); ctx.drawImage(im, f * 96, 104, 96, 72, s.tx - 20, s.ty - 28, 40, 30);
   }
 }
 function drawSofeaFx(f, age) {   // false when finished
