@@ -37,7 +37,7 @@ defineTypes(RobotState, { id: "string", kind: "string", x: "float32", y: "float3
 
 // Sofea's tank / helicopter (one per Sofea, id = her sessionId). phase: "call" (radio call) then "ride".
 export class VehicleState extends Schema {}
-defineTypes(VehicleState, { id: "string", kind: "string", phase: "string", x: "float32", y: "float32", hull: "number", aim: "number", left: "number", mv: "boolean", shots: "number" });
+defineTypes(VehicleState, { id: "string", kind: "string", phase: "string", x: "float32", y: "float32", hull: "number", aim: "number", left: "number", mv: "boolean", shots: "number", fire: "boolean" });   // fire: helicopter gun firing (held mouse)
 
 // A spitter's acid puddle on the ground (hurts survivors standing in it).
 export class PuddleState extends Schema {}

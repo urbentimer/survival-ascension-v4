@@ -173,7 +173,7 @@ const SOFEA = {
   call: 0.8, protect: 0.75,
   tank: { life: 30, cd: 30, speed: 140, taken: 0.65, rate: 1.5, body: 34, reach: 30, hw: 50, hh: 32,
           shot: { dmg: 65, min: 30, r: 110, speed: 600, range: 650 }, crush: { dmg: 55, boss: 10, gap: 0.75, minSpeed: 40, push: 30 } },
-  // helicopter: flies over everything (only the map edge stops it); its machine gun fires the WHOLE ride, hitting every
+  // helicopter: flies over everything (only the map edge stops it); its machine gun fires while she HOLDS the left mouse button, hitting every
   // zombie in a 90-degree cone (200px) the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
           gun: { cone: Math.PI / 2, range: 200, every: 0.1, dmg: 10, bossMult: 0.5 } },   // 100 dps per zombie on wave 1
@@ -360,6 +360,7 @@ export class SurvivalRoom extends Room {
         const t = Date.now(), dtv = Math.min(0.1, Math.max(0, (t - (this.lastInputs.get(client.sessionId) || t - 50)) / 1000)); this.lastInputs.set(client.sessionId, t);
         const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { veh.aim = a; p.aim = a; }
         if (veh.phase === "ride") this.moveVehicle(p, veh, clamp(Number(data?.dx) || 0, -1, 1), clamp(Number(data?.dy) || 0, -1, 1), dtv);
+        if (veh.kind === "heli") this.vmem(p).fireUntil = data?.f ? t + 300 : 0;   // helicopter gun: fires while she holds the left mouse button (each input says so; stops if they stop coming)
         return;
       }
       if (this.queueInput(client.sessionId, data, false)) return;
@@ -1380,7 +1381,7 @@ export class SurvivalRoom extends Room {
   }
   vehicleFire(p, a, dist) {
     const v = this.state.vehicles.get(p.sessionId); if (!v || v.phase !== "ride" || v.left <= 0 || !p.alive) return;
-    if (v.kind === "heli") { v.aim = a; p.aim = a; return; }   // the helicopter's gun fires by itself (heliGun)
+    if (v.kind === "heli") { v.aim = a; p.aim = a; this.vmem(p).fireUntil = Date.now() + 400; return; }   // bots: keep the helicopter gun firing (players hold the mouse: "input" f)
     const K = SOFEA[v.kind], W = K.shot, now = Date.now(), m = this.vmem(p);
     if (now - m.shotAt < K.rate * 1000) return;
     m.shotAt = now; v.aim = a; p.aim = a; v.shots++; this.lastAimAt.set(p.sessionId, now);
@@ -1395,8 +1396,10 @@ export class SurvivalRoom extends Room {
     }
     this.broadcast("sofea", { k: "fire", id: p.sessionId, kind: v.kind, a: Math.round(a * 100) / 100, pts, sp: W.speed });
   }
-  heliGun(p, v, dt) {   // the machine gun: every 0.1s, every zombie in the 90-degree cone in front of her aim takes a hit
-    const G = SOFEA.heli.gun, m = this.vmem(p); m.gunT = (m.gunT || 0) + dt;
+  heliGun(p, v, dt) {   // the machine gun (while she holds fire): every 0.1s, every zombie in the 90-degree cone in front of her aim takes a hit
+    const G = SOFEA.heli.gun, m = this.vmem(p); v.fire = Date.now() < (m.fireUntil || 0);
+    if (!v.fire) { m.gunT = 0; return; }
+    m.gunT = (m.gunT || 0) + dt;
     const scale = 1 + (this.state.stage - 1) * 0.08;
     while (m.gunT >= G.every) {
       m.gunT -= G.every;

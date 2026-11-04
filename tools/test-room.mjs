@@ -708,9 +708,12 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const zz = placeZombie(room, p.x + 30, p.y, 500); zz.attackCooldown = 0; zz.role = "hunter"; zz.damage = 20; const hpH = p.hp; tick(3);
   ok(p.hp === hpH, "zombies on the ground can't reach the helicopter");
   room.state.zombies.clear(); h.aim = 0; const r1 = placeZombie(room, p.x + 120, p.y, 500), r2 = placeZombie(room, p.x + 100, p.y + 80, 500), back = placeZombie(room, p.x - 150, p.y, 500), far = placeZombie(room, p.x + 320, p.y, 500), long = placeZombie(room, p.x + 190, p.y, 500);
-  tick(20); ok(500 - r1.hp > 50 && 500 - r2.hp > 50, `the machine gun fires by itself and hits everything in the 90-degree cone (${Math.round(500 - r1.hp)}, ${Math.round(500 - r2.hp)} dmg in 1s)`);
+  const hold = (n, a = 0) => { for (let i = 0; i < n; i++) { send(A, "input", { dx: 0, dy: 0, a, f: 1 }); tick(1); } };
+  tick(20); ok(r1.hp === 500 && !h.fire, "the helicopter gun doesn't fire unless she holds the mouse");
+  hold(20); ok(500 - r1.hp > 50 && 500 - r2.hp > 50 && h.fire, `holding fire: it hits everything in the 90-degree cone (${Math.round(500 - r1.hp)}, ${Math.round(500 - r2.hp)} dmg in 1s)`);
+  { send(A, "input", { dx: 0, dy: 0, a: 0, f: 0 }); const h1 = r1.hp; tick(20); ok(r1.hp === h1 && !h.fire, "...let go: it stops at once"); }
   ok(back.hp === 500 && far.hp === 500 && long.hp < 500, "...reaches 200px (hits a zombie 190px away), nothing behind her or at 320px");
-  send(A, "input", { dx: 0, dy: 0, a: Math.PI }); tick(10); ok(back.hp < 500, "...the cone turns with her aim");
+  hold(10, Math.PI); ok(back.hp < 500, "...the cone turns with her aim");
   { room.state.zombies.clear(); const x0 = p.x; room.mapBoxesNear = () => [{ x: x0 + 60, y: p.y, hw: 30, hh: 200 }]; for (let i = 0; i < 10; i++) send(A, "input", { dx: 1, dy: 0, a: 0 }), room.lastInputs.set("A", Date.now() - 50);
     ok(p.x > x0 + 100, `she flies straight over buildings (x ${Math.round(x0)} -> ${Math.round(p.x)}, building at ${Math.round(x0 + 30)}-${Math.round(x0 + 90)})`); delete room.mapBoxesNear; }
   h.left = 0.05; tick(2); ok(!room.state.vehicles.has("A") && p.ultCd > 59, `after 30s she lands; Q cools down 60s (${p.ultCd}s)`);

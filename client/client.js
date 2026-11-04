@@ -453,7 +453,7 @@ let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus =
 const SFX = {
   turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
   rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
-  mg:       { url: "assets/audio/rifle_shot.mp3", vol: .24, max: 4, gap: 50 },   // Sofea's helicopter gun (rattles the whole ride)
+  gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .42 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
   pistol:   { url: "assets/audio/pistol_shot.mp3", vol: .32, max: 4, gap: 40 },
   shotgun:  { url: "assets/audio/shotgun_blast.mp3", vol: .4, max: 3, gap: 60 },
   boom:     { url: "assets/audio/explosion.mp3", vol: .5, max: 4, gap: 60 },
@@ -571,6 +571,22 @@ function audioWatch() {
   aw.brutes.clear(); for (const z of s.zombies.values()) if (z.kind === "brute") aw.brutes.add(z.id);
 }
 window.__saAudio = () => ({ ctx: audioContext?.state, music: music.cur?.name || "", played: Object.keys(SFX).filter(k => SFX[k].lastAt), ready: Object.keys(SFX).filter(k => SFX[k].raw).length });   // read-only hook for tests
+// Sofea's helicopter gatling: press = wind-up (0-0.4s), hold = loop 0.45-4.2s, release = quick fade. Volume follows the distance.
+const heliLoops = new Map();   // heli id -> { src, gain }
+function heliLoop(p, on) {
+  const ac = audioContext, s = SFX.gatling, cur = heliLoops.get(p.sessionId);
+  const me = V(me_()), d = me ? Math.hypot(p.x - me.x, p.y - me.y) : 0, vol = s.vol * (p.sessionId === myId ? 1 : .6) * Math.max(0, 1 - d / 900);
+  if (on && !cur && ac && ac.state === "running" && sfxOn) {
+    const buf = decoded(s, ac); if (!buf) return;
+    const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true; src.loopStart = .45; src.loopEnd = Math.min(4.2, buf.duration - .05);
+    gain.gain.value = vol; src.connect(gain); gain.connect(sfxBus); src.start(); heliLoops.set(p.sessionId, { src, gain });
+  } else if (cur && on) cur.gain.gain.setTargetAtTime(vol, ac.currentTime, .05);
+  else if (cur && !on) { cur.gain.gain.setTargetAtTime(0, ac.currentTime, .04); const src = cur.src; setTimeout(() => { try { src.stop(); } catch {} }, 250); heliLoops.delete(p.sessionId); }
+}
+function stopLostHeliLoops() {   // every frame: landed / left -> stop; off screen (not drawn) -> keep the volume and on/off up to date here
+  for (const id of [...heliLoops.keys()]) { const v = state?.vehicles?.get(id), p = state?.players?.get(id);
+    if (!v || v.kind !== "heli" || v.phase !== "ride" || !p) heliLoop({ sessionId: id, x: 0, y: 0 }, false); else heliLoop(V(p), heliFiring(p)); }
+}
 // gunshot sound for a "shot" message (yours loudest, teammates' quieter, police / robots quieter still)
 function shotSound(m) {
   if (m.w === "launcher") return;   // the rocket's explosion makes the noise
@@ -590,6 +606,7 @@ canvas.addEventListener("mousedown", e => {
     e.preventDefault(); if (wheel) return;
     if (squadWheel) return;
     const me = me_();
+    if (state.vehicles?.get(myId)) { firing = true; clickShotAt = performance.now(); return; }   // in a vehicle the mouse is the gun's trigger, whatever slot is selected
     if (me?.activeSlot === 5) room.send("attack", {});
     else if (me?.activeSlot === 1 && me.melee === "axe") { if (!axeChargeAt) { axeChargeAt = performance.now(); room.send("charge", { on: true }); } }
     else { firing = true; clickShotAt = performance.now(); }
@@ -755,7 +772,7 @@ function sendControls(t) {
   if (t - lastInput > 45) {
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
     const dt = Math.min(100, t - lastInput), seq = ++PRED.seq; lastInput = t;
-    if (ride) room.send("input", { dx, dy, a: aimAngle(me), s: seq });   // in a vehicle the gun follows the mouse (no prediction: the server drives it)
+    if (ride) room.send("input", { dx, dy, a: aimAngle(me), s: seq, f: ride.kind === "heli" && heliTrigger() ? 1 : 0 });   // in a vehicle the gun follows the mouse (no prediction: the server drives it)
     else { room.send("input", { dx, dy, s: seq, dt: Math.round(dt) }); predictInput(me, { seq, dx, dy, dt: dt / 1000 }); }
   }
   if (ride) {   // Sofea's tank / helicopter: hold or click to fire (the server allows one shot every 1.5s)
@@ -1161,16 +1178,20 @@ function drawSofea(p, img, now) {
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
 // sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
-const HGUN = { cone: Math.PI / 2, range: 200, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+const HGUN = { cone: Math.PI / 2, range: 200, every: 45 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
 function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
+const heliTrigger = () => firing && !anyPanelOpen() && !wheel;   // you're holding the helicopter gun's trigger (left mouse)
+function heliFiring(p) { const v = state?.vehicles?.get(p.sessionId); return !!v && v.phase === "ride" && (p.sessionId === myId ? heliTrigger() : !!v.fire); }   // yours: instant; others: from the server
 function heliGunFx(p, a, now, bob, under) {
   const im = sImgs.gun, mz = heliMuzzle(p, a, bob); let g = heliShots.get(p.sessionId);
   if (!g) { g = { at: 0, snd: 0, list: [] }; heliShots.set(p.sessionId, g); }
-  if (!under) {   // flickering muzzle flash pointing where she aims
+  const on = heliFiring(p); heliLoop(p, on);
+  if (!under) {   // flickering muzzle flash pointing where she aims (only while firing)
+    if (!on) return;
     if (!im?.naturalWidth) return; const f = 3 + Math.floor(Math.random() * 5);
     ctx.save(); ctx.translate(mz.x, mz.y); ctx.rotate(a); ctx.drawImage(im, f * 128, 0, 128, 64, -4, -20, 80, 40); ctx.restore(); return;
   }
-  if (now - g.at > HGUN.every) {   // new tracer: at a zombie in the cone most of the time, otherwise at the ground
+  if (on && now - g.at > HGUN.every) {   // new tracer: at a zombie in the cone most of the time, otherwise at the ground
     g.at = now; const inCone = [];
     for (const z0 of state.zombies.values()) { const z = V(z0), d = Math.hypot(z.x - p.x, z.y - p.y); let da = Math.atan2(z.y - p.y, z.x - p.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (d < HGUN.range && Math.abs(da) < HGUN.cone / 2) inCone.push(z); }
     let tx, ty;
@@ -1178,7 +1199,6 @@ function heliGunFx(p, a, now, bob, under) {
     else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 50 + Math.random() * (HGUN.range - 60); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
     g.list.push({ t: now, tx, ty }); if (g.list.length > 24) g.list.shift();
   }
-  if (now - g.snd > HGUN.sound) { g.snd = now; playSfx("mg", p.x, p.y, p.sessionId === myId ? 1 : .6); }   // the rattle
   if (!im?.naturalWidth) return;
   for (const s of g.list) {
     const age = now - s.t; if (age > 360) continue;
@@ -2488,7 +2508,7 @@ function frame(t){
   requestAnimationFrame(frame);
   unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
-    sendControls(t); updateFeel(); updateCamera(t); updateMusic();
+    sendControls(t); updateFeel(); updateCamera(t); updateMusic(); stopLostHeliLoops();
     ctx.clearRect(0, 0, W, H);
     const off = shakeOffset();
     ctx.save(); ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore();
