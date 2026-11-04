@@ -24,6 +24,7 @@ CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside 
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
 TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
 MIRROR_OF = {5: 3, 6: 2, 7: 1}      # up-left <- up-right, left <- right, down-left <- down-right
+LEFT_ATTACKS = os.environ.get('MIRROR_LEFT_ATTACKS') == '1'   # 8-row sheets whose left-side attack frames were drawn facing RIGHT (Sofea v2): use mirrored right-side ones
 out_dir = os.path.join(here, '..', 'client', 'assets', 'sprites', 'dir8'); os.makedirs(out_dir, exist_ok=True)
 
 def runs_of(occ, min_gap, min_len):
@@ -74,7 +75,7 @@ def foreground(src):
     for _ in range(3): bgm = ndimage.binary_dilation(bgm) & (core | soft | shadow)
     return ~(bgm | core | shadow)
 
-def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
+def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None, vlook=False):
     H, W, _ = src.shape
     fg = foreground(src)
     cols = [[round(i * col_pitch), min(W, round((i + 1) * col_pitch))] for i in range(COLS)] if col_pitch else squeeze(runs_of(fg.sum(0) > 2, 14, 12), COLS)
@@ -97,6 +98,17 @@ def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
             out.append((lo, hi))
         return out
     rb, cb = bounds(rows, H), bounds(cols, W)
+    # vlook (fixed row grid): ChatGPT doesn't keep characters inside its grid (some rows sit low and the grid line cuts their
+    # legs). Per column, move each row cut to the emptiest line within 30% of the grid line, so it falls in the gap.
+    vcuts = None
+    if vlook and row_pitch:
+        vcuts = []
+        for (xa_, xb_) in cb:
+            prof_c = fg[:, xa_:xb_].sum(1); cuts = [rb[0][0]]
+            for k in range(1, len(rb)):
+                y = rb[k][0]; lo, hi = max(cuts[-1] + 20, int(y - row_pitch * .3)), min(H - 1, int(y + row_pitch * .3))
+                seg = prof_c[lo:hi + 1]; best = np.where(seg == seg.min())[0]; cuts.append(lo + int(best[np.argmin(abs(best + lo - y))]))
+            cuts.append(rb[-1][1]); vcuts.append(cuts)
     frames = {}
     for ri, (ya, yb) in enumerate(rb):
         for ci, (xa, xb) in enumerate(cb):
@@ -104,7 +116,8 @@ def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None):
             # but only keep pieces whose centre is inside this column
             pad = int(col_pitch * .3) if col_pitch else 0
             core0, core1 = xa, xb; xa, xb = max(0, xa - pad), min(W, xb + pad)
-            cell = fg[ya:yb, xa:xb]
+            if vcuts: ya, yb = vcuts[ci][ri], vcuts[ci][ri + 1]   # this column's own row cuts (see below)
+            vpad = 0; cell = fg[ya:yb, xa:xb]
             lab, n = ndimage.label(cell, structure=np.ones((3, 3)))
             if n == 0: continue
             sizes = ndimage.sum(cell, lab, range(1, n + 1)); boxes = ndimage.find_objects(lab)
@@ -161,6 +174,7 @@ if __name__ == '__main__':
     sheet = Image.new('RGBA', (CELL_W * COLS, CELL_H * 8 * len(specs)), (0, 0, 0, 0))
     names = []
     for bi, (name, spec) in enumerate(specs):
+        vlook = spec.endswith('~'); spec = spec.rstrip('~')   # "...%229x143.125~": with a fixed row grid, also look 25% into the rows above/below (characters drawn low on their row)
         spec, _, pitch = spec.partition('%')
         spec, _, ncols = spec.partition('!')   # "!4": this sheet has 4 columns (e.g. a skill pose sheet); goes before any %pitch
         COLS = int(ncols) if ncols else 6   # "%175": columns are evenly spaced every 175px (effects bridge the gaps); "%219x150": rows too
@@ -174,12 +188,18 @@ if __name__ == '__main__':
             parts = [stack]
         full = np.array(parts[0]).astype(int)
         if box: x0, y0, x1, y1 = map(int, box.split(',')); full = full[y0:y1, x0:x1]
-        frames, nrows = cut_sheet(full, None, float(pitch) if pitch else None, float(rpitch) if rpitch else None)
+        frames, nrows = cut_sheet(full, None, float(pitch) if pitch else None, float(rpitch) if rpitch else None, vlook)
         idle_h = np.median([frames[(r, 0)][3] for r in range(nrows) if (r, 0) in frames])
         scale = TARGET_H / idle_h
         remap = [4, 3, 2, 1, 0, 7, 6, 5] if order == 'U' else list(range(8))
         for (r, c), (img, bc, feet, _) in frames.items():
             place(sheet, img, bc, feet, scale, bi * 8 + remap[r], c)
+        if nrows == 8 and LEFT_ATTACKS and COLS == 6:
+            for r, src_r in MIRROR_OF.items():
+                for c in (4, 5):
+                    if (src_r, c) not in frames: continue
+                    x0, y0 = c * CELL_W, (bi * 8 + r) * CELL_H; sheet.paste((0, 0, 0, 0), (x0, y0, x0 + CELL_W, y0 + CELL_H))
+                    img, bc, feet, _ = frames[(src_r, c)]; place(sheet, img, bc, feet, scale, bi * 8 + r, c, flip=True)
         if nrows == 5:
             for r, src_r in MIRROR_OF.items():
                 for c in range(COLS):
