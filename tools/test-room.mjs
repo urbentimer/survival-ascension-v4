@@ -707,9 +707,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(h.phase === "ride", "...she flies it");
   const zz = placeZombie(room, p.x + 30, p.y, 500); zz.attackCooldown = 0; zz.role = "hunter"; zz.damage = 20; const hpH = p.hp; tick(3);
   ok(p.hp === hpH, "zombies on the ground can't reach the helicopter");
-  room.state.zombies.clear(); h.aim = 0; const r1 = placeZombie(room, p.x + 300, p.y, 500), r2 = placeZombie(room, p.x + 250, p.y + 200, 500), back = placeZombie(room, p.x - 300, p.y, 500), far = placeZombie(room, p.x + 1900, p.y, 500), long = placeZombie(room, p.x + 1500, p.y, 500);
+  room.state.zombies.clear(); h.aim = 0; const r1 = placeZombie(room, p.x + 300, p.y, 500), r2 = placeZombie(room, p.x + 250, p.y + 200, 500), back = placeZombie(room, p.x - 300, p.y, 500), far = placeZombie(room, p.x + 800, p.y, 500), long = placeZombie(room, p.x + 620, p.y, 500);
   tick(20); ok(500 - r1.hp > 50 && 500 - r2.hp > 50, `the machine gun fires by itself and hits everything in the 90-degree cone (${Math.round(500 - r1.hp)}, ${Math.round(500 - r2.hp)} dmg in 1s)`);
-  ok(back.hp === 500 && far.hp === 500 && long.hp < 500, "...reaches 1680px (hits a zombie 1500px away), nothing behind her or further");
+  ok(back.hp === 500 && far.hp === 500 && long.hp < 500, "...reaches 672px (hits a zombie 620px away), nothing behind her or at 800px");
   send(A, "input", { dx: 0, dy: 0, a: Math.PI }); tick(10); ok(back.hp < 500, "...the cone turns with her aim");
   { room.state.zombies.clear(); const x0 = p.x; room.mapBoxesNear = () => [{ x: x0 + 60, y: p.y, hw: 30, hh: 200 }]; for (let i = 0; i < 10; i++) send(A, "input", { dx: 1, dy: 0, a: 0 }), room.lastInputs.set("A", Date.now() - 50);
     ok(p.x > x0 + 100, `she flies straight over buildings (x ${Math.round(x0)} -> ${Math.round(p.x)}, building at ${Math.round(x0 + 30)}-${Math.round(x0 + 90)})`); delete room.mapBoxesNear; }
