@@ -662,7 +662,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._handlers.debugBoss(B); ok(room.state.stage === 2, "a non-host player can't skip to the Butcher");
   room._handlers.debugBoss(A); ok(room.state.stage === 4 && room.state.waveType === "boss" && room.state.bossPhase === "horde" && room.state.zombies.size === 0, "the host skips straight to the Butcher (intro next)");
   room._dispose(); }
-// 33. SOFEA (operator): E = tank 30s (cannon + run-over), Q = helicopter 30s (rockets), then cooldowns
+// 33. SOFEA (operator): E = tank 30s (cannon + run-over), Q = helicopter 30s (machine gun cone, flies over buildings), then cooldowns
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.state.phase = "lobby"; room.allowAllClasses = true; p.characterClass = "operator"; send(A, "chooseClass", { id: "operator" }); room.state.phase = "playing";
   ok(p.characterClass === "operator" && p.maxHp === 115 && p.speed === 180, "Sofea: 115 HP, speed 180");
@@ -697,9 +697,12 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(h.phase === "ride", "...she flies it");
   const zz = placeZombie(room, p.x + 30, p.y, 500); zz.attackCooldown = 0; zz.role = "hunter"; zz.damage = 20; const hpH = p.hp; tick(3);
   ok(p.hp === hpH, "zombies on the ground can't reach the helicopter");
-  room.state.zombies.clear(); const r1 = placeZombie(room, p.x + 400, p.y, 500); events.length = 0;
-  send(A, "attack", { a: 0, d: 400 }); room.ripples.forEach(r => r.t -= 3000); const f = events.find(e => e.type === "sofea" && e.k === "fire"); ok(f && f.pts.length === 2, "left click fires a pair of rockets");
-  tick(14); ok(500 - r1.hp > 100, `both rockets hit (${Math.round(500 - r1.hp)} dmg)`);
+  room.state.zombies.clear(); h.aim = 0; const r1 = placeZombie(room, p.x + 300, p.y, 500), r2 = placeZombie(room, p.x + 250, p.y + 200, 500), back = placeZombie(room, p.x - 300, p.y, 500), far = placeZombie(room, p.x + 600, p.y, 500);
+  tick(20); ok(500 - r1.hp > 50 && 500 - r2.hp > 50, `the machine gun fires by itself and hits everything in the 90-degree cone (${Math.round(500 - r1.hp)}, ${Math.round(500 - r2.hp)} dmg in 1s)`);
+  ok(back.hp === 500 && far.hp === 500, "...nothing behind her or beyond 420px");
+  send(A, "input", { dx: 0, dy: 0, a: Math.PI }); tick(10); ok(back.hp < 500, "...the cone turns with her aim");
+  { room.state.zombies.clear(); const x0 = p.x; room.mapBoxesNear = () => [{ x: x0 + 60, y: p.y, hw: 30, hh: 200 }]; for (let i = 0; i < 10; i++) send(A, "input", { dx: 1, dy: 0, a: 0 }), room.lastInputs.set("A", Date.now() - 50);
+    ok(p.x > x0 + 100, `she flies straight over buildings (x ${Math.round(x0)} -> ${Math.round(p.x)}, building at ${Math.round(x0 + 30)}-${Math.round(x0 + 90)})`); delete room.mapBoxesNear; }
   h.left = 0.05; tick(2); ok(!room.state.vehicles.has("A") && p.ultCd > 59, `after 30s she lands; Q cools down 60s (${p.ultCd}s)`);
   // can't call the tank with no room / while downed the vehicle goes
   send(A, "ability", {}); ok(!room.state.vehicles.has("A"), "E is on cooldown");

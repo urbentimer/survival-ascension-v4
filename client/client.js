@@ -452,6 +452,7 @@ let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus =
 const SFX = {
   turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
   rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
+  mg:       { url: "assets/audio/rifle_shot.mp3", vol: .24, max: 4, gap: 50 },   // Sofea's helicopter gun (rattles the whole ride)
   pistol:   { url: "assets/audio/pistol_shot.mp3", vol: .32, max: 4, gap: 40 },
   shotgun:  { url: "assets/audio/shotgun_blast.mp3", vol: .4, max: 3, gap: 60 },
   boom:     { url: "assets/audio/explosion.mp3", vol: .5, max: 4, gap: 60 },
@@ -737,7 +738,7 @@ function sendControls(t) {
   }
   if (ride) {   // Sofea's tank / helicopter: hold or click to fire (the server allows one shot every 1.5s)
     const clicked = clickShotAt && performance.now() - clickShotAt < 300;
-    if (ride.phase === "ride" && !anyPanelOpen() && (firing || clicked) && t - lastShoot > 120) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
+    if (ride.phase === "ride" && ride.kind !== "heli" && !anyPanelOpen() && (firing || clicked) && t - lastShoot > 120) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
     dashQueued = false; return;
   }
   if (!wheel && !squadWheel && !anyPanelOpen() && !(me.stunned > 0)) {
@@ -1095,7 +1096,7 @@ function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets 
 }
 // ---------- SOFEA: tank (E) + helicopter (Q) ----------
 const sImgs = {};
-for (const [k, url] of Object.entries({ tank: "assets/sprites/zombies/dir8/sofea-tank.png", heli: "assets/sprites/zombies/dir8/sofea-heli.png", fx: "assets/sprites/fx/sofea-fx.png" })) { const im = new Image(); im.src = url; sImgs[k] = im; }
+for (const [k, url] of Object.entries({ tank: "assets/sprites/zombies/dir8/sofea-tank.png", heli: "assets/sprites/zombies/dir8/sofea-heli.png", fx: "assets/sprites/fx/sofea-fx.png", gun: "assets/sprites/fx/sofea-gun.webp" })) { const im = new Image(); im.src = url; sImgs[k] = im; }
 const SOF = { tank: { cw: 180, ch: 150, lift: 10, tur: 16, barrel: 70 }, heli: { cw: 190, ch: 150, alt: 46 }, fx: 128 };   // tank sheet: col 0 = hull, col 1 = cannon out (one whole tank per direction)
 const sofeaShotAt = new Map();
 function sofeaCell(im, cw, ch, col, row, x, y, alpha = 1, sc = 1) {
@@ -1122,9 +1123,45 @@ function drawSofea(p, img, now) {
   } else {
     const H = SOF.heli, bob = Math.sin(now / 380) * 3;
     ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(p.x, p.y + 16, 46, 16, 0, 0, 7); ctx.fill(); ctx.restore();
+    if (v.phase === "ride") heliGunFx(p, aim, now, bob, true);   // cone + tracers + impacts under / in front of the body
     sofeaCell(sImgs.heli, H.cw, H.ch, Math.floor(now / 45) % 4, rowOf(aim), p.x, p.y - H.alt + bob);
+    if (v.phase === "ride") heliGunFx(p, aim, now, bob, false);   // muzzle flash on top
   }
   return true;
+}
+// Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
+// sprites/fx/sofea-gun.webp (tools/extract-heli-gun.py): row 0 muzzle flash 128x64 (tip at 6,32), row 1 tracers 192x40, row 2 impact 96x72.
+const HGUN = { cone: Math.PI / 2, range: 420, every: 45, sound: 75 }, heliShots = new Map();   // per helicopter: { at, snd, list: [{ t, tx, ty }] }
+function heliMuzzle(p, a, bob) { return { x: p.x + Math.cos(a) * 50, y: p.y - SOF.heli.alt + bob + 12 + Math.sin(a) * 28 }; }
+function heliGunFx(p, a, now, bob, under) {
+  const im = sImgs.gun, mz = heliMuzzle(p, a, bob); let g = heliShots.get(p.sessionId);
+  if (!g) { g = { at: 0, snd: 0, list: [] }; heliShots.set(p.sessionId, g); }
+  if (!under) {   // flickering muzzle flash pointing where she aims
+    if (!im?.naturalWidth) return; const f = 3 + Math.floor(Math.random() * 5);
+    ctx.save(); ctx.translate(mz.x, mz.y); ctx.rotate(a); ctx.drawImage(im, f * 128, 0, 128, 64, -4, -20, 80, 40); ctx.restore(); return;
+  }
+  if (p.sessionId === myId) {   // the pilot sees the gun's cone on the ground
+    ctx.save(); ctx.fillStyle = "rgba(255,190,90,.06)"; ctx.strokeStyle = "rgba(255,190,90,.22)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, HGUN.range, a - HGUN.cone / 2, a + HGUN.cone / 2); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  if (now - g.at > HGUN.every) {   // new tracer: at a zombie in the cone most of the time, otherwise at the ground
+    g.at = now; const inCone = [];
+    for (const z0 of state.zombies.values()) { const z = V(z0), d = Math.hypot(z.x - p.x, z.y - p.y); let da = Math.atan2(z.y - p.y, z.x - p.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (d < HGUN.range && Math.abs(da) < HGUN.cone / 2) inCone.push(z); }
+    let tx, ty;
+    if (inCone.length && Math.random() < .75) { const z = inCone[Math.floor(Math.random() * inCone.length)]; tx = z.x + (Math.random() - .5) * 16; ty = z.y + (Math.random() - .5) * 10; }
+    else { const aa = a + (Math.random() - .5) * HGUN.cone, d = 120 + Math.random() * (HGUN.range - 120); tx = p.x + Math.cos(aa) * d; ty = p.y + Math.sin(aa) * d; }
+    g.list.push({ t: now, tx, ty }); if (g.list.length > 24) g.list.shift();
+  }
+  if (now - g.snd > HGUN.sound) { g.snd = now; playSfx("mg", p.x, p.y, p.sessionId === myId ? 1 : .6); }   // the rattle
+  if (!im?.naturalWidth) return;
+  for (const s of g.list) {
+    const age = now - s.t; if (age > 360) continue;
+    if (age < 120) {   // tracer streaking from the gun to where it lands
+      const L = Math.hypot(s.tx - mz.x, s.ty - mz.y), ang = Math.atan2(s.ty - mz.y, s.tx - mz.x), f = Math.min(7, Math.floor(age / 15));
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(mz.x, mz.y); ctx.rotate(ang); ctx.drawImage(im, f * 192, 64, 192, 40, 0, -10, L, 20); ctx.restore();
+    }
+    if (age > 60) { const f = Math.min(7, Math.floor((age - 60) / 38)); ctx.drawImage(im, f * 96, 104, 96, 72, s.tx - 24, s.ty - 33, 48, 36); }   // dust + sparks where it hits
+  }
 }
 function drawSofeaFx(f, age) {   // false when finished
   const s = age / 1000, F = SOF.fx;
@@ -2290,7 +2327,7 @@ function drawWorldObjects(extra) {
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
-  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) items.push({ y: p.y + 12, draw: () => drawSurvivor(p) }); }
+  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });   // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
@@ -2440,7 +2477,7 @@ const ROSTER = [
              { k: "PASSIVE", n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too." }], gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a rocket gunship and rolls straight over the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
-             { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a rocket gunship for 30s, above the horde: zombies can't reach you." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },

@@ -175,8 +175,10 @@ const SOFEA = {
   call: 0.8, protect: 0.75,
   tank: { life: 30, cd: 30, speed: 140, taken: 0.65, rate: 1.5, body: 34, reach: 30, hw: 50, hh: 32,
           shot: { dmg: 65, min: 30, r: 110, speed: 600, range: 650 }, crush: { dmg: 55, boss: 10, gap: 0.75, minSpeed: 40, push: 30 } },
-  heli: { life: 30, cd: 60, speed: 230, taken: 0.8, rate: 1.5, body: 30, pod: 16,
-          shot: { dmg: 65, min: 25, r: 100, speed: 700, range: 800 } },
+  // helicopter: flies over everything (only the map edge stops it); its machine gun fires the WHOLE ride, hitting every
+  // zombie in a 90-degree cone the way she aims, 10 times a second (dmg grows with the wave like her tank's cannon)
+  heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
+          gun: { cone: Math.PI / 2, range: 420, every: 0.1, dmg: 6, bossMult: 0.5 } },
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {
@@ -1351,8 +1353,9 @@ export class SurvivalRoom extends Room {
     if (moved / dt >= SOFEA.tank.crush.minSpeed) { this.vmem(p).movingUntil = now + 160; if (v.kind === "tank") this.tankCrush(p, v, now, ox, oy); }
     if (dx) p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(p.sessionId, now);
   }
-  // tank: blocked by the tower, generator, solid structures and map pieces; helicopter: only tall things (map pieces, tower)
+  // tank: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
   solveVehicle(p, v) {
+    if (v.kind === "heli") return;
     const boxes = [{ x: ARENA.width / 2, y: ARENA.height / 2, hw: TOWER_HALF, hh: TOWER_HALF }];
     if (v.kind === "tank") {
       boxes.push({ x: ARENA.width / 2 + GEN_OFF.x, y: ARENA.height / 2 + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
@@ -1379,19 +1382,33 @@ export class SurvivalRoom extends Room {
   }
   vehicleFire(p, a, dist) {
     const v = this.state.vehicles.get(p.sessionId); if (!v || v.phase !== "ride" || v.left <= 0 || !p.alive) return;
+    if (v.kind === "heli") { v.aim = a; p.aim = a; return; }   // the helicopter's gun fires by itself (heliGun)
     const K = SOFEA[v.kind], W = K.shot, now = Date.now(), m = this.vmem(p);
     if (now - m.shotAt < K.rate * 1000) return;
     m.shotAt = now; v.aim = a; p.aim = a; v.shots++; this.lastAimAt.set(p.sessionId, now);
     const want = Number.isFinite(dist) && dist > 20 ? Math.min(dist, W.range) : W.range, pts = [];
-    for (const off of v.kind === "tank" ? [0] : [-K.pod, K.pod]) {   // helicopter: one rocket from each wing pod
-      const ox = v.x - Math.sin(a) * off, oy = v.y + Math.cos(a) * off;
+    {   // the tank cannon (the helicopter has its machine gun instead: heliGun)
+      const ox = v.x, oy = v.y;
       let end = Math.max(20, Math.min(this.wallDist(ox, oy, a, want) - 4, want));
       const first = this.rayHits({ x: ox, y: oy }, a, end)[0]; if (first) end = Math.max(20, first.t);   // it blows up on the first zombie it hits, not behind it
       const bx = ox + Math.cos(a) * end, by = oy + Math.sin(a) * end;
-      this.ripples.push({ kind: v.kind === "tank" ? "shell" : "hrocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / W.speed, dmg: W.dmg, fall: W.min, r: W.r, flat: 1, push: 8, wallSafe: true, scaled: true });
+      this.ripples.push({ kind: "shell", owner: p.sessionId, x: bx, y: by, t: now, at: end / W.speed, dmg: W.dmg, fall: W.min, r: W.r, flat: 1, push: 8, wallSafe: true, scaled: true });
       pts.push([Math.round(ox), Math.round(oy), Math.round(bx), Math.round(by)]);
     }
     this.broadcast("sofea", { k: "fire", id: p.sessionId, kind: v.kind, a: Math.round(a * 100) / 100, pts, sp: W.speed });
+  }
+  heliGun(p, v, dt) {   // the machine gun: every 0.1s, every zombie in the 90-degree cone in front of her aim takes a hit
+    const G = SOFEA.heli.gun, m = this.vmem(p); m.gunT = (m.gunT || 0) + dt;
+    const scale = 1 + (this.state.stage - 1) * 0.08;
+    while (m.gunT >= G.every) {
+      m.gunT -= G.every;
+      for (const z of [...this.state.zombies.values()]) {
+        const d = Math.hypot(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > G.range) continue;
+        let da = Math.atan2(z.y - v.y, z.x - v.x) - v.aim; da = Math.atan2(Math.sin(da), Math.cos(da));
+        if (Math.abs(da) > G.cone / 2 && d > z.radius) continue;
+        this.hitZombie(z, p, G.dmg * scale * (z.boss ? G.bossMult : 1));
+      }
+    }
   }
   // get out: next to the vehicle on clear ground, 0.75s of protection, cooldown starts (not if the call never finished)
   dismount(p, v, now) {
@@ -1426,6 +1443,7 @@ export class SurvivalRoom extends Room {
       }
       p.stunned = 0; p.slowed = 0; p.charging = false;   // vehicles shrug off stuns and slows
       v.x = p.x; v.y = p.y; v.mv = now < this.vmem(p).movingUntil;
+      if (v.kind === "heli") this.heliGun(p, v, dt);
       v.left = Math.max(0, v.left - dt);
       if (v.left <= 0) this.dismount(p, v, now);
     }
@@ -2422,7 +2440,7 @@ export class SurvivalRoom extends Room {
       if (v.kind === "tank") { mx = ax; my = ay; }
       else if (nearD < 220) { mx = -ax; my = -ay; } else if (nearD > 420) { mx = ax; my = ay; } else { mx = -ay * brain.strafe; my = ax * brain.strafe; }
       const ft = distance(b, center); if (ft > 520) { mx += (center.x - b.x) / ft; my += (center.y - b.y) / ft; }
-      if (nearD < SOFEA[v.kind].shot.range) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
+      if (nearD < (v.kind === "heli" ? SOFEA.heli.gun.range + 150 : SOFEA.tank.shot.range)) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
     } else if (distance(b, center) > 200) { mx = center.x - b.x; my = center.y - b.y; }
     const ox = b.x, oy = b.y; this.moveVehicle(b, v, mx, my, dt);
     if (Math.hypot(b.x - ox, b.y - oy) < 0.5 && (mx || my)) brain.strafe = -(brain.strafe || 1);
