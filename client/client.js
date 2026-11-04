@@ -888,7 +888,7 @@ function drawBriggsFx(f, age) {   // false when finished
 }
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
 const aImgs = {};
-for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
+for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", heal: "assets/sprites/fx/astra-heal.webp", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 2, life: 45 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
@@ -931,9 +931,40 @@ function drawAstraGround() {   // safehouse floor / footprint + green heal pulse
     else { ctx.fillStyle = "rgba(90,210,255,.07)"; ctx.fillRect(st.x - H + SAFE.wall, st.y - H + SAFE.wall, 2 * (H - SAFE.wall), 2 * (H - SAFE.wall)); if (st.hp < 5) { ctx.strokeStyle = `rgba(255,90,80,${.4 + .4 * (Math.floor(now / 200) % 2)})`; ctx.lineWidth = 3; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); } }
     ctx.restore();
   }
+  for (const [, h] of healing()) { const pt = V(state.players.get(h.tgt)); if (pt) healCell(0, Math.floor(now / HEAL_FX.ms) % 6, pt.x, pt.y + 17, .9, HEAL_FX.ring); }   // neon heal circle at the patient's feet
+}
+// Astra's medic: neon healing effect (sprites/fx/astra-heal.webp, tools/extract-heal-fx.py). Row 0 ground circle (centred),
+// row 1 rising aura and row 2 heal burst (bottom-anchored). Drawn additively so it glows.
+const HEAL_FX = { cells: [[176, 96], [144, 208], [208, 176]], ms: 180, burstMs: 100, ring: .95, aura: .64, burst: .85 };
+const healSeen = new Map();   // doctor id -> { tgt, t: when this heal started (burst), last: last frame seen healing }
+function healing() {   // doctors healing right now, with when each heal started
+  const now = performance.now(), live = new Set();
   if (state.robots) for (const r of state.robots.values()) {
-    if (r.kind !== "doctor" || r.act !== "heal") continue;
-    const pt = V(state.players.get(r.tgt)); if (pt) astraFx(Math.floor(now / 140) % 4, 1, pt.x, pt.y + 22, .9, .75);
+    if (r.kind !== "doctor" || r.act !== "heal" || !r.tgt) continue;
+    live.add(r.id); let h = healSeen.get(r.id);
+    if (!h || h.tgt !== r.tgt || now - h.last > 1000) { h = { tgt: r.tgt, t: now, last: now }; healSeen.set(r.id, h); }   // a new patient (or back after a break): burst again
+    h.last = now;
+  }
+  for (const [id, h] of healSeen) if (!live.has(id) && now - h.last > 1000) healSeen.delete(id);
+  return [...healSeen].filter(([id]) => live.has(id));
+}
+function healCell(row, col, x, y, alpha, sc) {   // y = the oval's centre (row 0) or the feet (rows 1-2)
+  const im = aImgs.heal; if (!im?.naturalWidth) return;
+  const [cw, ch] = HEAL_FX.cells[row], oy = row === 0 ? 0 : row === 1 ? 96 : 304;
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = true;
+  const w = cw * sc, h = ch * sc, top = row === 0 ? y - h / 2 : y - (ch - 22) * sc;
+  ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h); ctx.restore();
+}
+function healOverlays(items) {   // aura + burst over each patient, sorted just in front of them
+  const now = performance.now();
+  for (const [, h] of healing()) {
+    const p0 = state.players.get(h.tgt), pt = V(p0); if (!pt || !inView(pt.x, pt.y, 160)) continue;
+    const f = Math.floor(now / HEAL_FX.ms) % 6;
+    items.push({ y: pt.y + 11, draw: () => healCell(1, f, pt.x, pt.y + 17, .85, HEAL_FX.aura) });   // the aura mostly BEHIND the patient (so they stay visible)...
+    items.push({ y: pt.y + 13, draw: () => {   // ...a faint layer in front, and the burst on top
+      healCell(1, f, pt.x, pt.y + 17, .25, HEAL_FX.aura);
+      const b = Math.floor((now - h.t) / HEAL_FX.burstMs); if (b < 6) healCell(2, b, pt.x, pt.y + 17, .95, HEAL_FX.burst);
+    } });
   }
 }
 function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets like the survivors (idle, walk x3, action x2)
@@ -2146,6 +2177,7 @@ function drawWorldObjects(extra) {
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) items.push({ y: p.y + 12, draw: () => drawSurvivor(p) }); }
+  healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });   // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
