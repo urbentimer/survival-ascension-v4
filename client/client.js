@@ -453,7 +453,9 @@ let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus =
 const SFX = {
   turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
   rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
-  gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .25 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
+  gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .25 },
+  // hero voice lines (VOICE below says which skill plays which)
+  vAstraQ:  { url: "assets/audio/voice_astra_q.mp3", vol: .85, max: 2 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
   pistol:   { url: "assets/audio/pistol_shot.mp3", vol: .32, max: 4, gap: 40 },
   shotgun:  { url: "assets/audio/shotgun_blast.mp3", vol: .4, max: 3, gap: 60 },
   boom:     { url: "assets/audio/explosion.mp3", vol: .5, max: 4, gap: 60 },
@@ -474,6 +476,9 @@ const SFX = {
   select:   { url: "assets/audio/ui_select.mp3", vol: .35, max: 2, gap: 60 },
   pause:    { url: "assets/audio/ui_pause.mp3", vol: .5, max: 1 },
 };
+// Voice lines: class -> skill key -> SFX name. Played when the skill starts (your own at full volume, others by distance).
+const VOICE = { dispatcher: { Q: "vAstraQ" } };
+function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
 // Music loops (empty in the solo preview: it has to stay under 16 MB). Crossfade 1s between scenes.
 const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3" };
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
@@ -1041,7 +1046,7 @@ for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-polic
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 5, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
-  if (m.k === "call") astraCall.set(m.id, t);
+  if (m.k === "call") { astraCall.set(m.id, t); playVoice(m.id, m.s); }   // radio call: "Cover me!" on Q
   else if (m.k === "cancel") astraCall.delete(m.id);
   else if (m.k === "arrive" || m.k === "leave") fx.push({ type: "astra", k: m.k, x: m.x, y: m.y, t });
   else if (m.k === "safeDown" || m.k === "safeCancel") fx.push({ type: "astra", k: "dismantle", x: m.x, y: m.y, t });
