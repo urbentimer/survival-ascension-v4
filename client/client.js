@@ -2509,19 +2509,20 @@ function drawPaintedGround(pm) {
   pm.fires.forEach(([x, y, sc], i) => {   // the glow each fire throws around it (pulses with the flames)
     if (!inView(x, y, 120)) return;
     const k = .8 + .2 * Math.sin(t * 7 + i * 1.9) + .1 * Math.sin(t * 17 + i);
-    const g = ctx.createRadialGradient(x, y - 14 * sc, 2, x, y - 14 * sc, 72 * sc); g.addColorStop(0, `rgba(255,150,50,${.32 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 72 * sc, y - 86 * sc, 144 * sc, 144 * sc);
+    const g = ctx.createRadialGradient(x, y - 40 * sc, 4, x, y - 40 * sc, 120 * sc); g.addColorStop(0, `rgba(255,150,50,${.38 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 120 * sc, y - 160 * sc, 240 * sc, 240 * sc);
   });
   ctx.restore();
   ctx.save();
-  pm.fires.forEach(([x, y, sc], i) => {   // smoke rolling up first (behind the flames), then the flames: a big one and two smaller licks beside it
-    if (!inView(x, y - 80, 160)) return;
-    if (mapFireImg.naturalWidth) for (let j = 0; j < 6; j++) {
-      const u = (t * .085 + j / 6 + i * .13) % 1, px_ = x + Math.sin(u * 4 + i + j) * 10 * sc + u * 30 * sc, py_ = y - 30 * sc - u * 120 * sc, r = (16 + u * 46) * sc;
-      ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, px_ - r / 2, py_ - r / 2, r, r);
+  pm.fires.forEach(([x, y, sc], i) => {   // a tall smoke plume first (behind), then a roaring fire: a big flame and licks either side
+    if (!inView(x, y - 120, 200)) return;
+    if (mapFireImg.naturalWidth) for (let j = 0; j < 9; j++) {
+      const u = (t * .07 + j / 9 + i * .13) % 1, px_ = x + Math.sin(u * 3 + i + j) * 14 * sc + u * 44 * sc, py_ = y - 50 * sc - u * 190 * sc, r = (26 + u * 80) * sc;
+      ctx.globalAlpha = .7 * Math.sin(u * Math.PI) * (1 - u * .3); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, px_ - r / 2, py_ - r / 2, r, r);
     }
-    drawFireSprite(x - 9 * sc, y + 3, sc * .62, i * 5 + 3, t, .9);
-    drawFireSprite(x + 10 * sc, y + 4, sc * .55, i * 5 + 9, t, .85);
-    drawFireSprite(x, y + 6, sc * .95, i * 5, t);
+    drawFireSprite(x - 20 * sc, y + 4, sc * 1.15, i * 5 + 3, t, .9);
+    drawFireSprite(x + 22 * sc, y + 5, sc * 1.05, i * 5 + 9, t, .85);
+    drawFireSprite(x - 4 * sc, y + 8, sc * 1.75, i * 5, t);
+    drawFireSprite(x + 8 * sc, y + 10, sc * 1.3, i * 5 + 12, t, .8);
   });
   ctx.restore();
 }
