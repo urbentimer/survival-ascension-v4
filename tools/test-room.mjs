@@ -979,4 +979,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.noCd = true; tick(1); const n0 = events.filter(e => e.type === "frag").length; send(A, "ult", { a: 0, d: 300 });
   ok(p.ultCd > 18 && !p.ultReady && events.filter(e => e.type === "frag").length === n0, "...even in test mode (no-cooldown ultimates) it stays on cooldown: no spamming");
   room._dispose(); }
+// 43. Levels: shared team XP (every kill gives XP to everyone), xp needed 30 + 72 per level, cap at 30, every run starts at level 1
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  ok(p.level === 1 && p.xp === 0 && p.xpNext === 30, "a new player starts at level 1 (30 XP to level 2)");
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  const z = placeZombie(room, p.x + 30, p.y, 1); room.hitZombie(z, p, 50);
+  ok(p.xp === 5 && q.xp === 5, `a kill gives its XP to the whole team (killer ${p.xp}, teammate ${q.xp})`);
+  let tot = 0; for (let L = 1; L < 30; L++) tot += 30 + 72 * (L - 1); ok(tot > 29000 && tot < 31000, `level 30 takes ${tot} XP in total`);
+  p.xp = tot + 500; let n = 0; while (p.xp >= p.xpNext && n < 50) { if (!room.applyUpgrade(p, "health")) break; n++; }
+  ok(p.level === 30 && n === 29 && p.xp === 0, `levels stop at 30 (${p.level}, ${n} upgrades)`);
+  const z2 = placeZombie(room, p.x + 30, p.y, 1); room.hitZombie(z2, p, 50); ok(p.xp === 0 && !room.applyUpgrade(p, "damage"), "no XP or upgrades past level 30");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

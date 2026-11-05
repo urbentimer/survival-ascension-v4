@@ -274,7 +274,7 @@ function renderHud(me, players) {
   if (!me) return;
   // bottom left: you
   $("hpText").textContent = Math.ceil(me.hp) + " / " + me.maxHp; $("hpBar").style.width = pct(me.hp, me.maxHp);
-  $("hudLevel").textContent = "LV " + me.level; $("xpText").textContent = me.xp + " / " + me.xpNext + " XP"; $("xpBar").style.width = pct(me.xp, me.xpNext);
+  const maxLv = me.level >= MAX_LEVEL; $("hudLevel").textContent = "LV " + me.level; $("xpText").textContent = maxLv ? "MAX LEVEL" : me.xp + " / " + me.xpNext + " XP"; $("xpBar").style.width = maxLv ? "100%" : pct(me.xp, me.xpNext);
   $("hudGold").innerHTML = icon("gold") + (me.currency || 0) + "g"; $("hudDef").textContent = "DEF " + (me.defence || 0); $("hudClass").textContent = String(me.characterClass).toUpperCase();
   const pc = "hud-portrait p-" + me.characterClass; if ($("hudPortrait").className !== pc) $("hudPortrait").className = pc;
   // bottom centre: hotbar
@@ -376,7 +376,7 @@ function togglePanel(id) {
   const opening = $(id).classList.contains("hidden");
   closePanels();
   if (!opening) return;
-  if (id === "levelUp") { const me = state?.players.get(myId); if (!me || me.xp < me.xpNext) return; levelUpBuiltFor = ""; }
+  if (id === "levelUp") { const me = state?.players.get(myId); if (!me || me.xp < me.xpNext || me.level >= MAX_LEVEL) return; levelUpBuiltFor = ""; }
   $(id).classList.remove("hidden"); firing = false;
   if (id === "equip") { equipKey = ""; renderEquip(state?.players.get(myId)); }
   if (id === "levelUp") renderLevelUp(state?.players.get(myId));
@@ -384,9 +384,10 @@ function togglePanel(id) {
 function anyPanelOpen() { return PANELS.some(id => !$(id).classList.contains("hidden")); }
 
 let levelUpBuiltFor = "", levelUpWaitUntil = 0;
-function pendingLevelUps(me) { let n = 0, xp = me.xp, next = me.xpNext; while (xp >= next && n < 9) { xp -= next; next = Math.floor(next * 1.35 + 8); n++; } return n; }
+const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);   // matches the server (shared team XP, cap 30)
+function pendingLevelUps(me) { let n = 0, xp = me.xp, L = me.level || 1; while (L < MAX_LEVEL && xp >= xpForLevel(L) && n < 9) { xp -= xpForLevel(L); L++; n++; } return n; }
 function renderLevelUp(me) {
-  const ready = !!(me && state.phase === "playing" && me.xp >= me.xpNext);
+  const ready = !!(me && state.phase === "playing" && me.xp >= me.xpNext && me.level < MAX_LEVEL);
   const n = ready ? pendingLevelUps(me) : 0;
   $("lvlBadge").classList.toggle("hidden", !ready);
   $("lvlBadge").textContent = `▲ LEVEL UP${n > 1 ? " ×" + n : ""} · press U`;
@@ -404,7 +405,7 @@ function renderLevelUp(me) {
 }
 function pickUpgrade(id) {
   const me = state?.players.get(myId);
-  if (!room || !me || !me.alive || me.xp < me.xpNext || Date.now() < levelUpWaitUntil) return;
+  if (!room || !me || !me.alive || me.xp < me.xpNext || me.level >= MAX_LEVEL || Date.now() < levelUpWaitUntil) return;
   levelUpWaitUntil = Date.now() + 700; room.send("upgrade", { id });
 }
 $("levelUpChoices").addEventListener("click", e => { const b = e.target.closest("button[data-upgrade]"); if (b) pickUpgrade(b.dataset.upgrade); });

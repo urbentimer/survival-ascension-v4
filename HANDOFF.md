@@ -170,3 +170,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User's ChatGPT sheet tools/art/marcus-dash.png (8 rows x 5 cols on magenta: CROUCH, LUNGE, STRETCH, SLIDE+dust, RECOVER). tools/extract-marcus-dash.py -> client/assets/sprites/dir8/assault-dash.webp (5 x 8 cells of 112x88, feet (56,80) like dir8; scale matched to marcus-v3-gun.png = 54px body; left rows mirrored from the right ones so the dust trails behind; lossy webp 50 KB).
 - Client: dashBeam() records marcusDash {t0, a = dash direction} for Marcus (own dash + others' "dash" broadcasts); drawMarcusDash plays the 5 frames over 300ms (60ms each) in the octRow of the dash, Combat Rush aura kept on. Cache v=20261105v.
 - Preview is now 16,716,756 bytes: only ~60 KB of room left under the 16 MiB cap.
+
+## Nov 5 — Levels: shared team XP, level 30 cap reachable in a 50-wave run
+- Sims (tools/sim-waves.mjs SA_XP=1, SA_BOTS=n): a full run makes ~38-40k XP of kills in total, the same for any team size (zombie counts don't scale with players), and kills are very uneven between players.
+- So XP is now SHARED: every kill gives its XP (5 / brute 9 / boss 35) to every player. Curve: XP to go from level L to L+1 = 30 + 72*(L-1) (MAX_LEVEL 30, xpForLevel in server + client); 30,102 XP to reach 30. Sims: L11 by wave 10, L17 by wave 20, L25 by wave 35 -> 30 around wave 43 (later for weaker teams).
+- Cap: no XP / upgrades past 30 (HUD "MAX LEVEL"); bot upgrade loop guarded. Every run starts at level 1 (the saved profile level is no longer loaded: it carried the number without the upgrades). Test 43. Cache v=20261105w.
+- Found (not fixed yet): boss-wave horde phase waits for EVERY horde zombie to die (bossWaveTick); in sims a last straggler far from the team sometimes never comes, so the boss never arrives (seen at waves 4, 12, 24, 36). Sim tools: SA_TRACE=1 prints stragglers; the STUCK line dumps them.

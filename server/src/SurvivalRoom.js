@@ -104,6 +104,9 @@ function pickKind(stage) {
   return "walker";
 }
 const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed", "#e5a36b", "#d2d879"];
+// Levels (Nov 5): XP is shared, every kill gives its XP to the whole team, so everyone levels together whatever the team size.
+// A full 50-wave run makes ~38-40k team XP (sims); 30k reaches the cap, so level 30 lands around wave 43-50. Every run starts at level 1.
+const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
 const UPGRADES = {
   damage: p => { p.bonusDamage = (p.bonusDamage || 0) + 20; applyLoadout(p); }, // +20% damage
   fireRate: p => { p.rateMult = Math.min(3, (p.rateMult || 1) * 1.2); applyLoadout(p); },
@@ -724,8 +727,7 @@ export class SurvivalRoom extends Room {
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
     p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
-    p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
-    p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
+    p.level = 1; p.xp = 0; p.xpNext = xpForLevel(1); p.currency = 0;   // every run starts at level 1 (upgrades don't carry over either)
     const classIds=PICKABLE;
     if(classIds.includes(profile.characterClass)) p.characterClass=profile.characterClass;
     applyClassBase(p);
@@ -977,10 +979,10 @@ export class SurvivalRoom extends Room {
   }
 
   applyUpgrade(p, id) {
-    if (!UPGRADES[id] || p.xp < p.xpNext) return false;
+    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL) return false;
     p.xp -= p.xpNext;
     p.level++;
-    p.xpNext = Math.floor(p.xpNext * 1.35 + 8);
+    p.xpNext = xpForLevel(p.level); if (p.level >= MAX_LEVEL) p.xp = 0;
     UPGRADES[id](p);
     this.state.message = `${p.name} upgraded: ${String(id)}.`;
     return true;
@@ -2442,7 +2444,7 @@ export class SurvivalRoom extends Room {
     const brain = this.botBrain.get(b.sessionId) || { strafe: 1 };
     const s = this.state, center = { x: this.A.cx, y: this.A.cy };
     // Level-ups: bots pick a random upgrade.
-    while (b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * 5)]);
+    while ((b.level || 1) < MAX_LEVEL && b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * 5)]);
     const zs = [...s.zombies.values()];
     const seen = zs.filter(z => distance(b, z) < 700 && this.lineClear(b, z));
     const pool = seen.length ? seen : zs;
@@ -2644,7 +2646,8 @@ export class SurvivalRoom extends Room {
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
       }
       killer.killLeadSince = Date.now();
-      killer.xp += z.boss ? 35 : z.kind === "brute" ? 9 : 5;
+      const gain = z.boss ? 35 : z.kind === "brute" ? 9 : 5;   // shared XP: the whole team gets it
+      for (const q of this.state.players.values()) if ((q.level || 1) < MAX_LEVEL) q.xp += gain;
       killer.currency += z.boss ? 25 : (KILL_GOLD[z.kind] || 1);
       killer.hp = Math.min(killer.maxHp, killer.hp + (z.boss ? 25 : 1));
     }
