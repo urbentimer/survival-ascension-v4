@@ -106,7 +106,7 @@ function connected() {
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
-  room.onMessage("heal", m => fx.push({ type: "healfx", t: performance.now(), ...m }));
+  room.onMessage("heal", m => { if (m.id && state?.players?.has(m.id)) regenPlay(m.id, m.k === "medkit"); else fx.push({ type: "healfx", t: performance.now(), ...m }); });   // healing effect on whoever was healed
   room.onMessage("summon", m => fx.push({ type: "summon", t: performance.now(), ...m }));
   room.onMessage("sky", m => { const t = performance.now(); skyAnim.set(m.id, { t0: t, a: m.a }); fx.push({ ...m, type: "dante", k: "sky", t }); });
   room.onMessage("demo", m => { const t = performance.now(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); playSfx("boom", m.x, m.y); DEMO.rings.forEach(rg => setTimeout(() => playSfx("boom", m.x, m.y, .8), (rg.at + DEMO.flight) * 1000)); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
@@ -847,7 +847,7 @@ const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, c
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
-  turretDead: "assets/sprites/fx/turret-dead.png", robotsDead: "assets/sprites/fx/robots-dead.png", fx: "assets/sprites/fx/viktor-fx.png", heal: "assets/sprites/fx/heal-ring.png" })) { const im = new Image(); im.src = url; vImgs[k] = im; }
+  turretDead: "assets/sprites/fx/turret-dead.png", robotsDead: "assets/sprites/fx/robots-dead.png", fx: "assets/sprites/fx/viktor-fx.png" })) { const im = new Image(); im.src = url; vImgs[k] = im; }
 const machineShotAt = new Map(), robotMove = new Map();
 const rowOf = a => ROW_OF_OCT[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 function vFrame(im, cw, ch, col, row, x, y, fy, alpha = 1) {
@@ -867,22 +867,9 @@ function drawHeavyTurret(st) {
   machineHp(st, 46, st.y - 86);
 }
 // Support robot's heal ring under the survivor it's visiting: turns on, pulses slowly while it stays, turns off when it leaves.
-const healRings = new Map();   // robot id -> { pid, t0, off }
+// Viktor's support robot healing someone: the regen effect loops on them (regenKeep)
 function drawHealRings() {
-  const now = performance.now();
-  for (const r of state?.robots?.values() || []) {
-    if (r.kind !== "support") continue; const cur = healRings.get(r.id);
-    if (r.tgt && (!cur || cur.off || cur.pid !== r.tgt)) { if (cur && !cur.off) healRings.set(r.id + "~" + now, { ...cur, off: now }); healRings.set(r.id, { pid: r.tgt, t0: now, off: 0 }); }
-    else if (!r.tgt && cur && !cur.off) cur.off = now;
-  }
-  for (const [id, h] of healRings) {
-    if (!state?.robots?.has(id.split("~")[0]) && !h.off) h.off = now;
-    const p = V(state?.players?.get(h.pid)); if (!p) { healRings.delete(id); continue; }
-    let row = 1, col;
-    if (h.off) { col = Math.floor((now - h.off) / 80); row = 2; if (col > 3) { healRings.delete(id); continue; } }
-    else { const t = now - h.t0; if (t < 320) { row = 0; col = Math.floor(t / 80); } else col = Math.floor((t - 320) / 140) % 8; }
-    vFrame(vImgs.heal, 100, 72, col, row, p.x, p.y + 12, 68, .9);
-  }
+  for (const r of state?.robots?.values() || []) if (r.kind === "support" && r.act === "heal" && r.tgt) regenKeep(r.tgt);
 }
 function drawRobot(r) {
   if (ASTRA_UNITS.has(r.kind)) return drawAstraUnit(r);
@@ -1068,7 +1055,7 @@ function drawBriggsFx(f, age) {   // false when finished
 }
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
 const aImgs = {};
-for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", heal: "assets/sprites/fx/astra-heal.webp", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
+for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 5, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
   const t = performance.now();
@@ -1130,11 +1117,24 @@ function drawAstraGround() {   // safehouse floor / footprint + green heal pulse
     else { ctx.fillStyle = "rgba(90,210,255,.07)"; ctx.fillRect(st.x - H + SAFE.wall, st.y - H + SAFE.wall, 2 * (H - SAFE.wall), 2 * (H - SAFE.wall)); if (st.life < 5 || st.hp <= 1) { ctx.strokeStyle = `rgba(255,90,80,${.4 + .4 * (Math.floor(now / 200) % 2)})`; ctx.lineWidth = 3; ctx.strokeRect(st.x - H, st.y - H, H * 2, H * 2); } }
     ctx.restore();
   }
-  for (const [, h] of healing()) { const pt = V(state.players.get(h.tgt)); if (pt) healCell(0, Math.floor(now / HEAL_FX.ms) % 6, pt.x, pt.y + 17, .9, HEAL_FX.ring); }   // neon heal circle at the patient's feet
+  for (const [, h] of healing()) regenKeep(h.tgt);   // Astra's medic: the regen effect loops on the patient
 }
-// Astra's medic: neon healing effect (sprites/fx/astra-heal.webp, tools/extract-heal-fx.py). Row 0 ground circle (centred),
-// row 1 rising aura and row 2 heal burst (bottom-anchored). Bold emerald colour + a 30% additive glow pass.
-const HEAL_FX = { cells: [[176, 96], [144, 208], [208, 176]], ms: 180, burstMs: 100, ring: .95, aura: .64, burst: .85 };
+// ALL healing (Astra's medic, Viktor's support robot, medkits) shows one effect: sprites/fx/regen.png (the user's "health regen"
+// sheet, tools/art/regen): 51 frames 128x128 in a row, two green arcs rise round the body, close over the head, collapse into a
+// spark and a "+" fades; the arcs' base (cell y 111) sits at the feet. Healing that goes on loops it; a medkit plays it once.
+const regenImg = new Image(); regenImg.src = "assets/sprites/fx/regen.png";
+const REGEN = { n: 51, ms: 30, cell: 128, feet: 111, sc: .9 }, regens = new Map();   // player id -> when its effect started
+const regenLen = () => REGEN.n * REGEN.ms;
+function regenPlay(id, restart = false) { const now = performance.now(), t = regens.get(id); if (restart || t === undefined || now - t > regenLen() * .7) regens.set(id, now); }
+function regenKeep(id) { const now = performance.now(), t = regens.get(id); if (t === undefined || now - t >= regenLen()) regens.set(id, now); }   // continuous healing: start again when one finishes
+function drawRegen(p, age, front) {   // front: the arcs' near halves + the spark / cross; behind: a soft layer so the body stays visible
+  if (!regenImg.naturalWidth) return;
+  const f = Math.min(REGEN.n - 1, Math.floor(age / REGEN.ms)), C = REGEN.cell, sc = REGEN.sc, x = p.x - C * sc / 2, y = p.y + SPR.feet - REGEN.feet * sc;
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha = front ? .95 : .5;
+  ctx.drawImage(regenImg, f * C, 0, C, C, x, y, C * sc, C * sc);
+  if (front) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .35; ctx.drawImage(regenImg, f * C, 0, C, C, x, y, C * sc, C * sc); }   // glow
+  ctx.restore();
+}
 const healSeen = new Map();   // doctor id -> { tgt, t: when this heal started (burst), last: last frame seen healing }
 function healing() {   // doctors healing right now, with when each heal started
   const now = performance.now(), live = new Set();
@@ -1147,25 +1147,13 @@ function healing() {   // doctors healing right now, with when each heal started
   for (const [id, h] of healSeen) if (!live.has(id) && now - h.last > 1000) healSeen.delete(id);
   return [...healSeen].filter(([id]) => live.has(id));
 }
-function healCell(row, col, x, y, alpha, sc) {   // y = the oval's centre (row 0) or the feet (rows 1-2)
-  const im = aImgs.heal; if (!im?.naturalWidth) return;
-  const [cw, ch] = HEAL_FX.cells[row], oy = row === 0 ? 0 : row === 1 ? 96 : 304;
-  ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = true;
-  const w = cw * sc, h = ch * sc, top = row === 0 ? y - h / 2 : y - (ch - 22) * sc;
-  ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h);   // the bold emerald colour...
-  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * .3; ctx.drawImage(im, col * cw, oy, cw, ch, x - w / 2, top, w, h);   // ...plus a glow pass
-  ctx.restore();
-}
-function healOverlays(items) {   // aura + burst over each patient, sorted just in front of them
+function healOverlays(items) {   // the regen effect on everyone being healed, sorted with them
   const now = performance.now();
-  for (const [, h] of healing()) {
-    const p0 = state.players.get(h.tgt), pt = V(p0); if (!pt || !inView(pt.x, pt.y, 160)) continue;
-    const f = Math.floor(now / HEAL_FX.ms) % 6;
-    items.push({ y: pt.y + 11, draw: () => healCell(1, f, pt.x, pt.y + 17, .85, HEAL_FX.aura) });   // the aura mostly BEHIND the patient (so they stay visible)...
-    items.push({ y: pt.y + 13, draw: () => {   // ...a faint layer in front, and the burst on top
-      healCell(1, f, pt.x, pt.y + 17, .25, HEAL_FX.aura);
-      const b = Math.floor((now - h.t) / HEAL_FX.burstMs); if (b < 6) healCell(2, b, pt.x, pt.y + 17, .95, HEAL_FX.burst);
-    } });
+  for (const [id, t] of regens) {
+    const age = now - t; if (age >= regenLen()) { regens.delete(id); continue; }
+    const p0 = state.players.get(id), pt = V(p0); if (!pt || !p0.alive || !inView(pt.x, pt.y, 120)) continue;
+    items.push({ y: pt.y + 11, draw: () => drawRegen(pt, age, false) });
+    items.push({ y: pt.y + 13, draw: () => drawRegen(pt, age, true) });
   }
 }
 function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets like the survivors (idle, walk x3, action x2)
@@ -1483,9 +1471,9 @@ function drawViktorFx(f, age) {   // false when finished
     ctx.translate(f.x, f.y); ctx.rotate(f.a); ctx.globalAlpha = 1 - age / 260;
     ctx.drawImage(F, 2 * 180 + 20, 30, 140, 50, 0, -12, f.len, 24);                       // beam stretched to the hit
     ctx.drawImage(F, 4 * 180, 0, 180, 110, f.len - 80, -30, 100, 60);                     // impact burst
-  } else if (f.type === "healfx") {
-    if (age > 600) { ctx.restore(); return false; }
-    ctx.drawImage(F, Math.min(5, Math.floor(age / 100)) * 180, 110, 180, 110, f.x - 60, f.y - 50, 120, 73);
+  } else if (f.type === "healfx") {   // (a heal with no player to follow: the regen effect at that spot)
+    if (age > regenLen()) { ctx.restore(); return false; }
+    drawRegen({ x: f.x, y: f.y }, age, true);
   } else if (f.type === "summon") {
     if (age > 700) { ctx.restore(); return false; }
     ctx.drawImage(F, Math.min(5, Math.floor(age / 115)) * 180, 330, 180, 110, f.x - 60, f.y - 52, 120, 73);

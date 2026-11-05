@@ -935,6 +935,7 @@ export class SurvivalRoom extends Room {
     if (p.hp >= p.maxHp) return;
     this.lastItem.set(p.sessionId, now);
     p.medkits -= 1; p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.6));
+    this.broadcast("heal", { x: Math.round(p.x), y: Math.round(p.y), id: p.sessionId, k: "medkit" });   // the healing effect on them
     this.event(`${p.name} used a medkit.`);
   }
   // Left mouse button: does whatever is in your hand.
@@ -1993,7 +1994,7 @@ export class SurvivalRoom extends Room {
           if (d < R.near) {
             m.t += dt; r.act = tg.hp < tg.maxHp ? "heal" : "buff"; r.tgt = tg.sessionId;   // client draws the heal ring under them
             tg.hp = Math.min(tg.maxHp, tg.hp + R.heal * dt);
-            if (now - (this.robotFire.get(r.id) || 0) > 900) { this.robotFire.set(r.id, now); this.broadcast("heal", { x: Math.round(tg.x), y: Math.round(tg.y) }); }
+            if (now - (this.robotFire.get(r.id) || 0) > 900) { this.robotFire.set(r.id, now); this.broadcast("heal", { x: Math.round(tg.x), y: Math.round(tg.y), id: tg.sessionId }); }
             if (m.t >= R.visit) {
               m.done++; m.seen.add(tg.sessionId); m.target = ""; m.t = 0; r.uses = R.visits - m.done;
               if (m.done >= R.visits) { this.supportMem.delete(r.id); this.destroyMachine(r, "robot"); continue; }
