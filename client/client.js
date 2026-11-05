@@ -182,6 +182,7 @@ $("bossNow").onclick = () => { room?.send("debugBoss"); closePanels(); };
 $("bossEnrage").onclick = () => { room?.send("debugBossHp", {}); closePanels(); };
 $("hookSpd").onclick = () => room?.send("debugHookSpeed");
 $("ultNow").onclick = () => { room?.send("debugUlt"); closePanels(); };
+$("levelPlus").onclick = () => room?.send("debugLevel");   // test: XP for one more level (the level-up menu then opens as usual)
 $("bossKill").onclick = () => { room?.send("debugBossHp", { kill: true }); closePanels(); };
 $("exploreToggle").onclick = () => room?.send("explore", { on: !state?.explore });
 $("skipButcher").onclick = () => { room?.send("debugBoss"); closePanels(); };

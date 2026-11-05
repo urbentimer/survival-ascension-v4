@@ -182,3 +182,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - 6th upgrade "cooldown": -5% skill cooldowns per pick, cap -35% (7 picks; then refused server-side and hidden from the client list). Synced as PlayerState.cdr (schema + Unity Generated/PlayerState.cs field 59).
 - How: tickCdr(dt) runs every tick before the normal countdown and gives each running timer an extra dt*(1/(1-cdr)-1): abilityCooldown (all E), Viktor's chargeCd, ultInfo.readyAt (every Q, only after the Q has ended), Sofea's mechaReady, Astra's safeReady. At -35% timers run 1.54x faster (20s -> 13s).
 - Client: upgradeChoices(me) filters the capped one; keys 1-6. Bots pick from all 6. Test 45. Cache v=20261105x.
+
+## Nov 5 — Test tool: Level +1
+- Esc menu (test box, same visibility as "Skip to wave": preview, or the host online): "Level +1" sends "debugLevel" -> server gives exactly the XP for one more level, counting levels already waiting to be picked (so it stacks); the player still picks the upgrade. No-op at level 30 / for non-hosts / in the lobby. Test 46. Cache v=20261105y.
+- Still open (user deferred): test mode "ultimates with no cooldown" is ON by default in every room (Q unlocked + no Q cooldowns); host can switch it off in the Esc menu / lobby settings.

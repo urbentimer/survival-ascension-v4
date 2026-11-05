@@ -1009,4 +1009,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.ultKills = 100; send(A, "ult", { a: 0, d: 300 }); tick(1); const q0 = p.ultCd; tick(20);
   ok(Math.abs((q0 - p.ultCd) - (1 / .65 - 1)) < .12, `Q (Frag Barrage) cooldown too: ${(q0 - p.ultCd).toFixed(2)}s extra per second on top of the clock (20s -> ~13s)`);   // Q timers are wall-clock; the test clock doesn't move, so only the extra shows
   room._dispose(); }
+// 46. Test tool "Level +1": the host gets exactly the XP for one more level (stacks with levels already waiting), nothing at 30, not for non-hosts
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  send(A, "debugLevel"); ok(p.xp === 30, `one press: XP for level 2 (${p.xp}/30)`);
+  send(A, "debugLevel"); ok(p.xp === 30 + 102, `second press before picking: XP for level 3 too (${p.xp})`);
+  send(A, "upgrade", { id: "damage" }); send(A, "upgrade", { id: "damage" }); ok(p.level === 3 && p.xp === 0, `two picks -> level 3 (${p.level})`);
+  send(B, "debugLevel"); ok(q.xp === 0, "a non-host can't use it online");
+  p.level = 30; p.xp = 0; send(A, "debugLevel"); ok(p.xp === 0, "nothing at level 30");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

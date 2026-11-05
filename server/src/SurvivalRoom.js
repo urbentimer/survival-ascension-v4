@@ -492,6 +492,13 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
+    // Test tool (preview, or the host online): exactly enough XP for one more level; the player still picks the upgrade
+    this.onMessage("debugLevel", client => {
+      const p = this.state.players.get(client.sessionId); if (!p || !(this.solo || client.sessionId === this.state.hostId) || this.state.phase === "lobby") return;
+      let banked = p.xp, L = p.level || 1; while (L < MAX_LEVEL && banked >= xpForLevel(L)) { banked -= xpForLevel(L); L++; }   // levels already waiting to be picked
+      if (L >= MAX_LEVEL) { this.state.message = `${p.name} is already at the max level (${MAX_LEVEL})`; return; }
+      p.xp += xpForLevel(L) - banked; this.state.message = `Test: ${p.name} has XP for level ${L + 1}`;
+    });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
     this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
       if (p.characterClass === "dispatcher") this.astraCast(p, "R");   // Astra's R: safehouse
