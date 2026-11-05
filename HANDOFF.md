@@ -165,3 +165,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
   - Broadcast "frag" {id, x, y, a, pts, fl, gap, br}. Bot Marcus throws it when 4+ zombies are within 220px.
 - Client: ULT.assault (noCard: grenade icon in the Q slot until card art exists); Q sends {a, d}; drawDanteFx k:"frag" = shock ring + dust at his feet, grenades arc with landing markers (demoFrame rows 1/2/5); fragHop pauses prediction for 380ms so the hop is drawn from the server. Roster text has the Q. Test 42. Cache v=20261105t.
 - Fix (Nov 5): Frag Barrage could be spammed because test mode ("ultimates with no cooldown", on by default) zeroes Q cooldowns, and his Q has no active time to block it. ultState now skips the test-mode reset for "assault", so it always has its cooldown. Cooldown 30s -> 20s. Cache v=20261105u.
+
+## Nov 5 — Marcus dash body animation
+- User's ChatGPT sheet tools/art/marcus-dash.png (8 rows x 5 cols on magenta: CROUCH, LUNGE, STRETCH, SLIDE+dust, RECOVER). tools/extract-marcus-dash.py -> client/assets/sprites/dir8/assault-dash.webp (5 x 8 cells of 112x88, feet (56,80) like dir8; scale matched to marcus-v3-gun.png = 54px body; left rows mirrored from the right ones so the dust trails behind; lossy webp 50 KB).
+- Client: dashBeam() records marcusDash {t0, a = dash direction} for Marcus (own dash + others' "dash" broadcasts); drawMarcusDash plays the 5 frames over 300ms (60ms each) in the octRow of the dash, Combat Rush aura kept on. Cache v=20261105v.
+- Preview is now 16,716,756 bytes: only ~60 KB of room left under the 16 MiB cap.

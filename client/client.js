@@ -1752,6 +1752,7 @@ const DASH_MS = 520, dashBeams = [];
 function dashBeam(id, x0, y0, x1, y1) {
   const p = state?.players?.get(id); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
   dashBeams.push({ x0, y0: y0 - 14, x1, y1: y1 - 14, t: performance.now(), fx: DASH_FX[p.characterClass] || DASH_FX.assault, seed: Math.random() * 100 });
+  if (p.characterClass === "assault") marcusDash.set(id, { t0: performance.now(), a: Math.atan2(y1 - y0, x1 - x0) });   // his dash body frames
   if (dashBeams.length > 24) dashBeams.shift();
 }
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
@@ -2235,8 +2236,22 @@ function dir8Block(p) {
   if (p.melee === "katana" && p.fire > 0 && blocks.includes("fire")) return blocks.indexOf("fire");
   const b = blocks.indexOf(p.melee); return b >= 0 ? b : blocks.indexOf("knife");
 }
+// Marcus's dash body (user's sheet, tools/extract-marcus-dash.py): 5 frames x 8 directions, dir8-sized cells; plays for 300ms.
+const marcusDashImg = new Image(); marcusDashImg.src = "assets/sprites/dir8/assault-dash.webp";
+const marcusDash = new Map();   // player id -> { t0, a }
+function drawMarcusDash(p, now) {
+  const d = marcusDash.get(p.sessionId), age = d ? now - d.t0 : 1e9;
+  if (age >= 300 || !p.alive || !marcusDashImg.naturalWidth) return false;
+  if (p.skillT > 0) marcusRush(p, now, false);   // keep the Combat Rush aura on while dashing
+  ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(marcusDashImg, Math.min(4, Math.floor(age / 60)) * D8.cellW, octRow(d.a) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
+  ctx.restore();
+  if (p.skillT > 0) marcusRush(p, now, true);
+  return true;
+}
 function drawSurvivorDir8(p, pose, img) {
   const now = performance.now(), a = animState(p);
+  if (p.characterClass === "assault" && drawMarcusDash(p, now)) return true;
   if (p.characterClass === "scout" && drawRavenSpecial(p, img, now)) return true;
   if (p.characterClass === "demolitionist" && drawDantePlacing(p, now)) return true;
   if (p.characterClass === "operator" && p.alive && drawSofea(p, img, now)) return true;
