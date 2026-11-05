@@ -12,7 +12,8 @@ defineTypes(PlayerState, {
   aim: "number", facing: "number", bledOut: "boolean", owned: "string", armor: "number", isBot: "boolean",
   primary: "string", secondary: "string", activeSlot: "number", mag: "number", reloadLeft: "number", medkits: "number",
   isHost: "boolean", color: "string", charging: "boolean", stunned: "number", slowed: "number", ultKills: "number", ultCd: "number", ultReady: "boolean", ultActive: "number", shadow: "number", fire: "number", storm: "number", katanaKills: "number", robotCharges: "number", chargeCd: "number", skillT: "number",
-  ack: "number"   // last movement input the server applied (client-side prediction replays the ones after it)
+  ack: "number",   // last movement input the server applied (client-side prediction replays the ones after it)
+  cdr: "number"   // skill cooldown reduction from level-up upgrades (0 .. 0.35)
 });
 // Server-only player numbers (not sent to browsers): bonusDamage, rateMult, buffDamage, magSize, reviveProgress.
 

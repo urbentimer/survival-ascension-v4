@@ -106,13 +106,16 @@ function pickKind(stage) {
 const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed", "#e5a36b", "#d2d879"];
 // Levels (Nov 5): XP is shared, every kill gives its XP to the whole team, so everyone levels together whatever the team size.
 // A full 50-wave run makes ~38-40k team XP (sims); 30k reaches the cap, so level 30 lands around wave 43-50. Every run starts at level 1.
-const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
+const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);
+// Skill cooldown reduction (level-up upgrade, Nov 5): -5% per pick, max -35%. Every skill timer (E, Q, R, Viktor's charges) just runs faster: x1/(1-cdr).
+const CDR = { step: 0.05, max: 0.35 };   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
 const UPGRADES = {
   damage: p => { p.bonusDamage = (p.bonusDamage || 0) + 20; applyLoadout(p); }, // +20% damage
   fireRate: p => { p.rateMult = Math.min(3, (p.rateMult || 1) * 1.2); applyLoadout(p); },
   health: p => { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 35); },
   defence: p => { p.defence += 2; },
-  speed: p => { p.speed = Math.min(300, p.speed * 1.1); }
+  speed: p => { p.speed = Math.min(300, p.speed * 1.1); },
+  cooldown: p => { p.cdr = Math.min(CDR.max, Math.round(((p.cdr || 0) + CDR.step) * 100) / 100); }
 };
 // Class identity: base HP/speed/defence plus multipliers that apply to ANY weapon.
 const CLASS_STATS = {
@@ -657,7 +660,7 @@ export class SurvivalRoom extends Room {
       p.level = 1; p.xp = 0; p.xpNext = 30;
       p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
       p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
-      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1;
+      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0;
       p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.weapon = "rifle"; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
       this.mags.delete(p.sessionId + ":rifle"); this.mags.delete(p.sessionId + ":pistol"); this.loadMag(p);
       p.ammo = 240; p.abilityCooldown = 0; p.bleedout = 0; p.reviveProgress = 0; p.reviveTargetId = "";
@@ -727,7 +730,7 @@ export class SurvivalRoom extends Room {
     p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
-    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
+    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level = 1; p.xp = 0; p.xpNext = xpForLevel(1); p.currency = 0;   // every run starts at level 1 (upgrades don't carry over either)
     const classIds=PICKABLE;
@@ -981,7 +984,7 @@ export class SurvivalRoom extends Room {
   }
 
   applyUpgrade(p, id) {
-    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL) return false;
+    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL || (id === "cooldown" && (p.cdr || 0) >= CDR.max - 1e-9)) return false;
     p.xp -= p.xpNext;
     p.level++;
     p.xpNext = xpForLevel(p.level); if (p.level >= MAX_LEVEL) p.xp = 0;
@@ -1340,6 +1343,20 @@ export class SurvivalRoom extends Room {
     const p = t.until > now ? this.state.players.get(t.id) : null;
     if (!p?.alive) { this.taunt.delete(z.id); return null; }
     return p;
+  }
+  // Cooldown reduction: on top of the normal countdown, every running skill timer gets an extra dt*(1/(1-cdr) - 1).
+  // Covers E (abilityCooldown), Viktor's robot charges (chargeCd), every Q (ultInfo.readyAt, only once the Q has ended), Sofea's mecha, Astra's safehouse.
+  tickCdr(dt, now) {
+    for (const p of this.state.players.values()) {
+      const r = p.cdr || 0; if (r <= 0) continue;
+      const extra = dt * (1 / (1 - r) - 1);
+      if (p.abilityCooldown > 0) p.abilityCooldown = Math.max(0, p.abilityCooldown - extra);
+      if (p.characterClass === "engineer" && p.chargeCd > 0 && (p.robotCharges ?? ROBOT_CHARGES) < ROBOT_CHARGES) p.chargeCd = Math.max(0, p.chargeCd - extra);
+      const info = this.ultInfo.get(p.sessionId);
+      if (info && info.readyAt > now && !this.ultStateRaw(p, now).alive) info.readyAt -= extra * 1000;
+      const vm = this.vmemory.get(p.sessionId); if (vm && vm.mechaReady > now) vm.mechaReady -= extra * 1000;
+      const am = this.astra?.get(p.sessionId); if (am && am.safeReady > now) am.safeReady -= extra * 1000;
+    }
   }
   fragBarrage(p, dist) {
     const F = MARCUS.frag, now = Date.now(), a = p.aim || 0, scale = 1 + (this.state.stage - 1) * 0.08;
@@ -2446,7 +2463,7 @@ export class SurvivalRoom extends Room {
     const brain = this.botBrain.get(b.sessionId) || { strafe: 1 };
     const s = this.state, center = { x: this.A.cx, y: this.A.cy };
     // Level-ups: bots pick a random upgrade.
-    while ((b.level || 1) < MAX_LEVEL && b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * 5)]);
+    while ((b.level || 1) < MAX_LEVEL && b.xp >= b.xpNext) this.applyUpgrade(b, Object.keys(UPGRADES)[Math.floor(Math.random() * Object.keys(UPGRADES).length)]);
     const zs = [...s.zombies.values()];
     const seen = zs.filter(z => distance(b, z) < 700 && this.lineClear(b, z));
     const pool = seen.length ? seen : zs;
@@ -2761,6 +2778,7 @@ export class SurvivalRoom extends Room {
     const guard = this.vehicleGuard(now);
     if (!this.state.explore) this.state.elapsed += dt;   // explore mode: timer frozen, no spawns (zombies were cleared when it was turned on)
     this.state.matchTime += dt;
+    this.tickCdr(dt, now);   // extra countdown for players with cooldown reduction
     for(const p of this.state.players.values()) if(p.abilityCooldown>0)p.abilityCooldown=Math.max(0,p.abilityCooldown-dt);
     if (this.state.noCd) for (const p of this.state.players.values()) if ((p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;
     for (const p of this.state.players.values()) {   // Viktor's robot charges refill one at a time, every 25s

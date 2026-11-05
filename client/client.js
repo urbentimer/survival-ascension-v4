@@ -22,7 +22,8 @@ function unwindTo(d) { while (ctxDepth > d) ctx.restore(); }
 function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.profileStorageKey)||"{}");}catch{return {};}}
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
-const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","+2 defence"], ["speed","Adrenaline","+10% movement speed"] ];
+const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","+2 defence"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-5% skill cooldowns (max -35%)"] ];
+const upgradeChoices = me => upgrades.filter(([id]) => id !== "cooldown" || (me?.cdr || 0) < .35 - 1e-9);   // Quick recovery leaves the list at -35%
 // ===================== GAME DATA (display only; the server has the final say) =====================
 const WEAPON_INFO = {
   pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 1.0, infinite: true },
@@ -394,11 +395,11 @@ function renderLevelUp(me) {
   if (!ready) { $("levelUp").classList.add("hidden"); levelUpBuiltFor = ""; return; }
   if ($("levelUp").classList.contains("hidden")) return;
   $("levelUpCount").textContent = n > 1 ? n + " upgrades ready" : "1 upgrade ready";
-  $("levelUpHint").textContent = me.alive ? "Press 1–5 or click. U or Esc to close. The fight keeps going." : "You're down. Pick once a teammate revives you.";
+  $("levelUpHint").textContent = me.alive ? `Press 1–${upgradeChoices(me).length} or click. U or Esc to close. The fight keeps going.` : "You're down. Pick once a teammate revives you.";
   const key = me.level + "|" + me.alive;
   if (key !== levelUpBuiltFor) {
     levelUpBuiltFor = key; levelUpWaitUntil = 0;
-    $("levelUpChoices").innerHTML = upgrades.map(([id, title, desc], i) => `<button class="button" data-upgrade="${id}"><kbd>${i + 1}</kbd><span><b>${title}</b><small>${desc}</small></span></button>`).join("");
+    $("levelUpChoices").innerHTML = upgradeChoices(me).map(([id, title, desc], i) => `<button class="button" data-upgrade="${id}"><kbd>${i + 1}</kbd><span><b>${title}</b><small>${desc}</small></span></button>`).join("");
   }
   const locked = !me.alive || Date.now() < levelUpWaitUntil;
   $("levelUpChoices").querySelectorAll("button").forEach(b => b.disabled = locked);
@@ -688,7 +689,7 @@ window.addEventListener("keydown", e => {
   if (k === "tab") { e.preventDefault(); scoreboardOpen = !scoreboardOpen; return; }
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (me_() && !me_().alive && [" ", "arrowleft", "arrowright"].includes(k) && !e.repeat) { switchSpectate(k === "arrowleft" ? -1 : 1); return; }
-  if (!$("levelUp").classList.contains("hidden") && /^[1-5]$/.test(k)) { pickUpgrade(upgrades[Number(k) - 1][0]); return; }
+  if (!$("levelUp").classList.contains("hidden") && /^[1-6]$/.test(k)) { const c = upgradeChoices(me_())[Number(k) - 1]; if (c) pickUpgrade(c[0]); return; }
   if (e.repeat && !"wasd ".includes(k) && !k.startsWith("arrow")) return;
   keys[k === " " ? "space" : k] = true;
   if (k === " ") dashQueued = true;   // a quick tap still counts

@@ -192,5 +192,8 @@ public PlayerState() { }
 
 		[Type(58, "number")]
 		public float ack = default(float);
+
+		[Type(59, "number")]
+		public float cdr = default(float);
 	}
 }

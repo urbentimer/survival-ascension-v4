@@ -999,4 +999,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.elapsed = 61; room.spawnClock = 9999; tick(2);
   ok(room.state.bossPhase === "intro" && room.state.zombies.size === 0, `15s later with 2 left: they vanish and the boss intro starts (${room.state.bossPhase})`);
   room._dispose(); }
+// 45. Level-up upgrade "Quick recovery": -5% skill cooldowns per pick, max -35% (E, Q and the rest count down faster)
+{ const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.noCd = false;
+  p.xp = 99999; for (let i = 0; i < 9; i++) send(A, "upgrade", { id: "cooldown" });
+  ok(Math.abs(p.cdr - .35) < 1e-9 && p.level === 8, `7 picks reach the -35% cap, more are refused (cdr ${p.cdr}, level ${p.level})`);
+  p.abilityCooldown = 0; send(A, "ability", {}); const e0 = p.abilityCooldown; tick(20);   // 1s
+  ok(Math.abs((e0 - p.abilityCooldown) - 1 / .65) < .05, `E cooldown runs 1/0.65 = 1.54x faster (${(e0 - p.abilityCooldown).toFixed(2)}s per second)`);
+  p.ultKills = 100; send(A, "ult", { a: 0, d: 300 }); tick(1); const q0 = p.ultCd; tick(20);
+  ok(Math.abs((q0 - p.ultCd) - (1 / .65 - 1)) < .12, `Q (Frag Barrage) cooldown too: ${(q0 - p.ultCd).toFixed(2)}s extra per second on top of the clock (20s -> ~13s)`);   // Q timers are wall-clock; the test clock doesn't move, so only the extra shows
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

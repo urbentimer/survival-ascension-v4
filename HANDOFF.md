@@ -177,3 +177,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Cap: no XP / upgrades past 30 (HUD "MAX LEVEL"); bot upgrade loop guarded. Every run starts at level 1 (the saved profile level is no longer loaded: it carried the number without the upgrades). Test 43. Cache v=20261105w.
 - Found (not fixed yet): boss-wave horde phase waits for EVERY horde zombie to die (bossWaveTick); in sims a last straggler far from the team sometimes never comes, so the boss never arrives (seen at waves 4, 12, 24, 36). Sim tools: SA_TRACE=1 prints stragglers; the STUCK line dumps them.
 - Fixed (Nov 5): boss-wave stragglers. BOSS_WAVE.straggleGrace 15 / straggleMax 3: 15s after the horde timer ends, if 3 or fewer non-boss zombies are left they vanish and the boss intro starts. Test 44. 50-wave sims with 4 and 8 players now reach victory with no hung waves; shared XP hits level 30 around wave 43-45. sim-waves.mjs accepts "victory" at wave 50.
+
+## Nov 5 — Level-up upgrade: Quick recovery (skill cooldown reduction)
+- 6th upgrade "cooldown": -5% skill cooldowns per pick, cap -35% (7 picks; then refused server-side and hidden from the client list). Synced as PlayerState.cdr (schema + Unity Generated/PlayerState.cs field 59).
+- How: tickCdr(dt) runs every tick before the normal countdown and gives each running timer an extra dt*(1/(1-cdr)-1): abilityCooldown (all E), Viktor's chargeCd, ultInfo.readyAt (every Q, only after the Q has ended), Sofea's mechaReady, Astra's safeReady. At -35% timers run 1.54x faster (20s -> 13s).
+- Client: upgradeChoices(me) filters the capped one; keys 1-6. Bots pick from all 6. Test 45. Cache v=20261105x.
