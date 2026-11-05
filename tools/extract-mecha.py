@@ -2,7 +2,7 @@
 #   python3 tools/extract-mecha.py
 # Writes:
 #   sprites/dir8/sofea-mecha.webp       8 rows (down, downRight, right, upRight, up, upLeft, left, downLeft) x 6 cols
-#                                       (idle, walk 1-3, flame pose, saber slash), cells 160x128, body centre x=80, feet y=120
+#                                       (0-1 idle, 2-5 walk, 6-7 flamethrower, 8-11 saber swing), cells 160x128, body centre x=80, feet y=120
 #   sprites/dir8/sofea-mecha-tf.webp    5 rows (down, front-left, left, right, up) x 8 frames of Sofea turning into the mecha,
 #                                       same cells / anchor; she grows from her size (54px) to the mecha (80px)
 #   (sprites/fx/sofea-flame.webp: the flame jet, made by tools/bake-flamethrower.py)
@@ -81,29 +81,43 @@ def place(c, sc, cx_src, feet_src, flip=False):
 def save_webp(arr, path, q=72):
     Image.fromarray(arr).save(path, quality=q, method=6, alpha_quality=100); print('->', os.path.relpath(path), os.path.getsize(path) // 1024, 'KB')
 
-# ---- mecha, 8 directions ----
-mech = grid(blue_key('mecha.png'), 8, 6, row_cols_from=840)
-SRC = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (3, 1), (5, 0), (7, 0)]   # (sheet row, mirrored)
+# ---- mecha, 8 directions (v2 art, Nov 5: robot head; tools/art/sofea-mecha2) ----
+# walk.png and attack.png: 5 rows (down, down-right, right, up-right, up) x 6 columns on blue.
+#   walk: idle 1-2, walk 1-4      attack: flamethrower pose 1-2, saber wind-up, mid-swing, follow-through, recover
+# The left-side directions are the right-side rows mirrored. Atlas: 8 rows (dir8 order) x 12 columns =
+#   0-1 idle, 2-5 walk, 6-7 flamethrower, 8-11 saber swing
+M2 = os.path.join(here, 'art', 'sofea-mecha2')
+def grid_cells(rgba, nrows, ncols):   # even grid: every blob goes to the cell its centre is in (raised sabers may poke into the row above)
+    lab, n = ndimage.label(rgba[..., 3] > 0); objs = ndimage.find_objects(lab); ph, pw = rgba.shape[0] / nrows, rgba.shape[1] / ncols
+    cells = [[[] for _ in range(ncols)] for _ in range(nrows)]
+    for i, sl in enumerate(objs):
+        if sl is None: continue
+        cy, cx = (sl[0].start + sl[0].stop) / 2, (sl[1].start + sl[1].stop) / 2
+        cells[min(nrows - 1, int(cy // ph))][min(ncols - 1, int(cx // pw))].append(i + 1)
+    return [[np.where(np.isin(lab, ids)[..., None], rgba, 0).astype(np.uint8) for ids in row] for row in cells]
+wk, at = grid_cells(blue_key(os.path.join(M2, 'walk.png')), 5, 6), grid_cells(blue_key(os.path.join(M2, 'attack.png')), 5, 6)
+mech = [wk[r] + at[r] for r in range(5)]
+COLS = 12
+SRC = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (3, 1), (2, 1), (1, 1)]   # (sheet row, mirrored)
 DIRV = [(0, 1), (.7, .7), (1, 0), (.7, -.7), (0, -1), (-.7, -.7), (-1, 0), (-.7, .7)]
-atlas = np.zeros((CH * 8, CW * 6, 4), np.uint8); nozzles = []
+atlas = np.zeros((CH * 8, CW * COLS, 4), np.uint8); nozzles = []
 for d, (sr, mir) in enumerate(SRC):
     cells = [crop(c) for c in mech[sr]]
     bx0, by0, bx1, by1 = body_box(cells[0]); sc = BODY_H / (by1 - by0)
     for k, c in enumerate(cells):
         x0, y0, x1, y1 = body_box(c)
-        # walk/attack frames: same feet line; body centre from the frame's torso (top 60% of the body, saber excluded)
         m = (c[..., 3] > 0) & ~is_green(c); top = m[y0:y0 + int((y1 - y0) * .6)]; xs = np.where(top.any(0))[0]
-        cx = (xs.min() + xs.max()) / 2 if k else (x0 + x1) / 2
+        cx = (xs.min() + xs.max()) / 2   # body centre from the torso (top 60% of the body, saber excluded)
         if k == 0: cx0 = cx
-        cx = cx0 if k < 4 else cx   # idle + walk share the idle centre (no sliding), attacks use their own
+        if k < 6: cx = cx0                # idle + walk share the idle centre (no sliding); attacks use their own
         atlas[d * CH:(d + 1) * CH, k * CW:(k + 1) * CW] = place(c, sc, cx, y1, bool(mir))
-    # flame nozzle = the gold barrel pixel farthest along the facing, in the flame-pose frame
-    f = atlas[d * CH:(d + 1) * CH, 4 * CW:5 * CW].astype(int); r, g, b = f[..., 0], f[..., 1], f[..., 2]
+    # flame nozzle = the gold barrel pixel farthest along the facing, in the flamethrower frame
+    f = atlas[d * CH:(d + 1) * CH, 6 * CW:7 * CW].astype(int); r, g, b = f[..., 0], f[..., 1], f[..., 2]
     gold = (f[..., 3] > 0) & (r > 150) & (g > 105) & (b < 110) & (r - b > 80)
-    gold[:FY - int(BODY_H * .62)] = False   # not the gold headset / hair clips: the gun arm is below the head
+    gold[:FY - int(BODY_H * .62)] = False   # not the head's gold trim: the gun arm is below the head
     ys, xs = np.where(gold)
     if len(xs):
-        vx, vy = DIRV[d]; s = (xs - AX) * vx + (ys - FY) * vy; sel = s >= np.percentile(s, 97)
+        vx, vy = DIRV[d]; s_ = (xs - AX) * vx + (ys - FY) * vy; sel = s_ >= np.percentile(s_, 97)
         nozzles.append([round(float(xs[sel].mean()) - AX), round(float(ys[sel].mean()) - FY)])
     else: nozzles.append([round(DIRV[d][0] * 25), -36])
     print(f'dir {d}: sheet row {sr}{" mirrored" if mir else ""}, scale {sc:.3f}, nozzle {nozzles[-1]}')

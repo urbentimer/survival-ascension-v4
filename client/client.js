@@ -1213,7 +1213,7 @@ function drawSofea(p, img, now) {
 // sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
 const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // 80px tall = 1.5x a survivor
-  nozzle: [[-7, -20], [32, -34], [30, -44], [20, -48], [4, -49], [-20, -48], [-27, -45], [-12, -15]],   // per direction, from the feet
+  nozzle: [[-4, -24], [23, -32], [28, -47], [27, -49], [-2, -45], [-28, -49], [-29, -47], [-22, -31]],   // per direction, from the feet
   tfRow: [0, 0, 3, 4, 4, 4, 2, 1] };   // which transformation angle each facing uses
 const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
 // draws frame f of a strip, cross-fading into frame f2 by k (0..1): smooth in-betweens for the transformation / flame
@@ -1241,12 +1241,12 @@ function drawMecha(p, v, aim, now) {
   if (!fs) { fs = { on: false, at: 0 }; mechaFlame.set(p.sessionId, fs); }
   if (fire !== fs.on) { fs.on = fire; fs.at = now; }
   const swingRow = sAge < MECHA.swing ? rowOf(sl.a) : row;
-  let col = 0;
-  if (sAge < 520) col = 5;
-  else if (fire || now - fs.at < 200) col = 4;
-  let bob = 0;
-  if (col === 0 && v.mv) { const st = Math.floor(now / 115) % 4; col = [1, 2, 3, 2][st]; bob = st % 2 ? 0 : 1; }   // walk 1-2-3-2, a 1px bob on the heavy steps
-  else if (col === 0) bob = Math.sin(now / 420) > .6 ? 1 : 0;   // idle: slow breathing
+  // atlas columns (v2 robot-head art): 0-1 idle, 2-5 walk, 6-7 flamethrower, 8-11 saber (wind-up, mid, follow-through, recover)
+  let col, bob = 0;
+  if (sAge < 760) col = sAge < 110 ? 8 : sAge < 260 ? 9 : sAge < 520 ? 10 : 11;
+  else if (fire || now - fs.at < 200) col = 6 + Math.floor(now / 110) % 2;   // braced, a little recoil
+  else if (v.mv) col = 2 + Math.floor(now / 120) % 4;
+  else col = Math.floor(now / 520) % 2;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 25, 7, 0, 0, 7); ctx.fill(); ctx.restore();
   const flameBehind = Math.sin(aim) < -.35;
   if (flameBehind) drawMechaFlame(p, aim, row, feet, fs, now);
