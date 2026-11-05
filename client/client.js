@@ -1244,7 +1244,7 @@ function drawMecha(p, v, aim, now) {
   // atlas columns (v2 robot-head art): 0-1 idle, 2-5 walk, 6-7 flamethrower, 8-11 saber (wind-up, mid, follow-through, recover)
   let col, bob = 0;
   if (sAge < 760) col = sAge < 110 ? 8 : sAge < 260 ? 9 : sAge < 520 ? 10 : 11;
-  else if (fire || now - fs.at < 200) col = 6 + Math.floor(now / 110) % 2;   // braced, a little recoil
+  else if (fire || now - fs.at < 200) { col = 6; if (fire) bob = Math.floor(now / 60) % 2; }   // one braced pose (the saber stays still), a 1px recoil shake
   else if (v.mv) col = 2 + Math.floor(now / 120) % 4;
   else col = Math.floor(now / 520) % 2;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 25, 7, 0, 0, 7); ctx.fill(); ctx.restore();
