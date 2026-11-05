@@ -34,7 +34,7 @@ const WEAPON_INFO = {
 };
 const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd: 0.6 }, axe: { name: "Fire axe", cd: 0.9 }, katana: { name: "Katana", cd: 0.5 } };
 const SKILLS = {
-  assault: { name: "Combat Rush", cd: 25 },
+  assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
   sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
@@ -127,6 +127,7 @@ function connected() {
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
+  room.onMessage("rush", () => {});   // Marcus Combat Rush started (hook for a VFX later)
   room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
@@ -292,7 +293,7 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : "skill", cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
@@ -824,7 +825,7 @@ function sendControls(t) {
   if (!wheel && !squadWheel && !anyPanelOpen() && !(me.stunned > 0)) {
     const clicked = clickShotAt && performance.now() - clickShotAt < 300; // a quick click counts even if the button is already released
     if (me.activeSlot === 1) {
-      const cd = (MELEE_INFO[me.melee] || MELEE_INFO.knife).cd * 1000;
+      const cd = (MELEE_INFO[me.melee] || MELEE_INFO.knife).cd * 1000 / (me.characterClass === "assault" && me.skillT > 0 ? 1.25 : 1);   // Combat Rush: +25% attack speed
       if (me.melee !== "axe" && (firing || clicked) && t - lastMelee > cd) { room.send("attack", { a: aimAngle(me) }); lastMelee = t; clickShotAt = 0; }
     } else if (me.activeSlot === 2 || me.activeSlot === 3) {
       const rage = me.characterClass === "juggernaut" && me.weapon === "shotgun" && me.ultActive > 0;   // War Cry: shotgun spam (hold to fire, 3x faster, no ammo)
@@ -2887,7 +2888,7 @@ requestAnimationFrame(frame);
 // Roster: who you can pick (Sofea was removed; Arshan shows as the locked "???" tile until he's ready).
 const ROSTER = [
   { id: "assault", name: "MARCUS", role: "ASSAULT", cat: "assault", hp: 110, dmg: 17, spd: 190, def: 0, desc: "Balanced frontline fighter. Fast rifle fire and a damage rush when the horde closes in.",
-    skills: [{ k: "E", n: "Combat Rush", cd: 25, t: "+50% damage for 6 seconds." }], gear: ["rifle", "pistol", "knife"] },
+    skills: [{ k: "E", n: "Combat Rush", cd: 15, t: "+50% damage and +25% attack speed (guns and melee) for 6 seconds." }], gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
              { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." },

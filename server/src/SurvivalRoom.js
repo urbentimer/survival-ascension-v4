@@ -240,12 +240,14 @@ const BUILD_RANGE = 160;
 const DASH_DISTANCE = 50, DASH_COOLDOWN = 5;   // seconds // you can place structures up to this far from yourself
 // Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
 // Upgrades are stored separately, so switching weapons never erases them.
+// Marcus E: Combat Rush. +50% damage and +25% attack speed (guns and melee) for 6s, 15s cooldown (counts from the press).
+const MARCUS = { rush: { cd: 15, t: 6, dmg: 50, rate: 1.25 } };
 function applyLoadout(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
   const w = WEAPONS[p.weapon] || WEAPONS.rifle;
   // bonusDamage / buffDamage are percentages (+20 = +20% damage)
   p.damage = Math.round(w.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * 10) / 10;
-  p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1));
+  p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1) * (p.buffRate || 1));
 }
 function applyClassBase(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
@@ -648,7 +650,7 @@ export class SurvivalRoom extends Room {
       p.level = 1; p.xp = 0; p.xpNext = 30;
       p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
       p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
-      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0;
+      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1;
       p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.weapon = "rifle"; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
       this.mags.delete(p.sessionId + ":rifle"); this.mags.delete(p.sessionId + ":pistol"); this.loadMag(p);
       p.ammo = 240; p.abilityCooldown = 0; p.bleedout = 0; p.reviveProgress = 0; p.reviveTargetId = "";
@@ -716,7 +718,7 @@ export class SurvivalRoom extends Room {
     p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
-    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
+    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level=Math.max(1,Math.min(100,Number(profile.level)||1));p.xp=Math.max(0,Math.min(100000,Number(profile.xp)||0));
     p.xpNext=Math.max(30,Math.min(100000,Number(profile.xpNext)||30));p.currency=0;
@@ -899,7 +901,7 @@ export class SurvivalRoom extends Room {
     if (p.characterClass === "slasher" && this.arshanBusy(p)) return;   // Arshan: hooking / cyclone
     const base = raven ? ravenKatana(p) : MELEE[p.melee] || MELEE.knife;
     const m = heavy ? { ...base, dmg: base.dmg * AXE_HEAVY.dmgMult, range: AXE_HEAVY.range, arc: AXE_HEAVY.arc } : base;
-    if (now - (this.lastMelee.get(p.sessionId) || 0) < m.cd * 1000) return;
+    if (now - (this.lastMelee.get(p.sessionId) || 0) < m.cd * 1000 / (p.buffRate || 1)) return;   // Combat Rush: swings 25% faster
     this.lastMelee.set(p.sessionId, now);
     p.aim = aim; this.lastAimAt.set(p.sessionId, now);
     if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility (and lights her katana)
@@ -959,14 +961,14 @@ export class SurvivalRoom extends Room {
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
-      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="juggernaut"?28:25;
+      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
     p.abilityCooldown=cooldown;
     if(cls==="engineer") this.summonRobot(p, data?.kind);
     else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="sniper"){const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<650).sort((a,b)=>distance(p,a)-distance(p,b)).find(z=>this.lineClear(p,z));if(z){const hit=Math.min(z.hp,p.damage*12);z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
-    else {p.buffDamage=50;applyLoadout(p);setTimeout(()=>{if(this.state.players.has(p.sessionId)){p.buffDamage=0;applyLoadout(p);}},6000);}
+    else {p.buffDamage=MARCUS.rush.dmg;p.buffRate=MARCUS.rush.rate;p.skillT=MARCUS.rush.t;applyLoadout(p);this.broadcast("rush",{id:p.sessionId});}   // ends in updateMarcus
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
   }
 
@@ -1325,6 +1327,13 @@ export class SurvivalRoom extends Room {
     const p = t.until > now ? this.state.players.get(t.id) : null;
     if (!p?.alive) { this.taunt.delete(z.id); return null; }
     return p;
+  }
+  updateMarcus(dt) {   // Combat Rush timer (skillT = seconds left, the HUD + aura read it)
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "assault" || !(p.skillT > 0)) continue;
+      p.skillT = Math.max(0, p.skillT - dt);
+      if (p.skillT <= 0 || !p.alive) { p.skillT = 0; p.buffDamage = 0; p.buffRate = 1; applyLoadout(p); }
+    }
   }
   updateBriggs(dt, now) {
     for (const p of this.state.players.values()) {
@@ -2729,7 +2738,7 @@ export class SurvivalRoom extends Room {
     this.updateRaven(dt, now);
     this.updateDante(dt, now);
     this.updateSofea(dt, now);
-    this.updateBriggs(dt, now);
+    this.updateMarcus(dt); this.updateBriggs(dt, now);
     this.updateArshan(dt, now);
     this.updateAstra(dt, now);
     this.separateZombies();

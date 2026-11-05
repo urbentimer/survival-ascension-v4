@@ -952,4 +952,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // night is 1 minute of a 3 minute day
   room.state.dayTime = 170; tick(1); ok(room.state.isNight, "night"); room.state.dayTime = 179.99; tick(2); ok(!room.state.isNight && room.state.dayTime < 5, "night lasts 1 minute, then day again");
   room._dispose(); }
+// 41. MARCUS Combat Rush (E): +50% damage, +25% attack speed (guns + melee) for 6s, 15s cooldown
+{ const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); p.x = 1000; p.y = 1000;
+  ok(p.characterClass === "assault", "Marcus is the assault");
+  const dmg0 = p.damage, rate0 = p.fireRate; p.abilityCooldown = 0; send(A, "ability", {});
+  ok(Math.abs(p.damage / dmg0 - 1.5) < .03 && Math.abs(p.fireRate / rate0 - 1.25) < .01 && p.abilityCooldown === 15 && p.skillT === 6,
+     `E: damage x${(p.damage / dmg0).toFixed(2)}, fire rate x${(p.fireRate / rate0).toFixed(2)}, cooldown ${p.abilityCooldown}s, lasts ${p.skillT}s`);
+  p.activeSlot = 1; p.melee = "knife"; room.lastMelee.set("A", Date.now() - 300); const z = placeZombie(room, 1030, 1000, 999); const hp0 = z.hp; room.meleeAttack(p, 0);
+  ok(z.hp < hp0, "...knife swings 25% faster (0.35s -> 0.28s between swings)");
+  tick(125); ok(p.skillT === 0 && Math.abs(p.damage - dmg0) < .01 && Math.abs(p.fireRate - rate0) < .01 && p.abilityCooldown > 8.5 && p.abilityCooldown < 9.5,
+     `after 6s it wears off (cooldown left ${p.abilityCooldown.toFixed(1)}s of 15)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

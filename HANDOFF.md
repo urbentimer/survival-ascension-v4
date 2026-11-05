@@ -150,3 +150,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Every katana swing by Raven plays a violet crescent slash (user's sprite sheet in tools/art/raven-slash).
 - tools/extract-raven-slash.py → client/assets/sprites/fx/raven-slash.webp: 24 frames (every 2nd of 48), 128px cells, 8x3, on black (drawn additive "lighter").
 - client.js drawRavenSlash: RSLASH {n:24, c:128, ms:17, ax:.38, ay:.55, reach:73}; scaled to the swing range (f.r*1.15/73), rotated to the swing angle, flip alternates each swing, frames cross-faded. Katana swings live 420ms in fx. Cache v=20261105q.
+
+## Nov 5 — Marcus Combat Rush rebalance
+- E Combat Rush: +50% damage AND +25% attack speed (guns via fireRate, melee via swing cd) for 6s; cooldown 15s (was 25s, damage only), counted from the press.
+- Server: MARCUS.rush {cd 15, t 6, dmg 50, rate 1.25}; p.buffRate (server-only) feeds applyLoadout fireRate and meleeAttack cd; p.skillT = seconds left (synced), ticked in updateMarcus (replaces the old setTimeout). Broadcast "rush" {id} (client no-op hook for a future VFX; added to Unity Net.cs list).
+- Client: E slot shows "RUSH 5s"; melee click gate divides by 1.25 during the rush; roster text updated. Test 41. Cache v=20261105r.
