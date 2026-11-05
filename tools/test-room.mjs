@@ -762,19 +762,20 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.vmemory.get("A").mechaReady = 0; send(A, "skill2"); tick(21); const v2 = room.state.vehicles.get("A"); v2.left = 0.05; tick(2);
   ok(!room.state.vehicles.has("A") && p.chargeCd > 99, "after 30s the ride ends and the 100s cooldown starts");
   room._dispose(); }
-// 33c. Fallen Dynasty: a painted map (one picture is the world; tower where it's painted; solid painted buildings; street spawns)
+// 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
   send(A, "settings", { map: 3 });
-  ok(room.state.mapSite === 3 && room.state.mapLayout === "P:dynasty" && room.state.worldW === 1672 && room.state.worldH === 941, "host picks Fallen Dynasty: the world is the picture's size (1672x941)");
-  ok(room.state.towerX === 875 && room.state.towerY === 805 && room.A.cx === 875, "the radio tower stands on the painted one");
-  ok(p.x > 600 && p.x < 1150 && p.y < 690 && !room.blockedByMap(p.x, p.y, 0), `everyone moves onto the new map by the tower (${Math.round(p.x)},${Math.round(p.y)})`);
-  ok(room.blockedByMap(200, 200) && room.blockedByMap(835, 345) && !room.blockedByMap(800, 560), "painted buildings and the dragon statue are solid, the plaza isn't");
-  room.state.phase = "playing"; let bad = 0; for (let i = 0; i < 60; i++) { room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); if (room.blockedByMap(z.x, z.y, 0) || Math.hypot(z.x - 875, z.y - 805) < 270) bad++; }
-  ok(bad === 0, "zombies walk in from the streets at the picture's edges (never inside a building, never next to the tower)");
-  room.state.zombies.clear(); const z = placeZombie(room, 1513, 414, 500); z.role = "tower"; z.speed = 57; room.state.phase = "playing"; room.spawnClock = 1e9; room.state.elapsed = 10;
-  for (let i = 0; i < 400; i++) { room.lastTick = Date.now() - 50; room.tick(); }
-  ok(Math.hypot(z.x - 875, z.y - 805) < 130, `a zombie in a side street finds its way round the buildings to the tower (${Math.round(z.x)},${Math.round(z.y)})`);
-  room.state.phase = "lobby"; send(A, "settings", { map: 0 }); ok(room.state.worldW === 3600 && room.state.towerX === 1800, "back to a city site: the big map again");
+  ok(room.state.mapSite === 3 && room.state.worldW === 4400 && room.state.worldH === 2800 && !room.state.mapLayout.startsWith("P:"), "host picks Fallen Dynasty: a bigger map (4400x2800) made of pieces");
+  ok(room.state.towerX === 2200 && room.state.towerY === 1400 && room.flow, "the radio tower is in the middle; zombies use the flow field there");
+  const kinds = new Set(room.state.mapLayout.split(";").map(r => Number(r.split(",")[0])));
+  ok(kinds.size > 20, `it uses the new pieces (${kinds.size} kinds)`);
+  ok(!room.blockedByMap(p.x, p.y, 0) && Math.hypot(p.x - 2200, p.y - 1400) < 260, `everyone moves onto the new map by the tower (${Math.round(p.x)},${Math.round(p.y)})`);
+  ok(room.blockedByMap(2200 - 520, 238) && !room.blockedByMap(2200, 250), "the city wall is solid, the temple gate's arch is open");
+  room.state.phase = "playing"; room.state.zombies.clear(); room.spawnClock = 1e9; room.state.elapsed = 10;
+  const z = placeZombie(room, 300, 2500, 500); z.kind = "walker"; z.role = "tower"; z.speed = 120; z.damage = 0;
+  for (let i = 0; i < 600; i++) { room.lastTick = Date.now() - 50; room.tick(); }
+  ok(Math.hypot(z.x - 2200, z.y - 1400) < 150, `a zombie from the far corner finds its way round the buildings to the tower (${Math.round(z.x)},${Math.round(z.y)})`);
+  room.state.phase = "lobby"; send(A, "settings", { map: 0 }); ok(room.state.worldW === 3600 && room.state.towerX === 1800 && !room.flow, "back to a city site: the city map again");
   room._dispose(); }
 // 34. test mode (host toggle): ultimates unlocked, no cooldown after they end
 { const { room, A, B, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };

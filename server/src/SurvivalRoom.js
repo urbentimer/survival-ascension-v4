@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -196,7 +196,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { painted: "dynasty" }];   // painted: one picture is the map (mapLayout.js PAINTED)
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }];   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -303,9 +303,11 @@ export class SurvivalRoom extends Room {
     this.pathGrids = new Map(); this.flowCache = new Map();
     this.state.mapSite = i;
     const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
-    this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: ARENA.width, height: ARENA.height, cx: ARENA.width / 2, cy: ARENA.height / 2, sx: ARENA.width / 2, sy: ARENA.height / 2, sh: 100 };   // sx, sy, sh: where survivors appear
+    const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height;
+    this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: W, height: H, cx: W / 2, cy: H / 2, sx: W / 2, sy: H / 2, sh: 100 };   // sx, sy, sh: where survivors appear
+    this.flow = !!P || S.style === "dynasty";   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
-    const layout = P ? paintedLayout(P) : buildMapLayout(ARENA.width, ARENA.height, SITES[i].seed);
+    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.mapGrid = new Map();               // 160px cells -> solid boxes touching that cell (fast lookups)
     for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
@@ -2365,7 +2367,7 @@ export class SurvivalRoom extends Room {
       e.x = clamp(x0 + Math.cos(a) * dist, 5, this.A.width - 5); e.y = clamp(y0 + Math.sin(a) * dist, 5, this.A.height - 5); solve(e);
       return Math.hypot(e.x - x0, e.y - y0);
     };
-    const offs = now < st.until ? [st.off, 0] : [0];
+    const offs = now < st.until ? [0, st.off] : [0];   // straight first: a remembered sidestep must not keep a zombie circling once the way is clear
     for (const o of [...offs, .6 * st.side, 1.1 * st.side, 1.6 * st.side, -.6 * st.side, -1.1 * st.side]) {
       const moved = tryDir(ang + o);
       const forward = (e.x - x0) * Math.cos(ang) + (e.y - y0) * Math.sin(ang);
@@ -2831,7 +2833,7 @@ export class SurvivalRoom extends Room {
         // Spitters keep their distance and lob acid from range.
         if (d < ACID.backOff) this.steerMove(z, z.id, a + Math.PI, z.speed * dt, e => this.solveZombie(e));
       } else if (d > (z.kind === "mutant" ? z.radius + 10 : z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) - 4)) {
-        if (this.painted) this.bossMove(z, target, z.speed * dt);   // painted maps have walls and dead ends: walk the flow field like the bosses
+        if (this.flow) this.bossMove(z, target, z.speed * dt);   // maps with walls and dead ends: walk the flow field like the bosses
         else this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
       }
       z.attackCooldown = Math.max(0, z.attackCooldown - dt);   // stops at 0: no network traffic while it just walks

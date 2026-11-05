@@ -1,7 +1,8 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout } from "./mapLayout.js";   // same collision rules as the server (movement prediction)
+import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout, dynastyGround } from "./mapLayout.js";
+import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
 
 const $ = id => document.getElementById(id);
 const serverInput = new URLSearchParams(location.search).get("server");
@@ -609,8 +610,8 @@ function heliLoop(p, on) {
 // fires on a painted map: one looping crackle, louder the closer you are to a fire (fades in / out)
 let fireLoop = null;
 function fireAmbience() {
-  const ac = audioContext, pm = state?.phase === "playing" && paintedMap(), me = pm && V(me_() || {});
-  let k = 0; if (pm && me) for (const [x, y, sc] of pm.fires) k = Math.max(k, Math.max(0, 1 - Math.hypot(x - me.x, y - me.y) / 420) * Math.min(1, sc + .2));
+  const ac = audioContext, fires = state?.phase === "playing" && (paintedMap()?.fires || (dynastyMap() ? dynFires : null)), me = fires && V(me_() || {});
+  let k = 0; if (fires && me) for (const [x, y, sc] of fires) k = Math.max(k, Math.max(0, 1 - Math.hypot(x - me.x, y - me.y) / 420) * Math.min(1, sc + .2));
   const vol = SFX.fire.vol * k;
   if (!fireLoop && vol > .01 && ac && ac.state === "running" && sfxOn) {
     const buf = decoded(SFX.fire, ac); if (!buf) return;
@@ -2454,6 +2455,8 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
+for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
+for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
 for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img.src = url; mapImgs[k] = img; }
 for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
@@ -2481,11 +2484,17 @@ function drawMapObj(d) {
 }
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
-const MAP_FLAT = { blood: 1, manhole: 1 };
-let decor = null, decorSrc = "";
+const MAP_FLAT = { blood: 1, manhole: 1, dBlood: 1, dManhole: 1, dPuddle: 1, dPetals: 1 };
+let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
+const SITE_STYLE = ["city", "city", "city", "dynasty"];   // lobby sites (server SITES)
+const dynastyMap = () => SITE_STYLE[state?.mapSite || 0] === "dynasty";
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
+  dynFires = []; dynLights = [];
   decor = src.startsWith("P:") ? [] : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
+  for (const d of decor) { const a = DYN_ART[d.kind]; if (!a) continue; const f = d.flip ? -1 : 1;
+    for (const [x, y, sc] of a.fires || []) dynFires.push([d.x + x * f, d.y + y, sc]);
+    for (const [x, y] of a.lights || []) dynLights.push([d.x + x * f, d.y + y]); }
 }
 const STREETLIGHT_LAMP = { x: 0.36, y: -0.83 };   // lamp position relative to the sprite (x from centre, y from the base), in sprite widths/heights
 function drawDecor(d) {
@@ -2502,6 +2511,7 @@ function drawDecor(d) {
 
 function drawWorld(){
   const pm = state && paintedMap(); if (pm) return drawPaintedWorld(pm);
+  if (state && dynastyMap()) return drawDynastyWorld();
   const x0 = Math.floor(cam.x / 32) * 32, y0 = Math.floor(cam.y / 32) * 32;
   const grassP = pattern("grass"), asphaltP = pattern("asphalt"), plazaP = pattern("plaza"), walkP = pattern("plaza", .5);
   if (grassP && asphaltP && plazaP && state) return drawWorldArt(grassP, asphaltP, plazaP, walkP);
@@ -2522,8 +2532,51 @@ function drawWorld(){
   for (const d of decor) if (inView(d.x, d.y)) drawDecor(d);
   drawWorldObjects([]);
 }
-// ---------- Painted maps (one picture is the ground: mapLayout.js PAINTED) ----------
-const PAINT_URLS = { "fallen-dynasty": "assets/map/fallen-dynasty.webp" }, paintImgs = {};
+// ---------- Fallen Dynasty (Nov 5): a city of Chinese pieces on straight roads (mapLayout.js buildDynastyLayout / dynastyGround) ----------
+let dynGroundCache = null;
+function drawDynastyWorld() {
+  const WW = worldW(), WH = worldH(), vx = cam.x - 2, vy = cam.y - 2, vw = W + 4, vh = H + 4;
+  if (!dynGroundCache || dynGroundCache.w !== WW) dynGroundCache = { w: WW, g: dynastyGround(WW, WH) };
+  const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
+  const grass = pattern("dgrass"); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
+  for (const g of dynGroundCache.g) { const p = pattern("d" + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
+    if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
+  ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
+  syncDecor();
+  const tall = [];
+  for (const d of decor) {
+    const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => { drawMapObj(d); dynPieceFx(d, a); } });
+  }
+  drawWorldObjects(tall);
+}
+// a piece's fires (animated flames + smoke, drawn on the burning building) and lit lanterns / windows (a warm flickering glow)
+function dynPieceFx(d, a) {
+  if (!a || (!a.fires && !a.lights)) return;
+  const t = performance.now() / 1000, f = d.flip ? -1 : 1, seed = (d.x * 7 + d.y * 13) % 100;
+  ctx.save();
+  (a.fires || []).forEach(([fx, fy, s], i) => {
+    const x = d.x + fx * f, y = d.y + fy, k = .8 + .2 * Math.sin(t * 7 + i * 1.9 + seed);
+    ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(x, y, 2, x, y, 46 * s); g.addColorStop(0, `rgba(255,150,50,${.4 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 46 * s, y - 46 * s, 92 * s, 92 * s);
+    ctx.globalCompositeOperation = "source-over";
+    if (i === 0 && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire
+      const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
+      ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
+    }
+    drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
+  });
+  if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
+    ctx.globalCompositeOperation = "lighter";
+    a.lights.forEach(([lx, ly], i) => {
+      const x = d.x + lx * f, y = d.y + ly, st = Math.sin(t * 9 + i * 7.3 + seed) > .985 ? .3 : 1, k = (.6 + .2 * Math.sin(t * 2.3 + i * 1.7 + seed)) * st;
+      ctx.globalAlpha = k; const g = ctx.createRadialGradient(x, y, 1, x, y, 24); g.addColorStop(0, "rgba(255,190,110,.55)"); g.addColorStop(1, "rgba(255,120,60,0)"); ctx.fillStyle = g; ctx.fillRect(x - 24, y - 24, 48, 48);
+    });
+  }
+  ctx.restore();
+}
+// ---------- Painted maps (one picture is the ground: mapLayout.js PAINTED; none at the moment) ----------
+const PAINT_URLS = {}, paintImgs = {};
 for (const [k, url] of Object.entries(PAINT_URLS)) { const im = new Image(); im.src = url; paintImgs[k] = im; }
 function drawPaintedWorld(pm) {
   const WW = worldW(), WH = worldH(), im = paintImgs[pm.art];
@@ -2591,8 +2644,8 @@ function drawPaintedGround(pm) {
   });
   ctx.restore();
 }
-// over everything (painted maps): rain, drifting blossom petals, embers floating up from the fires
-function drawPaintedOverlay(pm) {
+// over everything (Fallen Dynasty / painted maps): rain, drifting blossom petals, embers floating up from the fires
+function drawPaintedOverlay(fires) {
   const t = performance.now() / 1000;
   ctx.save();
   ctx.strokeStyle = "rgba(170,190,230,.16)"; ctx.lineWidth = 1; ctx.beginPath();
@@ -2606,7 +2659,7 @@ function drawPaintedOverlay(pm) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(t * (1 + i % 3) + i); ctx.globalAlpha = .7; ctx.fillStyle = i % 3 ? "#f2a6c8" : "#ffd0e4"; ctx.fillRect(-2.5, -1.5, 5, 3); ctx.restore();
   }
   ctx.globalCompositeOperation = "lighter";
-  pm.fires.forEach(([x, y, sc], i) => {   // embers
+  fires.forEach(([x, y, sc], i) => {   // embers
     if (!inView(x, y - 60, 120)) return;
     for (let j = 0; j < 6; j++) {
       const u = (t * (.35 + j * .05) + j * .17 + i * .31) % 1, ex = x + Math.sin(u * 6 + j * 2 + i) * 16 * sc + u * 20, ey = y - u * 120 * sc;
@@ -2660,7 +2713,7 @@ function drawWorldObjects(extra) {
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
-  const pmOver = paintedMap(); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
+  const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
   for (const f of mechaLate.splice(0)) { const d = ctxDepth; ctx.save(); try { f(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }     // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
@@ -2695,6 +2748,10 @@ function drawNight() {
   if (decor && sl?.naturalWidth) for (const d of decor) {
     if (d.kind !== "streetlight" || !inView(d.x, d.y, NIGHT.lightR)) continue;
     lightHole(d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, d.y - 24 - cam.y, NIGHT.lightR, NIGHT.lightAlpha);
+  }
+  if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
+    for (const [x, y] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, 110, .8);
+    for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
   }
   const pmN = paintedMap();
   if (pmN) {   // painted map: its lamps and fires light the night
@@ -2767,6 +2824,8 @@ function drawScreen() {
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
+  else if (dynastyMap() && dynGroundCache) { m.fillStyle = '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
@@ -2841,7 +2900,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Burning Plaza"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -2943,6 +3002,17 @@ function drawMapThumb() {   // a little satellite view of the chosen map (from t
     const k = W / pm.w, sh = H / k, sy = Math.max(0, Math.min(pm.h - sh, pm.tower[1] - sh * .62));
     g.imageSmoothingEnabled = true; g.drawImage(im, 0, sy, pm.w, sh, 0, 0, W, H);
     g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
+    return;
+  }
+  if (SITE_STYLE[state?.mapSite || 0] === "dynasty" && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
+    const MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = 20;
+    g.fillStyle = "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
+    const items = src.split(";").map(r => { const [ki, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[ki], x, y, f }; })
+      .filter(d => d.kind && d.y < y0 + H / k + 260 && Math.abs(d.x - MW / 2) < 1200).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
+    let waiting = false;
+    for (const d of items) { const im = mapImgs[d.kind]; if (!im?.naturalWidth) { if (im && !waiting) { waiting = true; im.addEventListener("load", drawMapThumb, { once: true }); } continue; }
+      g.save(); g.translate((d.x - x0) * k, (d.y - y0) * k); if (d.f === 1) g.scale(-1, 1); g.drawImage(im, -im.width * k / 2, -im.height * k, im.width * k, im.height * k); g.restore(); }
+    const v = g.createLinearGradient(0, 0, 0, H); v.addColorStop(0, "rgba(10,12,30,.25)"); v.addColorStop(1, "rgba(10,12,30,.55)"); g.fillStyle = v; g.fillRect(0, 0, W, H);
     return;
   }
   g.fillStyle = "#1b1f1a"; g.fillRect(0, 0, W, H);
