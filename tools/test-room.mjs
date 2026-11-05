@@ -741,7 +741,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const hold = (n, a = 0) => { for (let i = 0; i < n; i++) { send(A, "input", { dx: 0, dy: 0, a, f: 1 }); tick(1); } };
   tick(10); ok(a1.hp === 500 && !v.fire, "no flame unless she holds left click");
   hold(20); ok(a1.hp === 500 - 48 && a2.hp === 500 - 48 && v.fire, `holding: 12 dmg every 0.25s to everything in the cone (${500 - a1.hp}, ${500 - a2.hp} dmg in 1s)`);
-  ok(wide.hp === 500 && far.hp === 500 && back.hp === 500, "...42 degrees wide, 190px long (not 35 degrees off, 240px away or behind her)");
+  ok(wide.hp === 500 && far.hp === 500 && back.hp === 500, "...60 degrees wide, 190px long (not 35 degrees off, 240px away or behind her)");
   { send(A, "input", { dx: 0, dy: 0, a: 0, f: 0 }); const h = a1.hp; tick(10); ok(a1.hp === h && !v.fire, "...let go: it stops"); }
   // walls block it
   { room.mapBoxesNear = () => [{ x: p.x + 60, y: p.y, hw: 10, hh: 60 }]; const h = a1.hp; hold(8); ok(a1.hp === h, "the flame doesn't go through a wall"); room.mapBoxesNear = () => []; send(A, "input", { a: 0, f: 0 }); tick(10); }

@@ -1256,7 +1256,7 @@ function drawMecha(p, v, aim, now) {
 }
 // sofea-flame.webp (tools/bake-flamethrower.py v3, from the Vefects fire VFX): row 0 = 36 frames 336x240 (nozzle at (6, 120),
 // jet ~285px of art): 0-7 ignite, 8-27 seamless loop, 28-35 cut off; row 1 (y 240) = each frame's soft glow at half size (168x120)
-const JETFX = { cw: 336, ch: 240, nx: 6, len: 285, loop: [8, 20], end: 28 };
+const JETFX = { cw: 336, ch: 240, nx: 6, len: 285, loop: [8, 20], end: 28, wide: 1.5 };   // wide: stretched sideways so the art's ~42-degree cone covers the 60-degree damage cone
 function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm's nozzle to the ground 190px out where she aims
   const im = sImgs.flame, J = JETFX; if (!im?.naturalWidth) return;
   const age = now - fs.at; let t, f, f2;   // t = position in frames; each frame cross-fades into the next
@@ -1267,7 +1267,7 @@ function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm'
   const tx = p.x + Math.cos(aim) * MECHA.range, ty = p.y + Math.sin(aim) * MECHA.range * .92;   // ground point at the end of the cone
   const L = Math.max(60, Math.hypot(tx - ox, ty - oy)), ang = Math.atan2(ty - oy, tx - ox), sc = L / J.len, k = t - Math.floor(t);
   const flick = .85 + .15 * Math.sin(now / 37) * Math.sin(now / 71);
-  ctx.save(); ctx.translate(ox, oy); ctx.rotate(ang);
+  ctx.save(); ctx.translate(ox, oy); ctx.rotate(ang); ctx.scale(1, J.wide);
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .3 * flick;   // hot light on the ground under the jet
   const g = ctx.createRadialGradient(L * .6, 0, 4, L * .6, 0, L * .6); g.addColorStop(0, "#ff9a3c"); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.fillRect(0, -L * .65, L * 1.25, L * 1.3);
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
@@ -2819,7 +2819,7 @@ const ROSTER = [
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
              { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
-             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px cone). Right click: a big lightsaber sweep (160px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px, 60° cone). Right click: a big lightsaber sweep (160px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
