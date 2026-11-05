@@ -975,6 +975,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   tick(6); ok(p.x < 1000 - 120, `he hops back away from his aim (${Math.round(1000 - p.x)}px)`);
   const f0 = far.map(z => [z.x, z.y, z.hp]); for (const r of room.ripples) r.t -= 1000; tick(2);   // ripples run on the wall clock
   ok(far.every((z, i) => z.hp < f0[i][2] && Math.hypot(z.x - f0[i][0], z.y - f0[i][1]) > 30), `the grenades blow where he aimed (fan: middle + side grenade both hit, knocked back ${far.map((z, i) => Math.round(Math.hypot(z.x - f0[i][0], z.y - f0[i][1]))).join(", ")}px)`);
-  ok(events.some(e => e.type === "frag") && p.ultCd > 28 && !p.ultReady, `30s cooldown (${p.ultCd}s)`);
+  ok(events.some(e => e.type === "frag") && p.ultCd > 18 && p.ultCd <= 20 && !p.ultReady, `20s cooldown (${p.ultCd}s)`);
+  room.state.noCd = true; tick(1); const n0 = events.filter(e => e.type === "frag").length; send(A, "ult", { a: 0, d: 300 });
+  ok(p.ultCd > 18 && !p.ultReady && events.filter(e => e.type === "frag").length === n0, "...even in test mode (no-cooldown ultimates) it stays on cooldown: no spamming");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

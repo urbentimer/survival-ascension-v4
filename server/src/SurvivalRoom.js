@@ -241,10 +241,10 @@ const DASH_DISTANCE = 50, DASH_COOLDOWN = 5;   // seconds // you can place struc
 // Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
 // Upgrades are stored separately, so switching weapons never erases them.
 // Marcus E: Combat Rush. +50% damage and +25% attack speed (guns and melee) for 6s, 15s cooldown (counts from the press).
-// Marcus Q: Frag Barrage (100 kills, then 30s cooldown). A concussion blast around him (hurts + shoves zombies away), he hops back
+// Marcus Q: Frag Barrage (100 kills, then 20s cooldown; the cooldown applies in test mode too). A concussion blast around him (hurts + shoves zombies away), he hops back
 // away from his aim, and throws 3 grenades in a fan toward the mouse; each lands (0.55s, 0.08s apart) and blows with a big knockback.
 const MARCUS = { rush: { cd: 15, t: 6, dmg: 50, rate: 1.25 },
-  frag: { cd: 30, n: 3, fan: 0.35, min: 140, max: 380, flight: 0.55, gap: 0.08, dmg: 110, r: 85, push: 60, bossMult: 0.5,
+  frag: { cd: 20, n: 3, fan: 0.35, min: 140, max: 380, flight: 0.55, gap: 0.08, dmg: 110, r: 85, push: 60, bossMult: 0.5,
           blast: { r: 150, dmg: 40, push: 90 }, hop: { dist: 170, t: 0.22 } } };
 function applyLoadout(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
@@ -1079,7 +1079,7 @@ export class SurvivalRoom extends Room {
     this.state.structures.set(st.id, st); this.state.message = `${p.name} deployed a HEAVY TURRET!`;
   }
   // Test mode (host toggle, on by default for now): ultimates are unlocked and have no cooldown (still can't stack while one is running)
-  ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd) r.left = r.alive ? r.active : 0; return r; }
+  ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd && p.characterClass !== "assault") r.left = r.alive ? r.active : 0; return r; }   // Marcus's Frag Barrage is instant: it keeps its cooldown even in test mode (user, Nov 5)
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: alive ? active + ASTRA.police.cd * 1000 : Math.max(0, info.readyAt - now) }; }
