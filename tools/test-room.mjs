@@ -14,7 +14,7 @@ let fails = 0; const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAI
 const W = ms => new Promise(r => setTimeout(r, ms));
 
 function makeRoom(withMap = false) {
-  const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false;   // tests check the real cooldowns
+  const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.state.noCd = false;   // tests check the real cooldowns
   if (!withMap) room.mapGrid = new Map();   // most tests use an empty map (fixed test positions may sit inside buildings)
   const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" };
@@ -147,7 +147,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   room._dispose(); }
 
 // 8. AI teammates
-{ const room = new SurvivalRoom(); room.onCreate({}); room.mapGrid = new Map(); room._onBroadcast = () => {};
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.mapGrid = new Map(); room._onBroadcast = () => {};
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Host" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d);
   send(B, "addBot"); ok(room.state.players.size === 2, "only the host can add bots");
@@ -233,7 +233,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   send(A, "build", { kind: "mine", x: 500, y: 600 }); p.x = 470; p.y = 600; for (let i = 0; i < 20; i++) send(A, "input", { dx: 1, dy: 0 }), room.lastInputs.set("A", Date.now() - 50);
   ok(p.x > 520, "mines can be walked over");
   room._dispose(); }
-{ const room = new SurvivalRoom(); room.onCreate({}); room.mapGrid = new Map(); let shots = 0; room._onBroadcast = (t, m) => { if (t === "shot" && m.id.startsWith("bot")) shots++; };
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.mapGrid = new Map(); let shots = 0; room._onBroadcast = (t, m) => { if (t === "shot" && m.id.startsWith("bot")) shots++; };
   const A = { sessionId: "A" }; room.onJoin(A, { name: "Host" }); room._handlers.addBot(A); room._handlers.addBot(A);
   for (const b of room.state.players.values()) if (b.isBot) { b.characterClass = "assault"; b.weapon = "rifle"; b.primary = "rifle"; b.activeSlot = 2; }
   room._handlers.start(A); room.spawnClock = 9999; room.state.zombies.clear();
@@ -245,7 +245,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   ok(shots > 10 && hitRate < 0.85 && hitRate > 0.1, "bots now miss sometimes (not perfect aim) but still help");
   room._dispose(); }
 // 12. bots keep personal space
-{ const room = new SurvivalRoom(); room.onCreate({}); room.mapGrid = new Map(); room._onBroadcast = () => {};
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.mapGrid = new Map(); room._onBroadcast = () => {};
   const A = { sessionId: "A" }; room.onJoin(A, { name: "Host" }); room._handlers.addBot(A); room._handlers.addBot(A);
   room._handlers.start(A); room.spawnClock = 9999; room.state.zombies.clear();
   const bots = [...room.state.players.values()].filter(p => p.isBot); bots[1].x = bots[0].x; bots[1].y = bots[0].y;
@@ -275,7 +275,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   send(A, "slot", { n: 1 }); room.chargeAt.clear(); p.melee = "knife"; send(A, "charge", { on: true }); ok(!p.charging, "only the axe can charge");
   room._dispose(); }
 // 14. explore mode: no zombies, frozen wave timer; can be switched off again
-{ const room = new SurvivalRoom(); room.onCreate({}); room._onBroadcast = () => {};
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room._onBroadcast = () => {};
   const A = { sessionId: "A" }; room.onJoin(A, { name: "Host" }); room._handlers.start(A, { explore: true });
   for (let i = 0; i < 30; i++) { room.lastTick = Date.now() - 100; room.spawnClock = 0; room.tick(); }
   ok(room.state.explore && room.state.zombies.size === 0 && room.state.elapsed === 0, "explore mode: no zombies spawn and the wave timer stays frozen");
@@ -348,7 +348,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   const runners = [...room.state.zombies.values()].filter(z => z.kind === "runner");
   ok(runners.length > 50 && runners.every(z => z.role === "tower"), `every runner is a tower zombie (${runners.length} runners)`);
   room._dispose(); }
-{ const room = new SurvivalRoom(); room.onCreate({ solo: true }); room._onBroadcast = () => {}; room.mapGrid = new Map();
+{ const room = new SurvivalRoom(); room.onCreate({ solo: true, site: 0 }); room._onBroadcast = () => {}; room.mapGrid = new Map();
   const A = { sessionId: "A" }; room.onJoin(A, { name: "Host" }); room._handlers.start(A, {});
   room._handlers.debugWave(A, { n: 12 }); ok(room.state.stage === 12 && room.state.waveType === "boss" && room.state.bossPhase === "horde", "solo: jump to wave 12 starts the boss wave (horde first)");
   room._handlers.debugWave(A, { n: 6 }); ok(room.state.stage === 6 && room.state.waveType === "normal" && room.state.zombies.size === 0, "solo: jump to wave 6");
@@ -564,7 +564,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.ultInfo.get(A.sessionId).readyAt = Date.now() - 1; tick(1); ok(p.ultReady, "...then Q is ready again (stays unlocked)");
   room._dispose(); }
 // 29. RAVEN (Scout): katana only, Shadow Pass (E), flaming katana + burns, Blade Storm (Q), katana tiers
-{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Raven" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
   send(A, "chooseClass", { id: "scout" });
@@ -607,7 +607,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(p.katanaKills === 50 && p.katanaTier === 1, `50 katana kills -> katana tier 1 (Honed Edge)`);
   room._dispose(); }
 // 30. DANTE (Demolitionist): shotgun, Breacher Blast (E), Demo Ripple (Q)
-{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.state.noCd = false; room.mapGrid = new Map(); const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Dante" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
   send(A, "chooseClass", { id: "demolitionist" }); room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
@@ -911,7 +911,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "skill2", {}); call(); ok(!room.safeOf(p) && m.safeReady === 0, "R with a boss in the way: refused, no cooldown used");
   room._dispose(); }
 // 39. LOBBY: rename, READY UP, mission settings (host only): map site, difficulty, wave mode, friendly fire, extra loot; Sofea not pickable
-{ const room = new SurvivalRoom(); room.onCreate({}); room.state.noCd = false; const events = []; room._onBroadcast = (t, m) => events.push({ type: t, ...m });
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.state.noCd = false; const events = []; room._onBroadcast = (t, m) => events.push({ type: t, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Host" }); room.onJoin(B, { name: "Friend" });
   const send = (c, t, d) => room._handlers[t](c, d), p = room.state.players.get("A"), q = room.state.players.get("B");
   ok(p.ready && !q.ready, "host counts as ready, a new player starts NOT READY");

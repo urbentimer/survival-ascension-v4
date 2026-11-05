@@ -5,7 +5,7 @@ process.env.SA_QUIET = "1";
 let fake = 1.8e12; Date.now = () => fake;   // game time: 50ms per tick
 const here = dirname(fileURLToPath(import.meta.url)), root = join(here, "..");
 const { SurvivalRoom } = await import(join(here, "dist/room-test.mjs"));
-const room = new SurvivalRoom(); room.onCreate({}); room._onBroadcast = () => {};
+const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room._onBroadcast = () => {};
 const A = { sessionId: "A" }; room.onJoin(A, { name: "H" }); room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
 const p = room.state.players.get("A"); p.hp = p.maxHp = 1e6;
 const boxes = new Set(); for (const v of room.mapGrid.values()) for (const b of v) if (b.hw > 40 && b.hh > 30) boxes.add(b);
