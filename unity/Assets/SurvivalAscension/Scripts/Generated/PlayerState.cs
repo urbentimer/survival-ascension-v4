@@ -195,5 +195,11 @@ public PlayerState() { }
 
 		[Type(59, "number")]
 		public float cdr = default(float);
+
+		[Type(60, "number")]
+		public float hands = default(float);
+
+		[Type(61, "number")]
+		public float reloadTotal = default(float);
 	}
 }

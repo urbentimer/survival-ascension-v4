@@ -123,15 +123,19 @@ const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed"
 // Levels (Nov 5): XP is shared, every kill gives its XP to the whole team, so everyone levels together whatever the team size.
 // A full 50-wave run makes ~38-40k team XP (sims); 30k reaches the cap, so level 30 lands around wave 43-50. Every run starts at level 1.
 const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);
-// Skill cooldown reduction (level-up upgrade, Nov 5): -5% per pick, max -35%. Every skill timer (E, Q, R, Viktor's charges) just runs faster: x1/(1-cdr).
-const CDR = { step: 0.05, max: 0.35 };   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
+// Skill cooldown reduction (level-up upgrade): -10% per pick, max -60% (Nov 5: was -5% / -35%). Every skill timer (E, Q, R, Viktor's charges) just runs faster: x1/(1-cdr).
+const CDR = { step: 0.10, max: 0.60 };
+// Fast Hands (level-up upgrade, Nov 5): per pick +15% reload speed and +20% magazine size, up to 5 picks (+75% / +100%).
+const HANDS = { reload: 0.15, mag: 0.20, max: 5 };
+const magCap = (p, w) => Math.round(w.mag * (1 + HANDS.mag * (p.hands || 0)));   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
 const UPGRADES = {
   damage: p => { p.bonusDamage = (p.bonusDamage || 0) + 20; applyLoadout(p); }, // +20% damage
   fireRate: p => { p.rateMult = Math.min(3, (p.rateMult || 1) * 1.2); applyLoadout(p); },
   health: p => { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 35); },
   defence: p => { p.defence += 2; },
   speed: p => { p.speed = Math.min(300, p.speed * 1.1); },
-  cooldown: p => { p.cdr = Math.min(CDR.max, Math.round(((p.cdr || 0) + CDR.step) * 100) / 100); }
+  cooldown: p => { p.cdr = Math.min(CDR.max, Math.round(((p.cdr || 0) + CDR.step) * 100) / 100); },
+  hands: p => { p.hands = Math.min(HANDS.max, (p.hands || 0) + 1); p.magSize = magCap(p, WEAPONS[p.weapon] || WEAPONS.rifle); }
 };
 // Class identity: base HP/speed/defence plus multipliers that apply to ANY weapon.
 const CLASS_STATS = {
@@ -688,7 +692,7 @@ export class SurvivalRoom extends Room {
       p.level = 1; p.xp = 0; p.xpNext = 30;
       p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
       p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
-      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0;
+      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0;
       p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.weapon = "rifle"; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
       this.mags.delete(p.sessionId + ":rifle"); this.mags.delete(p.sessionId + ":pistol"); this.loadMag(p);
       p.ammo = 240; p.abilityCooldown = 0; p.bleedout = 0; p.reviveProgress = 0; p.reviveTargetId = "";
@@ -758,7 +762,7 @@ export class SurvivalRoom extends Room {
     p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
-    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
+    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level = 1; p.xp = 0; p.xpNext = xpForLevel(1); p.currency = 0;   // every run starts at level 1 (upgrades don't carry over either)
     const classIds=PICKABLE;
@@ -917,17 +921,17 @@ export class SurvivalRoom extends Room {
   loadMag(p) {
     const w = WEAPONS[p.weapon] || WEAPONS.rifle;
     const saved = this.mags.get(p.sessionId + ":" + p.weapon);
-    p.magSize = w.mag; p.mag = saved === undefined ? w.mag : saved;
+    p.magSize = magCap(p, w); p.mag = saved === undefined ? p.magSize : Math.min(saved, p.magSize);
   }
   startReload(p) {
     const w = WEAPONS[p.weapon] || WEAPONS.rifle;
-    if (p.reloadLeft > 0 || p.activeSlot === 1 || p.activeSlot === 5 || p.mag >= w.mag) return;
+    if (p.reloadLeft > 0 || p.activeSlot === 1 || p.activeSlot === 5 || p.mag >= magCap(p, w)) return;
     if (!w.infinite && p.ammo <= 0) { this.event(`${p.name} has no spare ammo for the ${p.weapon}.`); return; }
-    p.reloadLeft = w.reload;
+    p.reloadLeft = w.reload / (1 + HANDS.reload * (p.hands || 0)); p.reloadTotal = p.reloadLeft;   // Fast Hands: faster reloads
   }
   finishReload(p) {
     const w = WEAPONS[p.weapon] || WEAPONS.rifle;
-    const need = w.mag - p.mag, take = w.infinite ? need : Math.min(need, p.ammo);
+    const need = magCap(p, w) - p.mag, take = w.infinite ? need : Math.min(need, p.ammo);
     p.mag += take; if (!w.infinite) p.ammo -= take;
   }
   meleeAttack(p, aim, wantHeavy = false) {
@@ -1013,7 +1017,7 @@ export class SurvivalRoom extends Room {
   }
 
   applyUpgrade(p, id) {
-    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL || (id === "cooldown" && (p.cdr || 0) >= CDR.max - 1e-9)) return false;
+    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL || (id === "cooldown" && (p.cdr || 0) >= CDR.max - 1e-9) || (id === "hands" && (p.hands || 0) >= HANDS.max)) return false;
     p.xp -= p.xpNext;
     p.level++;
     p.xpNext = xpForLevel(p.level); if (p.level >= MAX_LEVEL) p.xp = 0;

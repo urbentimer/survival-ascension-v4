@@ -999,15 +999,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.elapsed = 61; room.spawnClock = 9999; tick(2);
   ok(room.state.bossPhase === "intro" && room.state.zombies.size === 0, `15s later with 2 left: they vanish and the boss intro starts (${room.state.bossPhase})`);
   room._dispose(); }
-// 45. Level-up upgrade "Quick recovery": -5% skill cooldowns per pick, max -35% (E, Q and the rest count down faster)
+// 45. Level-up upgrade "Quick recovery": -10% skill cooldowns per pick, max -60% (E, Q and the rest count down faster)
 { const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.noCd = false;
   p.xp = 99999; for (let i = 0; i < 9; i++) send(A, "upgrade", { id: "cooldown" });
-  ok(Math.abs(p.cdr - .35) < 1e-9 && p.level === 8, `7 picks reach the -35% cap, more are refused (cdr ${p.cdr}, level ${p.level})`);
+  ok(Math.abs(p.cdr - .6) < 1e-9 && p.level === 7, `6 picks reach the -60% cap, more are refused (cdr ${p.cdr}, level ${p.level})`);
   p.abilityCooldown = 0; send(A, "ability", {}); const e0 = p.abilityCooldown; tick(20);   // 1s
-  ok(Math.abs((e0 - p.abilityCooldown) - 1 / .65) < .05, `E cooldown runs 1/0.65 = 1.54x faster (${(e0 - p.abilityCooldown).toFixed(2)}s per second)`);
+  ok(Math.abs((e0 - p.abilityCooldown) - 1 / .4) < .05, `E cooldown runs 1/0.4 = 2.5x faster (${(e0 - p.abilityCooldown).toFixed(2)}s per second)`);
   p.ultKills = 100; send(A, "ult", { a: 0, d: 300 }); tick(1); const q0 = p.ultCd; tick(20);
-  ok(Math.abs((q0 - p.ultCd) - (1 / .65 - 1)) < .12, `Q (Frag Barrage) cooldown too: ${(q0 - p.ultCd).toFixed(2)}s extra per second on top of the clock (20s -> ~13s)`);   // Q timers are wall-clock; the test clock doesn't move, so only the extra shows
+  ok(Math.abs((q0 - p.ultCd) - (1 / .4 - 1)) < .15, `Q (Frag Barrage) cooldown too: ${(q0 - p.ultCd).toFixed(2)}s extra per second on top of the clock (20s -> 8s)`);   // Q timers are wall-clock; the test clock doesn't move, so only the extra shows
   room._dispose(); }
 // 46. Test tool "Level +1": the host gets exactly the XP for one more level (stacks with levels already waiting), nothing at 30, not for non-hosts
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
@@ -1045,5 +1045,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   think(.7); const c = room.wHazards.find(h => h.k === "crows"); ok(c && Math.abs(c.x - 2300) < 5, "Crow Storm lands on the far survivor");
   think(1.5); ok(q.hp < 500 && q.slowed > 0, `inside it: damage + slow (${Math.round(500 - q.hp)} dmg in 1.5s)`);
   z.hp = z.maxHp * .3; think(.1); ok(z.enraged, "enraged below 35%");
+  room._dispose(); }
+// 48. Level-up upgrade "Fast Hands": +15% reload speed and +20% magazine per pick, max 5 picks
+{ const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  p.activeSlot = 2; p.weapon = "rifle"; p.primary = "rifle"; room.loadMag(p); const base = p.magSize;
+  p.mag = 0; room.startReload(p); const r0 = p.reloadLeft; p.reloadLeft = 0; room.finishReload(p);
+  p.xp = 99999; for (let i = 0; i < 7; i++) send(A, "upgrade", { id: "hands" });
+  ok(p.hands === 5 && p.level === 6, `5 picks max, more are refused (hands ${p.hands}, level ${p.level})`);
+  ok(p.magSize === base * 2, `magazine +100% (${base} -> ${p.magSize})`);
+  p.mag = 0; p.reloadLeft = 0; room.startReload(p); ok(Math.abs(p.reloadLeft - r0 / 1.75) < .01 && p.reloadTotal === p.reloadLeft, `reload 1.75x faster (${r0.toFixed(2)}s -> ${p.reloadLeft.toFixed(2)}s)`);
+  p.reloadLeft = .01; tick(2); ok(p.mag === base * 2, `a reload fills the bigger magazine (${p.mag})`);
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

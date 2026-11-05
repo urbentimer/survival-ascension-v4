@@ -195,3 +195,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: drawWendigo / drawWendigoFx / drawWendigoGround (warning circles), BOSS_INFO.wendigo intro card, death fx. Preview test tools: "Wendigo" spawn button; "Boss intro now" now opens the CURRENT boss wave's boss (skip to 8 first).
 - Preview builder now packs PNGs as WebP q90 (cache tools/dist/webp/, ~1 min first time): 16.7 -> 13.9 MB before the Wendigo, 15.9 MB with it. Cache v=20261105z.
 - Handipede prompts were also given (not made yet): the next boss slot would be wave 12 (placeholder "screamer").
+
+## Nov 6 — Level-up upgrades: Quick recovery buffed, new Fast Hands
+- Quick recovery: -10% per pick, cap -60% (6 picks; timers run up to 2.5x faster). CDR = { step: .10, max: .60 }.
+- Fast Hands (7th upgrade, id "hands"): per pick +15% reload speed and +20% magazine, max 5 picks (+75% reload speed, +100% mag). HANDS const, magCap(p, w) used by loadMag / startReload / finishReload; reload time = w.reload / (1 + .15*hands). Synced: PlayerState.hands, reloadTotal (reload bar), schema + Unity fields 60/61. Client list hides capped upgrades, keys 1-7. Tests 45 (updated) + 48. Cache v=20261106a.

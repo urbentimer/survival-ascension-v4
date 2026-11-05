@@ -22,8 +22,8 @@ function unwindTo(d) { while (ctxDepth > d) ctx.restore(); }
 function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.profileStorageKey)||"{}");}catch{return {};}}
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
-const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","+2 defence"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-5% skill cooldowns (max -35%)"] ];
-const upgradeChoices = me => upgrades.filter(([id]) => id !== "cooldown" || (me?.cdr || 0) < .35 - 1e-9);   // Quick recovery leaves the list at -35%
+const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","+2 defence"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-10% skill cooldowns (max -60%)"], ["hands","Fast Hands","+15% reload speed, +20% magazine size (max 5)"] ];
+const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me?.cdr || 0) < .6 - 1e-9) && (id !== "hands" || (me?.hands || 0) < 5));   // capped upgrades leave the list
 // ===================== GAME DATA (display only; the server has the final say) =====================
 const WEAPON_INFO = {
   pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 1.0, infinite: true },
@@ -300,7 +300,7 @@ function renderHotbar(me) {
   const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
   const kk = me.katanaKills || 0, tier = Math.min(5, Math.floor(kk / 50));
   const cd = eng ? Math.ceil(ch < 1 ? me.chargeCd || 0 : me.abilityCooldown || 0) : Math.ceil(me.abilityCooldown || 0);
-  const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / w.reload) * 100 : 0;
+  const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / (me.reloadTotal || w.reload)) * 100 : 0;
   const slots = [
     { n: 1, name: (MELEE_INFO[me.melee] || MELEE_INFO.knife).name, sub: rav && me.melee === "katana" ? (tier >= 5 ? "T5 MAX" : `T${tier} · ${kk % 50}/50`) : "melee", ic: icon(me.melee || "knife") },
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
@@ -700,7 +700,7 @@ window.addEventListener("keydown", e => {
   if (k === "tab") { e.preventDefault(); scoreboardOpen = !scoreboardOpen; return; }
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (me_() && !me_().alive && [" ", "arrowleft", "arrowright"].includes(k) && !e.repeat) { switchSpectate(k === "arrowleft" ? -1 : 1); return; }
-  if (!$("levelUp").classList.contains("hidden") && /^[1-6]$/.test(k)) { const c = upgradeChoices(me_())[Number(k) - 1]; if (c) pickUpgrade(c[0]); return; }
+  if (!$("levelUp").classList.contains("hidden") && /^[1-7]$/.test(k)) { const c = upgradeChoices(me_())[Number(k) - 1]; if (c) pickUpgrade(c[0]); return; }
   if (e.repeat && !"wasd ".includes(k) && !k.startsWith("arrow")) return;
   keys[k === " " ? "space" : k] = true;
   if (k === " ") dashQueued = true;   // a quick tap still counts
