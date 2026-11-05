@@ -232,7 +232,7 @@ const ASTRA = {
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6,   // session: longest single treatment (s)
            burst: .30, burstR: 300,          // on arrival: everyone alive within 300px of Astra (him too) heals 30% of their max HP, once (Nov 6)
            revive: 2.5, reviveR: 60, reviveHp: .35 },   // TOP priority: walks to the nearest downed teammate and revives them in 2.5s (up with 35% HP)
-  police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 7, burst: 3, gap: .12, every: 3, range: 440, leash: 600, threat: 250 },
+  police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 5, burst: 5, gap: .08, every: 2, range: 440, leash: 600, threat: 250, astra: 2 },   // Nov 6: 5-round bursts every 2s, 5 dmg; Astra gets 2 officers, every teammate 1
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
   // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
@@ -1747,9 +1747,12 @@ export class SurvivalRoom extends Room {
       this.broadcast("astra", { k: "burst", x: Math.round(p.x), y: Math.round(p.y), r: M.burstR });
       this.state.message = `${p.name} called in the EMERGENCY MEDICS!`;
     } else if (c.k === "Q") {
-      // one officer per living player (Astra included), each arriving next to the player he guards
-      const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 }, guards = [...this.state.players.values()].filter(q => q.alive);
-      const spots = guards.map(q => (this.freeSpots(q.x, q.y, 1) || this.freeSpots(p.x, p.y, 1) || [null])[0]);
+      // one officer per living teammate, TWO for Astra himself; each arrives next to the player he guards
+      const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 }, guards = [], spots = [];
+      for (const q of this.state.players.values()) {
+        if (!q.alive) continue; const n = q === p ? ASTRA.police.astra : 1, ss = this.freeSpots(q.x, q.y, n) || this.freeSpots(p.x, p.y, n) || Array(n).fill(null);
+        for (let i = 0; i < n; i++) { guards.push(q); spots.push(ss[i] || null); }
+      }
       if (!guards.length || spots.some(s => !s)) { info.summonedAt = 0; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return this.astraNo(p, "no room for the police here"); }
       spots.forEach((s, i) => this.spawnUnit(p, "police", s, { hp: ASTRA.police.hp, until: now + ASTRA.police.life * 1000, slot: i, guard: guards[i].sessionId, nextBurst: now + rand(100, 1500), burstLeft: 0, nextShot: 0, think: 0 }));
       for (const r of this.unitsOf(p.sessionId, "police")) r.hp = r.maxHp = ASTRA.police.hp * this.summonScale();

@@ -874,12 +874,12 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (const r of room.unitsOf("A", "doctor")) room.unitMem.get(r.id).until = 0; tick(1); ok(!room.unitsOf("A", "doctor").length, "doctors leave after 20s");
   // Q
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
-  send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); ok(cops.length === 2, `Q: one officer per living player (2 players -> ${cops.length})`);
-  ok(new Set(cops.map(r => room.unitMem.get(r.id).guard)).size === 2, "...each officer guards a different player");
+  send(A, "ult", {}); call(); const cops = room.unitsOf("A", "police"); const gA = cops.filter(r => room.unitMem.get(r.id).guard === "A").length; ok(cops.length === 3 && gA === 2, `Q: 2 officers guard Astra, 1 per teammate (2 players -> ${cops.length}, Astra ${gA})`);
+  ok(new Set(cops.map(r => room.unitMem.get(r.id).guard)).size === 2, "...both players are guarded");
   { const cq = cops.find(r => room.unitMem.get(r.id).guard === "B"); q.x = 1500; q.y = 900; tick(80); const dq = Math.hypot(cq.x - q.x, cq.y - q.y); ok(dq < 140, `...and stays with that player (${Math.round(dq)}px from B)`); q.x = 1060; q.y = 700; tick(60); }
-  send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 2, "...no second squad while they're out");
+  send(A, "ult", {}); call(); ok(room.unitsOf("A", "police").length === 3, "...no second squad while they're out");
   const z = placeZombie(room, p.x + 300, p.y, 400); const k0 = p.kills; for (let i = 0; i < 40; i++) { for (const r of room.unitsOf("A", "police")) { const m = room.unitMem.get(r.id); m.nextBurst = Math.min(m.nextBurst, Date.now()); m.nextShot = 0; } tick(1); }
-  ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (7 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
+  ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (5 dmg bullets in bursts of 5 every 2s) and Astra gets the kill (${p.kills - k0})`);
   ok(q.hp === q.maxHp, "...they never shoot teammates");
   for (const r of room.unitsOf("A", "police")) room.unitMem.get(r.id).until = 0; tick(1); tick(1);
   ok(!room.unitsOf("A", "police").length && !p.ultReady && p.ultCd > 59, `after 30s they go home; the 60s cooldown has been running since the press (${p.ultCd}s on the test clock)`);
