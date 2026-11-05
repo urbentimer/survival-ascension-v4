@@ -1212,7 +1212,7 @@ function drawSofea(p, img, now) {
 // sofea-mecha.webp: 8 rows (dir8 order) x 6 cols (idle, walk 1-3, flame pose, saber slash), cells 224x192, feet at (112, 186)
 // sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
-const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 160, swing: 900,   // 80px tall = 1.5x a survivor
+const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 120, swing: 900,   // 80px tall = 1.5x a survivor
   nozzle: [[-4, -24], [23, -32], [28, -47], [27, -49], [-2, -45], [-28, -49], [-29, -47], [-22, -31]],   // per direction, from the feet
   tfRow: [0, 1, 4, 5, 5, 5, 3, 2] };   // which transformation row each facing uses (tf rows: down, down-right, down-left, left, right, up)
 const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
@@ -1286,7 +1286,7 @@ function drawSaberSweep(p, a, age, feet, flip) {
   if (!slashImg.naturalWidth) return;
   const t = (age - SLASH.start) / SLASH.ms; if (t < 0 || t >= SLASH.n) return;
   const f = Math.floor(t), f2 = Math.min(SLASH.n - 1, f + 1), k = (MECHA.saber * .96) / SLASH.reach, C = SLASH.c;
-  ctx.save(); ctx.translate(p.x, feet - 42); ctx.rotate(a + Math.PI / 2); ctx.scale(flip ? -k : k, k * .9);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(p.x, feet - 38); ctx.rotate(a + Math.PI / 2); ctx.scale(flip ? -k : k, k * .9);   // drawn smaller than the art: crisp
   blendCells(slashImg, 0, 0, C, C, f, f2, t - f, -SLASH.px, -SLASH.py, C, C);
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .5; ctx.drawImage(slashImg, f * C, 0, C, C, -SLASH.px, -SLASH.py, C, C);   // glow
   ctx.restore();
@@ -2819,7 +2819,7 @@ const ROSTER = [
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
              { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
-             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px, 60° cone). Right click: a big lightsaber sweep (160px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px, 60° cone). Right click: a lightsaber sweep (120px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
