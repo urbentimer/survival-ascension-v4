@@ -178,11 +178,11 @@ const SOFEA = {
   heli: { life: 30, cd: 60, speed: 230, taken: 0.8, body: 30,
           gun: { cone: Math.PI / 2, range: 250, every: 0.1, dmg: 10, bossMult: 0.5 } },   // 100 dps per zombie on wave 1
   // mecha (R): she transforms (1s) and pilots it on foot-speed WASD. HOLD left click = flame jet (190px, 42-degree cone, 12 dmg to every
-  // zombie in it every 0.25s); right click = lightsaber sweep (230px, 150 degrees, 80 dmg once per zombie, the swing takes 0.9s).
+  // zombie in it every 0.25s); right click = lightsaber sweep (160px, 150 degrees, 80 dmg once per zombie, the swing takes 0.9s).
   // Flame pulses and swings share one attack timer. Both stop at walls. She takes normal damage; no run-over. 100s cooldown from getting out.
   mecha: { life: 30, cd: 100, call: 1, speed: 150, taken: 1, body: 20, reach: 8,   // 1.5x a survivor
            flame: { range: 190, cone: 42 * Math.PI / 180, every: 0.25, dmg: 12 },
-           saber: { range: 230, cone: 150 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },   // big sweep (Nov 5: 155px / 120 deg -> 230px / 150 deg)
+           saber: { range: 160, cone: 150 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },   // sweep (Nov 5: 155px / 120 deg -> 230px / 150 deg -> 30% smaller: 160px)
 };
 // BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
 const BRIGGS = {

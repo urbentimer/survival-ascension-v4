@@ -746,10 +746,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // walls block it
   { room.mapBoxesNear = () => [{ x: p.x + 60, y: p.y, hw: 10, hh: 60 }]; const h = a1.hp; hold(8); ok(a1.hp === h, "the flame doesn't go through a wall"); room.mapBoxesNear = () => []; send(A, "input", { a: 0, f: 0 }); tick(10); }
   // saber: right click, 155px 120 degrees, 80 dmg once per zombie, 0.9s swing, shares the timer with the flame
-  room.state.zombies.clear(); const s1 = mk(150, 0), s2 = mk(40, 120), s3 = mk(280, 0), s4 = mk(-100, 0); events.length = 0;
+  room.state.zombies.clear(); const s1 = mk(120, 0), s2 = mk(30, 110), s3 = mk(210, 0), s4 = mk(-100, 0); events.length = 0;
   send(A, "mechaSlash", { a: 0 }); tick(8);
   ok(events.some(e => e.type === "sofea" && e.k === "slash") && s1.hp === 420 && s2.hp === 420, `right click: the saber sweeps 150 degrees for 80 (${500 - s1.hp}, ${500 - s2.hp})`);
-  ok(s3.hp === 500 && s4.hp === 500, "...230px reach, nothing behind her");
+  ok(s3.hp === 500 && s4.hp === 500, "...160px reach, nothing behind her");
   hold(8); ok(s1.hp === 420, "...once per swing; no flame until the 0.9s swing is over");
   hold(6); ok(s1.hp < 420, "...then the flame carries on");
   // damage taken: normal
