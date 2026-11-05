@@ -127,7 +127,7 @@ function connected() {
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
-  room.onMessage("rush", () => {});   // Marcus Combat Rush started (hook for a VFX later)
+  room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
   room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
@@ -1019,6 +1019,45 @@ const FIRE = { cw: 180, ch: 150, ms: 70, sc: .47 };
 function bFireFrame(col, row, x, y, sx, sy, alpha, add) {   // (x, y) = bottom-centre
   ctx.save(); ctx.globalAlpha = alpha; if (add) ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true;
   ctx.drawImage(fireImg, col * FIRE.cw, row * FIRE.ch, FIRE.cw, FIRE.ch, Math.round(x - FIRE.cw * sx / 2), Math.round(y - FIRE.ch * sy), FIRE.cw * sx, FIRE.ch * sy); ctx.restore();
+}
+// ---------- Marcus: Combat Rush (E) aura. Behind him: red ground glow + a body haze. In front: rising embers + a heat outline.
+// Starts with a shock ring; fades out over the last half second (skillT = seconds left, synced).
+const rushStart = new Map();
+function marcusRush(p, now, front) {
+  const t = now / 1000, fade = Math.min(1, p.skillT / .5), born = now - (rushStart.get(p.sessionId) || -1e9);
+  const fy = p.y + SPR.feet, cy = fy - 26, beat = .5 + .5 * Math.sin(t * 9);
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  if (!front) {
+    let g = ctx.createRadialGradient(p.x, fy - 2, 2, p.x, fy - 2, 56);   // ground glow
+    g.addColorStop(0, `rgba(255,60,30,${.85 * fade})`); g.addColorStop(.6, `rgba(220,20,20,${.4 * fade})`); g.addColorStop(1, "rgba(120,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, fy - 2, 56, 20, 0, 0, Math.PI * 2); ctx.fill();
+    g = ctx.createRadialGradient(p.x, cy, 4, p.x, cy, 46 + beat * 8);   // body haze, breathing with the beat
+    g.addColorStop(0, `rgba(255,40,30,${(.5 + beat * .18) * fade})`); g.addColorStop(1, "rgba(150,0,0,0)");
+    ctx.fillStyle = g; ctx.fillRect(p.x - 56, cy - 56, 112, 112);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = `rgba(255,70,50,${(.5 + beat * .4) * fade})`;   // spinning dashed ground ring
+    ctx.setLineDash([10, 7]); ctx.lineDashOffset = -t * 40; ctx.beginPath(); ctx.ellipse(p.x, fy - 2, 30 + beat * 3, 11 + beat, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  } else {
+    for (let i = 0; i < 24; i++) {   // embers / flame licks rising off him
+      const ph = (t * .9 + i * .137) % 1, sd = Math.sin(i * 12.9898) * 43758.5453, r = sd - Math.floor(sd);
+      const x = p.x + (r - .5) * 38 + Math.sin(t * 3 + i) * 5, y = fy - 4 - ph * 72, a = (1 - ph) * fade, sz = (1 - ph) * 4 + 1;
+      ctx.fillStyle = `rgba(255,${80 + (i % 3) * 50},40,${a})`; ctx.beginPath(); ctx.ellipse(x, y, sz * .7, sz * 1.8, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (born < 450) {   // activation: a red shock ring bursting out
+      const k = born / 450; ctx.lineWidth = 6 * (1 - k) + 1; ctx.strokeStyle = `rgba(255,50,40,${1 - k})`;
+      ctx.beginPath(); ctx.ellipse(p.x, fy - 2, 20 + k * 90, 7 + k * 32, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,90,60,${.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(p.x, cy, 18 + k * 30, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+// Screen pulse for the Marcus player: a red heartbeat around the edges + a flash when it starts.
+function drawRushScreen() {
+  const me = me_(); if (!me || me.characterClass !== "assault" || !(me.skillT > 0) || !me.alive) return;
+  const now = performance.now(), fade = Math.min(1, me.skillT / .5), born = now - (rushStart.get(me.sessionId) || -1e9);
+  const ph = (now / 600) % 1, beat = Math.max(Math.exp(-ph * 9), .8 * Math.exp(-Math.abs(ph - .22) * 14));   // lub-dub every 0.6s
+  const flash = born < 350 ? 1 - born / 350 : 0, a = (.16 + .2 * beat) * fade + .35 * flash;
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * (.42 - .05 * beat), W / 2, H / 2, W * .66);
+  g.addColorStop(0, "rgba(220,20,20,0)"); g.addColorStop(1, `rgba(220,20,20,${a})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
 function briggsFire(p, now, front) {
   if (!fireImg.naturalWidth) return;
@@ -2196,6 +2235,7 @@ function drawSurvivorDir8(p, pose, img) {
     if (p.ultActive > 0 && p.alive) briggsFire(p, now, false);   // War Cry: back flames behind him, his normal frames on top
   }
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
+  const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
   let flip = 0; const fix = DIR8[p.characterClass].fix, rowFix = fix && (fix[DIR8[p.characterClass].blocks[blk]] || fix.all);
   if (rowFix?.[row]) [row, flip] = rowFix[row];
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
@@ -2207,6 +2247,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.restore();
   if (p.characterClass === "juggernaut" && p.ultActive > 0 && p.alive) briggsFire(p, now, true);   // burning ring in front
   if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsDome(p, now);
+  if (rush) marcusRush(p, now, true);
   return true;
 }
 
@@ -2807,6 +2848,7 @@ function drawScreen() {
   if (!vignette) { vignette = ctx.createRadialGradient(W / 2, H / 2, H * .38, W / 2, H / 2, W * .62); vignette.addColorStop(0, "rgba(0,0,0,0)"); vignette.addColorStop(1, "rgba(2,6,10,.55)"); }
   ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
   drawNight();
+  drawRushScreen();   // Marcus Combat Rush: red heartbeat on the screen edges (over the night tint so it shows at night too)
   // street lights glow (warm, stronger at night)
   const sl = mapImgs.streetlight;
   if (decor && sl?.naturalWidth) {
