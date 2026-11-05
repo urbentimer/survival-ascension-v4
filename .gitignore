@@ -2,3 +2,7 @@ node_modules/
 tools/dist/
 /*.png
 __pycache__/
+
+# Unity starter: big reference files / copies of client audio stay out of git (they are in the zip)
+unity/Reference/
+unity/Assets/SurvivalAscension/Audio/
