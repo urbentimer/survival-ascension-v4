@@ -2673,7 +2673,9 @@ export class SurvivalRoom extends Room {
     if (!dx && !dy) dx = p.facing || 1;
     const mag = Math.hypot(dx, dy);
     this.lastDashAt.set(sid, now);
+    const x0 = p.x, y0 = p.y;
     this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
+    this.broadcast("dash", { id: sid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(p.x), y1: Math.round(p.y) });   // everyone sees the energy trail
     if (dx) p.facing = dx > 0 ? 1 : -1;
   }
   tick() {

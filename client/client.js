@@ -126,6 +126,7 @@ function connected() {
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
+  room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
@@ -836,7 +837,8 @@ function sendControls(t) {
     dashQueued = false;
     dashReady = false; dashReadyAt = performance.now() + DASH_CD_MS; setTimeout(() => dashReady = true, DASH_CD_MS);
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
-    const seq = ++PRED.seq; room.send("dash", { dx, dy, s: seq }); predictInput(me, { seq, dx, dy, dash: true });
+    const seq = ++PRED.seq, from = V(me); room.send("dash", { dx, dy, s: seq }); predictInput(me, { seq, dx, dy, dash: true });
+    if (from && PRED.ok) dashBeam(myId, from.x, from.y, PRED.x, PRED.y);
   }
 }
 // --- Pixel-art world renderer: hand-drawn Canvas sprites, buildings and props ---
@@ -1642,7 +1644,69 @@ function drawBossCorpse(c) {
   ctx.drawImage(im, f * C.w, 0, C.w, C.h, c.x - C.ax, c.y + 32 - C.fy, C.w, C.h); ctx.restore();
 }
 // Cleaver Quake on the ground: the crack, then the red, yellow and blue shockwaves one after another.
+// ---------- Dash: an energy-beam trail, one style + colour per hero (after the user's "Energy Beams FX" pack, MIT:
+// lance / gold beads / violet lightning / toxic hex / crimson pulse rings / glacier shards / prism / plasma / amber drill /
+// nova; their Godot shaders are re-drawn here in canvas). Trail from where you left to where you landed, fading in ~0.5s.
+const DASH_FX = {
+  assault:       { c: [43, 217, 255], core: [255, 255, 255], style: "lance" },    // Marcus: Cyan Lance
+  juggernaut:    { c: [255, 128, 40], core: [255, 226, 190], style: "drill" },    // Briggs: Amber Drill
+  operator:      { c: [255, 51, 84], core: [255, 219, 209], style: "pulse" },     // Sofea: Crimson Pulse
+  engineer:      { c: [90, 150, 255], core: [225, 238, 255], style: "plasma" },   // Viktor: Plasma Storm
+  scout:         { c: [153, 92, 255], core: [240, 230, 255], style: "storm" },    // Raven: Violet Storm
+  demolitionist: { c: [255, 166, 31], core: [255, 241, 196], style: "solar" },    // Dante: Solar Gold
+  sniper:        { c: [168, 237, 255], core: [255, 255, 255], style: "glacier" }, // Sienna: Glacier Shard
+  dispatcher:    { c: [107, 255, 74], core: [235, 255, 224], style: "hex" },      // Astra: Toxic Hex (his medics' green)
+  slasher:       { c: [240, 236, 222], core: [255, 255, 255], style: "nova" },    // Arshan: Nova White
+};
+const DASH_MS = 520, dashBeams = [];
+function dashBeam(id, x0, y0, x1, y1) {
+  const p = state?.players?.get(id); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
+  dashBeams.push({ x0, y0: y0 - 14, x1, y1: y1 - 14, t: performance.now(), fx: DASH_FX[p.characterClass] || DASH_FX.assault, seed: Math.random() * 100 });
+  if (dashBeams.length > 24) dashBeams.shift();
+}
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function drawDashBeams() {
+  const now = performance.now();
+  for (let i = dashBeams.length - 1; i >= 0; i--) {
+    const b = dashBeams[i], age = now - b.t; if (age > DASH_MS) { dashBeams.splice(i, 1); continue; }
+    if (!inView(b.x1, b.y1, 120)) continue;
+    const u = age / DASH_MS, fade = Math.pow(1 - u, 1.4), grow = Math.min(1, age / 70), C = b.fx.c, K = b.fx.core, st = b.fx.style;
+    const dx = b.x1 - b.x0, dy = b.y1 - b.y0, L = Math.hypot(dx, dy) * grow, a = Math.atan2(dy, dx), t = now / 1000;
+    ctx.save(); ctx.translate(b.x0, b.y0); ctx.rotate(a); ctx.globalCompositeOperation = "lighter";
+    const taper = (w0, w1, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -w0); ctx.lineTo(L, -w1); ctx.arc(L, 0, w1, -Math.PI / 2, Math.PI / 2); ctx.lineTo(0, w0); ctx.closePath(); ctx.fill(); };
+    // glow, beam, core (thin where they left, thick where they are)
+    const g = ctx.createLinearGradient(0, 0, L, 0); g.addColorStop(0, rgba(C, 0)); g.addColorStop(.35, rgba(C, .22 * fade)); g.addColorStop(1, rgba(C, .42 * fade)); taper(3, 17 * (1 - u * .4), g);
+    const g2 = ctx.createLinearGradient(0, 0, L, 0); g2.addColorStop(0, rgba(C, .1 * fade)); g2.addColorStop(1, rgba(C, .85 * fade)); taper(1.5, 7 * (1 - u * .5), g2);
+    if (st === "prism") { const pg = ctx.createLinearGradient(0, 0, L, 0); ["#ff4d6d", "#ffb347", "#fff35c", "#5cff8a", "#5cc8ff", "#b07cff"].forEach((c, k) => pg.addColorStop(k / 5, c)); ctx.globalAlpha = fade * .8; taper(1, 4, pg); ctx.globalAlpha = 1; }
+    const g3 = ctx.createLinearGradient(0, 0, L, 0); g3.addColorStop(0, rgba(K, .15 * fade)); g3.addColorStop(1, rgba(K, fade)); taper(.6, 2.6 * (1 - u * .5), g3);
+    // each style's pattern along the beam
+    const n = Math.max(2, Math.round(L / 12));
+    ctx.lineWidth = 1.6; ctx.strokeStyle = rgba(K, .8 * fade); ctx.fillStyle = rgba(K, .9 * fade);
+    if (st === "lance" || st === "solar" || st === "nova") for (let k = 1; k < n; k++) {   // travelling beads
+      const x = ((k / n + t * 1.6) % 1) * L, r = (st === "solar" ? 2.6 : 1.8) * (.6 + .4 * x / L); ctx.beginPath(); ctx.arc(x, Math.sin(t * 6 + k) * (st === "solar" ? 2 : 0), r, 0, 7); ctx.fill(); }
+    if (st === "lance" || st === "pulse" || st === "nova" || st === "plasma") for (let k = 0; k < 3; k++) {   // rings (crescents) sliding up the beam
+      const q = (k / 3 + t * (st === "pulse" ? 2.2 : 1.4)) % 1, x = q * L, r = (4 + 9 * q) * (1 - u * .3);
+      ctx.strokeStyle = rgba(st === "pulse" ? C : K, .7 * fade * (1 - q * .5)); ctx.lineWidth = st === "pulse" ? 2.4 : 1.4; ctx.beginPath(); ctx.ellipse(x, 0, r * .35, r, 0, -Math.PI / 2, Math.PI / 2); ctx.stroke(); }
+    if (st === "storm" || st === "plasma") for (let k = 0; k < 2; k++) {   // crackling lightning, re-drawn every 45ms
+      const sd = Math.floor(now / 45) + k * 7 + b.seed; ctx.strokeStyle = rgba(k ? C : K, .85 * fade); ctx.lineWidth = k ? 2 : 1.2; ctx.beginPath(); ctx.moveTo(0, 0);
+      for (let j = 1; j <= 7; j++) { const r = Math.sin(sd * 12.9898 + j * 78.233) * 43758.5453, off = (r - Math.floor(r) - .5) * 14 * (j / 7); ctx.lineTo(L * j / 7, j === 7 ? 0 : off); } ctx.stroke(); }
+    if (st === "hex") for (let k = 1; k < n; k++) {   // little hexagons drifting off the beam
+      const q = (k / n + t * .9) % 1, x = q * L, y = Math.sin(k * 2.3 + t * 3) * 6 * q, r = 2.2 + 2 * q; ctx.strokeStyle = rgba(k % 2 ? C : K, .8 * fade); ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let j = 0; j < 6; j++) { const aa = j * Math.PI / 3 + t; ctx[j ? "lineTo" : "moveTo"](x + Math.cos(aa) * r, y + Math.sin(aa) * r); } ctx.closePath(); ctx.stroke(); }
+    if (st === "glacier") for (let k = 1; k < n; k++) {   // ice shards flaking off
+      const x = k / n * L, s = (k % 2 ? 1 : -1), h = 3 + 5 * (k / n); ctx.fillStyle = rgba(k % 2 ? K : C, .75 * fade); ctx.beginPath(); ctx.moveTo(x - 3, 0); ctx.lineTo(x + 2, s * h); ctx.lineTo(x + 4, 0); ctx.fill(); }
+    if (st === "drill") for (let k = 0; k < 2; k++) {   // a spinning double helix
+      ctx.strokeStyle = rgba(k ? C : K, .8 * fade); ctx.lineWidth = 1.6; ctx.beginPath();
+      for (let j = 0; j <= 16; j++) { const x = j / 16 * L, y = Math.sin(j * .9 - t * 14 + k * Math.PI) * (2 + 6 * j / 16); ctx[j ? "lineTo" : "moveTo"](x, y); } ctx.stroke(); }
+    // where they left: an expanding shock ring; where they landed: a star flare
+    ctx.strokeStyle = rgba(C, .7 * fade); ctx.lineWidth = 2 * (1 - u) + .5; ctx.beginPath(); ctx.ellipse(0, 0, 4 + 22 * u, (4 + 22 * u) * .55, 0, 0, 7); ctx.stroke();
+    if (age < 260) { const k = 1 - age / 260, fr = ctx.createRadialGradient(L, 0, 0, L, 0, 18); fr.addColorStop(0, rgba(K, .9 * k)); fr.addColorStop(.4, rgba(C, .5 * k)); fr.addColorStop(1, rgba(C, 0)); ctx.fillStyle = fr; ctx.fillRect(L - 18, -18, 36, 36);
+      ctx.strokeStyle = rgba(K, .8 * k); ctx.lineWidth = 1.4; ctx.beginPath(); for (let j = 0; j < 4; j++) { const aa = j * Math.PI / 4 + t * 3; ctx.moveTo(L - Math.cos(aa) * 14 * k, -Math.sin(aa) * 14 * k); ctx.lineTo(L + Math.cos(aa) * 14 * k, Math.sin(aa) * 14 * k); } ctx.stroke(); }
+    ctx.restore();
+  }
+}
 function drawGroundFx() {
+  drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
   const now = performance.now();
   for (let i = fx.length - 1; i >= 0; i--) {
