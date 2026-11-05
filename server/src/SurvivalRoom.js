@@ -999,7 +999,7 @@ export class SurvivalRoom extends Room {
   useAbility(p, data) {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
-      if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts when the doctors arrive
+      if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts on the press (refunded if the call fails)
       if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
@@ -1122,7 +1122,7 @@ export class SurvivalRoom extends Room {
   ultState(p, now = Date.now()) { return this.ultStateRaw(p, now); }   // cooldowns always apply (Nov 6: test mode only unlocks Q now)
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
-    if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: alive ? active + ASTRA.police.cd * 1000 : Math.max(0, info.readyAt - now) }; }
+    if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: Math.max(0, (info.readyAt || 0) - now) }; }   // Q cooldown counts from the press (Nov 6)
     if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
@@ -1144,7 +1144,8 @@ export class SurvivalRoom extends Room {
     if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
     if (p.characterClass === "dispatcher") {   // police: Q is blocked while the squad is out; the 60s cooldown starts when the last officer leaves
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
-      if (this.astraCast(p, "Q")) { info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); } return;
+      if (this.unitsOf(p.sessionId, "police").length) return;   // one squad at a time
+      if (this.astraCast(p, "Q")) { info.summonedAt = now; info.readyAt = now + ASTRA.police.cd * 1000; this.ultInfo.set(p.sessionId, info); } return;   // cooldown starts on the press
     }
     if (p.characterClass === "slasher") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || this.arshanBusy(p)) return;
@@ -1390,7 +1391,8 @@ export class SurvivalRoom extends Room {
       const info = this.ultInfo.get(p.sessionId);
       if (info) {
         if (info.readyAt !== m.q) { m.qPending = info.readyAt > now; m.q = info.readyAt; }
-        if (m.qPending && !this.ultStateRaw(p, now).alive) { m.qPending = false; if (info.readyAt > now && k < 1) { info.readyAt = now + (info.readyAt - now) * k; } m.q = info.readyAt; }
+        // Astra's Q cooldown runs from the press: shrink it straight away; other Qs once they've ended
+        if (m.qPending && (p.characterClass === "dispatcher" || !this.ultStateRaw(p, now).alive)) { m.qPending = false; if (info.readyAt > now && k < 1) { info.readyAt = now + (info.readyAt - now) * k; } m.q = info.readyAt; }
       }
       const vm = this.vmemory.get(p.sessionId);
       if (vm) { if ((vm.mechaReady || 0) !== (m.mecha || 0)) { if (vm.mechaReady > now && k < 1) vm.mechaReady = now + (vm.mechaReady - now) * k; m.mecha = vm.mechaReady; } }
@@ -1708,6 +1710,8 @@ export class SurvivalRoom extends Room {
       site = this.safeSite(p); if (!site) return this.astraNo(p, "no room for a safehouse here");
     }
     m.cast = { k, at: now + ASTRA.call * 1000, site };
+    if (k === "E") p.abilityCooldown = ASTRA.medic.cd;          // every cooldown starts the moment the skill is used (Nov 6);
+    if (k === "R") m.safeReady = now + ASTRA.safe.cd * 1000;    // finishCast refunds it if the call fails (downed, no room)
     this.broadcast("astra", { k: "call", id: p.sessionId, s: k });
     return true;
   }
@@ -1727,11 +1731,12 @@ export class SurvivalRoom extends Room {
   }
   finishCast(p, m, now) {
     const c = m.cast; m.cast = null;
-    if (!p.alive) { this.broadcast("astra", { k: "cancel", id: p.sessionId }); if (c.k === "Q") { const info = this.ultInfo.get(p.sessionId); if (info) { info.summonedAt = 0; info.readyAt = 0; } } return; }   // downed mid-call: nothing spent
+    const refund = () => { if (c.k === "E") p.abilityCooldown = 0; if (c.k === "R") m.safeReady = 0; if (c.k === "Q") { const i = this.ultInfo.get(p.sessionId); if (i) { i.summonedAt = 0; i.readyAt = 0; } } };
+    if (!p.alive) { refund(); this.broadcast("astra", { k: "cancel", id: p.sessionId }); if (c.k === "Q") { const info = this.ultInfo.get(p.sessionId); if (info) { info.summonedAt = 0; info.readyAt = 0; } } return; }   // downed mid-call: nothing spent
     if (c.k === "E") {
-      const spots = this.freeSpots(p.x, p.y, ASTRA.medic.n); if (!spots) return this.astraNo(p, "no room for the medics here");
+      const spots = this.freeSpots(p.x, p.y, ASTRA.medic.n); if (!spots) { refund(); return this.astraNo(p, "no room for the medics here"); }
       spots.forEach((s, i) => this.spawnUnit(p, "doctor", s, { hp: ASTRA.medic.hp, until: now + ASTRA.medic.life * 1000, idx: i }));
-      m.medUntil = now + ASTRA.medic.life * 1000; p.abilityCooldown = ASTRA.medic.cd;
+      m.medUntil = now + ASTRA.medic.life * 1000;
       this.state.message = `${p.name} called in the EMERGENCY MEDICS!`;
     } else if (c.k === "Q") {
       // one officer per living player (Astra included), each arriving next to the player he guards
@@ -1740,17 +1745,16 @@ export class SurvivalRoom extends Room {
       if (!guards.length || spots.some(s => !s)) { info.summonedAt = 0; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); return this.astraNo(p, "no room for the police here"); }
       spots.forEach((s, i) => this.spawnUnit(p, "police", s, { hp: ASTRA.police.hp, until: now + ASTRA.police.life * 1000, slot: i, guard: guards[i].sessionId, nextBurst: now + rand(100, 1500), burstLeft: 0, nextShot: 0, think: 0 }));
       for (const r of this.unitsOf(p.sessionId, "police")) r.hp = r.maxHp = ASTRA.police.hp * this.summonScale();
-      m.polUntil = now + ASTRA.police.life * 1000; m.polOut = true; info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info);
+      m.polUntil = now + ASTRA.police.life * 1000; m.polOut = true; info.summonedAt = now; this.ultInfo.set(p.sessionId, info);
       this.state.message = `${p.name} called POLICE BACKUP!`;
     } else if (c.k === "R") {
       let site = c.site && this.safeFits(c.site.x, c.site.y) ? c.site : this.safeSite(p);   // check again: things move during the call
-      if (!site) return this.astraNo(p, "no room for a safehouse here");
+      if (!site) { refund(); return this.astraNo(p, "no room for a safehouse here"); }
       const st = new StructureState(); st.id = `sh${++this.robotSeq}`; st.kind = "safehouse"; st.x = Math.round(site.x); st.y = Math.round(site.y); st.ownerId = p.sessionId;
       st.deploy = ASTRA.safe.build; st.hp = st.maxHp = ASTRA.safe.hits; st.life = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
       const H = ASTRA.safe.half - 30, spots = this.freeSpots(p.x, p.y, 2) || [{ x: p.x - 20, y: p.y }, { x: p.x + 20, y: p.y }];
       this.spawnUnit(p, "worker", spots[0], { site: st.id, goal: { x: st.x + H, y: st.y - H } });   // worker A: north + east walls
       this.spawnUnit(p, "worker", spots[1], { site: st.id, goal: { x: st.x - H, y: st.y + H } });   // worker B: south + west walls
-      m.safeReady = now + ASTRA.safe.cd * 1000;
       this.state.message = `${p.name} is building a SAFEHOUSE!`;
     }
   }
@@ -1938,10 +1942,8 @@ export class SurvivalRoom extends Room {
       const m = this.amemOf(p), docs = this.unitsOf(p.sessionId, "doctor").length;
       p.skillT = docs ? Math.ceil(Math.max(0, m.medUntil - now) / 100) / 10 : 0;
       p.chargeCd = Math.ceil(Math.max(0, m.safeReady - now) / 100) / 10;
-      if (m.polOut && !this.unitsOf(p.sessionId, "police").length) {   // last officer gone: the 60s cooldown starts now
-        m.polOut = false; const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + ASTRA.police.cd * 1000; this.ultInfo.set(p.sessionId, info);
-      }
-      const { left, active, alive } = this.ultState(p, now); p.ultCd = alive ? ASTRA.police.cd : Math.ceil(left / 100) / 10; p.ultActive = Math.ceil(active / 100) / 10; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+      if (m.polOut && !this.unitsOf(p.sessionId, "police").length) m.polOut = false;   // (the cooldown has been running since the press)
+      const { left, active, alive } = this.ultState(p, now); p.ultCd = Math.ceil(left / 100) / 10; p.ultActive = Math.ceil(active / 100) / 10; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
   // ---------- RAVEN ----------

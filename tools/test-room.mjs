@@ -859,8 +859,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.phase = "lobby"; send(A, "chooseClass", { id: "dispatcher" }); send(A, "start", {}); room.state.phase = "playing"; room.spawnClock = 9999; room.state.zombies.clear();
   ok(p.maxHp === 120 && p.speed === 180 && p.primary === "rifle", "Astra: 120 HP, speed 180, rifle");
   p.x = 1000; p.y = 700; q.x = 1060; q.y = 700; events.length = 0;
-  send(A, "ability", {}); ok(events.some(e => e.type === "astra" && e.k === "call" && e.s === "E") && !room.unitsOf("A", "doctor").length, "E: 0.45s radio call first");
-  call(); const docs = room.unitsOf("A", "doctor"); ok(docs.length === 1 && p.abilityCooldown === 30, `...then exactly 1 doctor, E cooldown 30s (${docs.length})`);
+  send(A, "ability", {}); ok(events.some(e => e.type === "astra" && e.k === "call" && e.s === "E") && !room.unitsOf("A", "doctor").length && p.abilityCooldown === 30, "E: 0.45s radio call first; the 30s cooldown starts on the press");
+  call(); const docs = room.unitsOf("A", "doctor"); ok(docs.length === 1 && p.abilityCooldown > 29 && p.abilityCooldown < 30, `...then exactly 1 doctor (${docs.length}), cooldown already running (${p.abilityCooldown.toFixed(2)}s)`);
   send(A, "ability", {}); p.abilityCooldown = 0; send(A, "ability", {}); call(); ok(room.unitsOf("A", "doctor").length === 1, "...can't call a second doctor while one is on duty");
   q.hp = 10; p.hp = 10; tick(14); const h0 = q.hp, a0 = p.hp; tick(20);
   ok(Math.abs((p.hp - a0) - 5) < 0.5 && q.hp - h0 < 1, `the medic treats Astra first at 5 HP/s, the teammate waits (${(p.hp - a0).toFixed(1)}, ${(q.hp - h0).toFixed(1)})`);
@@ -882,7 +882,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(!room.state.zombies.has(z.id) && p.kills > k0, `police shoot zombies (7 dmg bullets in bursts of 3) and Astra gets the kill (${p.kills - k0})`);
   ok(q.hp === q.maxHp, "...they never shoot teammates");
   for (const r of room.unitsOf("A", "police")) room.unitMem.get(r.id).until = 0; tick(1); tick(1);
-  ok(!room.unitsOf("A", "police").length && !p.ultReady && p.ultCd > 59, `after 30s they go home and the 60s cooldown starts (${p.ultCd}s)`);
+  ok(!room.unitsOf("A", "police").length && !p.ultReady && p.ultCd > 59, `after 30s they go home; the 60s cooldown has been running since the press (${p.ultCd}s on the test clock)`);
   // R
   room.state.zombies.clear(); p.x = 1000; p.y = 700; const inside = placeZombie(room, p.x + 60, p.y + 30, 300);
   send(A, "skill2", {}); call(); const st = room.safeOf(p); const wk = room.unitsOf("A", "worker");
@@ -1057,5 +1057,17 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(p.magSize === base * 2, `magazine +100% (${base} -> ${p.magSize})`);
   p.mag = 0; p.reloadLeft = 0; room.startReload(p); ok(Math.abs(p.reloadLeft - r0 / 1.75) < .01 && p.reloadTotal === p.reloadLeft, `reload 1.75x faster (${r0.toFixed(2)}s -> ${p.reloadLeft.toFixed(2)}s)`);
   p.reloadLeft = .01; tick(2); ok(p.mag === base * 2, `a reload fills the bigger magazine (${p.mag})`);
+  room._dispose(); }
+// 49. Astra (Nov 6): E, Q and R cooldowns all start on the press; refunded if the call fails
+{ const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.allowAllClasses = true; room.state.phase = "lobby"; send(A, "chooseClass", { id: "dispatcher" }); send(A, "start", {}); room.state.phase = "playing"; room.spawnClock = 9999; room.state.zombies.clear(); room.state.noCd = false;
+  p.x = 1000; p.y = 700; p.ultKills = 100;
+  send(A, "ult", { a: 0 }); const info = room.ultInfo.get("A"); ok(info && info.readyAt - Date.now() > 59000, "Q: the 60s cooldown starts on the press");
+  const call = () => { const mm = room.amemOf(p); if (mm.cast) mm.cast.at = 0; tick(1); };
+  call(); ok(room.unitsOf("A", "police").length >= 1, "...the officer still arrives");
+  const m = room.amemOf(p); m.safeReady = 0; p.x = 2000; p.y = 1400; send(A, "skill2", {}); ok(m.safeReady - Date.now() > 89000, `R: the 90s cooldown starts on the press (${Math.round((m.safeReady - Date.now()) / 1000)}s, call ${!!m.cast})`); call();
+  // downed during the radio call: refunded
+  p.abilityCooldown = 0; for (const r of room.unitsOf("A", "doctor")) room.removeUnit(r); room.amemOf(p).cast = null; send(A, "ability", {}); ok(p.abilityCooldown === 30, "E: cooldown on the press");
+  p.alive = false; call(); ok(p.abilityCooldown === 0, "...refunded when Astra goes down before the medic arrives");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
