@@ -295,6 +295,10 @@ export class SurvivalRoom extends Room {
     this.onMessage = (type, cb) => onMsg(type, (client, data) => {
       try { cb(client, data); } catch (e) { this.logErr(`message "${type}"`, e, client); }
     });
+    // Unknown message types are ignored instead of kicking the player (Colyseus' default). A newer page talking to an older
+    // server (the website updates before the game server during a deploy) used to disconnect people, e.g. "debugLevel" (Nov 5).
+    const unknownSeen = new Set();
+    onMsg("*", (client, type) => { if (unknownSeen.size < 50 && !unknownSeen.has(type)) { unknownSeen.add(type); this.log("warn", "room", `ignored unknown message "${type}" (page newer than the server?)`, client); } });
     this.autoDispose = true;
     this.solo = !!options.solo;   // set only by the single-player preview build (enables test helpers)
     this.axeSwing = new Map();
