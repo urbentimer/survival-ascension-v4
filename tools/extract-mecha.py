@@ -129,6 +129,6 @@ save_webp(tfa, os.path.join(A, 'dir8', 'sofea-mecha-tf.webp'))
 
 # (the flame jet is made by tools/bake-flamethrower.py from the Vefects fire VFX since Nov 5; the ChatGPT flame sheets in
 #  tools/art/sofea-mecha/flame-*.png are no longer used)
-FW, FH, NX = 208, 112, 4
+FW, FH, NX = 208, 160, 4
 json.dump({'cell': [CW, CH], 'anchor': [AX, FY], 'nozzle': nozzles, 'flame': {'cell': [FW, FH], 'nozzle': [NX, FH // 2], 'grow': [0, 8], 'loop': [8, 20], 'end': [20, 28]}},
           open(os.path.join(A, 'dir8', 'sofea-mecha.json'), 'w'))

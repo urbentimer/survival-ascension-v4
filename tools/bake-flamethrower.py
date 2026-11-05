@@ -2,14 +2,14 @@
 # Unity fire shader works: flame-shaped masks eroded by scrolling noise and pushed around by a distortion noise, many
 # overlapping fire bursts that shoot out of the nozzle, swell, cool down (white-hot -> yellow -> orange -> red) and turn to smoke.
 #   python3 tools/bake-flamethrower.py
-# Writes client/assets/sprites/fx/sofea-flame.webp: 28 frames, cells 208x112, the nozzle = cell (4, 56), it blasts RIGHT,
+# Writes client/assets/sprites/fx/sofea-flame.webp: 28 frames, cells 208x160, the nozzle = cell (4, 80), it blasts RIGHT,
 # the jet is ~JET px long:  0-7 ignite (it shoots out), 8-19 seamless loop, 20-27 cut off (the tail flies away and burns out)
 import os
 import numpy as np
 from PIL import Image
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'vefects-fire')
 OUT = os.path.join(here, '..', 'client', 'assets', 'sprites', 'fx', 'sofea-flame.webp')
-CW, CH, NX, S = 208, 112, 4, 2
+CW, CH, NX, S = 208, 160, 4, 2   # tall cells: the jet fans out into a wide cone
 W, H = CW * S, CH * S
 JET = 168                     # jet length in cell px
 LOOP, IGN, END = 12, 8, 8
@@ -29,8 +29,8 @@ def sample_clamp(t, u, v):
 
 yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); X = xx / S - NX; Y = yy / S - CH / 2   # cell px, nozzle at (0, 0)
 L = X / JET                                                                            # 0 at the nozzle -> 1 at the end
-N = 36   # bursts per loop
-P = [dict(ph=i / N, life=.34 + .06 * rng.random(), dy=rng.uniform(-.5, .5), s=rng.uniform(.85, 1.15), seed=rng.random(), rot=rng.uniform(0, 6.28)) for i in range(N)]
+N = 64   # bursts per loop
+P = [dict(ph=i / N, life=.34 + .06 * rng.random(), dy=rng.uniform(-1, 1), s=rng.uniform(.85, 1.15), seed=rng.random(), rot=rng.uniform(0, 6.28)) for i in range(N)]
 
 def frame(t, reach=1e9, tail=-1e9):
     """one frame at loop time t (0..1); reach/tail: only the part of the jet between tail and reach (cell px) burns"""
@@ -44,13 +44,13 @@ def frame(t, reach=1e9, tail=-1e9):
             a = age / p['life']
             cx = a ** .85 * JET * 1.02                                    # flies out fast, slows a little
             if cx > reach + 6 or cx < tail - 6: continue
-            r = (9 + 48 * a ** .7) * p["s"]                                # swells into the cone
-            cy = p['dy'] * r * .6
+            r = (8 + .36 * cx) * p["s"]                                     # swells as it flies
+            cy = p["dy"] * cx * .2                                         # each burst flies out at its own angle: a cone (~42 degrees with the bursts' size)
             u = (X - cx) / (2.2 * r) + .5 + dist * .18; v = (Y - cy) / (2 * r) + .5 + dist * .12
             c, s_ = np.cos(p['rot'] + a), np.sin(p['rot'] + a); du, dv = u - .5, v - .5; u, v = .5 + du * c - dv * s_, .5 + du * s_ + dv * c
             m = sample_clamp(BLOB if a > .5 else MASK, u, v)
             val = m * (.55 + 1.1 * n1 * n2)
-            erode = .05 + .38 * a
+            erode = .04 + .3 * a
             b = np.clip((val - erode) / (1 - erode), 0, 1) ** 1.2
             fade = np.clip(a / .06, 0, 1)
             heat += b * fade * (1.35 - a * 1.05)                          # cools as it flies
@@ -58,7 +58,7 @@ def frame(t, reach=1e9, tail=-1e9):
     # the hot core right out of the nozzle
     core = np.exp(-(Y / (4 + 16 * L.clip(0))) ** 2) * np.clip(1 - L / .42, 0, 1) * (X > -1) * (.75 + .5 * n1)
     heat += core * 1.4
-    heat *= .82
+    heat *= .6
     win = np.clip((reach - X) / 10, 0, 1) * np.clip((X - tail) / 10, 0, 1)
     heat *= win; smoke *= win
     ramp = [(0, (.5, .06, .02)), (.22, (.92, .25, .03)), (.5, (1, .55, .08)), (.85, (1, .84, .32)), (1.35, (1, .98, .86))]
@@ -77,5 +77,5 @@ for i in range(LOOP): frames.append(frame(i / LOOP))                            
 for i in range(END): frames.append(frame((LOOP + i) / LOOP % 1, tail=(i + 1) / END * (JET + 30)))            # tail flies off
 atlas = Image.new('RGBA', (CW * len(frames), CH))
 for i, fr in enumerate(frames): atlas.alpha_composite(fr, (i * CW, 0))
-atlas.save(OUT, quality=72, method=6, alpha_quality=85)
+atlas.save(OUT, quality=66, method=6, alpha_quality=80)
 print('->', os.path.relpath(OUT), len(frames), 'frames', os.path.getsize(OUT) // 1024, 'KB')

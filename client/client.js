@@ -1267,7 +1267,7 @@ function drawMecha(p, v, aim, now) {
 function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm's nozzle to the ground 190px out where she aims
   const im = sImgs.flame; if (!im?.naturalWidth) return;
   const age = now - fs.at; let t, f, f2;   // t = position in frames; each frame cross-fades into the next
-  // sofea-flame.webp (tools/bake-flamethrower.py, Vefects fire VFX): 0-7 ignite, 8-19 loop, 20-27 cut off; 208x112 cells, nozzle at (4, 56)
+  // sofea-flame.webp (tools/bake-flamethrower.py, Vefects fire VFX): 0-7 ignite, 8-19 loop, 20-27 cut off; 208x160 cells, nozzle at (4, 80)
   if (fs.on) { if (age < 200) { t = age / 25; f = Math.floor(t); f2 = Math.min(8, f + 1); } else { t = (age - 200) / 40; f = 8 + Math.floor(t) % 12; f2 = 8 + (Math.floor(t) + 1) % 12; } }
   else { if (age > 300 || !fs.at) return; t = age / 37; f = 20 + Math.min(7, Math.floor(t)); f2 = Math.min(27, f + 1); }
   const [nx, ny] = MECHA.nozzle[row], ox = p.x + nx, oy = feet + ny;
@@ -1277,7 +1277,7 @@ function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm'
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .35;   // hot glow on the ground under the jet
   const g = ctx.createRadialGradient(L * .6, 0, 4, L * .6, 0, L * .55); g.addColorStop(0, "#ff9a3c"); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.fillRect(0, -L * .6, L * 1.2, L * 1.2);
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
-  blendCells(im, 0, 0, 208, 112, f, f2, t - Math.floor(t), -4 * sc, -56 * sc * .85, 208 * sc, 112 * sc * .85);
+  blendCells(im, 0, 0, 208, 160, f, f2, t - Math.floor(t), -4 * sc, -80 * sc, 208 * sc, 160 * sc);   // a wide cone (~42 degrees, like the damage)
   ctx.restore();
 }
 function drawSaberSweep(p, a, age, feet) {   // a bright green crescent sweeping 120 degrees, 155px
