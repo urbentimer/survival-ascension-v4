@@ -41,7 +41,7 @@ for (let wave = 1; wave <= LAST; wave++) {
   console.log(`wave ${wave}: ${room.state.phase} after ${Math.round(ticks / 20)}s game time, total kills ${room.state.totalKills}, robots ${room.state.robots.size}, ult kills ${[...room.state.players.values()].map(p => p.characterClass[0] + (p.ultKills ?? "-")).join(" ")}`);
   if (process.env.SA_XP && wave % 5 === 0) console.log(`  XP after wave ${wave}: ` + [...room.state.players.values()].map(p => { let tot = p.xp; for (let l = 1; l < p.level; l++) tot += 30 + 72 * (l - 1); return `${p.characterClass} L${p.level} k${p.kills} xp${tot}`; }).join(" | "));   // SA_XP=1: levelling report
   if (room.state.phase === "playing") console.log(`  STUCK: bossPhase=${room.state.bossPhase} waveType=${room.state.waveType} elapsed=${room.state.elapsed} zombies:`, [...room.state.zombies.values()].map(z => `${z.kind}${z.boss ? "(boss)" : ""} hp${Math.round(z.hp)} @${Math.round(z.x)},${Math.round(z.y)}`).slice(0, 12).join(" "), "players:", [...room.state.players.values()].map(p => `${p.characterClass} ${p.alive ? "up" : "down"} @${Math.round(p.x)},${Math.round(p.y)}`).join(" "));
-  if (room.state.phase !== "cleared") { bad.push(`wave ${wave} ended as ${room.state.phase}`); break; }
+  if (room.state.phase !== "cleared" && !(wave === 50 && room.state.phase === "victory")) { bad.push(`wave ${wave} ended as ${room.state.phase}`); break; }
   send(H, "nextStage");
   if (room.state.phase !== "playing") { room.state.countdown = 0; for (let i = 0; i < 5 && room.state.phase !== "playing"; i++) { t += 100; room.lastTick = t - 100; const real = Date.now; Date.now = () => t; room.tick(); Date.now = real; } }
 }

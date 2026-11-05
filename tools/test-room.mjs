@@ -990,4 +990,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(p.level === 30 && n === 29 && p.xp === 0, `levels stop at 30 (${p.level}, ${n} upgrades)`);
   const z2 = placeZombie(room, p.x + 30, p.y, 1); room.hitZombie(z2, p, 50); ok(p.xp === 0 && !room.applyUpgrade(p, "damage"), "no XP or upgrades past level 30");
   room._dispose(); }
+// 44. Boss wave: a last straggler (3 or fewer) 15s after the horde ends doesn't hold the boss back
+{ const { room, A, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room._handlers.start(A, {}); room.jumpToWave(4); room.spawnClock = 9999; room.state.zombies.clear(); p.x = 1000; p.y = 1000;
+  ok(room.state.waveType === "boss" && room.state.bossPhase === "horde", "wave 4 is a boss wave, horde first");
+  room.state.elapsed = 46; placeZombie(room, 3000, 2200, 9999); placeZombie(room, 3050, 2200, 9999); room.spawnClock = 9999; tick(2);
+  ok(room.state.bossPhase === "horde" && room.state.zombies.size === 2, "right after the horde: the stragglers still have to be killed");
+  room.state.elapsed = 61; room.spawnClock = 9999; tick(2);
+  ok(room.state.bossPhase === "intro" && room.state.zombies.size === 0, `15s later with 2 left: they vanish and the boss intro starts (${room.state.bossPhase})`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

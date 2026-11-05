@@ -65,7 +65,7 @@ const ROBOT = {
 };
 const ROBOT_R = 13;
 const BOSS_HP_PER_PLAYER = 0.6;                      // boss health +60% for every survivor after the first (bots count)
-const BOSS_WAVE = { horde: 45, introWait: 25, escortEvery: 3.2, escortMax: 14 };
+const BOSS_WAVE = { horde: 45, introWait: 25, escortEvery: 3.2, escortMax: 14, straggleGrace: 15, straggleMax: 3 };   // straggle: 15s after the horde ends, 3 or fewer left -> they vanish and the boss comes anyway
 const ringZone = (dx, dy) => Math.hypot(dx, dy / 0.55);   // distance on the flat ground ellipse the shockwaves are drawn as
 const SLAM = { trigger: 115, radius: 140, windup: 0.8, total: 1.45, cooldown: 5.5, stun: 1.3, dmgMult: 1.5 };
 // How far past its body edge a zombie can hit (brutes have long, heavy arms).
@@ -693,6 +693,8 @@ export class SurvivalRoom extends Room {
         this.spawnZombie(false);   // the horde uses the wave's normal mix; once the boss is out, only walkers come
         const early = { 4: 1.3 }[s.stage]; this.spawnClock = early || Math.max(0.3, 1.15 - s.stage * 0.018);
       }
+      if (s.elapsed >= BOSS_WAVE.horde + BOSS_WAVE.straggleGrace && s.zombies.size > 0 && s.zombies.size <= BOSS_WAVE.straggleMax && ![...s.zombies.values()].some(z => z.boss))
+        s.zombies.clear();   // a last straggler stuck far away doesn't hold the boss back (sims: the wave could hang forever)
       if (s.elapsed >= BOSS_WAVE.horde && s.zombies.size === 0) {
         s.bossPhase = "intro"; s.bossIntro = this.bossKind(); this.introAcks = new Set(); this.introUntil = now + BOSS_WAVE.introWait * 1000;
         s.introNeed = [...s.players.values()].filter(p => !p.isBot).length; s.introReady = 0;
