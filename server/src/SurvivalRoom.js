@@ -265,7 +265,7 @@ const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the towe
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
 const BUILD_RANGE = 160;
-const DASH_DISTANCE = 50, DASH_COOLDOWN = 5;   // seconds // you can place structures up to this far from yourself
+const DASH_DISTANCE = 140, DASH_COOLDOWN = 5, DASH_IFRAMES = 0.25;   // Nov 6: a real dodge (was 50px, no i-frames)   // seconds // you can place structures up to this far from yourself
 // Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
 // Upgrades are stored separately, so switching weapons never erases them.
 // Marcus E: Combat Rush. +50% damage and +25% attack speed (guns and melee) for 6s, 15s cooldown (counts from the press).
@@ -379,7 +379,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.wHazards = []; this.wSeq = 0; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.wHazards = []; this.wSeq = 0; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -886,7 +886,7 @@ export class SurvivalRoom extends Room {
             if (q === p || !q.alive) continue; const vx = q.x - p.x, vy = q.y - p.y, t = vx * dx + vy * dy;
             if (t > 0 && t < ft && Math.abs(vx * dy - vy * dx) <= BODY_R + 2) { ff = q; ft = t; }
           }
-          if (ff) { const dealt = Math.max(1, Math.round(p.damage * (w.pelletMult || 1) * FRIENDLY_FIRE - ff.defence)); ff.hp -= dealt; ff.damageTaken += dealt; if (ff.hp <= 0) this.downPlayer(ff); end = ft; }
+          if (ff) { if (!this.untouchable(ff)) { const dealt = Math.max(1, Math.round(p.damage * (w.pelletMult || 1) * FRIENDLY_FIRE - ff.defence)); ff.hp -= dealt; ff.damageTaken += dealt; if (ff.hp <= 0) this.downPlayer(ff); } end = ft; }
         }
       }
       tracers.push(Math.round(end));
@@ -1072,7 +1072,7 @@ export class SurvivalRoom extends Room {
     if (s.atTower) { this.state.towerHp = Math.max(0, this.state.towerHp - s.dmg * 1.5); if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } return; }
     for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
     for (const p of this.state.players.values()) {   // direct hit
-      if (!p.alive || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
+      if (!p.alive || this.untouchable(p) || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
       const dealt = Math.max(1, Math.round(s.dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
     }
     const pu = new PuddleState(); pu.id = "a" + (++this.puddleSeq); pu.x = Math.round(s.tx); pu.y = Math.round(s.ty);
@@ -1093,7 +1093,7 @@ export class SurvivalRoom extends Room {
         if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
       }
     }
-    for (const [p, dps] of burn) { const dealt = dps * dt; p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt; p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
   separateZombies() {
@@ -2208,7 +2208,7 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y) });
     return z;
   }
-  hiveHurt(p, dmg) { if (!p.alive) return; const dealt = Math.max(1, Math.round(dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
+  hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = Math.max(1, Math.round(dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000 }; this.hiveMem.set(z.id, m);
     if (now >= m.spawnAt && z.act !== "jump") {   // tears zombies out of its body
@@ -2434,7 +2434,7 @@ export class SurvivalRoom extends Room {
   butcher_hookback() {}
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p); }   // up in the helicopter / inside a safehouse
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now(); }   // up in the helicopter / inside a safehouse / mid-dash
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -2493,7 +2493,7 @@ export class SurvivalRoom extends Room {
     if (m.spinTick <= 0 && t1 > .3) {
       m.spinTick = S.tick;
       for (const p of this.state.players.values()) {
-        if (!p.alive || distance(z, p) > S.radius + BODY_R) continue;
+        if (!p.alive || this.untouchable(p) || distance(z, p) > S.radius + BODY_R) continue;
         const dealt = Math.max(1, Math.round(z.damage * S.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
       }
     }
@@ -2503,7 +2503,7 @@ export class SurvivalRoom extends Room {
   mutantWhip(z, ang) {
     const reach = z.radius + ATTACK_REACH.mutant + BODY_R;
     for (const p of this.state.players.values()) {
-      if (!p.alive) continue; const pd = distance(z, p); if (pd > reach) continue;
+      if (!p.alive || this.untouchable(p)) continue; const pd = distance(z, p); if (pd > reach) continue;
       let diff = Math.atan2(p.y - z.y, p.x - z.x) - ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) > MUTANT.arc && pd > z.radius + BODY_R + 4) continue;
       const dealt = Math.max(1, Math.round(z.damage * MUTANT.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
@@ -2513,7 +2513,7 @@ export class SurvivalRoom extends Room {
   // Brute ground slam lands: damage + stun everyone in the radius.
   bruteSlam(z) {
     for (const p of this.state.players.values()) {
-      if (!p.alive || distance(p, z) > SLAM.radius + BODY_R) continue;
+      if (!p.alive || this.untouchable(p) || distance(p, z) > SLAM.radius + BODY_R) continue;
       const dealt = Math.max(1, Math.round(z.damage * SLAM.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt;
       p.stunned = Math.max(p.stunned || 0, SLAM.stun); p.charging = false;
       if (p.hp <= 0) this.downPlayer(p);
@@ -2902,7 +2902,7 @@ export class SurvivalRoom extends Room {
     let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
     if (!dx && !dy) dx = p.facing || 1;
     const mag = Math.hypot(dx, dy);
-    this.lastDashAt.set(sid, now);
+    this.lastDashAt.set(sid, now); this.dodgeUntil.set(sid, now + DASH_IFRAMES * 1000);   // 0.25s nothing can hurt you
     const x0 = p.x, y0 = p.y;
     this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
     this.broadcast("dash", { id: sid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(p.x), y1: Math.round(p.y) });   // everyone sees the energy trail
@@ -3073,6 +3073,7 @@ export class SurvivalRoom extends Room {
         } else if (z.kind === "mutant" && target.sessionId) {
           // mutants only hurt survivors with their charged whip (above)
         } else if (target.sessionId) {
+          if (this.untouchable(target)) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered: the bite misses
           const dealt = Math.max(1,z.damage-target.defence); target.hp-=dealt; target.damageTaken+=dealt;
           if(target.hp<=0)this.downPlayer(target);
         } else {

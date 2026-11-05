@@ -1861,9 +1861,9 @@ const DASH_FX = {
   dispatcher:    { c: [107, 255, 74], core: [235, 255, 224], style: "hex" },      // Astra: Toxic Hex (his medics' green)
   slasher:       { c: [240, 236, 222], core: [255, 255, 255], style: "nova" },    // Arshan: Nova White
 };
-const DASH_MS = 520, dashBeams = [];
+const DASH_MS = 520, dashBeams = [], dodgeAt = new Map();   // dodgeAt: when each player last dashed (0.25s untouchable)
 function dashBeam(id, x0, y0, x1, y1) {
-  const p = state?.players?.get(id); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
+  const p = state?.players?.get(id); if (p) dodgeAt.set(id, performance.now()); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
   dashBeams.push({ x0, y0: y0 - 14, x1, y1: y1 - 14, t: performance.now(), fx: DASH_FX[p.characterClass] || DASH_FX.assault, seed: Math.random() * 100 });
   if (p.characterClass === "assault") marcusDash.set(id, { t0: performance.now(), a: Math.atan2(y1 - y0, x1 - x0) });   // his dash body frames
   if (dashBeams.length > 24) dashBeams.shift();
@@ -2428,7 +2428,11 @@ function drawSurvivor(p){
   const pose=survivorPose(p);
   // soft shadow under everyone
   ctx.save();ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(p.x,p.y+17,14,4,0,0,7);ctx.fill();ctx.restore();
-  if(drawSurvivorSprite(p,pose)){drawHeldItem(p,pose);drawSurvivorLabels(p);return;}
+  const dodge=performance.now()-(dodgeAt.get(p.sessionId)||-1e9)<250;   // 0.25s dash dodge: see-through flicker (nothing can hurt them)
+  if(dodge){ctx.save();ctx.globalAlpha=.45+.25*Math.sin(performance.now()/22);}
+  const drew=drawSurvivorSprite(p,pose); if(drew){drawHeldItem(p,pose);}
+  if(dodge)ctx.restore();
+  if(drew){drawSurvivorLabels(p);return;}
   ctx.save();ctx.translate(Math.round(p.x),Math.round(p.y));ctx.scale(pose.facing,1);
   const c=p.alive?(p.color||'#69c9d1'):'#555b59';
   // feet, legs, tactical trousers
@@ -2521,7 +2525,7 @@ window.__saCam = cam; window.__saPred = () => { const m = me_(); return { id: my
 // Every input has a number; the server sends back the last number it applied (player.ack). On each update we start from the
 // server's position and replay the inputs it hasn't applied yet. Small differences fade out over ~0.1s instead of snapping.
 const PRED = { seq: 0, pending: [], x: 0, y: 0, ok: false, ex: 0, ey: 0, grid: null, src: null };
-const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_SOLID = { barricade: 20, turret: 16, fence: 18 }, P_DASH = 50;
+const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_SOLID = { barricade: 20, turret: 16, fence: 18 }, P_DASH = 140;   // matches DASH_DISTANCE on the server
 function predGrid() {
   const src = state?.mapLayout || ""; if (PRED.src === src && PRED.grid) return PRED.grid;
   const pm = paintedMap(), layout = pm ? paintedLayout(pm) : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];

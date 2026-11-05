@@ -82,7 +82,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 
 // 3. dash
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
-  p.x = 300; p.y = 600; send(A, "dash", { dx: 1, dy: 0 }); ok(Math.round(p.x - 300) === 50, "dash moves 50px"); const x = p.x;
+  p.x = 300; p.y = 600; send(A, "dash", { dx: 1, dy: 0 }); ok(Math.round(p.x - 300) === 140, `dash moves 140px (${Math.round(p.x - 300)})`); const x = p.x;
   send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "dash has a cooldown");
   room.lastDashAt.set("A", Date.now() - 4000); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "still on cooldown after 4s");
   room.lastDashAt.set("A", Date.now() - 5100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 5s"); room._dispose(); }
@@ -1085,5 +1085,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(!q.alive && qh0 === 0, "the downed teammate isn't healed by the burst (out of range / down)");
   let up = 0; for (let i = 0; i < 160 && !q.alive; i++) { tick(1); up = i; }
   ok(q.alive && q.hp >= Math.round(q.maxHp * .35) - 1, `the medic goes straight to the downed teammate and revives them (${(up / 20).toFixed(1)}s, ${Math.round(q.hp)} HP)`);
+  room._dispose(); }
+// 51. Dash dodge (Nov 6): 140px and 0.25s where nothing can hurt you
+{ const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); p.x = 1000; p.y = 1000; p.hp = p.maxHp = 500;
+  send(A, "dash", { dx: 1, dy: 0 }); const z = placeZombie(room, p.x + 20, p.y, 999); z.kind = "walker"; z.attackCooldown = 0;
+  tick(2); ok(p.hp === 500, "a zombie right next to you can't bite during the dodge");
+  room.hiveHurt(p, 50); ok(p.hp === 500, "boss attacks miss too");
+  room.dodgeUntil.set("A", Date.now() - 1); tick(25); ok(p.hp < 500, `after 0.25s you can be hurt again (${Math.round(500 - p.hp)} dmg)`);
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
