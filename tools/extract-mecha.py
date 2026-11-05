@@ -123,22 +123,25 @@ for d, (sr, mir) in enumerate(SRC):
     print(f'dir {d}: sheet row {sr}{" mirrored" if mir else ""}, scale {sc:.3f}, nozzle {nozzles[-1]}')
 save_webp(atlas, os.path.join(A, 'dir8', 'sofea-mecha.webp'))
 
-# ---- transformation, 5 angles ----
-TF = ['transform-down.png', 'transform-b.png', 'transform-a.png', 'transform-c.png', 'transform-up.png']
-tfa = np.zeros((CH * 5, CW * 8, 4), np.uint8)
-for row, src in enumerate(TF):
-    rgba = blue_key(src); lab, n = ndimage.label(rgba[..., 3] > 0); pitch = rgba.shape[1] / 8
+# ---- transformation (v2, Nov 5): tools/art/sofea-mecha2/tf-*.png, 1 row x 8 frames each, she grows as the armour builds up ----
+# atlas rows: 0 down, 1 down-right, 2 down-left (mirrored), 3 left, 4 right (mirrored), 5 up
+TF = [('tf-down.png', 0), ('tf-downright.png', 0), ('tf-downright.png', 1), ('tf-left.png', 0), ('tf-left.png', 1), ('tf-up.png', 0)]
+tfa = np.zeros((CH * len(TF), CW * 8, 4), np.uint8)
+for row, (src, mir) in enumerate(TF):
+    rgba = blue_key(os.path.join(M2, src)); lab, n = ndimage.label(rgba[..., 3] > 0); pitch = rgba.shape[1] / 8
     objs = ndimage.find_objects(lab); cells = []
-    for k in range(8):   # each blob goes to the column its centre is in (sparkles that cross the column line stay whole)
-        ids = [i + 1 for i, s in enumerate(objs) if s and int(((s[1].start + s[1].stop) / 2) // pitch) == k]
+    for k in range(8):   # each blob goes to the column its centre is in (flying armour pieces / sparks stay with their frame)
+        ids = [i + 1 for i, s_ in enumerate(objs) if s_ and int(((s_[1].start + s_[1].stop) / 2) // pitch) == k]
         cells.append(crop(np.where(np.isin(lab, ids)[..., None], rgba, 0).astype(np.uint8)))
     for k, c in enumerate(cells):
-        x0, y0, x1, y1 = body_box(c)
+        body = (c[..., 3] > 0) & ~is_green(c); bl, bn = ndimage.label(body)   # her body = the biggest blob (not the flying pieces)
+        big = bl == (1 + int(np.argmax(ndimage.sum(body, bl, range(1, bn + 1)))))
+        ys, xs = np.where(big); y0, y1 = ys.min(), ys.max() + 1
         t = k / 7; t = t * t * (3 - 2 * t)
-        sc = (54 + (BODY_H - 54) * t) / (y1 - y0)
-        m = (c[..., 3] > 0) & ~is_green(c); top = m[y0:y0 + int((y1 - y0) * .35)]; xs = np.where(top.any(0))[0]   # head centre
-        tfa[row * CH:(row + 1) * CH, k * CW:(k + 1) * CW] = place(c, sc, (xs.min() + xs.max()) / 2, y1)
-    print(f'transform {src}: ok')
+        sc = (54 + (BODY_H - 54) * t) / (y1 - y0)                          # 54px (her) -> 80px (the mecha)
+        hx = np.where(big[y0:y0 + int((y1 - y0) * .35)].any(0))[0]          # head centre
+        tfa[row * CH:(row + 1) * CH, k * CW:(k + 1) * CW] = place(c, sc, (hx.min() + hx.max()) / 2, y1, bool(mir))
+    print(f'transform {src}{" mirrored" if mir else ""}: ok')
 save_webp(tfa, os.path.join(A, 'dir8', 'sofea-mecha-tf.webp'))
 
 # (the flame jet is made by tools/bake-flamethrower.py from the Vefects fire VFX since Nov 5; the ChatGPT flame sheets in

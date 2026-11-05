@@ -1214,7 +1214,7 @@ function drawSofea(p, img, now) {
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
 const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // 80px tall = 1.5x a survivor
   nozzle: [[-4, -24], [23, -32], [28, -47], [27, -49], [-2, -45], [-28, -49], [-29, -47], [-22, -31]],   // per direction, from the feet
-  tfRow: [0, 0, 3, 4, 4, 4, 2, 1] };   // which transformation angle each facing uses
+  tfRow: [0, 1, 4, 5, 5, 5, 3, 2] };   // which transformation row each facing uses (tf rows: down, down-right, down-left, left, right, up)
 const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
 // draws frame f of a strip, cross-fading into frame f2 by k (0..1): smooth in-betweens for the transformation / flame
 function blendCells(im, sx, sy, cw, ch, f, f2, k, dx, dy, dw = cw, dh = ch) {
