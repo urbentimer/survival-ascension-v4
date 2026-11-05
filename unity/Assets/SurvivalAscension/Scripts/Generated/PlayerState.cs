@@ -201,5 +201,8 @@ public PlayerState() { }
 
 		[Type(61, "number")]
 		public float reloadTotal = default(float);
+
+		[Type(62, "number")]
+		public float armorPct = default(float);
 	}
 }

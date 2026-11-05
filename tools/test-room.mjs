@@ -140,8 +140,8 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   send(A, "buy", { id: "shotgun" }); ok(p.currency === 160 && p.weapon === "shotgun" && p.owned.includes("shotgun"), "buying the shotgun unlocks and equips it (-40 gold)");
   send(A, "buy", { id: "shotgun" }); ok(p.currency === 160, "can't buy a weapon twice");
   const scrap = room.state.scrap; send(A, "buy", { id: "scrap" }); ok(room.state.scrap === scrap + 40 && p.currency === 145, "team scrap +40 for 15 gold");
-  for (let i = 0; i < 7; i++) send(A, "buy", { id: "armor" }); ok(p.armor === 4 && p.currency === 25, "armour stops when gold runs out (4 plates)");
-  p.currency = 500; send(A, "buy", { id: "armor" }); send(A, "buy", { id: "armor" }); ok(p.armor === 5, "armour capped at 5 plates");
+  send(A, "buy", { id: "armor" }); ok(p.currency === 145 && !(p.armor > 0), "armour isn't sold in the shop (it's a level-up upgrade now)");
+  p.currency = 500;
   const mk = p.medkits; send(A, "buy", { id: "medkit" }); send(A, "buy", { id: "medkit" }); send(A, "buy", { id: "medkit" }); ok(p.medkits === 3 && mk === 1, "shop medkits go to the quick slot, max 3");
   room.state.phase = "victory"; send(A, "restart"); ok(p.currency === 0 && p.owned === "pistol,rifle" && p.armor === 0, "new match resets gold, weapons and armour");
   room._dispose(); }
@@ -637,7 +637,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   tick(2); ok(room.demoOf(p) && zs.core.hp === 2000, "it waits for Dante's signal");
   send(A, "ult"); ok(!room.demoOf(p), "Q again: BOOM");
   tick(1); ok(zs.core.hp <= 1700, `the crate blast hits hard (${Math.round(2000 - zs.core.hp)} dmg)`);
-  { const g3 = events.filter(e => e.type === "demo" && e.k === "boom").pop().pts.find(g => g[2] === 2); zs.r3.x = g3[0]; zs.r3.y = g3[1]; }   // stand where an outer grenade lands
+  { const pts = events.filter(e => e.type === "demo" && e.k === "boom").pop().pts, g1 = pts.find(g => g[2] === 0), g3 = pts.find(g => g[2] === 2); zs.r1.x = g1[0]; zs.r1.y = g1[1]; zs.r3.x = g3[0]; zs.r3.y = g3[1]; }   // stand where an inner / outer grenade lands (they scatter randomly)
   const r1hp = zs.r1.hp; for (const e of room.ripples) e.t -= 2000; tick(1);
   const demo = events.filter(e => e.type === "demo" && e.k === "boom").pop();
   ok(demo && [0, 1, 2].map(r => demo.pts.filter(g => g[2] === r).length).join() === "4,8,16", "the ripples throw 4, 8 and 16 grenades");
@@ -1093,6 +1093,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "dash", { dx: 1, dy: 0 }); const z = placeZombie(room, p.x + 20, p.y, 999); z.kind = "walker"; z.attackCooldown = 0;
   tick(2); ok(p.hp === 500, "a zombie right next to you can't bite during the dodge");
   room.hiveHurt(p, 50); ok(p.hp === 500, "boss attacks miss too");
-  room.dodgeUntil.set("A", Date.now() - 1); tick(25); ok(p.hp < 500, `after 0.25s you can be hurt again (${Math.round(500 - p.hp)} dmg)`);
+  room.dodgeUntil.set("A", Date.now() - 1); room.hiveHurt(p, 50); ok(p.hp < 500, `after 0.25s you can be hurt again (${Math.round(500 - p.hp)} dmg)`);
+  room._dispose(); }
+// 52. Body Armour (Nov 6): percent damage reduction by weight class, 8 picks to the cap; the shop doesn't sell armour
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  room.allowAllClasses = true; room.state.phase = "lobby"; send(A, "chooseClass", { id: "juggernaut" }); send(B, "chooseClass", { id: "scout" }); send(A, "start", {}); room.state.phase = "playing"; room.spawnClock = 9999; room.state.zombies.clear();
+  p.xp = q.xp = 99999; for (let i = 0; i < 10; i++) { send(A, "upgrade", { id: "defence" }); send(B, "upgrade", { id: "defence" }); }
+  ok(Math.abs(p.armorPct - .64) < 1e-9 && Math.abs(q.armorPct - .32) < 1e-9 && p.level === 9, `8 picks: Briggs (heavy) -64%, Raven (light) -32%, more refused (${p.armorPct}, ${q.armorPct}, level ${p.level})`);
+  p.hp = p.maxHp = 1000; q.hp = q.maxHp = 1000; room.hiveHurt(p, 100); room.hiveHurt(q, 100);
+  ok(1000 - p.hp === Math.round(100 * .36 - p.defence) && 1000 - q.hp === 68, `a 100 hit: Briggs takes ${1000 - p.hp} (36 - his 5 defence), Raven ${1000 - q.hp}`);
+  const g0 = p.currency = 999; send(A, "buy", { id: "armor" }); ok(p.currency === 999, "the shop doesn't sell armour any more");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

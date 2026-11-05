@@ -22,8 +22,11 @@ function unwindTo(d) { while (ctxDepth > d) ctx.restore(); }
 function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.profileStorageKey)||"{}");}catch{return {};}}
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
-const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","+2 defence"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-10% skill cooldowns (max -60%)"], ["hands","Fast Hands","+15% reload speed, +20% magazine size (max 5)"] ];
-const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me?.cdr || 0) < .6 - 1e-9) && (id !== "hands" || (me?.hands || 0) < 5));   // capped upgrades leave the list
+const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","ARMOR_TEXT"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-10% skill cooldowns (max -60%)"], ["hands","Fast Hands","+15% reload speed, +20% magazine size (max 5)"] ];
+const ARMOR_STEP = { juggernaut: .08, slasher: .08, dispatcher: .06, operator: .06, assault: .06, engineer: .06, demolitionist: .04, sniper: .04, scout: .04 };   // matches the server (Body Armour by weight class)
+const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me?.cdr || 0) < .6 - 1e-9) && (id !== "hands" || (me?.hands || 0) < 5) && (id !== "defence" || (me?.armorPct || 0) < (ARMOR_STEP[me?.characterClass] || .06) * 8 - 1e-9))
+  .map(u => { if (u[0] !== "defence") return u; const st = ARMOR_STEP[me?.characterClass] || .06, cls = st > .07 ? "heavy" : st < .05 ? "light" : "medium";
+    return [u[0], u[1], `−${Math.round(st * 100)}% damage taken (${cls} hero, max −${Math.round(st * 800)}%)`]; });   // capped upgrades leave the list
 // ===================== GAME DATA (display only; the server has the final say) =====================
 const WEAPON_INFO = {
   pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 1.0, infinite: true },
@@ -353,7 +356,7 @@ function renderScoreboard(players) {
 // [id, name, what it does, price] — prices must match SHOP on the server
 const SHOP_ITEMS = [
   ["Weapons", [["smg", "SMG", "Fast full-auto spray", 35], ["shotgun", "Shotgun", "5 pellets, close range", 40], ["sniper", "Sniper rifle", "Huge damage, pierces 3", 70], ["launcher", "Launcher", "Explosive splash", 120]]],
-  ["Gear", [["medkit", "Medkit", "Heals 60% · slot 5", 10], ["ammo", "Ammo +90", "Spare bullets", 5], ["armor", "Armour", "+2 defence", 30]]],
+  ["Gear", [["medkit", "Medkit", "Heals 60% · slot 5", 10], ["ammo", "Ammo +90", "Spare bullets", 5],]],
   ["Team supplies", [["scrap", "Scrap +40", "Build & repair", 15], ["electronics", "Electronics +8", "Turrets & fences", 20], ["fuel", "Fuel +30", "Generator & flame traps", 10], ["explosives", "Explosives +5", "Mines", 15]]],
 ];
 let shopKey = "", shopGold = null, shopBought = "";
@@ -435,7 +438,7 @@ function renderEquip(me) {
     row(3, "SECONDARY", WEAPON_INFO[me.secondary]?.name || "—", "", icon(me.secondary)) +
     row(4, "SKILL", skill.name, skill.cd + "s cooldown", `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>`) +
     row(5, "QUICK ITEM", "Medkit ×" + (me.medkits || 0), "heals 60%", icon("medkit")) +
-    row("🛡", "ARMOUR", (me.armor || 0) + " plate" + (me.armor === 1 ? "" : "s"), "defence " + (me.defence || 0), icon("armor"));
+    row("🛡", "ARMOUR", "−" + Math.round((me.armorPct || 0) * 100) + "% damage taken", (ARMOR_STEP[me.characterClass] ? ARMOR_STEP[me.characterClass] * 100 : 6) + "% per pick · max " + Math.round((ARMOR_STEP[me.characterClass] || .06) * 800) + "%" + (me.defence ? " · +" + me.defence + " defence" : ""), icon("armor"));
   // backpack: everything you own but don't have equipped right now
   const owned = (me.owned || "").split(",").filter(Boolean);
   const items = [

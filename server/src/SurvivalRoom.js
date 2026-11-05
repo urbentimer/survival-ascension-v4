@@ -127,12 +127,17 @@ const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);
 const CDR = { step: 0.10, max: 0.60 };
 // Fast Hands (level-up upgrade, Nov 5): per pick +15% reload speed and +20% magazine size, up to 5 picks (+75% / +100%).
 const HANDS = { reload: 0.15, mag: 0.20, max: 5 };
+// Body Armour (level-up upgrade, Nov 6): PERCENT damage reduction by weight class, 8 picks to the cap. Heroes' built-in flat
+// defence (Briggs 5, Viktor 1) still comes off after the percent. The shop no longer sells armour.
+const ARMOR_CLASS = { juggernaut: "heavy", slasher: "heavy", dispatcher: "medium", operator: "medium", assault: "medium", engineer: "medium", demolitionist: "light", sniper: "light", scout: "light" };
+const ARMOR = { heavy: .08, medium: .06, light: .04, picks: 8 };
+const armorStep = p => ARMOR[ARMOR_CLASS[p.characterClass] || "medium"], armorCap = p => armorStep(p) * ARMOR.picks;
 const magCap = (p, w) => Math.round(w.mag * (1 + HANDS.mag * (p.hands || 0)));   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
 const UPGRADES = {
   damage: p => { p.bonusDamage = (p.bonusDamage || 0) + 20; applyLoadout(p); }, // +20% damage
   fireRate: p => { p.rateMult = Math.min(3, (p.rateMult || 1) * 1.2); applyLoadout(p); },
   health: p => { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 35); },
-  defence: p => { p.defence += 2; },
+  defence: p => { p.armorPct = Math.min(armorCap(p), Math.round(((p.armorPct || 0) + armorStep(p)) * 100) / 100); },   // Body Armour: percent, by weight class
   speed: p => { p.speed = Math.min(300, p.speed * 1.1); },
   cooldown: p => { p.cdr = Math.min(CDR.max, Math.round(((p.cdr || 0) + CDR.step) * 100) / 100); },
   hands: p => { p.hands = Math.min(HANDS.max, (p.hands || 0) + 1); p.magSize = magCap(p, WEAPONS[p.weapon] || WEAPONS.rifle); }
@@ -295,7 +300,6 @@ const SHOP = {
   launcher:    { price: 120, label: "Launcher",       type: "weapon" },
   medkit:      { price: 10,  label: "Medkit (quick item, max 3)" },
   ammo:        { price: 5,   label: "Ammo +90" },
-  armor:       { price: 30,  label: "Armour plate (+2 defence)", max: 5 },
   scrap:       { price: 15,  label: "Scrap +40 (team)" },
   electronics: { price: 20,  label: "Electronics +8 (team)" },
   fuel:        { price: 10,  label: "Fuel +30 (team)" },
@@ -628,7 +632,6 @@ export class SurvivalRoom extends Room {
       if (item.type === "weapon") { this.unlockWeapon(p, id); this.storeMag(p); p[WEAPONS[id].slot] = id; this.setSlot(p, WEAPONS[id].slot === "primary" ? 2 : 3); }
       else if (id === "medkit") p.medkits += 1;
       else if (id === "ammo") p.ammo += 90;
-      else if (id === "armor") { p.armor++; p.defence += 2; }
       else if (id === "scrap") s.scrap += 40;
       else if (id === "electronics") s.electronics += 8;
       else if (id === "fuel") s.fuel += 30;
@@ -694,7 +697,7 @@ export class SurvivalRoom extends Room {
       p.level = 1; p.xp = 0; p.xpNext = 30;
       p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0;
       p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0;
-      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0;
+      p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0; p.armorPct = 0;
       p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.weapon = "rifle"; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
       this.mags.delete(p.sessionId + ":rifle"); this.mags.delete(p.sessionId + ":pistol"); this.loadMag(p);
       p.ammo = 240; p.abilityCooldown = 0; p.bleedout = 0; p.reviveProgress = 0; p.reviveTargetId = "";
@@ -764,7 +767,7 @@ export class SurvivalRoom extends Room {
     p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
     p.hp = 100; p.maxHp = 100; p.level = 1; p.xp = 0; p.xpNext = 30;
     p.characterClass = "assault"; p.abilityCooldown = 0; p.bleedout = 0; p.weapon = "rifle"; p.melee = "knife"; p.ammo = 240; p.currency = 0; p.owned = STARTER_WEAPONS; p.armor = 0; p.isBot = false; p.primary = "rifle"; p.secondary = "pistol"; p.activeSlot = 2; p.medkits = 1; p.reloadLeft = 0; p.stunned = 0; p.slowed = 0; p.ultKills = 0; p.ultCd = 0; p.ultReady = false; p.robotCharges = ROBOT_CHARGES; p.chargeCd = 0;
-    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
+    p.kills = 0; p.killLeadSince = 0; p.bossDamage = 0; p.revives = 0; p.damageDealt = 0; p.damageTaken = 0; p.towerRepairs = 0; p.structuresBuilt = 0; p.headshots = 0; p.bonusDamage = 0; p.rateMult = 1; p.buffDamage = 0; p.buffRate = 1; p.cdr = 0; p.hands = 0; p.armorPct = 0; p.facing = 1; p.aim = 0; p.bledOut = false; p.charging = false;
     const profile=options.profile&&typeof options.profile==="object"?options.profile:{};
     p.level = 1; p.xp = 0; p.xpNext = xpForLevel(1); p.currency = 0;   // every run starts at level 1 (upgrades don't carry over either)
     const classIds=PICKABLE;
@@ -886,7 +889,7 @@ export class SurvivalRoom extends Room {
             if (q === p || !q.alive) continue; const vx = q.x - p.x, vy = q.y - p.y, t = vx * dx + vy * dy;
             if (t > 0 && t < ft && Math.abs(vx * dy - vy * dx) <= BODY_R + 2) { ff = q; ft = t; }
           }
-          if (ff) { if (!this.untouchable(ff)) { const dealt = Math.max(1, Math.round(p.damage * (w.pelletMult || 1) * FRIENDLY_FIRE - ff.defence)); ff.hp -= dealt; ff.damageTaken += dealt; if (ff.hp <= 0) this.downPlayer(ff); } end = ft; }
+          if (ff) { if (!this.untouchable(ff)) { const dealt = this.armorHit(ff, p.damage * (w.pelletMult || 1) * FRIENDLY_FIRE); ff.hp -= dealt; ff.damageTaken += dealt; if (ff.hp <= 0) this.downPlayer(ff); } end = ft; }
         }
       }
       tracers.push(Math.round(end));
@@ -1019,7 +1022,7 @@ export class SurvivalRoom extends Room {
   }
 
   applyUpgrade(p, id) {
-    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL || (id === "cooldown" && (p.cdr || 0) >= CDR.max - 1e-9) || (id === "hands" && (p.hands || 0) >= HANDS.max)) return false;
+    if (!UPGRADES[id] || p.xp < p.xpNext || (p.level || 1) >= MAX_LEVEL || (id === "cooldown" && (p.cdr || 0) >= CDR.max - 1e-9) || (id === "hands" && (p.hands || 0) >= HANDS.max) || (id === "defence" && (p.armorPct || 0) >= armorCap(p) - 1e-9)) return false;
     p.xp -= p.xpNext;
     p.level++;
     p.xpNext = xpForLevel(p.level); if (p.level >= MAX_LEVEL) p.xp = 0;
@@ -1073,7 +1076,7 @@ export class SurvivalRoom extends Room {
     for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
     for (const p of this.state.players.values()) {   // direct hit
       if (!p.alive || this.untouchable(p) || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
-      const dealt = Math.max(1, Math.round(s.dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+      const dealt = this.armorHit(p, s.dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
     }
     const pu = new PuddleState(); pu.id = "a" + (++this.puddleSeq); pu.x = Math.round(s.tx); pu.y = Math.round(s.ty);
     pu.r = ACID.radius; pu.life = ACID.life; pu.maxLife = ACID.life;
@@ -1093,7 +1096,7 @@ export class SurvivalRoom extends Room {
         if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
       }
     }
-    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt; p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
   separateZombies() {
@@ -2208,7 +2211,8 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y) });
     return z;
   }
-  hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = Math.max(1, Math.round(dmg - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
+  armorHit(p, raw) { return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) - (p.defence || 0))); }   // percent armour first, then flat defence
+  hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000 }; this.hiveMem.set(z.id, m);
     if (now >= m.spawnAt && z.act !== "jump") {   // tears zombies out of its body
@@ -2392,7 +2396,7 @@ export class SurvivalRoom extends Room {
       const inner = i ? C.rings[i - 1] : 0, outer = C.rings[i];
       for (const p of this.state.players.values()) {
         if (!p.alive || this.untouchable(p)) continue; const zd = ringZone(p.x - cx, p.y - cy); if (zd < inner || zd >= outer) continue;
-        if (i === 0) { const dealt = Math.max(1, Math.round(z.damage - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
+        if (i === 0) { const dealt = this.armorHit(p, z.damage); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
         else if (i === 1) { p.stunned = Math.max(p.stunned || 0, C.stun); p.charging = false; }
         else p.slowed = Math.max(p.slowed || 0, C.slow);
       }
@@ -2424,7 +2428,7 @@ export class SurvivalRoom extends Room {
     if (hit && this.canDeflect(hit, z, now, DEFLECT.window)) { this.deflectHook(z, hit, now); return; }
     if (hit) {
       z.hookId = hit.sessionId; z.hookD = best; hit.stunned = Math.max(hit.stunned || 0, .3); hit.charging = false;
-      const dealt = Math.max(1, H.dmg - hit.defence); hit.hp -= dealt; hit.damageTaken += dealt;
+      const dealt = this.armorHit(hit, H.dmg); hit.hp -= dealt; hit.damageTaken += dealt;
       if (hit.hp <= 0) { this.downPlayer(hit); this.startAct(z, "hookback", .35); return; }
       this.broadcast("hooked", { id: hit.sessionId }); m.stuck = 0;
       this.startAct(z, "pull", 2.5); return;
@@ -2494,7 +2498,7 @@ export class SurvivalRoom extends Room {
       m.spinTick = S.tick;
       for (const p of this.state.players.values()) {
         if (!p.alive || this.untouchable(p) || distance(z, p) > S.radius + BODY_R) continue;
-        const dealt = Math.max(1, Math.round(z.damage * S.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+        const dealt = this.armorHit(p, z.damage * S.dmgMult); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
       }
     }
     if (z.slam <= 0) m.spinReady = now + S.every * 1000;
@@ -2506,7 +2510,7 @@ export class SurvivalRoom extends Room {
       if (!p.alive || this.untouchable(p)) continue; const pd = distance(z, p); if (pd > reach) continue;
       let diff = Math.atan2(p.y - z.y, p.x - z.x) - ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) > MUTANT.arc && pd > z.radius + BODY_R + 4) continue;
-      const dealt = Math.max(1, Math.round(z.damage * MUTANT.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+      const dealt = this.armorHit(p, z.damage * MUTANT.dmgMult); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
     }
     this.broadcast("whip", { x: Math.round(z.x), y: Math.round(z.y), a: Math.round(ang * 100) / 100 });
   }
@@ -2514,7 +2518,7 @@ export class SurvivalRoom extends Room {
   bruteSlam(z) {
     for (const p of this.state.players.values()) {
       if (!p.alive || this.untouchable(p) || distance(p, z) > SLAM.radius + BODY_R) continue;
-      const dealt = Math.max(1, Math.round(z.damage * SLAM.dmgMult - p.defence)); p.hp -= dealt; p.damageTaken += dealt;
+      const dealt = this.armorHit(p, z.damage * SLAM.dmgMult); p.hp -= dealt; p.damageTaken += dealt;
       p.stunned = Math.max(p.stunned || 0, SLAM.stun); p.charging = false;
       if (p.hp <= 0) this.downPlayer(p);
     }
@@ -3074,7 +3078,7 @@ export class SurvivalRoom extends Room {
           // mutants only hurt survivors with their charged whip (above)
         } else if (target.sessionId) {
           if (this.untouchable(target)) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered: the bite misses
-          const dealt = Math.max(1,z.damage-target.defence); target.hp-=dealt; target.damageTaken+=dealt;
+          const dealt = this.armorHit(target, z.damage); target.hp-=dealt; target.damageTaken+=dealt;
           if(target.hp<=0)this.downPlayer(target);
         } else {
           this.state.towerHp=Math.max(0,this.state.towerHp-z.damage*(z.boss?2:1));

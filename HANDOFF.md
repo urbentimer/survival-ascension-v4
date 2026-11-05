@@ -209,3 +209,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 ## Nov 6 — Dash is a real dodge (all heroes)
 - DASH_DISTANCE 50 -> 140 (client P_DASH too), cooldown still 5s, + DASH_IFRAMES 0.25s: this.dodgeUntil per player, folded into untouchable(p). Every player-damage path now checks untouchable: zombie bites (generic melee: bite misses, retry in .25s), hiveHurt (Hivemind + Wendigo), Butcher rings/hook/spin, mutant whip, brute slam, spitter acid hit + burn, friendly fire. Client: dodgeAt map (set in dashBeam, even if a wall stopped the dash) -> the survivor flickers see-through for 0.25s. Test 85 updated + test 51. Cache v=20261106f.
+
+## Nov 6 — Body Armour is percent, by weight class (level-up only)
+- Level-up "defence" upgrade: damage taken -8% per pick (heavy: Briggs, Arshan), -6% (medium: Astra, Sofea, Marcus, Viktor), -4% (light: Dante, Sienna, Raven); 8 picks to the cap (-64 / -48 / -32%). ARMOR_CLASS / ARMOR / armorStep / armorCap on the server, ARMOR_STEP on the client. Synced PlayerState.armorPct (schema + Unity field 62).
+- armorHit(p, raw) = max(1, round(raw * (1 - armorPct) - defence)): every player damage path uses it (acid burn: percent only). Heroes' built-in flat defence (Briggs 5, Viktor 1) still applies after the percent.
+- The shop no longer sells armour (SHOP.armor + buy branch removed; client Gear list). Loadout panel shows "-X% damage taken". Level-up card text is per hero. Tests 52 + shop test updated; flaky tests 51 (dodge) and Dante's grenade rings made deterministic. Cache v=20261106g.

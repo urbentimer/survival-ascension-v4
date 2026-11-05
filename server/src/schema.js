@@ -15,7 +15,8 @@ defineTypes(PlayerState, {
   ack: "number",   // last movement input the server applied (client-side prediction replays the ones after it)
   cdr: "number",   // skill cooldown reduction from level-up upgrades (0 .. 0.6)
   hands: "number",   // Fast Hands picks (0..5): +15% reload speed, +20% magazine each
-  reloadTotal: "number"   // length of the current reload (s), for the reload bar
+  reloadTotal: "number",   // length of the current reload (s), for the reload bar
+  armorPct: "number"   // Body Armour: damage taken reduced by this fraction (0 .. 0.64)
 });
 // Server-only player numbers (not sent to browsers): bonusDamage, rateMult, buffDamage, magSize, reviveProgress.
 
