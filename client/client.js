@@ -129,7 +129,7 @@ function connected() {
   room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
   room.onMessage("sofea", m => { const t = performance.now();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
-    else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
+    else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a, flip: !mechaSlash.get(m.id)?.flip }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
     else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
@@ -1212,7 +1212,7 @@ function drawSofea(p, img, now) {
 // sofea-mecha.webp: 8 rows (dir8 order) x 6 cols (idle, walk 1-3, flame pose, saber slash), cells 224x192, feet at (112, 186)
 // sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
-const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // 80px tall = 1.5x a survivor
+const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 230, swing: 900,   // 80px tall = 1.5x a survivor
   nozzle: [[-4, -24], [23, -32], [28, -47], [27, -49], [-2, -45], [-28, -49], [-29, -47], [-22, -31]],   // per direction, from the feet
   tfRow: [0, 1, 4, 5, 5, 5, 3, 2] };   // which transformation row each facing uses (tf rows: down, down-right, down-left, left, right, up)
 const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
@@ -1252,7 +1252,7 @@ function drawMecha(p, v, aim, now) {
   if (flameBehind) drawMechaFlame(p, aim, row, feet, fs, now);
   if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * MECHA.cw, swingRow * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy + bob, MECHA.cw, MECHA.ch); ctx.restore(); }
   if (!flameBehind) mechaLate.push(() => drawMechaFlame(p, aim, row, feet, fs, now));   // over the zombies it's burning (drawn after all sprites)
-  if (sAge < 480) drawSaberSweep(p, sl.a, sAge, feet);
+  if (sAge < 640) { const s0 = sl; mechaLate.push(() => drawSaberSweep(p, s0.a, now - s0.t, feet, s0.flip)); }   // over the zombies it cuts
 }
 function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm's nozzle to the ground 190px out where she aims
   const im = sImgs.flame; if (!im?.naturalWidth) return;
@@ -1270,13 +1270,18 @@ function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm'
   blendCells(im, 0, 0, 208, 160, f, f2, t - Math.floor(t), -4 * sc, -80 * sc, 208 * sc, 160 * sc);   // a wide cone (~42 degrees, like the damage)
   ctx.restore();
 }
-function drawSaberSweep(p, a, age, feet) {   // a bright green crescent sweeping 120 degrees, 155px
-  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 70, R = MECHA.saber;
-  const a0 = a - Math.PI / 3, a1 = a0 + (Math.PI * 2 / 3) * u;
-  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
-  for (const [w, c, al] of [[18, "#1fff6a", .22], [8, "#5dff9a", .55], [3, "#eafff0", .95]]) {
-    ctx.globalAlpha = al * fade; ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.ellipse(p.x, cy + 40, R * .92, R * .62, 0, Math.max(a0, a1 - 1.3), a1); ctx.stroke();
-  }
+// sofea-slash.webp (tools/extract-saber-slash.py, the user's green energy arc): 8 frames 256x256, the arc bulges UP, its pivot
+// (her shoulder) at cell (128, 200), the arc's top ~147px above it. Turned to where she swings, scaled to the 230px reach;
+// every other swing is mirrored, so she slashes right-to-left, then left-to-right.
+const slashImg = new Image(); slashImg.src = "assets/sprites/fx/sofea-slash.webp";
+const SLASH = { n: 8, c: 256, px: 128, py: 200, reach: 147, start: 90, ms: 60 };
+function drawSaberSweep(p, a, age, feet, flip) {
+  if (!slashImg.naturalWidth) return;
+  const t = (age - SLASH.start) / SLASH.ms; if (t < 0 || t >= SLASH.n) return;
+  const f = Math.floor(t), f2 = Math.min(SLASH.n - 1, f + 1), k = (MECHA.saber * .96) / SLASH.reach, C = SLASH.c;
+  ctx.save(); ctx.translate(p.x, feet - 42); ctx.rotate(a + Math.PI / 2); ctx.scale(flip ? -k : k, k * .9);
+  blendCells(slashImg, 0, 0, C, C, f, f2, t - f, -SLASH.px, -SLASH.py, C, C);
+  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .5; ctx.drawImage(slashImg, f * C, 0, C, C, -SLASH.px, -SLASH.py, C, C);   // glow
   ctx.restore();
 }
 // Sofea's helicopter machine gun (fires the whole ride; the server hits every zombie in a 90-degree cone, 420px, where she aims).
@@ -2807,7 +2812,7 @@ const ROSTER = [
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
              { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
-             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px cone). Right click: lightsaber sweep (155px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px cone). Right click: a huge lightsaber sweep (230px, 80 dmg). R again to step out." }], gear: ["rifle", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
