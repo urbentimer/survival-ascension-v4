@@ -2,9 +2,9 @@
 #   python3 tools/extract-mecha.py
 # Writes:
 #   sprites/dir8/sofea-mecha.webp       8 rows (down, downRight, right, upRight, up, upLeft, left, downLeft) x 6 cols
-#                                       (idle, walk 1-3, flame pose, saber slash), cells 112x88, body centre x=56, feet y=80
+#                                       (idle, walk 1-3, flame pose, saber slash), cells 160x128, body centre x=80, feet y=120
 #   sprites/dir8/sofea-mecha-tf.webp    5 rows (down, front-left, left, right, up) x 8 frames of Sofea turning into the mecha,
-#                                       same cells / anchor; all frames the same height (54px)
+#                                       same cells / anchor; she grows from her size (54px) to the mecha (80px)
 #   (sprites/fx/sofea-flame.webp: the flame jet, made by tools/bake-flamethrower.py)
 #                                       0-7 ignite (grow), 8-13 loop, 14-21 cut off (shrink)
 #   sprites/dir8/sofea-mecha.json       per direction: the flame nozzle offset from the feet anchor
@@ -16,8 +16,8 @@ from PIL import Image
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'sofea-mecha')
 A = os.path.join(here, '..', 'client', 'assets', 'sprites')
-CW, CH, AX, FY = 112, 88, 56, 80   # same cells as the survivors' dir8 atlases
-BODY_H = 54    # her normal size (was 162 = 3x; the user wants her to stay her size)
+CW, CH, AX, FY = 160, 128, 80, 120
+BODY_H = 80    # 1.5x a survivor (162 = 3x was too big, 54 = her size too small)
 
 def blue_key(path):
     a = np.array(Image.open(os.path.join(ART, path)).convert('RGB')).astype(int); r, g, b = a[..., 0], a[..., 1], a[..., 2]
@@ -78,7 +78,7 @@ def place(c, sc, cx_src, feet_src, flip=False):
     out[y0:y1, x0:x1] = a[y0 - y:y1 - y, x0 - x:x1 - x]
     return out
 
-def save_webp(arr, path, q=82):
+def save_webp(arr, path, q=72):
     Image.fromarray(arr).save(path, quality=q, method=6, alpha_quality=100); print('->', os.path.relpath(path), os.path.getsize(path) // 1024, 'KB')
 
 # ---- mecha, 8 directions ----
@@ -105,7 +105,7 @@ for d, (sr, mir) in enumerate(SRC):
     if len(xs):
         vx, vy = DIRV[d]; s = (xs - AX) * vx + (ys - FY) * vy; sel = s >= np.percentile(s, 97)
         nozzles.append([round(float(xs[sel].mean()) - AX), round(float(ys[sel].mean()) - FY)])
-    else: nozzles.append([round(DIRV[d][0] * 17), -24])
+    else: nozzles.append([round(DIRV[d][0] * 25), -36])
     print(f'dir {d}: sheet row {sr}{" mirrored" if mir else ""}, scale {sc:.3f}, nozzle {nozzles[-1]}')
 save_webp(atlas, os.path.join(A, 'dir8', 'sofea-mecha.webp'))
 

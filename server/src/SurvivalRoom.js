@@ -180,7 +180,7 @@ const SOFEA = {
   // mecha (R): she transforms (1s) and pilots it on foot-speed WASD. HOLD left click = flame jet (190px, 42-degree cone, 12 dmg to every
   // zombie in it every 0.25s); right click = lightsaber sweep (155px, 120 degrees, 80 dmg once per zombie, the swing takes 0.9s).
   // Flame pulses and swings share one attack timer. Both stop at walls. She takes normal damage; no run-over. 100s cooldown from getting out.
-  mecha: { life: 30, cd: 100, call: 1, speed: 150, taken: 1, body: 14, reach: 2,   // her normal size
+  mecha: { life: 30, cd: 100, call: 1, speed: 150, taken: 1, body: 20, reach: 8,   // 1.5x a survivor
            flame: { range: 190, cone: 42 * Math.PI / 180, every: 0.25, dmg: 12 },
            saber: { range: 155, cone: 120 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },
 };

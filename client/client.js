@@ -1222,8 +1222,8 @@ function drawSofea(p, img, now) {
 // sofea-mecha.webp: 8 rows (dir8 order) x 6 cols (idle, walk 1-3, flame pose, saber slash), cells 224x192, feet at (112, 186)
 // sofea-mecha-tf.webp: 5 rows (front, front-left, left, right, back) x 8 frames of the transformation, same cells
 // sofea-flame.webp: 22 frames 208x112 pointing RIGHT, nozzle at (4, 56): 0-7 ignite, 8-13 loop, 14-21 cut off
-const MECHA = { cw: 112, ch: 88, ax: 56, fy: 80, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // her normal size (same cells as the survivors)
-  nozzle: [[-4, -23], [22, -26], [19, -30], [-6, -33], [-2, -33], [5, -33], [-19, -31], [-2, -17]],   // per direction, from the feet
+const MECHA = { cw: 160, ch: 128, ax: 80, fy: 120, call: 1, outMs: 650, range: 190, saber: 155, swing: 900,   // 80px tall = 1.5x a survivor
+  nozzle: [[-7, -20], [32, -34], [30, -44], [20, -48], [4, -49], [-20, -48], [-27, -45], [-12, -15]],   // per direction, from the feet
   tfRow: [0, 0, 3, 4, 4, 4, 2, 1] };   // which transformation angle each facing uses
 const mechaOut = new Map(), mechaSlash = new Map(), mechaFlame = new Map(), mechaCall = new Map(), mechaLate = [];
 // draws frame f of a strip, cross-fading into frame f2 by k (0..1): smooth in-betweens for the transformation / flame
@@ -1235,8 +1235,8 @@ const mechaFiring = (p, v) => v.phase === "ride" && (p.sessionId === myId ? heli
 function drawMechaTf(p, row, u) {   // u: 0 = Sofea, 1 = mecha
   const im = sImgs.mechaTf; if (!im?.naturalWidth) return;
   u = Math.max(0, Math.min(1, u)); const t = u * 7, f = Math.floor(t), tr = MECHA.tfRow[row], feet = Math.round(p.y + SPR.feet);
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 14 + 3 * u, 4 + u, 0, 0, 7); ctx.fill();
-  if (u > .05 && u < .97) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .55 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(p.x, feet - 26, 3, p.x, feet - 26, 34); g.addColorStop(0, "#ffb27a"); g.addColorStop(1, "rgba(255,60,40,0)"); ctx.fillStyle = g; ctx.fillRect(p.x - 40, feet - 64, 80, 70); }
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 14 + 11 * u, 4 + 3 * u, 0, 0, 7); ctx.fill();
+  if (u > .05 && u < .97) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .55 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(p.x, feet - 34, 3, p.x, feet - 34, 48); g.addColorStop(0, "#ffb27a"); g.addColorStop(1, "rgba(255,60,40,0)"); ctx.fillStyle = g; ctx.fillRect(p.x - 52, feet - 86, 104, 92); }
   ctx.restore();
   ctx.save(); ctx.imageSmoothingEnabled = false; blendCells(im, 0, tr * MECHA.ch, MECHA.cw, MECHA.ch, f, Math.min(7, f + 1), t - f, Math.round(p.x - MECHA.ax), feet - MECHA.fy); ctx.restore();
 }
@@ -1257,7 +1257,7 @@ function drawMecha(p, v, aim, now) {
   let bob = 0;
   if (col === 0 && v.mv) { const st = Math.floor(now / 115) % 4; col = [1, 2, 3, 2][st]; bob = st % 2 ? 0 : 1; }   // walk 1-2-3-2, a 1px bob on the heavy steps
   else if (col === 0) bob = Math.sin(now / 420) > .6 ? 1 : 0;   // idle: slow breathing
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 17, 5, 0, 0, 7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(p.x, feet - 1, 25, 7, 0, 0, 7); ctx.fill(); ctx.restore();
   const flameBehind = Math.sin(aim) < -.35;
   if (flameBehind) drawMechaFlame(p, aim, row, feet, fs, now);
   if (im?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, col * MECHA.cw, swingRow * MECHA.ch, MECHA.cw, MECHA.ch, Math.round(p.x - MECHA.ax), feet - MECHA.fy + bob, MECHA.cw, MECHA.ch); ctx.restore(); }
@@ -1281,7 +1281,7 @@ function drawMechaFlame(p, aim, row, feet, fs, now) {   // the jet from her arm'
   ctx.restore();
 }
 function drawSaberSweep(p, a, age, feet) {   // a bright green crescent sweeping 120 degrees, 155px
-  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 58, R = MECHA.saber;
+  const u = Math.min(1, age / 260), fade = age < 260 ? 1 : Math.max(0, 1 - (age - 260) / 220), cy = feet - 70, R = MECHA.saber;
   const a0 = a - Math.PI / 3, a1 = a0 + (Math.PI * 2 / 3) * u;
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
   for (const [w, c, al] of [[18, "#1fff6a", .22], [8, "#5dff9a", .55], [3, "#eafff0", .95]]) {
@@ -2060,7 +2060,7 @@ function drawSurvivorLabels(p) {
     ctx.restore();
   }
   ctx.fillStyle = "#f2ead9"; ctx.font = "11px monospace"; ctx.textAlign = "center";
-  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
+  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
   ctx.fillText(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift);
   if (!p.alive) { ctx.fillStyle = "#ff7568"; ctx.fillText(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32); }
 }
