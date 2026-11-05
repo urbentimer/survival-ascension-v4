@@ -156,3 +156,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server: MARCUS.rush {cd 15, t 6, dmg 50, rate 1.25}; p.buffRate (server-only) feeds applyLoadout fireRate and meleeAttack cd; p.skillT = seconds left (synced), ticked in updateMarcus (replaces the old setTimeout). Broadcast "rush" {id} (client no-op hook for a future VFX; added to Unity Net.cs list).
 - Client: E slot shows "RUSH 5s"; melee click gate divides by 1.25 during the rush; roster text updated. Test 41. Cache v=20261105r.
 - Combat Rush VFX (canvas, no art file): marcusRush(p, now, front) in drawSurvivorDir8. Behind him: red ground glow, breathing body haze, spinning dashed ring; in front: 24 rising embers + a 450ms shock ring on activation (from the "rush" broadcast → rushStart). Fades over the last 0.5s of skillT. drawRushScreen(): the Marcus player's own screen gets a red "lub-dub" heartbeat vignette every 0.6s + a 350ms flash at the start, drawn after drawNight. Cache v=20261105s.
+
+## Nov 5 — Marcus Q: Frag Barrage
+- Q (ultimate rules: 100 kills to unlock, then 30s cooldown from the throw; test mode/noCd skips both). MARCUS.frag in SurvivalRoom.js:
+  - concussion blast around him: r 150, 40 dmg (x wave scale), shoves non-boss zombies 90px;
+  - he hops back 170px over 0.22s, away from his aim (this.fragHops, applied in updateMarcus with moveWithCollision);
+  - 3 grenades in a fan (±0.35 rad) to the mouse distance (clamped 140-380px), land after 0.55s (+0.08s each) as "frag" ripples: 110 dmg, r 85, 60px knockback, bosses x0.5 dmg and no push. Blasts broadcast as "boom" k:"frag" (Dante's explosion art + scorch + shake).
+  - Broadcast "frag" {id, x, y, a, pts, fl, gap, br}. Bot Marcus throws it when 4+ zombies are within 220px.
+- Client: ULT.assault (noCard: grenade icon in the Q slot until card art exists); Q sends {a, d}; drawDanteFx k:"frag" = shock ring + dust at his feet, grenades arc with landing markers (demoFrame rows 1/2/5); fragHop pauses prediction for 380ms so the hop is drawn from the server. Roster text has the Q. Test 42. Cache v=20261105t.

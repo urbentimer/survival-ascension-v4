@@ -127,6 +127,7 @@ function connected() {
   room.onMessage("hive", m => onHive(m));
   room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
+  room.onMessage("frag", m => { const t = performance.now(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
   room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
   room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
   room.onMessage("sofea", m => { const t = performance.now();
@@ -294,7 +295,7 @@ function renderHotbar(me) {
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
     { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
-    ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
+    ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? `RAGE ${Math.ceil(me.ultActive)}s` : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
@@ -695,7 +696,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && (me.shadow > 0 || me.fire > 0)) { feed.unshift({ text: me.shadow > 0 ? "You're hidden: attack to strike with a burning katana" : `Katana burning: ${Math.ceil(me.fire)}s left`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
-  else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me) }); } }
+  else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
   else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "f" && !e.repeat) tryRevive();
@@ -847,7 +848,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "War Cry", icon: "warCry", life: 10, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
+const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 30 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "War Cry", icon: "warCry", life: 10, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -1423,6 +1424,25 @@ function drawDanteFx(f, age) {   // false when finished
     });
     return true;
   }
+  if (f.k === "frag") {   // Marcus: concussion ring around him, then 3 grenades arc out to their spots (the blasts come as "boom")
+    const total = (f.pts.length - 1) * f.gap + f.fl; if (s > Math.max(total, .5)) return false;
+    if (s < .5) {   // shock ring + dust where he stood
+      const k = s / .5, R = (f.br || 150) * (.25 + .75 * Math.sqrt(k));
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 8 * (1 - k) + 1.5; ctx.strokeStyle = `rgba(255,190,120,${.9 * (1 - k)})`;
+      ctx.beginPath(); ctx.ellipse(f.x, f.y + 14, R, R * .42, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 3 * (1 - k) + .5; ctx.strokeStyle = `rgba(255,255,255,${.8 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(f.x, f.y + 14, R * .82, R * .34, 0, 0, Math.PI * 2); ctx.stroke();
+      if (s < .12) { ctx.fillStyle = `rgba(255,220,170,${.6 * (1 - s / .12)})`; ctx.beginPath(); ctx.arc(f.x, f.y, 34, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+      demoFrame(5, Math.min(3, Math.floor(s / .13)), f.x, f.y + 22, .55 * (1 - k), .8);
+    }
+    f.pts.forEach(([tx, ty], i) => {
+      const u = (s - i * f.gap) / f.fl; if (u < 0 || u >= 1) return;
+      const dist = Math.hypot(tx - f.x, ty - f.y), gx = f.x + (tx - f.x) * u, gy = f.y - 18 + (ty - f.y + 18) * u - Math.sin(Math.PI * u) * (40 + dist * .25);
+      demoFrame(2, Math.min(2, Math.floor(u * 3)), tx, ty + 6, .8, .7);   // landing marker
+      demoFrame(1, Math.floor(age / 70) % 4, gx, gy + 32, 1, .65, Math.atan2(ty - f.y, tx - f.x));   // the grenade, spinning
+    });
+    return true;
+  }
   if (f.k === "ripple") {
     if (s > 2.6) return false;
     if (s < .5) demoFrame(0, 3 + Math.min(2, Math.floor(s / .16)), f.x, f.y + 6);        // the crate bursts
@@ -1448,6 +1468,7 @@ function drawDanteFx(f, age) {   // false when finished
 // ---------- RAVEN (Scout): Shadow Pass dash, invisibility, burning katana, Blade Storm ----------
 const rImgs = {};
 for (const [k, url] of Object.entries({ dash: "assets/sprites/zombies/dir8/raven-dash.png", shadow: "assets/sprites/fx/raven-shadow.png", fire: "assets/sprites/fx/raven-fire.png" })) { const im = new Image(); im.src = url; rImgs[k] = im; }
+const fragHop = new Map();   // Marcus id -> when he threw Frag Barrage (the server hops him back: no prediction for a moment)
 const ravenDash = new Map();   // player id -> { t0, a }: plays the dash frames
 const octRow = a => ROW_OF_OCT[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 function ravenHidden(p) { ctx.globalAlpha = p.sessionId === myId ? .38 : .1; ctx.filter = "saturate(.4) brightness(.75) hue-rotate(20deg)"; }
@@ -2405,7 +2426,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
 }
 // not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
 // the server's smooth updates instead, and prediction picks up again right after
-const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
+const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || performance.now() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
 const predicting = me => !!(me && me.alive && state?.phase === "playing" && !state.vehicles?.get(myId) && !(me.stunned > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
@@ -2930,7 +2951,8 @@ requestAnimationFrame(frame);
 // Roster: who you can pick (Sofea was removed; Arshan shows as the locked "???" tile until he's ready).
 const ROSTER = [
   { id: "assault", name: "MARCUS", role: "ASSAULT", cat: "assault", hp: 110, dmg: 17, spd: 190, def: 0, desc: "Balanced frontline fighter. Fast rifle fire and a damage rush when the horde closes in.",
-    skills: [{ k: "E", n: "Combat Rush", cd: 15, t: "+50% damage and +25% attack speed (guns and melee) for 6 seconds." }], gear: ["rifle", "pistol", "knife"] },
+    skills: [{ k: "E", n: "Combat Rush", cd: 15, t: "+50% damage and +25% attack speed (guns and melee) for 6 seconds." },
+             { k: "Q", n: "Frag Barrage", cd: 30, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }], gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
              { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." },

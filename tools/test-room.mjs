@@ -964,4 +964,17 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   tick(125); ok(p.skillT === 0 && Math.abs(p.damage - dmg0) < .01 && Math.abs(p.fireRate - rate0) < .01 && p.abilityCooldown > 8.5 && p.abilityCooldown < 9.5,
      `after 6s it wears off (cooldown left ${p.abilityCooldown.toFixed(1)}s of 15)`);
   room._dispose(); }
+// 42. MARCUS Frag Barrage (Q): concussion blast + hop back away from the aim + 3 grenades in a fan with big knockback, 30s cooldown
+{ const { room, events, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.noCd = false; p.x = 1000; p.y = 1000; p.ultKills = 0;
+  send(A, "ult", { a: 0, d: 300 }); ok(!room.fragHops.has("A"), "Q is locked until 100 kills");
+  p.ultKills = 100; const close = placeZombie(room, 1060, 1000, 9999), far = [placeZombie(room, 1330, 1000, 9999), placeZombie(room, 1000 + Math.cos(.35) * 330, 1000 + Math.sin(.35) * 330, 9999)];
+  const c0 = close.x, hp0 = close.hp; send(A, "ult", { a: 0, d: 300 });
+  ok(close.x > c0 + 40 && close.hp < hp0, `the blast around him shoves a close zombie away (${Math.round(close.x - c0)}px) and hurts it`);
+  tick(6); ok(p.x < 1000 - 120, `he hops back away from his aim (${Math.round(1000 - p.x)}px)`);
+  const f0 = far.map(z => [z.x, z.y, z.hp]); for (const r of room.ripples) r.t -= 1000; tick(2);   // ripples run on the wall clock
+  ok(far.every((z, i) => z.hp < f0[i][2] && Math.hypot(z.x - f0[i][0], z.y - f0[i][1]) > 30), `the grenades blow where he aimed (fan: middle + side grenade both hit, knocked back ${far.map((z, i) => Math.round(Math.hypot(z.x - f0[i][0], z.y - f0[i][1]))).join(", ")}px)`);
+  ok(events.some(e => e.type === "frag") && p.ultCd > 28 && !p.ultReady, `30s cooldown (${p.ultCd}s)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

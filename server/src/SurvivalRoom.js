@@ -241,7 +241,11 @@ const DASH_DISTANCE = 50, DASH_COOLDOWN = 5;   // seconds // you can place struc
 // Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
 // Upgrades are stored separately, so switching weapons never erases them.
 // Marcus E: Combat Rush. +50% damage and +25% attack speed (guns and melee) for 6s, 15s cooldown (counts from the press).
-const MARCUS = { rush: { cd: 15, t: 6, dmg: 50, rate: 1.25 } };
+// Marcus Q: Frag Barrage (100 kills, then 30s cooldown). A concussion blast around him (hurts + shoves zombies away), he hops back
+// away from his aim, and throws 3 grenades in a fan toward the mouse; each lands (0.55s, 0.08s apart) and blows with a big knockback.
+const MARCUS = { rush: { cd: 15, t: 6, dmg: 50, rate: 1.25 },
+  frag: { cd: 30, n: 3, fan: 0.35, min: 140, max: 380, flight: 0.55, gap: 0.08, dmg: 110, r: 85, push: 60, bossMult: 0.5,
+          blast: { r: 150, dmg: 40, push: 90 }, hop: { dist: 170, t: 0.22 } } };
 function applyLoadout(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
   const w = WEAPONS[p.weapon] || WEAPONS.rifle;
@@ -343,7 +347,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -456,7 +460,7 @@ export class SurvivalRoom extends Room {
     // Q: Viktor's robot squad. data.kinds = up to 3 of "assault" | "support" | "hunter"
     this.onMessage("ult", (client, data) => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
       const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { p.aim = a; this.lastAimAt.set(client.sessionId, Date.now()); }
-      this.useUlt(p); });
+      this.useUlt(p, data); });
     this.onMessage("debugUlt", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.ultKills = ULT_KILLS; this.state.message = "Test: ultimate unlocked (100 kills)"; } });
     this.onMessage("ackBoss", client => {
       const p = this.state.players.get(client.sessionId); if (!p || this.state.bossPhase !== "intro") return;
@@ -1079,6 +1083,7 @@ export class SurvivalRoom extends Room {
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: alive ? active + ASTRA.police.cd * 1000 : Math.max(0, info.readyAt - now) }; }
+    if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
@@ -1091,7 +1096,11 @@ export class SurvivalRoom extends Room {
     const left = alive ? active + (scout ? RAVEN.storm.cd : dante ? DANTE.demo.cd : ULT_CD) * 1000 : Math.max(0, info.readyAt - now);
     return { info, alive, left, active };
   }
-  useUlt(p) {
+  useUlt(p, data) {
+    if (p.characterClass === "assault") {   // Marcus: Frag Barrage (instant; the cooldown starts right away)
+      const now = Date.now(), { info, left } = this.ultState(p, now); if ((p.ultKills || 0) < ULT_KILLS || left > 0 || p.stunned > 0 || !p.alive) return;
+      info.summonedAt = now; info.readyAt = now + MARCUS.frag.cd * 1000; this.ultInfo.set(p.sessionId, info); this.fragBarrage(p, Number(data?.d)); return;
+    }
     if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
     if (p.characterClass === "dispatcher") {   // police: Q is blocked while the squad is out; the 60s cooldown starts when the last officer leaves
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
@@ -1328,11 +1337,34 @@ export class SurvivalRoom extends Room {
     if (!p?.alive) { this.taunt.delete(z.id); return null; }
     return p;
   }
-  updateMarcus(dt) {   // Combat Rush timer (skillT = seconds left, the HUD + aura read it)
+  fragBarrage(p, dist) {
+    const F = MARCUS.frag, now = Date.now(), a = p.aim || 0, scale = 1 + (this.state.stage - 1) * 0.08;
+    const d = Math.max(F.min, Math.min(F.max, Number.isFinite(dist) && dist > 0 ? dist : F.max * .7)), x0 = p.x, y0 = p.y, pts = [];
+    for (const z of [...this.state.zombies.values()]) {   // concussion blast around him
+      const zd = distance(p, z); if (zd > F.blast.r + z.radius) continue;
+      if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), F.blast.push, q => this.solveZombie(q));
+      this.hitZombie(z, p, F.blast.dmg * scale);
+    }
+    for (let i = 0; i < F.n; i++) {   // 3 grenades in a fan
+      const ga = a + (i - (F.n - 1) / 2) * F.fan;
+      const x = clamp(x0 + Math.cos(ga) * d, 10, this.A.width - 10), y = clamp(y0 + Math.sin(ga) * d, 10, this.A.height - 10);
+      pts.push([Math.round(x), Math.round(y)]);
+      this.ripples.push({ kind: "frag", owner: p.sessionId, x, y, t: now, at: F.flight + i * F.gap, dmg: F.dmg, r: F.r, push: F.push, bossMult: F.bossMult, scaled: true });
+    }
+    this.fragHops.set(p.sessionId, { vx: -Math.cos(a) * F.hop.dist / F.hop.t, vy: -Math.sin(a) * F.hop.dist / F.hop.t, left: F.hop.t });   // hop back
+    p.facing = Math.cos(a) < 0 ? -1 : 1;
+    this.broadcast("frag", { id: p.sessionId, x: Math.round(x0), y: Math.round(y0), a: Math.round(a * 100) / 100, pts, fl: F.flight, gap: F.gap, br: F.blast.r });
+    this.state.message = `${p.name}: FRAG BARRAGE!`;
+  }
+  updateMarcus(dt, now = Date.now()) {   // Combat Rush timer (skillT = seconds left, the HUD + aura read it), Frag Barrage hop + Q HUD
     for (const p of this.state.players.values()) {
-      if (p.characterClass !== "assault" || !(p.skillT > 0)) continue;
-      p.skillT = Math.max(0, p.skillT - dt);
-      if (p.skillT <= 0 || !p.alive) { p.skillT = 0; p.buffDamage = 0; p.buffRate = 1; applyLoadout(p); }
+      if (p.characterClass !== "assault") continue;
+      if (p.skillT > 0) { p.skillT = Math.max(0, p.skillT - dt); if (p.skillT <= 0 || !p.alive) { p.skillT = 0; p.buffDamage = 0; p.buffRate = 1; applyLoadout(p); } }
+      const hop = this.fragHops.get(p.sessionId);
+      if (hop) { const st = Math.min(dt, hop.left); if (p.alive) this.moveWithCollision(p, hop.vx * st, hop.vy * st); hop.left -= st; if (hop.left <= 0) this.fragHops.delete(p.sessionId); }
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const { left } = this.ultState(p, now);
+      p.ultCd = Math.ceil(left / 100) / 10; p.ultActive = 0; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
   updateBriggs(dt, now) {
@@ -2484,6 +2516,7 @@ export class SurvivalRoom extends Room {
       if (b.ultReady && crowd >= 5) this.useUlt(b);
       else if (near && b.abilityCooldown <= 0 && nearD > 320 && nearD < 1000 && seen.includes(near) && !this.arshanBusy(b)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
     }
+    if (b.characterClass === "assault" && b.ultReady && near && nearD < 200 && zs.filter(z => distance(b, z) < 220).length >= 4) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useUlt(b, { d: Math.max(160, nearD + 60) }); }   // Marcus bot: frag the crowd and hop out
     if (b.characterClass === "juggernaut") {   // Briggs bot: dome when it gets hairy, War Cry into a crowd
       const crowd = zs.filter(z => distance(b, z) < 350).length;
       if (b.ultReady && crowd >= 4) this.useUlt(b);
