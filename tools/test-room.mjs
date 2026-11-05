@@ -999,15 +999,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.elapsed = 61; room.spawnClock = 9999; tick(2);
   ok(room.state.bossPhase === "intro" && room.state.zombies.size === 0, `15s later with 2 left: they vanish and the boss intro starts (${room.state.bossPhase})`);
   room._dispose(); }
-// 45. Level-up upgrade "Quick recovery": -10% skill cooldowns per pick, max -60% (E, Q and the rest count down faster)
+// 45. Level-up upgrade "Quick recovery": -10% skill cooldowns per pick, max -60% (every skill timer starts shorter)
 { const { room, A, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.noCd = false;
   p.xp = 99999; for (let i = 0; i < 9; i++) send(A, "upgrade", { id: "cooldown" });
   ok(Math.abs(p.cdr - .6) < 1e-9 && p.level === 7, `6 picks reach the -60% cap, more are refused (cdr ${p.cdr}, level ${p.level})`);
-  p.abilityCooldown = 0; send(A, "ability", {}); const e0 = p.abilityCooldown; tick(20);   // 1s
-  ok(Math.abs((e0 - p.abilityCooldown) - 1 / .4) < .05, `E cooldown runs 1/0.4 = 2.5x faster (${(e0 - p.abilityCooldown).toFixed(2)}s per second)`);
-  p.ultKills = 100; send(A, "ult", { a: 0, d: 300 }); tick(1); const q0 = p.ultCd; tick(20);
-  ok(Math.abs((q0 - p.ultCd) - (1 / .4 - 1)) < .15, `Q (Frag Barrage) cooldown too: ${(q0 - p.ultCd).toFixed(2)}s extra per second on top of the clock (20s -> 8s)`);   // Q timers are wall-clock; the test clock doesn't move, so only the extra shows
+  p.abilityCooldown = 0; send(A, "ability", {}); tick(1);
+  ok(Math.abs(p.abilityCooldown - 15 * .4) < .1, `E (Combat Rush, 15s) starts at ${p.abilityCooldown.toFixed(1)}s (15 x 0.4 = 6s)`);
+  const e0 = p.abilityCooldown; tick(20); ok(Math.abs((e0 - p.abilityCooldown) - 1) < .02, "...and counts down at normal speed (the HUD shows real seconds)");
+  p.ultKills = 100; send(A, "ult", { a: 0, d: 300 }); tick(1);
+  ok(p.ultCd > 7.5 && p.ultCd <= 8.05, `Q (Frag Barrage, 20s) starts at ${p.ultCd}s (20 x 0.4 = 8s)`);
   room._dispose(); }
 // 46. Test tool "Level +1": the host gets exactly the XP for one more level (stacks with levels already waiting), nothing at 30, not for non-hosts
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);

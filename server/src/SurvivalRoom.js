@@ -123,7 +123,7 @@ const COLORS = ["#68d5e8", "#e8bd68", "#c58be8", "#82d49a", "#e88787", "#8eabed"
 // Levels (Nov 5): XP is shared, every kill gives its XP to the whole team, so everyone levels together whatever the team size.
 // A full 50-wave run makes ~38-40k team XP (sims); 30k reaches the cap, so level 30 lands around wave 43-50. Every run starts at level 1.
 const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);
-// Skill cooldown reduction (level-up upgrade): -10% per pick, max -60% (Nov 5: was -5% / -35%). Every skill timer (E, Q, R, Viktor's charges) just runs faster: x1/(1-cdr).
+// Skill cooldown reduction (level-up upgrade): -10% per pick, max -60% (Nov 5: was -5% / -35%). Every skill timer (E, Q, R, Viktor's charges) starts x(1-cdr) shorter (tickCdr).
 const CDR = { step: 0.10, max: 0.60 };
 // Fast Hands (level-up upgrade, Nov 5): per pick +15% reload speed and +20% magazine size, up to 5 picks (+75% / +100%).
 const HANDS = { reload: 0.15, mag: 0.20, max: 5 };
@@ -377,7 +377,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.wHazards = []; this.wSeq = 0; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.wHazards = []; this.wSeq = 0; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -1377,18 +1377,25 @@ export class SurvivalRoom extends Room {
     if (!p?.alive) { this.taunt.delete(z.id); return null; }
     return p;
   }
-  // Cooldown reduction: on top of the normal countdown, every running skill timer gets an extra dt*(1/(1-cdr) - 1).
-  // Covers E (abilityCooldown), Viktor's robot charges (chargeCd), every Q (ultInfo.readyAt, only once the Q has ended), Sofea's mecha, Astra's safehouse.
+  // Cooldown reduction: every skill timer STARTS shorter (x(1 - cdr)) and then counts down normally, so the HUD shows the real
+  // time left. Each tick we spot timers that were just (re)started (the value went up) and shrink them once:
+  // E (abilityCooldown), Viktor's robot charges (chargeCd), every Q (ultInfo.readyAt, once the Q itself has ended),
+  // Sofea's mecha (mechaReady), Astra's safehouse (safeReady).
   tickCdr(dt, now) {
     for (const p of this.state.players.values()) {
-      const r = p.cdr || 0; if (r <= 0) continue;
-      const extra = dt * (1 / (1 - r) - 1);
-      if (p.abilityCooldown > 0) p.abilityCooldown = Math.max(0, p.abilityCooldown - extra);
-      if (p.characterClass === "engineer" && p.chargeCd > 0 && (p.robotCharges ?? ROBOT_CHARGES) < ROBOT_CHARGES) p.chargeCd = Math.max(0, p.chargeCd - extra);
+      const k = 1 - (p.cdr || 0); let m = this.cdrMem.get(p.sessionId); if (!m) { m = {}; this.cdrMem.set(p.sessionId, m); }
+      if (p.abilityCooldown > (m.e ?? 0) + 1e-6 && k < 1) p.abilityCooldown *= k;
+      m.e = p.abilityCooldown;
+      if (p.characterClass === "engineer") { if (p.chargeCd > (m.c ?? 0) + 1e-6 && k < 1) p.chargeCd *= k; m.c = p.chargeCd; }
       const info = this.ultInfo.get(p.sessionId);
-      if (info && info.readyAt > now && !this.ultStateRaw(p, now).alive) info.readyAt -= extra * 1000;
-      const vm = this.vmemory.get(p.sessionId); if (vm && vm.mechaReady > now) vm.mechaReady -= extra * 1000;
-      const am = this.astra?.get(p.sessionId); if (am && am.safeReady > now) am.safeReady -= extra * 1000;
+      if (info) {
+        if (info.readyAt !== m.q) { m.qPending = info.readyAt > now; m.q = info.readyAt; }
+        if (m.qPending && !this.ultStateRaw(p, now).alive) { m.qPending = false; if (info.readyAt > now && k < 1) { info.readyAt = now + (info.readyAt - now) * k; } m.q = info.readyAt; }
+      }
+      const vm = this.vmemory.get(p.sessionId);
+      if (vm) { if ((vm.mechaReady || 0) !== (m.mecha || 0)) { if (vm.mechaReady > now && k < 1) vm.mechaReady = now + (vm.mechaReady - now) * k; m.mecha = vm.mechaReady; } }
+      const am = this.astra?.get(p.sessionId);
+      if (am) { if ((am.safeReady || 0) !== (m.safe || 0)) { if (am.safeReady > now && k < 1) am.safeReady = now + (am.safeReady - now) * k; m.safe = am.safeReady; } }
     }
   }
   fragBarrage(p, dist) {
