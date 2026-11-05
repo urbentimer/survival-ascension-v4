@@ -2,7 +2,8 @@
 // Usage (from the project root):  node tools/build-preview.mjs
 // Output: tools/dist/preview.html
 import { build } from "esbuild";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -46,9 +47,24 @@ body = body.replace(/<main class="wrap">/, `<main class="wrap">${banner}`);
 const extraCss = `.solo-banner{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;margin:0 0 12px;padding:9px 12px;border:1px dashed #f28b36;background:#2a1c14;color:#ffd2a8;font-size:12px;line-height:1.45}.solo-banner b{letter-spacing:.14em;color:#ffb56d}`;
 
 // Inline art (client/assets/...) as data URIs so the single-file preview shows it.
-const inlineAssets = (text) => text.replace(/assets\/[\w\/.-]+\.(webp|png|jpg|mp3)/g, (rel) => {
+// PNGs are packed as high-quality WebP (q90, alpha exact; looks the same, about half the size): the preview must stay under 16 MB.
+// The live game keeps the original PNGs. Cached in tools/dist/webp/ (delete the folder to re-encode).
+const ASSET_RE = /assets\/[\w\/.-]+\.(webp|png|jpg|mp3)/g;
+const WEBP_DIR = join(here, "dist/webp"); mkdirSync(WEBP_DIR, { recursive: true });
+const webpOf = rel => join(WEBP_DIR, rel.replace(/[\/]/g, "__") + ".q90.webp");
+{
+  const all = new Set([...(js + html).matchAll(ASSET_RE)].map(m => m[0]).filter(r => r.endsWith(".png")));
+  const todo = [...all].filter(r => { const out = webpOf(r); return !existsSync(out) || statSync(out).mtimeMs < statSync(join(root, "client", r)).mtimeMs; });
+  if (todo.length) {
+    const py = "import sys\nfrom PIL import Image\nfor a in sys.argv[1:]:\n  src, dst = a.split('|')\n  im = Image.open(src); im = im.convert('RGBA') if im.mode not in ('RGB','RGBA') else im\n  im.save(dst, quality=90, alpha_quality=100, method=6)\n";
+    execFileSync("python3", ["-c", py, ...todo.map(r => join(root, "client", r) + "|" + webpOf(r))], { stdio: "inherit" });
+  }
+}
+const inlineAssets = (text) => text.replace(ASSET_RE, (rel) => {
   if (rel.includes("audio/music_") || rel.includes("audio/fire_loop")) return "";   // music + the fire crackle stay out of the preview (16 MB limit): the live game has them
-  const ext = rel.split(".").pop(); const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
+  const ext = rel.split(".").pop();
+  if (ext === "png") { const w = readFileSync(webpOf(rel)), p = readFileSync(join(root, "client", rel)); if (w.length < p.length) return "data:image/webp;base64," + w.toString("base64"); }
+  const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
   return `data:${mime};base64,` + readFileSync(join(root, "client", rel)).toString("base64");
 });
 js = inlineAssets(js);

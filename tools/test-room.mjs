@@ -1018,4 +1018,32 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(B, "debugLevel"); ok(q.xp === 0, "a non-host can't use it online");
   p.level = 30; p.xp = 0; send(A, "debugLevel"); ok(p.xp === 0, "nothing at level 30");
   room._dispose(); }
+// 47. THE WENDIGO (wave 8 boss): claw, Blood Spikes (+ EXPOSED +50%), Bramble Snare (roots after a warning: stun), Crow Storm (slow + damage)
+{ const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  ok(room.bossKindFor ? true : room.state.stage >= 1, "room running");
+  room.state.stage = 8; ok(room.bossKind() === "wendigo", "wave 8's boss is the Wendigo");
+  room.spawnZombie(true, "wendigo"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
+  ok(z.kind === "wendigo" && z.boss && z.radius === 46, `spawns as a boss (hp ${Math.round(z.hp)})`);
+  let T = Date.now(); const think = (sec, players) => { for (let i = 0; i < sec * 20; i++) { T += 50; room.wendigoThink(z, .05, T, players || [p, q].filter(x => x.alive)); } };
+  // claw: one survivor close, the other far
+  p.x = 1600; p.y = 1200; q.x = 3000; q.y = 2000; p.hp = p.maxHp = 500; q.hp = q.maxHp = 500; const m = room.wmem(z, T); m.rootsReady = m.crowsReady = m.spikesReady = T + 1e9; m.clawReady = 0;
+  think(1.1); ok(p.hp < 500, `Claw Swipe hits the survivor in front of it (${Math.round(500 - p.hp)} dmg)`);
+  // spikes: two survivors close -> knockback, then EXPOSED
+  p.x = 1620; p.y = 1200; q.x = 1380; q.y = 1200; p.hp = q.hp = 500; z.act = ""; m.clawReady = T + 1e9; m.spikesReady = 0;
+  think(.85); const px = p.x; ok(p.hp < 500 && q.hp < 500 && px > 1640, `Blood Spikes hit both and knock them back (p ${Math.round(500 - p.hp)} dmg, pushed to x=${Math.round(px)})`);
+  think(.6); ok(z.act === "rest", "...then it's EXPOSED");
+  const h0 = z.hp; room.hitZombie(z, p, 100); ok(Math.abs((h0 - z.hp) - 150) < 1, `exposed: 100 damage -> ${Math.round(h0 - z.hp)}`);
+  think(1.7); ok(z.act === "", "exposed ends after 1.6s");
+  // roots: warning first, then stun
+  p.x = 1900; p.y = 1200; q.x = 1150; q.y = 1500; p.hp = q.hp = 500; m.spikesReady = m.clawReady = T + 1e9; m.rootsReady = 0;
+  think(.55); const r = room.wHazards.filter(h => h.k === "roots"); ok(r.length === 2 && p.hp === 500, `Bramble Snare marks 2 spots, no damage yet (${r.length})`);
+  think(1.0); ok(p.hp < 500 && p.stunned > 0 && q.stunned > 0, `1s later the roots erupt: damage + stun (${Math.round(500 - p.hp)} dmg)`);
+  // crows on the far survivor
+  p.stunned = q.stunned = 0; p.x = 1600; p.y = 1200; q.x = 2300; q.y = 1200; p.hp = q.hp = 500; z.act = ""; m.rootsReady = T + 1e9; m.crowsReady = 0;
+  think(.7); const c = room.wHazards.find(h => h.k === "crows"); ok(c && Math.abs(c.x - 2300) < 5, "Crow Storm lands on the far survivor");
+  think(1.5); ok(q.hp < 500 && q.slowed > 0, `inside it: damage + slow (${Math.round(500 - q.hp)} dmg in 1.5s)`);
+  z.hp = z.maxHp * .3; think(.1); ok(z.enraged, "enraged below 35%");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
