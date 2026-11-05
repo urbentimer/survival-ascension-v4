@@ -56,5 +56,5 @@ for row, (y0, y1) in enumerate(zip(cuts[:-1], cuts[1:])):
         atlas.alpha_composite(cell, (c * cw, oy))
     print(f'row {row}: band {y0}-{y1}, scale {sc:.3f}, cell {cw}x{ch}')
     oy += ch
-p = os.path.join(A, 'sprites', 'fx', 'astra-heal.webp'); atlas.save(p, quality=90, method=6)
+p = os.path.join(A, 'sprites', 'fx', 'astra-heal.webp'); atlas.save(p, quality=82, method=6)
 print('->', p, os.path.getsize(p) // 1024, 'KB')

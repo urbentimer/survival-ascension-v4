@@ -167,7 +167,7 @@ for i, (c, tip, cy) in enumerate(seq):
     im = Image.fromarray(np.ascontiguousarray(c)).resize((max(1, round(c.shape[1] * fsc)), max(1, round(c.shape[0] * fsc))), Image.LANCZOS)
     fl.alpha_composite(im, (i * FW + NX, max(0, round(FH / 2 - (cy - y0) * fsc))))
 print(f'flame: {len(seq)} frames, scale {fsc:.3f}')
-p = os.path.join(A, 'fx', 'sofea-flame.webp'); fl.save(p, quality=80, method=6); print('->', os.path.relpath(p), os.path.getsize(p) // 1024, 'KB')
+p = os.path.join(A, 'fx', 'sofea-flame.webp'); fl.save(p, quality=74, method=6); print('->', os.path.relpath(p), os.path.getsize(p) // 1024, 'KB')
 
 json.dump({'cell': [CW, CH], 'anchor': [AX, FY], 'nozzle': nozzles, 'flame': {'cell': [FW, FH], 'nozzle': [NX, FH // 2], 'grow': [0, 8], 'loop': [8, 14], 'end': [14, 22]}},
           open(os.path.join(A, 'dir8', 'sofea-mecha.json'), 'w'))

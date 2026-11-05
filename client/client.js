@@ -461,6 +461,7 @@ const SFX = {
   turret:   { url: "assets/sfx/turret-shoot.mp3", vol: .45, max: 3 },
   rifle:    { url: "assets/audio/rifle_shot.mp3", vol: .3, max: 5, gap: 35 },
   gatling:  { url: "assets/audio/heli_gatling.mp3", vol: .25 },
+  fire:     { url: "assets/audio/fire_loop.mp3", vol: .32 },   // Vefects fire loop: crackling near the fires on painted maps (fireAmbience)
   // hero voice lines (VOICE below says which skill plays which)
   vAstraQ:  { url: "assets/audio/voice_astra_q.mp3", vol: .85, max: 2 },
   vAstraE:  { url: "assets/audio/voice_astra_e.mp3", vol: .85, max: 2 },   // Sofea's helicopter gun: looped while she holds fire (heliLoop)
@@ -603,6 +604,21 @@ function heliLoop(p, on) {
       tail.connect(tg); tg.connect(sfxBus); tail.start(now, 4.2);
     }
   }
+}
+// fires on a painted map: one looping crackle, louder the closer you are to a fire (fades in / out)
+let fireLoop = null;
+function fireAmbience() {
+  const ac = audioContext, pm = state?.phase === "playing" && paintedMap(), me = pm && V(me_() || {});
+  let k = 0; if (pm && me) for (const [x, y, sc] of pm.fires) k = Math.max(k, Math.max(0, 1 - Math.hypot(x - me.x, y - me.y) / 420) * Math.min(1, sc + .2));
+  const vol = SFX.fire.vol * k;
+  if (!fireLoop && vol > .01 && ac && ac.state === "running" && sfxOn) {
+    const buf = decoded(SFX.fire, ac); if (!buf) return;
+    const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true; src.loopStart = .06; src.loopEnd = buf.duration - .06;
+    gain.gain.value = 0; src.connect(gain); gain.connect(sfxBus); src.start(0, Math.random() * 5); fireLoop = { src, gain };
+  }
+  if (!fireLoop) return;
+  if (vol <= .005 || !sfxOn) { const f = fireLoop; fireLoop = null; f.gain.gain.setTargetAtTime(0, ac.currentTime, .2); setTimeout(() => { try { f.src.stop(); } catch {} }, 1200); return; }
+  fireLoop.gain.gain.setTargetAtTime(vol, ac.currentTime, .25);
 }
 function stopLostHeliLoops() {   // every frame: landed / left -> stop; off screen (not drawn) -> keep the volume and on/off up to date here
   for (const id of [...heliLoops.keys()]) { const v = state?.vehicles?.get(id), p = state?.players?.get(id);
@@ -2456,8 +2472,19 @@ function drawPaintedWorld(pm) {
   drawWorldObjects([]);
 }
 // living scenery on the painting: flickering lamps, car headlights, the tower's warning lights, fires with smoke
+// fire-loop.webp (tools/bake-fire.py, from the Vefects fire VFX textures): row 0 = 16 looping fire frames 72x104 (base at the
+// bottom centre), then a soft smoke puff 48x48 at (0, 104)
+const mapFireImg = new Image(); mapFireImg.src = "assets/sprites/fx/fire-loop.webp";
+const MFIRE = { n: 16, w: 72, h: 104, fps: 15, puff: 48 };
+function drawFireSprite(x, y, sc, phase, t, alpha = 1) {   // one burning fire: the flipbook, cross-faded frame to frame, with a bright additive pass
+  if (!mapFireImg.naturalWidth) return;
+  const ft = t * MFIRE.fps + phase, f = Math.floor(ft) % MFIRE.n, f2 = (f + 1) % MFIRE.n, w = MFIRE.w * sc, h = MFIRE.h * sc;
+  ctx.globalAlpha = alpha; blendCells(mapFireImg, 0, 0, MFIRE.w, MFIRE.h, f, f2, ft - Math.floor(ft), x - w / 2, y - h, w, h);
+  const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * .45;
+  ctx.drawImage(mapFireImg, f * MFIRE.w, 0, MFIRE.w, MFIRE.h, x - w / 2, y - h, w, h); ctx.globalCompositeOperation = op; ctx.globalAlpha = 1;
+}
 function drawPaintedGround(pm) {
-  const t = performance.now() / 1000, F = sImgs.flame;
+  const t = performance.now() / 1000;
   ctx.save(); ctx.globalCompositeOperation = "lighter";
   pm.lights.forEach(([x, y], i) => {   // street lamps: a soft glow that breathes; now and then one stutters
     if (!inView(x, y, 40)) return;
@@ -2479,26 +2506,24 @@ function drawPaintedGround(pm) {
     g.addColorStop(0, `rgba(255,70,50,${.85 * on})`); g.addColorStop(1, "rgba(255,30,30,0)"); ctx.fillStyle = g; ctx.fillRect(x - 16, y - 16, 32, 32);
   });
   if ((state.towerHp || 0) < (state.towerMaxHp || 1) * .25 && Math.sin(t * 8) > 0) { ctx.fillStyle = "rgba(255,60,40,.10)"; ctx.fillRect(towerX() - 70, towerY() - 280, 140, 320); }   // tower critical
-  pm.fires.forEach(([x, y, sc], i) => {   // fires: a pulsing glow + live flame tongues (the flame-jet frames, pointing up)
+  pm.fires.forEach(([x, y, sc], i) => {   // the glow each fire throws around it (pulses with the flames)
     if (!inView(x, y, 120)) return;
     const k = .8 + .2 * Math.sin(t * 7 + i * 1.9) + .1 * Math.sin(t * 17 + i);
-    const g = ctx.createRadialGradient(x, y - 8, 2, x, y - 8, 70 * sc); g.addColorStop(0, `rgba(255,150,50,${.34 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70 * sc, y - 78 * sc, 140 * sc, 140 * sc);
-    if (F?.naturalWidth) for (let j = 0; j < 3; j++) {
-      const ft = t * 16 + i * 3 + j * 2.2, f = 8 + Math.floor(ft) % 6, f2 = 8 + (Math.floor(ft) + 1) % 6, w = (34 + 8 * Math.sin(t * 3 + i + j)) * sc;
-      ctx.save(); ctx.translate(x + (j - 1) * 10 * sc, y + 4); ctx.rotate(-Math.PI / 2 + (j - 1) * .22 + Math.sin(t * 2 + j + i) * .08); ctx.globalAlpha = .55;
-      blendCells(F, 0, 0, 208, 112, f, f2, ft - Math.floor(ft), 0, -w * .27, w, w * .54); ctx.restore();
-    }
+    const g = ctx.createRadialGradient(x, y - 14 * sc, 2, x, y - 14 * sc, 72 * sc); g.addColorStop(0, `rgba(255,150,50,${.32 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 72 * sc, y - 86 * sc, 144 * sc, 144 * sc);
   });
   ctx.restore();
-  pm.fires.forEach(([x, y, sc], i) => {   // smoke rolling up from each fire
-    if (!inView(x, y - 80, 140)) return;
-    ctx.save();
-    for (let j = 0; j < 5; j++) {
-      const u = (t * .09 + j * .2 + i * .13) % 1, px_ = x + Math.sin(u * 4 + i + j) * 10 * sc + u * 26, py_ = y - 14 - u * 110 * sc, r = (7 + u * 18) * sc;
-      ctx.globalAlpha = .26 * Math.sin(u * Math.PI); ctx.fillStyle = "#2c2a30"; ctx.beginPath(); ctx.arc(px_, py_, r, 0, 7); ctx.fill();
+  ctx.save();
+  pm.fires.forEach(([x, y, sc], i) => {   // smoke rolling up first (behind the flames), then the flames: a big one and two smaller licks beside it
+    if (!inView(x, y - 80, 160)) return;
+    if (mapFireImg.naturalWidth) for (let j = 0; j < 6; j++) {
+      const u = (t * .085 + j / 6 + i * .13) % 1, px_ = x + Math.sin(u * 4 + i + j) * 10 * sc + u * 30 * sc, py_ = y - 30 * sc - u * 120 * sc, r = (16 + u * 46) * sc;
+      ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, px_ - r / 2, py_ - r / 2, r, r);
     }
-    ctx.restore();
+    drawFireSprite(x - 9 * sc, y + 3, sc * .62, i * 5 + 3, t, .9);
+    drawFireSprite(x + 10 * sc, y + 4, sc * .55, i * 5 + 9, t, .85);
+    drawFireSprite(x, y + 6, sc * .95, i * 5, t);
   });
+  ctx.restore();
 }
 // over everything (painted maps): rain, drifting blossom petals, embers floating up from the fires
 function drawPaintedOverlay(pm) {
@@ -2707,7 +2732,7 @@ function frame(t){
   requestAnimationFrame(frame);
   unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
-    sendControls(t); updateFeel(); updateCamera(t); updateMusic(); stopLostHeliLoops();
+    sendControls(t); updateFeel(); updateCamera(t); updateMusic(); stopLostHeliLoops(); fireAmbience();
     ctx.clearRect(0, 0, W, H);
     const off = shakeOffset();
     ctx.save(); ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore();
