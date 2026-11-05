@@ -219,7 +219,7 @@ function renderState() {
   $("waveJump").classList.toggle("hidden", !(SOLO_PREVIEW || state.hostId === myId) || state.phase === "lobby");   // the host can skip to any wave
   for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
-  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates with no cooldown: ${state.noCd ? "ON" : "OFF"}`;
+  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`;
   if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
   $("exploreToggle").textContent = state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves";
   // switch between lobby page and full-screen game

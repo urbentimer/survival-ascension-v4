@@ -781,8 +781,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
 { const { room, A, B, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.state.phase = "lobby"; send(A, "chooseClass", { id: "scout" }); room.state.phase = "playing"; p.ultKills = 0;
   send(B, "testNoCd"); ok(!room.state.noCd, "only the host can switch test mode");
-  send(A, "testNoCd"); tick(1); ok(room.state.noCd && p.ultReady, "test mode: the ultimate is unlocked straight away");
-  send(A, "ult", {}); ok(p.storm > 0, "...Blade Storm starts"); p.storm = 0.01; tick(3); ok(p.ultReady && p.ultCd === 0, "...and is ready again as soon as it ends (no cooldown)");
+  send(A, "testNoCd"); tick(1); ok(room.state.noCd && p.ultReady, "test mode: the ultimate is unlocked straight away (no 100 kills)");
+  send(A, "ult", {}); ok(p.storm > 0, "...Blade Storm starts"); p.storm = 0.01; tick(3); ok(!p.ultReady && p.ultCd > 55, `...and when it ends the real cooldown still applies in test mode (${p.ultCd}s)`);
   room._dispose(); }
 // 35. game log: a crash in the game tick or a message handler is logged and the room keeps running
 { const { room, A, send } = makeRoom(); const logged = []; room.log = (lv, kind, msg) => logged.push([lv, kind, msg]);

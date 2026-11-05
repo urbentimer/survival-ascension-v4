@@ -327,7 +327,7 @@ export class SurvivalRoom extends Room {
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
     this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
-    this.state.noCd = true;   // testing: ultimates unlocked with no cooldown (host can switch it off in the Esc menu)
+    this.state.noCd = true;   // test mode: Q unlocked from the start (no 100 kills needed). Cooldowns always apply (Nov 6). Host can switch it off in the Esc menu
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
     this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
@@ -515,7 +515,7 @@ export class SurvivalRoom extends Room {
       const n = (this.errCount = (this.errCount || 0) + 1); if (n > 300) return;
       this.log(data?.lv === "warn" ? "warn" : "error", "client", String(data?.m || ""), client, { browser: String(data?.ua || "").slice(0, 80) });
     });
-    this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked, no cooldowns" : "Test mode off: normal ultimate cooldowns"; });
+    this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked from the start (cooldowns still apply)" : "Test mode off: ultimates unlock at 100 kills"; });
     this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     // Test tool (preview, or the host online): exactly enough XP for one more level; the player still picks the upgrade
     this.onMessage("debugLevel", client => {
@@ -1119,7 +1119,7 @@ export class SurvivalRoom extends Room {
     this.state.structures.set(st.id, st); this.state.message = `${p.name} deployed a HEAVY TURRET!`;
   }
   // Test mode (host toggle, on by default for now): ultimates are unlocked and have no cooldown (still can't stack while one is running)
-  ultState(p, now = Date.now()) { const r = this.ultStateRaw(p, now); if (this.state.noCd && p.characterClass !== "assault") r.left = r.alive ? r.active : 0; return r; }   // Marcus's Frag Barrage is instant: it keeps its cooldown even in test mode (user, Nov 5)
+  ultState(p, now = Date.now()) { return this.ultStateRaw(p, now); }   // cooldowns always apply (Nov 6: test mode only unlocks Q now)
   ultStateRaw(p, now = Date.now()) {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: alive ? active + ASTRA.police.cd * 1000 : Math.max(0, info.readyAt - now) }; }
@@ -1540,7 +1540,7 @@ export class SurvivalRoom extends Room {
     }
   }
   // ---- R: Crimson Aegis (mecha) ----
-  mechaReadyIn(p, now = Date.now()) { return this.state.noCd ? 0 : Math.max(0, (this.vmem(p).mechaReady || 0) - now); }
+  mechaReadyIn(p, now = Date.now()) { return Math.max(0, (this.vmem(p).mechaReady || 0) - now); }
   mechaKey(p) {   // R on foot: summon it (if R is ready and there's room); R inside: step out early
     const v = this.state.vehicles.get(p.sessionId), now = Date.now();
     if (v) { if (v.kind === "mecha" && v.phase === "ride") this.dismount(p, v, now); return; }
@@ -1704,7 +1704,7 @@ export class SurvivalRoom extends Room {
     let site = null;
     if (k === "R") {
       if (this.safeOf(p)) return this.astraNo(p, "your safehouse is still up");
-      if (now < m.safeReady && !this.state.noCd) return false;
+      if (now < m.safeReady) return false;
       site = this.safeSite(p); if (!site) return this.astraNo(p, "no room for a safehouse here");
     }
     m.cast = { k, at: now + ASTRA.call * 1000, site };
@@ -1937,7 +1937,7 @@ export class SurvivalRoom extends Room {
       if (p.characterClass !== "dispatcher") continue;
       const m = this.amemOf(p), docs = this.unitsOf(p.sessionId, "doctor").length;
       p.skillT = docs ? Math.ceil(Math.max(0, m.medUntil - now) / 100) / 10 : 0;
-      p.chargeCd = this.state.noCd ? 0 : Math.ceil(Math.max(0, m.safeReady - now) / 100) / 10;
+      p.chargeCd = Math.ceil(Math.max(0, m.safeReady - now) / 100) / 10;
       if (m.polOut && !this.unitsOf(p.sessionId, "police").length) {   // last officer gone: the 60s cooldown starts now
         m.polOut = false; const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + ASTRA.police.cd * 1000; this.ultInfo.set(p.sessionId, info);
       }
@@ -2673,7 +2673,7 @@ export class SurvivalRoom extends Room {
       const crowd = zs.filter(z => distance(b, z) < 450).length, m = this.amemOf(b);
       if (b.ultReady && crowd >= 5) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .7)) this.useAbility(b);
-      else if (!this.safeOf(b) && (this.state.noCd || Date.now() >= m.safeReady) && b.hp < b.maxHp * .5 && zs.filter(z => distance(b, z) < 250).length >= 4) this.astraCast(b, "R");
+      else if (!this.safeOf(b) && (Date.now() >= m.safeReady) && b.hp < b.maxHp * .5 && zs.filter(z => distance(b, z) < 250).length >= 4) this.astraCast(b, "R");
     }
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
