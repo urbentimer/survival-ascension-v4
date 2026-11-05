@@ -1657,6 +1657,22 @@ function drawBossCorpse(c) {
   ctx.drawImage(im, f * C.w, 0, C.w, C.h, c.x - C.ax, c.y + 32 - C.fy, C.w, C.h); ctx.restore();
 }
 // Cleaver Quake on the ground: the crack, then the red, yellow and blue shockwaves one after another.
+// Raven's katana slash (sprites/fx/raven-slash.webp, tools/extract-raven-slash.py, the user's violet crescent): 24 frames
+// 128x128 in 8 x 3, on black (drawn additively: black = nothing). The crescent bulges RIGHT = the swing direction; Raven at (.38, .55).
+const ravenSlashImg = new Image(); ravenSlashImg.src = "assets/sprites/fx/raven-slash.webp";
+const RSLASH = { n: 24, c: 128, ms: 17, ax: .38, ay: .55, reach: 73 };
+let ravenSlashFlip = false;
+function drawRavenSlash(f, age) {   // false when finished; every other swing is mirrored (a cut one way, then back)
+  const R = RSLASH, t = age / R.ms; if (t >= R.n) return false;
+  if (f.flip === undefined) { f.flip = ravenSlashFlip; ravenSlashFlip = !ravenSlashFlip; }
+  const i = Math.floor(t), i2 = Math.min(R.n - 1, i + 1), k = (f.r || 96) * 1.15 / R.reach, C = R.c;
+  ctx.save(); ctx.translate(f.x, f.y - 6); ctx.rotate(f.a); ctx.scale(k, f.flip ? -k : k); ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true;
+  const cell = n => [(n % 8) * C, Math.floor(n / 8) * C];
+  const [sx, sy] = cell(i), [sx2, sy2] = cell(i2);
+  ctx.globalAlpha = 1 - (t - i) * .5; ctx.drawImage(ravenSlashImg, sx, sy, C, C, -R.ax * C, -R.ay * C, C, C);
+  ctx.globalAlpha = (t - i) * .5 + .15; ctx.drawImage(ravenSlashImg, sx2, sy2, C, C, -R.ax * C, -R.ay * C, C, C);
+  ctx.restore(); return true;
+}
 // ---------- Dash: an energy-beam trail, one style + colour per hero (after the user's "Energy Beams FX" pack, MIT:
 // lance / gold beads / violet lightning / toxic hex / crimson pulse rings / glacier shards / prism / plasma / amber drill /
 // nova; their Godot shaders are re-drawn here in canvas). Trail from where you left to where you landed, fading in ~0.5s.
@@ -2048,7 +2064,7 @@ function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;con
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2065,6 +2081,7 @@ function drawShotFx(){
    if(f.type==='shot'){const k=1-age/140;ctx.globalAlpha=k;ctx.strokeStyle=TRACER[f.w]||'#ffcf66';ctx.lineWidth=f.w==='sniper'?3:2;ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;
     f.a.forEach((a,j)=>{const ox=f.x+Math.cos(a)*16,oy=f.y+Math.sin(a)*16;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(f.x+Math.cos(a)*f.len[j],f.y+Math.sin(a)*f.len[j]);ctx.stroke();});
     if(age<60){ctx.fillStyle='#fff3c4';ctx.beginPath();ctx.arc(f.x+Math.cos(f.a[0])*20,f.y+Math.sin(f.a[0])*20,5,0,7);ctx.fill();}}
+   else if(f.type==='swing'&&f.m==='katana'&&ravenSlashImg.naturalWidth){if(!drawRavenSlash(f,age)){ctx.restore();fx.splice(i,1);continue;}}
    else if(f.type==='swing'){const life=f.heavy?280:160;if(age>life){ctx.restore();fx.splice(i,1);continue;}const k=age/life;ctx.globalAlpha=.8*(1-k);ctx.strokeStyle=f.heavy?'#ffd9a0':'#f3f6f2';ctx.lineWidth=f.heavy?9:4;ctx.shadowColor='#ffffff';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.75+.25*k),f.a-f.arc*(1-k*.4),f.a+f.arc*(1-k*.4));ctx.stroke();}
    else{const k=age/380;ctx.globalAlpha=1-k;ctx.strokeStyle='#ff8a3d';ctx.lineWidth=4;ctx.shadowColor='#ff8a3d';ctx.shadowBlur=16;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.35+.65*k),0,7);ctx.stroke();ctx.fillStyle='rgba(255,170,80,.25)';ctx.fill();}
    ctx.restore();}
