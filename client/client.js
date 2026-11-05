@@ -1211,6 +1211,7 @@ function onAstra(m) {
   if (m.k === "call") { astraCall.set(m.id, t); playVoice(m.id, m.s); }   // radio call: "Medic!" on E, "Cover me!" on Q
   else if (m.k === "cancel") astraCall.delete(m.id);
   else if (m.k === "arrive" || m.k === "leave") fx.push({ type: "astra", k: m.k, x: m.x, y: m.y, t });
+  else if (m.k === "burst") fx.push({ type: "astra", k: "burst", x: m.x, y: m.y, r: m.r, t });   // medic arrives: healing wave around Astra
   else if (m.k === "safeDown" || m.k === "safeCancel") fx.push({ type: "astra", k: "dismantle", x: m.x, y: m.y, t });
   else if (m.k === "wallHit") { fx.push({ type: "astra", k: "hit", x: m.x, y: m.y, t }); playSfx("zhit", m.x, m.y, 1.4); safeFlash.set(Math.round(m.x / 400) + "," + Math.round(m.y / 400), t); }
   else if (m.k === "wallFix") { fx.push({ type: "astra", k: "fix", x: m.x, y: m.y, t }); playSfx("repair", m.x, m.y, .6); }
@@ -1222,6 +1223,13 @@ function astraFx(col, row, x, y, alpha = 1, sc = 1) {   // 96x64 cells: row 0 ar
 }
 function drawAstraFx(f, age) {   // false when finished
   if (f.k === "arrive" || f.k === "leave") { if (age > 400) return false; const c = Math.min(3, Math.floor(age / 100)); astraFx(f.k === "arrive" ? c : 3 - c, 0, f.x, f.y + 14, .9, .7); return true; }
+  if (f.k === "burst") {   // a green healing wave rolling out to the edge of the heal radius
+    if (age > 700) return false; const k = age / 700, R = f.r * (.15 + .85 * Math.sqrt(k));
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(90,255,150,${.16 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(f.x, f.y + 16, R, R * .55, 0, 0, 7); ctx.fill();
+    ctx.lineWidth = 5 * (1 - k) + 1.5; ctx.strokeStyle = `rgba(140,255,180,${.85 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(f.x, f.y + 16, R, R * .55, 0, 0, 7); ctx.stroke();
+    ctx.restore(); return true;
+  }
   if (f.k === "lock") { if (age > 380) return false; ctx.save(); ctx.strokeStyle = `rgba(120,240,255,${1 - age / 380})`; ctx.lineWidth = 4; ctx.strokeRect(f.x - SAFE.half, f.y - SAFE.half, SAFE.half * 2, SAFE.half * 2); ctx.restore(); return true; }
   if (f.k === "hit") { if (age > 300) return false; const k = age / 300; ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = "#cfc6b4"; for (let i = 0; i < 5; i++) { const a = i * 1.3 + f.x; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * 18 * k, f.y - 10 + Math.sin(a) * 10 * k, 3 * (1 - k) + 1, 0, 7); ctx.fill(); } ctx.restore(); return true; }   // chips of concrete
   if (f.k === "fix") { if (age > 800) return false; ctx.save(); ctx.globalAlpha = 1 - age / 800; ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#7dff9a"; ctx.strokeStyle = "#0b2a14"; ctx.lineWidth = 3; ctx.strokeText("+1", f.x, f.y - age / 30); ctx.fillText("+1", f.x, f.y - age / 30); ctx.restore(); return true; }   // a builder patched the wall
@@ -3096,7 +3104,7 @@ const ROSTER = [
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
     skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "A huge shot at the nearest zombie in sight." }], gear: ["rifle", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
-    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic for 20s: heals you first, then each injured ally once (5 HP/s, up to 6s each), then follows you." },
+    skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic arrives: everyone within 300px of you heals 30% of their max HP at once. For 20s he revives downed teammates first (2.5s each), then heals the injured (5 HP/s)." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "An armed officer for every living teammate: each one guards his player for 30s." },
              { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s." }], gear: ["rifle", "pistol", "knife"] },
 ];

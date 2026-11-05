@@ -229,7 +229,9 @@ const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a tea
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
-  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6 },   // session: longest single treatment (s)
+  medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6,   // session: longest single treatment (s)
+           burst: .30, burstR: 300,          // on arrival: everyone alive within 300px of Astra (him too) heals 30% of their max HP, once (Nov 6)
+           revive: 2.5, reviveR: 60, reviveHp: .35 },   // TOP priority: walks to the nearest downed teammate and revives them in 2.5s (up with 35% HP)
   police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 7, burst: 3, gap: .12, every: 3, range: 440, leash: 600, threat: 250 },
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
@@ -1737,6 +1739,12 @@ export class SurvivalRoom extends Room {
       const spots = this.freeSpots(p.x, p.y, ASTRA.medic.n); if (!spots) { refund(); return this.astraNo(p, "no room for the medics here"); }
       spots.forEach((s, i) => this.spawnUnit(p, "doctor", s, { hp: ASTRA.medic.hp, until: now + ASTRA.medic.life * 1000, idx: i }));
       m.medUntil = now + ASTRA.medic.life * 1000;
+      const M = ASTRA.medic;   // arrival: a burst of healing for everyone close to Astra
+      for (const q of this.state.players.values()) {
+        if (!q.alive || distance(p, q) > M.burstR) continue;
+        q.hp = Math.min(q.maxHp, q.hp + q.maxHp * M.burst); this.broadcast("heal", { x: Math.round(q.x), y: Math.round(q.y), id: q.sessionId, k: "medkit" });
+      }
+      this.broadcast("astra", { k: "burst", x: Math.round(p.x), y: Math.round(p.y), r: M.burstR });
       this.state.message = `${p.name} called in the EMERGENCY MEDICS!`;
     } else if (c.k === "Q") {
       // one officer per living player (Astra included), each arriving next to the player he guards
@@ -1837,6 +1845,28 @@ export class SurvivalRoom extends Room {
   updateDoctor(r, mem, owner, now, dt) {
     const M = ASTRA.medic, ok = q => q && q.alive && q.hp < q.maxHp;
     mem.done = mem.done || new Set(); mem.skip = mem.skip || {};
+    // TOP PRIORITY: a downed teammate (nearest first) -> walk over and revive them
+    let down = mem.down ? this.state.players.get(mem.down) : null;
+    if (down && (down.alive || down.bledOut || !this.state.players.has(down.sessionId))) { down = null; mem.down = ""; mem.revT = 0; }
+    if (!down) {
+      const c = [...this.state.players.values()].filter(q => !q.alive && !q.bledOut && !(mem.skip[q.sessionId] > now)).sort((a, b) => distance(r, a) - distance(r, b));
+      if (c[0]) { down = c[0]; mem.down = down.sessionId; mem.revT = 0; mem.best = distance(r, down); mem.progAt = now; if (mem.patient) { if (this.docRes.get(mem.patient) === r.id) this.docRes.delete(mem.patient); mem.patient = ""; } }
+    }
+    if (down) {
+      const d = distance(r, down); r.tgt = down.sessionId; r.aim = Math.atan2(down.y - r.y, down.x - r.x);
+      if (d < mem.best - 8) { mem.best = d; mem.progAt = now; }
+      if (d > M.reviveR && now - mem.progAt > M.stuck * 1000 * 2) { mem.skip[down.sessionId] = now + 3000; mem.down = ""; mem.revT = 0; return; }   // can't reach them
+      if (d <= M.reviveR) {
+        r.act = "heal"; mem.revT = (mem.revT || 0) + dt; mem.progAt = now;
+        if (mem.revT >= M.revive) {
+          down.alive = true; down.bleedout = 0; down.hp = Math.max(30, Math.round(down.maxHp * M.reviveHp)); down.reviveProgress = 0;
+          this.state.message = `The medic revived ${down.name}!`; this.broadcast("heal", { x: Math.round(down.x), y: Math.round(down.y), id: down.sessionId, k: "medkit" });
+          mem.down = ""; mem.revT = 0;
+        }
+        return;
+      }
+      r.act = ""; this.unitStep(r, down, M.speed, dt); return;
+    }
     let pt = mem.patient ? this.state.players.get(mem.patient) : null;
     const release = () => { if (this.docRes.get(mem.patient) === r.id) this.docRes.delete(mem.patient); mem.patient = ""; pt = null; };
     if (mem.patient && (!ok(pt) || mem.healT >= M.session)) { if (mem.healT > 0) mem.done.add(mem.patient); release(); }   // full (or treated long enough): done with them

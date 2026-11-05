@@ -1070,4 +1070,20 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.abilityCooldown = 0; for (const r of room.unitsOf("A", "doctor")) room.removeUnit(r); room.amemOf(p).cast = null; send(A, "ability", {}); ok(p.abilityCooldown === 30, "E: cooldown on the press");
   p.alive = false; call(); ok(p.abilityCooldown === 0, "...refunded when Astra goes down before the medic arrives");
   room._dispose(); }
+// 50. Astra's E (Nov 6): arrival burst (30% max HP to everyone within 300px, once) + the medic revives downed teammates first
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room.allowAllClasses = true; room.state.phase = "lobby"; send(A, "chooseClass", { id: "dispatcher" }); send(A, "start", {}); room.state.phase = "playing"; room.spawnClock = 9999; room.state.zombies.clear();
+  const call = () => { const mm = room.amemOf(p); if (mm.cast) mm.cast.at = 0; tick(1); };
+  p.x = 1000; p.y = 700; q.x = 1200; q.y = 700; p.hp = 20; q.hp = 20; const far = { hp: 0 };
+  send(A, "ability", {}); call();
+  ok(Math.abs(p.hp - (20 + p.maxHp * .3)) < 1 && Math.abs(q.hp - (20 + q.maxHp * .3)) < 1, `arrival: Astra and a teammate 200px away both heal 30% of max HP (${Math.round(p.hp)}, ${Math.round(q.hp)})`);
+  for (const r of room.unitsOf("A", "doctor")) room.removeUnit(r);
+  // revive: teammate down 350px away
+  q.x = 1350; q.y = 700; q.alive = false; q.bleedout = 30; q.hp = 0; p.hp = p.maxHp * .5; p.abilityCooldown = 0; room.amemOf(p).cast = null;
+  send(A, "ability", {}); call(); const qh0 = q.hp;
+  ok(!q.alive && qh0 === 0, "the downed teammate isn't healed by the burst (out of range / down)");
+  let up = 0; for (let i = 0; i < 160 && !q.alive; i++) { tick(1); up = i; }
+  ok(q.alive && q.hp >= Math.round(q.maxHp * .35) - 1, `the medic goes straight to the downed teammate and revives them (${(up / 20).toFixed(1)}s, ${Math.round(q.hp)} HP)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
