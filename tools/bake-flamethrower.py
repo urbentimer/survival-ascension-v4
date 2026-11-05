@@ -2,17 +2,19 @@
 # Unity fire shader works: flame-shaped masks eroded by scrolling noise and pushed around by a distortion noise, many
 # overlapping fire bursts that shoot out of the nozzle, swell, cool down (white-hot -> yellow -> orange -> red) and turn to smoke.
 #   python3 tools/bake-flamethrower.py
-# Writes client/assets/sprites/fx/sofea-flame.webp: 28 frames, cells 208x160, the nozzle = cell (4, 80), it blasts RIGHT,
-# the jet is ~JET px long:  0-7 ignite (it shoots out), 8-19 seamless loop, 20-27 cut off (the tail flies away and burns out)
+# Writes client/assets/sprites/fx/sofea-flame.webp (v3, Nov 5: bigger, more frames, more bursts, flying embers, a glow row):
+#   row 0: 36 frames, cells 336x240, the nozzle = cell (6, 120), it blasts RIGHT, the jet is ~285px of art:
+#          0-7 ignite (it shoots out), 8-27 seamless loop, 28-35 cut off (the tail flies away and burns out)
+#   row 1 (y 240): the same 36 frames' soft glow at half size (168x120), drawn additively 2x bigger in game (fake bloom)
 import os
 import numpy as np
 from PIL import Image
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'vefects-fire')
 OUT = os.path.join(here, '..', 'client', 'assets', 'sprites', 'fx', 'sofea-flame.webp')
-CW, CH, NX, S = 208, 160, 4, 2   # tall cells: the jet fans out into a wide cone
+CW, CH, NX, S = 336, 240, 6, 2   # tall cells: the jet fans out into a wide cone
 W, H = CW * S, CH * S
-JET = 168                     # jet length in cell px
-LOOP, IGN, END = 12, 8, 8
+JET = 236                     # jet length in cell px
+LOOP, IGN, END = 20, 8, 8
 rng = np.random.default_rng(5)
 
 def tex(name): return np.asarray(Image.open(os.path.join(ART, name)).convert('L')).astype(np.float32) / 255
@@ -29,7 +31,10 @@ def sample_clamp(t, u, v):
 
 yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); X = xx / S - NX; Y = yy / S - CH / 2   # cell px, nozzle at (0, 0)
 L = X / JET                                                                            # 0 at the nozzle -> 1 at the end
-N = 64   # bursts per loop
+N = 96   # bursts per loop
+NE = 70  # embers per loop
+from scipy import ndimage
+E = [dict(ph=i / NE, life=.25 + .2 * rng.random(), ang=rng.normal(0, .26), sp=rng.uniform(.8, 1.25), wob=rng.uniform(-1, 1), sz=rng.uniform(.6, 1.4)) for i in range(NE)]
 P = [dict(ph=i / N, life=.34 + .06 * rng.random(), dy=rng.uniform(-1, 1), s=rng.uniform(.85, 1.15), seed=rng.random(), rot=rng.uniform(0, 6.28)) for i in range(N)]
 
 def frame(t, reach=1e9, tail=-1e9):
@@ -44,7 +49,7 @@ def frame(t, reach=1e9, tail=-1e9):
             a = age / p['life']
             cx = a ** .85 * JET * 1.02                                    # flies out fast, slows a little
             if cx > reach + 6 or cx < tail - 6: continue
-            r = (8 + .36 * cx) * p["s"]                                     # swells as it flies
+            r = (12 + .36 * cx) * p["s"]                                     # swells as it flies
             cy = p["dy"] * cx * .2                                         # each burst flies out at its own angle: a cone (~42 degrees with the bursts' size)
             u = (X - cx) / (2.2 * r) + .5 + dist * .18; v = (Y - cy) / (2 * r) + .5 + dist * .12
             c, s_ = np.cos(p['rot'] + a), np.sin(p['rot'] + a); du, dv = u - .5, v - .5; u, v = .5 + du * c - dv * s_, .5 + du * s_ + dv * c
@@ -58,9 +63,21 @@ def frame(t, reach=1e9, tail=-1e9):
     # the hot core right out of the nozzle
     core = np.exp(-(Y / (4 + 16 * L.clip(0))) ** 2) * np.clip(1 - L / .42, 0, 1) * (X > -1) * (.75 + .5 * n1)
     heat += core * 1.4
-    heat *= .6
-    win = np.clip((reach - X) / 10, 0, 1) * np.clip((X - tail) / 10, 0, 1)
+    heat *= .5
+    win = np.clip((reach - X) / 15, 0, 1) * np.clip((X - tail) / 15, 0, 1)
     heat *= win; smoke *= win
+    # embers: bright sparks thrown out of the flame, flying a bit past it and fading (white-hot -> orange)
+    sparks = np.zeros((H, W), np.float32)
+    for e in E:
+        for k in (-1, 0):
+            age = (t - e['ph']) % 1 + k
+            if age < 0 or age > e['life']: continue
+            a = age / e['life']; d = a ** .7 * JET * 1.25 * e['sp']
+            if d > reach + 10 or d < tail: continue
+            ex = (NX + d * np.cos(e['ang'])) * S; ey = (CH / 2 + d * np.sin(e['ang']) + e['wob'] * 14 * a * a) * S
+            r2 = ((xx - ex) / (3.6 * S)) ** 2 + ((yy - ey) / (1.5 * S * e["sz"])) ** 2   # a short streak along the flight
+            sparks += np.exp(-r2) * (1 - a) * 1.6
+    heat += sparks * (heat < 1.2)
     ramp = [(0, (.5, .06, .02)), (.22, (.92, .25, .03)), (.5, (1, .55, .08)), (.85, (1, .84, .32)), (1.35, (1, .98, .86))]
     col = np.zeros((H, W, 3), np.float32)
     for (h0, c0), (h1, c1) in zip(ramp[:-1], ramp[1:]):
@@ -69,13 +86,16 @@ def frame(t, reach=1e9, tail=-1e9):
     fa = np.clip(heat * 2.6, 0, 1) ** 1.1; sa = np.clip(smoke * .9, 0, .75) * (1 - fa)
     col = (col * fa[..., None] + np.array([.16, .14, .15]) * sa[..., None]) / np.maximum(fa + sa, 1e-4)[..., None]
     rgba = np.dstack([np.clip(col, 0, 1) * 255, np.clip(fa + sa, 0, 1) * 255]).astype(np.uint8)
-    return Image.fromarray(rgba).resize((CW, CH), Image.LANCZOS)
+    glow = ndimage.gaussian_filter(np.clip(heat, 0, 1.5), 14 * S)                  # the soft light the fire throws (fake bloom)
+    ga = np.clip(glow * 1.5, 0, 1)
+    grgba = np.dstack([np.full_like(ga, 255), 120 + 60 * ga, 40 + 0 * ga, ga * 255]).astype(np.uint8)
+    return Image.fromarray(rgba).resize((CW, CH), Image.LANCZOS), Image.fromarray(grgba).resize((CW // 2, CH // 2), Image.LANCZOS)
 
 frames = []
 for i in range(IGN): frames.append(frame(i / LOOP * .5, reach=(i + 1) / IGN * (JET + 20)))                     # shoots out
 for i in range(LOOP): frames.append(frame(i / LOOP))                                                          # loop
 for i in range(END): frames.append(frame((LOOP + i) / LOOP % 1, tail=(i + 1) / END * (JET + 30)))            # tail flies off
-atlas = Image.new('RGBA', (CW * len(frames), CH))
-for i, fr in enumerate(frames): atlas.alpha_composite(fr, (i * CW, 0))
-atlas.save(OUT, quality=66, method=6, alpha_quality=80)
+atlas = Image.new('RGBA', (CW * len(frames), CH + CH // 2))
+for i, (fr, gl) in enumerate(frames): atlas.alpha_composite(fr, (i * CW, 0)); atlas.alpha_composite(gl, (i * CW // 2, CH))
+atlas.save(OUT, quality=58, method=6, alpha_quality=70)
 print('->', os.path.relpath(OUT), len(frames), 'frames', os.path.getsize(OUT) // 1024, 'KB')
