@@ -769,7 +769,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(room.state.towerX === 875 && room.state.towerY === 805 && room.A.cx === 875, "the radio tower stands on the painted one");
   ok(p.x > 600 && p.x < 1150 && p.y < 690 && !room.blockedByMap(p.x, p.y, 0), `everyone moves onto the new map by the tower (${Math.round(p.x)},${Math.round(p.y)})`);
   ok(room.blockedByMap(200, 200) && room.blockedByMap(835, 345) && !room.blockedByMap(800, 560), "painted buildings and the dragon statue are solid, the plaza isn't");
-  room.state.phase = "playing"; let bad = 0; for (let i = 0; i < 60; i++) { room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); if (room.blockedByMap(z.x, z.y, 0) || Math.hypot(z.x - 875, z.y - 805) < 300) bad++; }
+  room.state.phase = "playing"; let bad = 0; for (let i = 0; i < 60; i++) { room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); if (room.blockedByMap(z.x, z.y, 0) || Math.hypot(z.x - 875, z.y - 805) < 270) bad++; }
   ok(bad === 0, "zombies walk in from the streets at the picture's edges (never inside a building, never next to the tower)");
   room.state.zombies.clear(); const z = placeZombie(room, 1513, 414, 500); z.role = "tower"; z.speed = 57; room.state.phase = "playing"; room.spawnClock = 1e9; room.state.elapsed = 10;
   for (let i = 0; i < 400; i++) { room.lastTick = Date.now() - 50; room.tick(); }

@@ -5,7 +5,7 @@
 #                                       (idle, walk 1-3, flame pose, saber slash), cells 112x88, body centre x=56, feet y=80
 #   sprites/dir8/sofea-mecha-tf.webp    5 rows (down, front-left, left, right, up) x 8 frames of Sofea turning into the mecha,
 #                                       same cells / anchor; all frames the same height (54px)
-#   sprites/fx/sofea-flame.webp         22 frames of the flame jet, cells 208x112, the nozzle = cell (4, 56), it blasts RIGHT:
+#   (sprites/fx/sofea-flame.webp: the flame jet, made by tools/bake-flamethrower.py)
 #                                       0-7 ignite (grow), 8-13 loop, 14-21 cut off (shrink)
 #   sprites/dir8/sofea-mecha.json       per direction: the flame nozzle offset from the feet anchor
 # The mecha sheet's rows were drawn: down, down-right, right, up-right, up, left, down-left, down-left (no up-left),
@@ -127,47 +127,8 @@ for row, src in enumerate(TF):
     print(f'transform {src}: ok')
 save_webp(tfa, os.path.join(A, 'dir8', 'sofea-mecha-tf.webp'))
 
-# ---- flame jet (magenta, un-mixed so the smoke stays see-through) ----
-def unmix(path):
-    a = np.array(Image.open(os.path.join(ART, path)).convert('RGB')).astype(float) / 255; r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    al = np.clip(1 - np.clip(np.minimum(r, b) - g, 0, 1) * 1.08, 0, 1)
-    al[(r > .85) & (b > .8) & (g < .25)] = 0; al[al < .1] = 0
-    col = np.clip((a - (1 - al)[..., None] * np.array([1, 0, 1])) / np.maximum(al, 1e-3)[..., None], 0, 1)
-    col[..., 2] = np.minimum(col[..., 2], np.maximum(col[..., 1], col[..., 0] * .5))
-    lum = col.max(-1); smoke = np.clip((.55 - lum) / .25, 0, 1)[..., None]
-    grey = col.mean(-1, keepdims=True) * np.array([1.0, .9, .82])
-    col = col * (1 - smoke * .8) + grey * smoke * .8
-    return np.dstack([col * 255, al * 255]).astype(np.uint8)
-
-def flame_rows(path, nrows):
-    rgba = unmix(path); m = rgba[..., 3] > 40
-    rows = bands(m, 1, min_gap=20)
-    assert len(rows) == nrows, f'{path}: {len(rows)} rows'
-    out = []
-    for y0, y1 in rows:
-        band = rgba[max(0, y0 - 20):y1 + 20]; mm = band[..., 3] > 40
-        lab, n = ndimage.label(mm); objs = ndimage.find_objects(lab)
-        pitch = band.shape[1] / 8; fr = []
-        for c in range(8):   # each blob goes to the column its centre is in, so nothing bleeds in from the next frame
-            ids = [i + 1 for i, sl in enumerate(objs) if sl and int(((sl[1].start + sl[1].stop) / 2) // pitch) == c]
-            cell = np.where(np.isin(lab, ids)[..., None], band, 0).astype(np.uint8)
-            ys, xs = np.where(cell[..., 3] > 40); fr.append((cell, xs.min(), (ys.min() + ys.max()) / 2))   # left tip x, centre line
-        out.append(fr)
-    return out
-
-f1 = flame_rows('flame-1.png', 2); f2 = flame_rows('flame-2.png', 2); f3 = flame_rows('flame-3.png', 1)
-seq = f1[0] + [f1[1][0], f1[1][1], f1[1][2], f2[1][0], f2[1][1], f1[0][7]] + f3[0]
+# (the flame jet is made by tools/bake-flamethrower.py from the Vefects fire VFX since Nov 5; the ChatGPT flame sheets in
+#  tools/art/sofea-mecha/flame-*.png are no longer used)
 FW, FH, NX = 208, 112, 4
-def ext(c, tip, cy):
-    ys, xs = np.where(c[..., 3] > 40); return xs.max() - tip, max(cy - ys.min(), ys.max() - cy) * 2
-fsc = min(min((FW - NX - 4) / ext(*f)[0], (FH - 4) / ext(*f)[1]) for f in seq)
-fl = Image.new('RGBA', (FW * len(seq), FH))
-for i, (c, tip, cy) in enumerate(seq):
-    ys, xs = np.where(c[..., 3] > 40); y0 = ys.min(); c = c[y0:ys.max() + 1, tip:xs.max() + 1]
-    im = Image.fromarray(np.ascontiguousarray(c)).resize((max(1, round(c.shape[1] * fsc)), max(1, round(c.shape[0] * fsc))), Image.LANCZOS)
-    fl.alpha_composite(im, (i * FW + NX, max(0, round(FH / 2 - (cy - y0) * fsc))))
-print(f'flame: {len(seq)} frames, scale {fsc:.3f}')
-p = os.path.join(A, 'fx', 'sofea-flame.webp'); fl.save(p, quality=74, method=6); print('->', os.path.relpath(p), os.path.getsize(p) // 1024, 'KB')
-
-json.dump({'cell': [CW, CH], 'anchor': [AX, FY], 'nozzle': nozzles, 'flame': {'cell': [FW, FH], 'nozzle': [NX, FH // 2], 'grow': [0, 8], 'loop': [8, 14], 'end': [14, 22]}},
+json.dump({'cell': [CW, CH], 'anchor': [AX, FY], 'nozzle': nozzles, 'flame': {'cell': [FW, FH], 'nozzle': [NX, FH // 2], 'grow': [0, 8], 'loop': [8, 20], 'end': [20, 28]}},
           open(os.path.join(A, 'dir8', 'sofea-mecha.json'), 'w'))
