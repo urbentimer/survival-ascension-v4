@@ -1,6 +1,6 @@
-# Barricade + electric fence as a FENCE LINE (Nov 6): both 96x43, same footprint (see LINE in SurvivalRoom.js / client).
-#   barricade-line.png: two of the original sawhorses side by side (slight overlap)
-#   fence-line.png:     the original fence (posts + wires) widened by repeating the wire section, then scaled to the barricade's height
+# Barricade + electric fence as a FENCE LINE (Nov 6): same size + footprint (FOOT in SurvivalRoom.js), placed across the way you face.
+#   barricade-line.png / fence-line.png      HORIZONTAL, 96x43: two sawhorses side by side / the fence widened (wire section repeated)
+#   barricade-line-v.png / fence-line-v.png  VERTICAL, 50x98: three panels stacked down the line (the further one drawn first)
 # Sources: the original 1-panel sprites in tools/art/objects/. Run: python3 tools/make-fenceline.py
 import os
 import numpy as np
@@ -15,4 +15,10 @@ f = Image.open(os.path.join(SRC, 'fence.png')).convert('RGBA').crop((1, 1, 47, 3
 L, R = f.crop((0, 0, 12, 30)), f.crop((33, 0, 46, 30)); mid = f.crop((12, 0, 33, 30))
 nat = Image.new('RGBA', (12 + mid.width * 2 + 13, 30)); nat.alpha_composite(L, (0, 0)); nat.alpha_composite(mid, (12, 0)); nat.alpha_composite(mid, (12 + mid.width, 0)); nat.alpha_composite(R, (12 + mid.width * 2, 0))
 big = nat.resize((W, H), Image.LANCZOS); a = np.array(big); a[..., 3] = np.where(a[..., 3] > 100, 255, 0); Image.fromarray(a).save(os.path.join(OUT, 'fence-line.png'))
+def column(panel, n=3, h=98):   # n panels down a vertical line, each one lower (nearer) drawn over the one above
+    out = Image.new('RGBA', (50, h)); dy = (h - panel.height) / (n - 1)
+    for i in range(n): out.alpha_composite(panel, ((50 - panel.width) // 2, round(i * dy)))
+    return out
+column(b).save(os.path.join(OUT, 'barricade-line-v.png'))
+fp = f.resize((50, 33), Image.LANCZOS); a = np.array(fp); a[..., 3] = np.where(a[..., 3] > 100, 255, 0); column(Image.fromarray(a)).save(os.path.join(OUT, 'fence-line-v.png'))
 print('barricade-line', line.size, 'fence-line', big.size)

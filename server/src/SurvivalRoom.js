@@ -269,10 +269,14 @@ function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.k
 const AXE_HEAVY = { charge: 1.0, dmgMult: 2.5, range: 100, arc: 1.7, knockback: 36, moveMult: 0.6 };
 const MAX_MEDKITS = 3;
 // Things players and bots can't walk through (half-width of their square). Mines and flame traps are floor traps.
-// Deployable footprints [half width, half height] (centre = where it was placed). Barricade + fence are 96px-wide FENCE LINES (Nov 6).
+// Deployable footprints [half width, half height] (centre = where it was placed). Barricade + fence are 96px FENCE LINES (Nov 6), built
+// ACROSS the way you face: facing left/right -> a vertical line (st.aim = PI/2), facing up/down -> a horizontal one (st.aim = 0).
 // They block vehicles only; survivors walk through every deployable.
-const FOOT = { barricade: [46, 16], fence: [46, 16], turret: [16, 16] };
-const nearFoot = (st, z, px, py) => Math.abs(z.x - st.x) < FOOT[st.kind][0] + px && Math.abs(z.y - st.y) < FOOT[st.kind][1] + py;   // z within (px, py) of the footprint
+const FOOT = { barricade: [46, 16], fence: [46, 16], turret: [16, 16] }, FOOT_V = { barricade: [24, 46], fence: [24, 46] };
+const LINES = { barricade: 1, fence: 1 };
+const footOf = st => (st.aim && FOOT_V[st.kind]) || FOOT[st.kind];
+const lineAim = a => Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? Math.PI / 2 : 0;   // facing (radians) -> the line's direction
+const nearFoot = (st, z, px, py) => { const f = footOf(st); return Math.abs(z.x - st.x) < f[0] + px && Math.abs(z.y - st.y) < f[1] + py; };   // z within (px, py) of the footprint
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
@@ -618,6 +622,7 @@ export class SurvivalRoom extends Room {
       if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
       st.x = clamp(bx, 30, this.A.width-30); st.y = clamp(by, 30, this.A.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
+      if (LINES[kind]) st.aim = lineAim(bd > 20 ? Math.atan2(by - p.y, bx - p.x) : (p.aim || 0));   // across the way you face
       this.state.structures.set(st.id, st); p.structuresBuilt++;
       this.state.message = `${p.name} built a ${kind}.`;
     });
@@ -1500,7 +1505,7 @@ export class SurvivalRoom extends Room {
     const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }];
     {   // tank and mecha
       boxes.push({ x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
-      for (const st of this.state.structures.values()) if (FOOT[st.kind]) boxes.push({ x: st.x, y: st.y, hw: FOOT[st.kind][0], hh: FOOT[st.kind][1] });
+      for (const st of this.state.structures.values()) if (FOOT[st.kind]) { const f = footOf(st); boxes.push({ x: st.x, y: st.y, hw: f[0], hh: f[1] }); }
       for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
     }
     for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
