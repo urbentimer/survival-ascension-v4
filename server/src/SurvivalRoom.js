@@ -44,6 +44,22 @@ const HIVE = {
   spawn: { every: 8, first: 5, max: 4 },
 };
 const isHiveWave = stage => stage % 4 === 2;
+// THE PYRE PRIEST: boss of wave 8 (user's design + art, Nov 6). A burning cultist swinging a giant censer on a chain.
+// Hunts SURVIVORS only (never the tower, robots or turrets) and walks faster than any survivor's base speed.
+//   CENSER SWING   someone within 200px: 0.7s wind-up (spinning red ring = the range), then a full 360 spin: damage, knockback,
+//                  sets them on fire. The dash dodge goes straight through it.
+//   FIREWALK       every 16s, for 8s: every step leaves a burning patch (6s; 9s enraged); standing in it sets you on fire.
+//   SERMON OF ASH  every 15s: kneels for 2.6s; 5 glowing circles land on / around the survivors and erupt into fire pillars
+//                  1s later. While he kneels, hits from BEHIND him do double damage.
+//   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
+//   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
+const PYRE = {
+  hp: 2400, speed: 230, radius: 40, dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
+  swing:  { trigger: 200, windup: .7, hit: .95, total: 1.6, r: 200, flat: .6, mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
+  walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
+  sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 5, r: 72, mult: 1.2, back: 2 },
+  burn:   { len: 3, dps: .25 },   // fraction of his damage per second
+};
 const PATH_CELL = 40;   // boss path-finding grid
 const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
 // ---------- VIKTOR (Engineer) ----------
@@ -367,7 +383,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [] }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -466,7 +482,8 @@ export class SurvivalRoom extends Room {
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
-      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind"].includes(kind)) return;
+      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre"].includes(kind)) return;
+      if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
       if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
       const was = this.state.explore; this.state.explore = false;
       for (let i = 0; i < 5; i++) {
@@ -673,7 +690,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -708,7 +725,7 @@ export class SurvivalRoom extends Room {
     if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
     else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
   }
-  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
+  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
   bossWaveTick(dt, now) {
     const s = this.state;
     if (s.bossPhase === "horde") {
@@ -803,9 +820,9 @@ export class SurvivalRoom extends Room {
       x = clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20); y = clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20);
     }
 
-    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
+    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
-    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
+    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, pyre:PYRE.hp, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
     const z = new ZombieState();
     z.id = `z${++this.zombieSequence}`; z.kind = kind; z.x = x; z.y = y;
     z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
@@ -817,6 +834,7 @@ export class SurvivalRoom extends Room {
     z.targetId = ""; z.boss = boss;
     z.role = boss || TOWER_KINDS[kind] ? "tower" : "hunter"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false;
     if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = 40; }
+    if (kind === "pyre") { z.speed = PYRE.speed; z.radius = PYRE.radius; z.damage = PYRE.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }   // hunts survivors only
     if (kind === "spitter") z.attackCooldown = 0.6 + Math.random() * 1.6;   // spitters don't all fire at once
     this.state.zombies.set(z.id, z);
   }
@@ -2248,6 +2266,91 @@ export class SurvivalRoom extends Room {
     }
     if (d > z.radius + 40) this.bossMove(z, near, z.speed * dt);
   }
+  // ---------- THE PYRE PRIEST ----------
+  pmem(z, now) {
+    let m = this.bossMem.get(z.id);
+    if (!m) { m = { swingReady: now + 1500, walkReady: now + PYRE.walk.first * 1000, walkUntil: 0, sermonReady: now + PYRE.sermon.first * 1000, lastDrop: null }; this.bossMem.set(z.id, m); }
+    return m;
+  }
+  pyreTargets() { return [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0)); }
+  ignite(p, z) {   // set a survivor on fire (or keep them burning)
+    if (!p.alive || this.untouchable(p)) return;
+    const was = this.pBurn.get(p.sessionId);
+    this.pBurn.set(p.sessionId, { until: Date.now() + PYRE.burn.len * 1000, dps: z.damage * PYRE.burn.dps });
+    if (!was || was.until < Date.now()) this.broadcast("pyre", { k: "ignite", id: p.sessionId, len: PYRE.burn.len });
+  }
+  pyreHit(p, z, mult) { if (!p.alive || this.untouchable(p)) return false; this.hiveHurt(p, z.damage * mult); this.ignite(p, z); return true; }
+  pyreThink(z, dt, now, taunted) {
+    const P = PYRE, m = this.pmem(z, now), cdk = z.enraged ? P.enrageCd : 1;
+    if (!z.enraged && z.hp / z.maxHp < P.enrageAt) {
+      z.enraged = true; z.speed *= P.enrageSpeed; this.state.message = "THE PYRE PRIEST IS ENRAGED!"; this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
+    }
+    // FIREWALK: a burning patch every few steps while it lasts
+    if (now < m.walkUntil) {
+      if (!m.lastDrop || Math.hypot(z.x - m.lastDrop.x, z.y - m.lastDrop.y) >= P.walk.step) {
+        const life = z.enraged ? P.walk.patchEnraged : P.walk.patch, x = Math.round(z.x), y = Math.round(z.y + z.radius * .55);
+        this.pyreFx.patches.push({ x, y, until: now + life * 1000, owner: z.id }); m.lastDrop = { x: z.x, y: z.y };
+        this.broadcast("pyre", { k: "patch", x, y, life });
+      }
+    }
+    if (z.act) {
+      const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, act = z.act, at = x => t0 < x && t1 >= x;
+      if (act === "swing" && at(P.swing.hit)) {
+        for (const p of this.state.players.values()) {
+          if (Math.hypot(p.x - z.x, (p.y - z.y) / P.swing.flat) > P.swing.r + BODY_R) continue;
+          if (!this.pyreHit(p, z, P.swing.mult)) continue;
+          const a = Math.atan2(p.y - z.y, p.x - z.x); this.moveWithCollision(p, Math.cos(a) * P.swing.push, Math.sin(a) * P.swing.push);
+        }
+      }
+      if (act === "sermon" && at(P.sermon.mark)) {
+        const tg = this.pyreTargets().sort((a, b) => distance(z, a) - distance(z, b)), pts = [];
+        for (let i = 0; i < P.sermon.n && tg.length; i++) {   // the first pillar on each survivor, the rest around them
+          const p = tg[i % tg.length], first = i < tg.length, a = Math.random() * Math.PI * 2, d = first ? 0 : 70 + Math.random() * 60;
+          pts.push([Math.round(clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20)), Math.round(clamp(p.y + 16 + Math.sin(a) * d * .7, 20, this.A.height - 20))]);
+        }
+        for (const [x, y] of pts) this.pyreFx.pillars.push({ x, y, at: now + P.sermon.warn * 1000, owner: z.id });
+        if (pts.length) this.broadcast("pyre", { k: "sermon", id: z.id, pts, warn: P.sermon.warn, r: P.sermon.r, big: z.enraged ? 1 : 0 });
+      }
+      if (z.act === act && z.slam <= 0) z.act = "";
+      this.pyreHazards(z, now);
+      return;
+    }
+    this.pyreHazards(z, now);
+    // hunts survivors only: the nearest one it can hurt (Briggs' taunt still pulls it), otherwise the nearest at all
+    const can = this.pyreTargets(), pool = taunted && can.includes(taunted) ? [taunted] : can.length ? can : [...this.state.players.values()].filter(p => p.alive);
+    if (!pool.length) return;
+    const near = pool.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
+    z.targetId = near.sessionId; z.aim = a;
+    if (can.length) {
+      if (now >= m.walkReady) { m.walkReady = now + P.walk.every * cdk * 1000; m.walkUntil = now + P.walk.life * 1000; m.lastDrop = null; this.broadcast("pyre", { k: "firewalk", id: z.id, life: P.walk.life }); }
+      if (d < P.swing.trigger + z.radius && now >= m.swingReady) { m.swingReady = now + P.swing.cd * cdk * 1000; this.startAct(z, "swing", P.swing.total, a); this.broadcast("pyre", { k: "swing", id: z.id, x: Math.round(z.x), y: Math.round(z.y), r: P.swing.r, wind: P.swing.windup }); return; }
+      if (now >= m.sermonReady && d < 900) { m.sermonReady = now + P.sermon.cd * cdk * 1000; this.startAct(z, "sermon", P.sermon.total, a); return; }
+    }
+    if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
+    this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it
+  }
+  pyreHazards(z, now) {   // pillars erupt after their warning; standing in a fire patch keeps you burning
+    const P = PYRE, F = this.pyreFx;
+    if (F.pillars.length) F.pillars = F.pillars.filter(h => {
+      if (h.owner !== z.id || now < h.at) return true;
+      for (const p of this.state.players.values()) if (Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .7) < P.sermon.r + BODY_R) this.pyreHit(p, z, P.sermon.mult);
+      return false;
+    });
+    if (F.patches.length) {
+      F.patches = F.patches.filter(h => h.until > now);
+      for (const p of this.state.players.values()) if (p.alive && F.patches.some(h => h.owner === z.id && Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .7) < P.walk.r + BODY_R * .6)) this.ignite(p, z);
+    }
+  }
+  tickBurn(dt, now) {   // survivors on fire (Pyre Priest)
+    if (!this.pBurn.size) return;
+    for (const [sid, b] of this.pBurn) {
+      const p = this.state.players.get(sid);
+      if (!p || !p.alive || now >= b.until) { this.pBurn.delete(sid); continue; }
+      if (this.untouchable(p)) continue;
+      const dealt = b.dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt;
+      if (p.hp <= 0) { this.pBurn.delete(sid); this.downPlayer(p); }
+    }
+  }
   butcherThink(z, dt, now, players) {
     const B = BUTCHER, m = this.bmem(z, now);
     if (!z.enraged && z.hp / z.maxHp < B.enrageAt) {
@@ -2703,6 +2806,10 @@ export class SurvivalRoom extends Room {
         const now = Date.now(); if (now - (this.clangAt || 0) > 140) { this.clangAt = now; this.broadcast("clang", { x: Math.round(z.x + Math.cos(z.aim || 0) * 30), y: Math.round(z.y - 40) }); }
       }
     }
+    if (z.kind === "pyre" && z.act === "sermon") {   // kneeling: hits from behind him do double damage
+      let diff = Math.atan2(p.y - z.y, p.x - z.x) - z.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > Math.PI / 2) dmg *= PYRE.sermon.back;
+    }
     z.hp -= dmg;
     p.damageDealt += dmg;
     if (z.boss) p.bossDamage += dmg;
@@ -2839,7 +2946,8 @@ export class SurvivalRoom extends Room {
     const guard = this.vehicleGuard(now);
     if (!this.state.explore) this.state.elapsed += dt;   // explore mode: timer frozen, no spawns (zombies were cleared when it was turned on)
     this.state.matchTime += dt;
-    this.tickCdr(dt, now);   // extra countdown for players with cooldown reduction
+    this.tickCdr(dt, now);   // cooldown reduction: shrink skill timers that just started
+    this.tickBurn(dt, now);
     for(const p of this.state.players.values()) if(p.abilityCooldown>0)p.abilityCooldown=Math.max(0,p.abilityCooldown-dt);
     if (this.state.noCd) for (const p of this.state.players.values()) if ((p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;
     for (const p of this.state.players.values()) {   // Viktor's robot charges refill one at a time, every 25s
@@ -2911,6 +3019,7 @@ export class SurvivalRoom extends Room {
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
+      if (z.kind === "pyre") { this.pyreThink(z, dt, now, taunted); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;

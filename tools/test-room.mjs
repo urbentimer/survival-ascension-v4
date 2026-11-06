@@ -1076,4 +1076,36 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(1000 - p.hp === Math.round(100 * .36 - p.defence) && 1000 - q.hp === 68, `a 100 hit: Briggs takes ${1000 - p.hp} (36 - his 5 defence), Raven ${1000 - q.hp}`);
   const g0 = p.currency = 999; send(A, "buy", { id: "armor" }); ok(p.currency === 999, "the shop doesn't sell armour any more");
   room._dispose(); }
+// 53. THE PYRE PRIEST (wave 8 boss): hunts survivors only, faster than them; Censer Swing (dodgeable), Firewalk, Sermon of Ash (x2 from behind), burning
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  room.state.stage = 8; ok(room.bossKind() === "pyre", "wave 8's boss is the Pyre Priest");
+  room.spawnZombie(true, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
+  ok(z.boss && z.role === "hunter" && z.speed > 225, `a boss that hunts survivors, speed ${z.speed} (Raven 225)`);
+  let T = Date.now(); const real = Date.now; const think = sec => { for (let i = 0; i < sec * 20; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); room.tickBurn(.05, T); } finally { Date.now = real; } } };
+  const m = room.pmem(z, T); m.walkReady = m.sermonReady = T + 1e9;
+  // hunts: walks to the nearest survivor, ignoring the tower
+  p.x = 1900; p.y = 1200; q.x = 3500; q.y = 2500; p.hp = p.maxHp = q.hp = q.maxHp = 500; m.swingReady = T + 1e9;
+  think(.5); ok(z.x > 1560 && z.targetId === "A", `walks straight at the nearest survivor (${Math.round(z.x - 1500)}px in 0.5s)`);
+  // swing: hit + knockback + burning; a dodging survivor takes nothing
+  z.x = 1500; z.y = 1200; p.x = 1650; p.y = 1200; m.swingReady = 0; think(.05); ok(z.act === "swing", "someone close: Censer Swing");
+  q.x = 1500; q.y = 1330; room.dodgeUntil.set("B", T + 5000);
+  think(1.0); ok(p.hp < 500 && p.x > 1700 && room.pBurn.has("A"), `the spin hits, knocks back (${Math.round(p.x - 1650)}px) and sets them on fire`);
+  ok(q.hp === 500 && !room.pBurn.has("B"), "a survivor dashing through it takes nothing");
+  const h0 = p.hp; think(1.2); ok(p.hp < h0, `burning keeps hurting (${(h0 - p.hp).toFixed(1)} in 1.2s)`);
+  think(3); ok(!room.pBurn.has("A"), "the fire goes out after 3s");
+  // firewalk: patches behind him; standing in one sets you on fire
+  room.dodgeUntil.delete("B"); z.act = ""; m.swingReady = T + 1e9; m.walkReady = 0; p.x = 2600; p.y = 1200; q.x = 3500; q.y = 2500; z.x = 1500; z.y = 1200;
+  think(2); const pt = room.pyreFx.patches.length; ok(pt >= 8, `Firewalk leaves burning patches as he walks (${pt} in 2s)`);
+  const patch = room.pyreFx.patches[0]; q.x = patch.x; q.y = patch.y - 16; think(.1); ok(room.pBurn.has("B"), "standing in a patch sets you on fire");
+  // sermon: kneels, pillars land on survivors and erupt after 1s; double damage from behind
+  m.walkUntil = 0; room.pyreFx.patches = []; room.pBurn.clear(); z.act = ""; z.x = 1500; z.y = 1200; p.x = 1800; p.y = 1200; q.x = 1200; q.y = 1200; p.hp = q.hp = 500; m.sermonReady = 0;
+  think(.6); ok(z.act === "sermon" && room.pyreFx.pillars.length === 5 && p.hp === 500, `Sermon of Ash: kneels, 5 pillars marked, no damage yet (${room.pyreFx.pillars.length})`);
+  const face = z.aim, hz = z.hp; room.hitZombie(z, z.aim === Math.atan2(p.y - z.y, p.x - z.x) ? q : p, 100);
+  ok(Math.abs((hz - z.hp) - 200) < 1, `kneeling: a hit from behind does double (100 -> ${Math.round(hz - z.hp)})`);
+  const hz2 = z.hp; room.hitZombie(z, z.aim === Math.atan2(p.y - z.y, p.x - z.x) ? p : q, 100); ok(Math.abs((hz2 - z.hp) - 100) < 1, "...from the front it's normal");
+  think(1.0); ok(p.hp < 500 && q.hp < 500 && room.pyreFx.pillars.length === 0, `1s later the pillars erupt on both survivors (${Math.round(500 - p.hp)}, ${Math.round(500 - q.hp)} dmg)`);
+  z.hp = z.maxHp * .3; z.act = ""; think(.05); ok(z.enraged, "enraged below 35%");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

@@ -129,7 +129,8 @@ function connected() {
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
   room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
-  room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
+  room.onMessage("pyre", onPyre);
+  room.onMessage("zdead", m => { if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: performance.now() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("frag", m => { const t = performance.now(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
   room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
@@ -159,6 +160,14 @@ const BOSS_INFO = {
       ["🪝", "Meat Hook", "Every 10-15s he hooks the furthest survivor and drags them in: 0.5s helpless, then the cleaver. Only a FIRE AXE swing timed into the hook can DEFLECT it and stagger him.", "#ff9a3c"],
       ["🛡️", "Armoured Front", "Takes half damage from the front. Flank him: shots to his back do full damage.", "#9fc4e8"],
       ["💢", "Berserk (below 30%)", "Faster, hooks more often, and spins in a cleaver whirlwind. Get away from him.", "#ff3737"],
+    ] },
+  pyre: { wave: 8, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
+    lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he is faster than all of you.",
+    skills: [
+      ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
+      ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
+      ["🙏", "Sermon of Ash", "He kneels and glowing circles land on you. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
+      ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the fire lasts longer and the pillars get bigger.", "#ff3737"],
     ] },
 };
 let introAcked = false;
@@ -895,6 +904,172 @@ function drawRobot(r) {
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(r.x, r.y + 3, 15, 5, 0, 0, 7); ctx.fill(); ctx.restore();
   vFrame(vImgs[r.kind], 110, 90, col, rowOf(r.aim || 0), r.x, r.y + 4, 84);
   machineHp(r, 30, r.y - 50);
+}
+// ---------- THE PYRE PRIEST (boss of wave 8; art: tools/extract-pyre.py) ----------
+// Sheets: 4 cols x 5 rows (D, DR, R, UR, U; the left side is the right side mirrored), 300x185 cells, feet at (150, 158).
+// Effects: 8 frames in a row on black, drawn additive ("lighter"). Timings match PYRE on the server.
+const pyImgs = {};
+for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-walk.webp", swing: "assets/sprites/zombies/dir8/pyre-swing.webp", sermon: "assets/sprites/zombies/dir8/pyre-sermon.webp",
+  death: "assets/sprites/zombies/dir8/pyre-death.webp", pillar: "assets/sprites/fx/pyre-pillar.webp", pillarBig: "assets/sprites/fx/pyre-pillar-enraged.webp",
+  trail: "assets/sprites/fx/pyre-trail.webp", ember: "assets/sprites/fx/pyre-ember.webp", ring: "assets/sprites/fx/pyre-swing.webp" })) { const im = new Image(); im.src = url; pyImgs[k] = im; }
+const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 200, flat: .6, wind: .7, spin: .55, sermon: 2.6, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
+const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
+function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
+  const r8 = ROW_OF_OCT[((Math.round((a || 0) / (Math.PI / 4)) % 8) + 8) % 8];
+  return r8 === 5 ? [3, true] : r8 === 6 ? [2, true] : r8 === 7 ? [1, true] : [r8, false];
+}
+function pyFx(key, frame, x, y, sc, ay = 1, alpha = 1) {   // one additive effect frame; (x, y) = the frame's anchor (ay: 1 = bottom, .5 = centre)
+  const im = pyImgs[key]; if (!im?.naturalWidth) return; const fw = im.naturalWidth / 8, fh = im.naturalHeight, f = Math.max(0, Math.min(7, frame)), f0 = Math.floor(f);
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha;
+  blendCells(im, 0, 0, fw, fh, f0, Math.min(7, f0 + 1), f - f0, x - fw * sc / 2, y - fh * sc * ay, fw * sc, fh * sc);
+  ctx.restore();
+}
+function pyreAura(z, feet, now, front) {   // the scary part: smoke, heat and embers around him
+  const t = now / 1000, en = z.enraged ? 1 : 0, gy = z.y + feet;
+  ctx.save();
+  if (!front) {
+    let g = ctx.createRadialGradient(z.x, gy, 10, z.x, gy, 160);   // scorched, smoky ground
+    g.addColorStop(0, "rgba(25,4,2,.8)"); g.addColorStop(.55, "rgba(15,2,2,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(z.x, gy, 160, 60, 0, 0, 7); ctx.fill();
+    g = ctx.createRadialGradient(z.x, gy - 75, 20, z.x, gy - 75, 120);   // a dark, smoky halo behind his body
+    g.addColorStop(0, "rgba(12,0,0,.5)"); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(z.x - 125, gy - 200, 250, 250);
+    ctx.globalCompositeOperation = "lighter"; const beat = .5 + .5 * Math.sin(t * 5.3) * Math.sin(t * 2.1);
+    g = ctx.createRadialGradient(z.x, gy - 40, 6, z.x, gy - 40, 95 + beat * 15);   // heat glow
+    g.addColorStop(0, `rgba(255,${110 - en * 40},30,${.22 + beat * .12 + en * .1})`); g.addColorStop(1, "rgba(120,20,0,0)");
+    ctx.fillStyle = g; ctx.fillRect(z.x - 120, gy - 160, 240, 200);
+    ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,${80 - en * 50},30,${.25 + beat * .3})`; ctx.setLineDash([3, 9]); ctx.lineDashOffset = -t * 30;   // flickering heat ring
+    ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + beat * 6, 26 + beat * 2, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  } else {
+    for (let i = 0; i < 18 + en * 10; i++) {   // embers rising off him, dark smoke curling above
+      const ph = (t * (.45 + (i % 5) * .07) + i * .173) % 1, sd = Math.sin(i * 91.7) * 4371.3, r = sd - Math.floor(sd);
+      const x = z.x + (r - .5) * 90 + Math.sin(t * 2 + i) * 8, y = gy - 20 - ph * 150;
+      if (i % 3 === 0) { ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = `rgba(18,8,8,${.38 * (1 - ph)})`; ctx.beginPath(); ctx.arc(x, y - 30, 10 + ph * 20, 0, 7); ctx.fill(); }
+      else { ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(255,${140 + (i % 4) * 25},50,${.85 * (1 - ph)})`; ctx.fillRect(x, y, 2.2, 2.2 + (1 - ph) * 3); }
+    }
+  }
+  ctx.restore();
+}
+function drawPyre(z) {
+  const now = performance.now(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet;
+  let mv = pyreMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; pyreMove.set(z.id, mv); }
+  const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 60) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
+  pyreAura(z, feet, now, false);
+  if (now < (pyreWalk.get(z.id) || 0)) {   // FIREWALK: flames licking at his feet
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(z.x, gy, 4, z.x, gy, 60);
+    g.addColorStop(0, "rgba(255,170,40,.55)"); g.addColorStop(1, "rgba(255,60,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(z.x, gy, 60, 22, 0, 0, 7); ctx.fill(); ctx.restore();
+  }
+  if (z.act === "swing" && t < PY.wind + .05) {   // telegraph: a spinning red ring = how far the censer reaches
+    const k = Math.min(1, t / PY.wind), R = PY.swingR; ctx.save();
+    ctx.fillStyle = `rgba(255,50,20,${.06 + .14 * k})`; ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * PY.flat, 0, 0, 7); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,70,40,${.5 + .5 * k})`; ctx.setLineDash([22, 14]); ctx.lineDashOffset = -now / 6;
+    ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * PY.flat, 0, 0, 7); ctx.stroke(); ctx.restore();
+  }
+  if (z.act === "sermon") {   // kneeling: his back is the weak spot (double damage), shown as a gold wedge behind him
+    const back = (z.aim || 0) + Math.PI, pulse = .5 + .5 * Math.sin(now / 120); ctx.save();
+    ctx.fillStyle = `rgba(255,210,80,${.1 + .1 * pulse})`; ctx.strokeStyle = `rgba(255,220,100,${.45 + .35 * pulse})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(z.x, gy); ctx.ellipse(z.x, gy, 150, 150 * .62, 0, back - PY.back, back + PY.back); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0b0b"; ctx.fillStyle = `rgba(255,225,110,${.7 + .3 * pulse})`;
+    const lx = z.x + Math.cos(back) * 105, ly = gy + Math.sin(back) * 60; ctx.strokeText("BACK ×2", lx, ly); ctx.fillText("BACK ×2", lx, ly); ctx.restore();
+  }
+  // pick the frame: walk cycle by distance walked (cross-faded), swing spins through every direction, sermon kneels
+  let sheet = "walk", f = 0, f2 = 0, k = 0, face = z.aim || 0;
+  if (z.act === "swing") {
+    sheet = "swing";
+    if (t < PY.wind) { const u = t / PY.wind * 1.99; f = Math.floor(u); f2 = f + 1; k = u - f; }
+    else if (t < PY.wind + PY.spin) { f = f2 = 2; face += (t - PY.wind) / PY.spin * Math.PI * 2; }   // the 360: censer out, turning all the way round
+    else { const u = Math.min(1, (t - PY.wind - PY.spin) / .3); f = 3; f2 = 0; k = u; }
+  } else if (z.act === "sermon") {
+    sheet = "sermon"; const T = PY.sermon;
+    f = t < .25 ? 0 : t < .45 ? 1 : t < T - .35 ? 2 : 3; f2 = Math.min(3, f + 1);
+    k = t < .25 ? t / .25 : t < .45 ? (t - .25) / .2 : t < T - .35 ? 0 : 0;
+  } else if (now - mv.at < 160) { const u = mv.dist / PY.step; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  const [row, flip] = pyRow(face), im = pyImgs[sheet]?.naturalWidth ? pyImgs[sheet] : pyImgs.walk;
+  const flashAt = feel.flash.get(z.id); let filter = flashAt && now - flashAt < 90 ? "brightness(2.2)" : "";
+  if (z.enraged) filter = (filter ? filter + " " : "") + "drop-shadow(0 0 6px rgba(255,60,20,.9))";
+  else if (z.act === "sermon" && f === 2) filter = (filter ? filter + " " : "") + "drop-shadow(0 0 8px rgba(255,170,40,.85))";
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; if (filter) ctx.filter = filter;
+  ctx.translate(Math.round(z.x), Math.round(gy)); if (flip) ctx.scale(-1, 1);
+  blendCells(im, 0, row * PY.ch, PY.cw, PY.ch, f, f2, k, -PY.ax, -PY.fy);
+  ctx.restore();
+  pyreAura(z, feet, now, true);
+}
+function onPyre(m) {
+  const t = performance.now();
+  if (m.k === "patch") fx.push({ type: "pyre", k: "patch", x: m.x, y: m.y, life: m.life, t, seed: Math.random() * 8 });
+  else if (m.k === "sermon") for (const [x, y] of m.pts || []) fx.push({ type: "pyre", k: "pillar", x, y, warn: m.warn, r: m.r, big: m.big, t });
+  else if (m.k === "swing") fx.push({ type: "pyre", k: "ring", id: m.id, x: m.x, y: m.y, r: m.r, wind: m.wind, t });
+  else if (m.k === "firewalk") pyreWalk.set(m.id, t + m.life * 1000);
+  else if (m.k === "ignite") { pyreBurn.set(m.id, t + m.len * 1000); const p = state?.players?.get(m.id); if (p) fx.push({ type: "pyre", k: "ember", id: m.id, t }); }
+}
+function drawPyreGround() {   // burning patches and the pillars' warning circles (under everyone)
+  const now = performance.now();
+  for (const f of fx) {
+    if (f.type !== "pyre") continue; const s = (now - f.t) / 1000;
+    if (f.k === "patch" && s < f.life) {
+      const a = Math.min(1, s / .3, (f.life - s) / .8); pyFx("trail", (s * 9 + f.seed) % 8, f.x, f.y + 14, .42, .82, a);
+    }
+    if (f.k === "pillar" && s < f.warn) {
+      const k = s / f.warn, R = f.r; ctx.save();
+      ctx.fillStyle = `rgba(255,${120 - 70 * k},30,${.12 + .2 * k})`; ctx.strokeStyle = `rgba(255,${170 - 110 * k},40,${.6 + .4 * k})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(f.x, f.y, R, R * .62, 0, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "rgba(255,150,50,.3)"; ctx.beginPath(); ctx.ellipse(f.x, f.y, R * k, R * .62 * k, 0, 0, 7); ctx.fill(); ctx.restore();
+    }
+  }
+}
+function drawPyreFx(f, age) {   // false when finished
+  const s = age / 1000;
+  if (f.k === "patch") return s < f.life;   // drawn on the ground by drawPyreGround
+  if (f.k === "pillar") {   // after the warning: a roaring pillar of fire
+    const e = s - f.warn; if (e < 0) return true; if (e > .9) return false;
+    if (e < .05 && !f.boomed) { f.boomed = true; shake(4, 160); playSfx("boom", f.x, f.y, .45); }
+    pyFx(f.big ? "pillarBig" : "pillar", e / .9 * 8, f.x, f.y + 22, f.big ? .8 : .7, .97); return true;
+  }
+  if (f.k === "ring") {   // the censer's fire ring, following him, from the start of the spin
+    const e = s - f.wind; if (e < 0) return true; if (e > .85) return false;
+    const zr = state?.zombies?.get(f.id), z = zr && (V(zr) || zr), x = z ? z.x : f.x, y = z ? z.y + z.radius * .8 : f.y + 32;
+    pyFx("ring", e / .85 * 8, x, y + 6, f.r * 2 / PY.ringW, .5); return true;   // scaled so the ring = the hit area
+  }
+  if (f.k === "ember") {   // catching fire: a burst of sparks on the survivor
+    if (s > .55) return false; const p = state?.players?.get(f.id); if (!p) return false; const v = V(p) || p;
+    pyFx("ember", s / .55 * 8, v.x, v.y - 18, .45, .5); return true;
+  }
+  if (f.k === "death") {   // collapses, the censer rolls away, burns down to ash
+    if (s > 4) return false; const im = pyImgs.death; if (!im?.naturalWidth) return true;
+    const u = Math.min(5, s / .3), fr = Math.floor(u), a = s > 2.8 ? 1 - (s - 2.8) / 1.2 : 1;
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high";
+    blendCells(im, 0, 0, PY.cw, PY.ch, fr, Math.min(5, fr + 1), u - fr, Math.round(f.x) - PY.ax, Math.round(f.y + 32) - PY.fy); ctx.restore(); return true;
+  }
+  return false;
+}
+function drawPyreBurning() {   // survivors on fire: flames dancing on them
+  if (!pyreBurn.size) return; const now = performance.now();
+  for (const [id, until] of pyreBurn) {
+    if (now > until) { pyreBurn.delete(id); continue; }
+    const p = state?.players?.get(id); if (!p || !p.alive) continue; const v = V(p) || p, left = (until - now) / 1000;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, left / .4);
+    for (let i = 0; i < 7; i++) {
+      const ph = (now / 420 + i * .143) % 1, x = v.x + Math.sin(i * 2.4 + now / 160) * 10, y = v.y + 8 - ph * 46;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 9 * (1 - ph) + 3); g.addColorStop(0, `rgba(255,220,120,${.9 * (1 - ph)})`); g.addColorStop(1, "rgba(255,60,0,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 9 * (1 - ph) + 3, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function drawPyreDread() {   // screen space: an orange heat haze creeps in at the edges when he's close to you
+  const me = me_(); if (!me || !me.alive || !state?.zombies) return; let best = 1e9;
+  for (const z of state.zombies.values()) if (z.kind === "pyre") best = Math.min(best, Math.hypot(z.x - me.x, z.y - me.y));
+  if (best > 420) return; const k = 1 - best / 420, fl = .85 + .15 * Math.sin(performance.now() / 70) * Math.sin(performance.now() / 23);
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * .38, W / 2, H / 2, W * .68);
+  g.addColorStop(0, "rgba(120,25,0,0)"); g.addColorStop(1, `rgba(130,30,0,${.32 * k * fl})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function pyreLights(now) {   // night: the priest, his fire patches and pillars light up the dark
+  if (!state?.zombies) return;
+  for (const z of state.zombies.values()) if (z.kind === "pyre" && inView(z.x, z.y, 200)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 30 - cam.y, 190 + Math.sin(now / 90) * 8, .9); }
+  for (const f of fx) if (f.type === "pyre") {
+    const s = (now - f.t) / 1000;
+    if (f.k === "patch" && s < f.life && inView(f.x, f.y, 80)) lightHole(f.x - cam.x, f.y - cam.y, 70, .55);
+    if (f.k === "pillar" && s > f.warn && s < f.warn + .9) lightHole(f.x - cam.x, f.y - 60 - cam.y, 160, .9);
+  }
 }
 // ---------- THE HIVEMIND (mini boss on waves 2, 6, 10...) ----------
 const hImgs = {};
@@ -1811,6 +1986,7 @@ function drawDashBeams() {
   }
 }
 function drawGroundFx() {
+  drawPyreGround();
   drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
   const now = performance.now();
@@ -2001,6 +2177,7 @@ function drawZombieDir8(z, img8, side) {
 function drawZombieAny(z) {
   if (z.kind === "hivemind") return drawHivemind(z);
   if (z.kind === "butcher" && butcherImgs.walk.naturalWidth) return drawButcher(z);
+  if (z.kind === "pyre" && pyImgs.walk.naturalWidth) return drawPyre(z);
   const img = zombieImgs[z.kind], img8 = zdir8[z.kind];
   if (!img || !img.complete || !img.naturalWidth) { drawZombie(z); drawHitFlash(z); return; }   // bosses (no art yet) use the old drawing
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + (z.radius || 14) * 0.8, (z.radius || 14) * 1.05, 4, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -2140,7 +2317,8 @@ function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;con
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  drawPyreBurning();
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2149,6 +2327,7 @@ function drawShotFx(){
    if(f.type==='briggs'){if(!drawBriggsFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='pyre'){if(!drawPyreFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
@@ -2876,6 +3055,7 @@ function drawNight() {
   if (me) lightHole(me.x - cam.x, me.y - 10 - cam.y, me.alive ? NIGHT.playerR : NIGHT.playerR * .5, me.alive ? 1 : .8);   // only YOUR light (smaller while downed)
   if (view && view !== me) lightHole(view.x - cam.x, view.y - 10 - cam.y, NIGHT.playerR, 1);   // spectating: see around the teammate you're watching
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
+  pyreLights(now);   // the Pyre Priest and his fires light the night
   ctx.drawImage(darkCv, 0, 0);
   // zombies out in the dark: only a faint pair of glowing eyes gives them away
   if (nightK > .5) {
@@ -2903,6 +3083,7 @@ function drawScreen() {
   ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
   drawNight();
   drawRushScreen();   // Marcus Combat Rush: red heartbeat on the screen edges (over the night tint so it shows at night too)
+  drawPyreDread();
   // street lights glow (warm, stronger at night)
   const sl = mapImgs.streetlight;
   if (decor && sl?.naturalWidth) {

@@ -217,3 +217,14 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 ## Nov 6 — The Wendigo removed (user is starting a new boss)
 - All Wendigo code, art (sprites/zombies/dir8/wendigo-*, sprites/fx/wendigo-*, portraits/wendigo), tools/extract-wendigo.py, its test, intro card and spawn button are gone; tools/art/wendigo deleted. Wave 8 is back to the placeholder boss "plagueBrute". (The Nov 5 Wendigo notes above are history only.) Kept from that work: the preview's WebP packing and "Boss intro now" opening the current boss wave's boss. Preview 13.6 MB. Cache v=20261106h.
+
+## Nov 6 — The Pyre Priest (boss, wave 8; replaces the deleted Wendigo)
+- Art: tools/art/pyre/ (ChatGPT) → `python3 tools/extract-pyre.py` → dir8/pyre-{walk,swing,sermon,death}.webp (5 rows D,DR,R,UR,U × 4, cells 300×185, feet 150,158, each frame anchored on its own head/feet so nothing jitters; left side = mirrored DR/R/UR), fx/pyre-{pillar,pillar-enraged,trail,ember,swing}.webp (8 frames on black, drawn additive), portraits/pyre.webp.
+- Server `PYRE` constants (SurvivalRoom.js): hp 2400, speed 230 (faster than every hero), targets players only (taunts respected, ignores walls/tower/robots), walks around the radio tower (pushOut).
+  - Swing: 200px flat-ellipse arc (0.7s wind-up telegraph), ×1.3 dmg, knockback, sets you on fire (3s, 25% of his dmg/s). 5s cd.
+  - Firewalk: every 16s (first at 6s) leaves burning patches for 8s (9 per walk when enraged).
+  - Sermon: kneels 2.6s, 5 fire pillars erupt on marked spots after a 1s warning; while kneeling, hits from behind do ×2 (gold "BACK ×2" wedge).
+  - Enrage at 35% hp: ×1.12 speed, ×0.75 cooldowns, bigger pillars.
+  - Broadcast "pyre" {k: ignite|patch|firewalk|swing|sermon}; state this.pyreFx / this.pBurn reset each wave; debug spawn button "Pyre Priest".
+- Client: pyreAura (scorched dark pool + smoky halo + heat ring behind, embers + smoke in front), drawPyre (distance-based cross-faded walk, telegraph ring, 360° spin, sermon, red enrage glow), drawPyreGround/Fx/Burning, pyreLights (night), drawPyreDread (orange heat haze at the screen edges when he's within 420px of you).
+- Test 53 (Pyre Priest). Cache v=20261106j.
