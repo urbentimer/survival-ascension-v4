@@ -44,22 +44,6 @@ const HIVE = {
   spawn: { every: 8, first: 5, max: 4 },
 };
 const isHiveWave = stage => stage % 4 === 2;
-// THE WENDIGO: boss of wave 8 (user's art, Nov 5; design is Claude's best guess, tweak freely). Antlered deer-skull beast of roots and crows.
-// Hunts survivors (only goes for the tower if it can't reach anyone).
-//   CLAW SWIPE   up close: 0.45s wind-up, wide claw arc in front.
-//   BRAMBLE SNARE roots erupt under up to 3 survivors (5 enraged) within 650px: red circle 1s warning, then damage + 0.9s stun.
-//   CROW STORM   on a survivor far away (260px+): a crow vortex sits on that spot for 5s: damage every 0.5s + slow inside it.
-//   BLOOD SPIKES when 2+ survivors are close (or enraged and someone is): 0.8s wind-up (red circle), spikes burst all around:
-//                big damage + knockback. Then he's EXPOSED for 1.6s: takes +50% damage (the opening).
-//   Enraged below 35%: faster, every cooldown x0.65, two crow storms at once.
-const WENDIGO_HP = 2200;
-const WENDIGO = {
-  speed: 92, radius: 46, dmg: 22, enrageAt: .35, enrageSpeed: 1.2, enrageCd: .65, first: 2.5,
-  claw:   { trigger: 150, windup: .45, total: 1.0, cd: 1.6, reach: 170, arc: 1.15, mult: 1.0 },
-  roots:  { range: 650, cast: .5, total: 1.3, warn: 1.0, cd: 9, r: 85, mult: .9, stun: .9, max: 3, maxEnraged: 5 },
-  crows:  { min: 260, range: 950, cast: .6, total: 1.2, cd: 13, life: 5, r: 125, every: .5, mult: .2, slow: .7 },
-  spikes: { near: 220, windup: .8, total: 1.4, cd: 8, r: 240, flat: .62, mult: 1.5, push: 80, rest: 1.6, exposed: 1.5 },
-};
 const PATH_CELL = 40;   // boss path-finding grid
 const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
 // ---------- VIKTOR (Engineer) ----------
@@ -383,7 +367,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.wHazards = []; this.wSeq = 0; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -482,8 +466,7 @@ export class SurvivalRoom extends Room {
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
-      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "wendigo"].includes(kind)) return;
-      if (kind === "wendigo") { this.spawnZombie(true, "wendigo"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 420, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Wendigo"; return; }   // preview: the boss right away
+      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind"].includes(kind)) return;
       if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
       const was = this.state.explore; this.state.explore = false;
       for (let i = 0; i < 5; i++) {
@@ -506,7 +489,7 @@ export class SurvivalRoom extends Room {
     // Skip the horde and go straight to the Butcher intro. Solo preview, or the host in an online room.
     this.onMessage("debugBoss", client => {
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
-      if (this.state.waveType !== "boss" || this.state.phase !== "playing") this.jumpToWave(4);   // on a boss wave: that wave's boss (e.g. skip to 8, then this = the Wendigo)
+      if (this.state.waveType !== "boss" || this.state.phase !== "playing") this.jumpToWave(4);   // on a boss wave: that wave's boss
       else if (["intro", "fight"].includes(this.state.bossPhase)) return;   // already there
       if (!this.solo) this.state.message = "Host skipped to the boss fight";
       this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
@@ -690,7 +673,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); this.wHazards = []; s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -725,7 +708,7 @@ export class SurvivalRoom extends Room {
     if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
     else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
   }
-  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","wendigo","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
+  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
   bossWaveTick(dt, now) {
     const s = this.state;
     if (s.bossPhase === "horde") {
@@ -820,9 +803,9 @@ export class SurvivalRoom extends Room {
       x = clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20); y = clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20);
     }
 
-    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","wendigo","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
+    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","plagueBrute","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
-    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, wendigo:WENDIGO_HP, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
+    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
     const z = new ZombieState();
     z.id = `z${++this.zombieSequence}`; z.kind = kind; z.x = x; z.y = y;
     z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
@@ -834,7 +817,6 @@ export class SurvivalRoom extends Room {
     z.targetId = ""; z.boss = boss;
     z.role = boss || TOWER_KINDS[kind] ? "tower" : "hunter"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false;
     if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = 40; }
-    if (kind === "wendigo") { const W = WENDIGO; z.speed = W.speed * (this.state.isNight ? 1.1 : 1); z.radius = W.radius; z.damage = W.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; }
     if (kind === "spitter") z.attackCooldown = 0.6 + Math.random() * 1.6;   // spitters don't all fire at once
     this.state.zombies.set(z.id, z);
   }
@@ -2266,92 +2248,6 @@ export class SurvivalRoom extends Room {
     }
     if (d > z.radius + 40) this.bossMove(z, near, z.speed * dt);
   }
-  // ---------- THE WENDIGO ----------
-  wmem(z, now) {
-    let m = this.bossMem.get(z.id);
-    if (!m) { const f = now + WENDIGO.first * 1000; m = { clawReady: now + 800, rootsReady: f, crowsReady: f + 3000, spikesReady: f + 1500 }; this.bossMem.set(z.id, m); }
-    return m;
-  }
-  wHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; this.hiveHurt(p, dmg); }
-  wendigoThink(z, dt, now, players) {
-    const W = WENDIGO, m = this.wmem(z, now), cdk = z.enraged ? W.enrageCd : 1;
-    if (!z.enraged && z.hp / z.maxHp < W.enrageAt) {
-      z.enraged = true; z.speed *= W.enrageSpeed; this.state.message = "THE WENDIGO IS ENRAGED!"; this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
-    }
-    this.wendigoHazards(z, dt, now);
-    if (z.act) {
-      const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, act = z.act, at = x => t0 < x && t1 >= x;
-      if (act === "claw" && at(W.claw.windup)) {
-        for (const p of this.state.players.values()) {
-          if (!p.alive) continue; const d = distance(z, p); if (d > W.claw.reach + BODY_R) continue;
-          let diff = Math.atan2(p.y - z.y, p.x - z.x) - z.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-          if (Math.abs(diff) <= W.claw.arc || d < z.radius + 14) this.wHurt(p, z.damage * W.claw.mult);
-        }
-        this.broadcast("wendigo", { k: "claw", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(z.aim * 100) / 100 });
-      }
-      if (act === "roots" && at(W.roots.cast)) {
-        const n = z.enraged ? W.roots.maxEnraged : W.roots.max;
-        const tg = this.state.players.size ? [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0) && distance(z, p) <= W.roots.range)
-          .sort((a, b) => distance(z, a) - distance(z, b)).slice(0, n) : [];
-        const pts = tg.map(p => [Math.round(p.x), Math.round(p.y + 16)]);
-        for (const [x, y] of pts) this.wHazards.push({ k: "roots", x, y, at: now + W.roots.warn * 1000, owner: z.id });
-        if (pts.length) this.broadcast("wendigo", { k: "roots", id: z.id, pts, warn: W.roots.warn, r: W.roots.r });
-      }
-      if (act === "crows" && at(W.crows.cast)) {
-        const far = [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0) && distance(z, p) >= W.crows.min && distance(z, p) <= W.crows.range)
-          .sort((a, b) => distance(z, b) - distance(z, a)).slice(0, z.enraged ? 2 : 1);
-        for (const p of far) {
-          const h = { k: "crows", id: `c${++this.wSeq}`, x: Math.round(p.x), y: Math.round(p.y + 10), until: now + W.crows.life * 1000, tick: 0, owner: z.id };
-          this.wHazards.push(h); this.broadcast("wendigo", { k: "crows", id: h.id, x: h.x, y: h.y, life: W.crows.life, r: W.crows.r });
-        }
-      }
-      if (act === "spikes" && at(W.spikes.windup)) {
-        const S = W.spikes;
-        for (const p of this.state.players.values()) {
-          if (!p.alive || this.untouchable(p)) continue; const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy / S.flat); if (d > S.r) continue;
-          this.wHurt(p, z.damage * S.mult); const a = Math.atan2(dy, dx); this.moveWithCollision(p, Math.cos(a) * S.push, Math.sin(a) * S.push);
-        }
-        this.broadcast("wendigo", { k: "spikes", id: z.id, x: Math.round(z.x), y: Math.round(z.y), r: S.r });
-      }
-      if (z.act === act && z.slam <= 0) { z.act = ""; if (act === "spikes") this.startAct(z, "rest", W.spikes.rest); }   // EXPOSED after the spikes
-      return;
-    }
-    if (!players.length) {   // nobody it can reach: go for the radio tower
-      const tw = { x: this.A.cx, y: this.A.cy }, ta = Math.atan2(tw.y - z.y, tw.x - z.x); z.aim = ta; z.targetId = "";
-      if (distance(z, tw) > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
-      else if (now >= m.clawReady) { m.clawReady = now + W.claw.cd * 1000; this.startAct(z, "claw", W.claw.total, ta); this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2);
-        if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } }
-      return;
-    }
-    const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
-    z.targetId = near.sessionId; z.aim = a;
-    const closeN = players.filter(p => Math.hypot(p.x - z.x, (p.y - z.y) / W.spikes.flat) < W.spikes.near).length;
-    if (now >= m.spikesReady && (closeN >= 2 || (z.enraged && closeN >= 1))) { m.spikesReady = now + W.spikes.cd * cdk * 1000; this.startAct(z, "spikes", W.spikes.total, a); return; }
-    if (d < W.claw.trigger + z.radius && now >= m.clawReady) { m.clawReady = now + W.claw.cd * cdk * 1000; this.startAct(z, "claw", W.claw.total, a); return; }
-    if (now >= m.rootsReady && d <= W.roots.range) { m.rootsReady = now + W.roots.cd * cdk * 1000; this.startAct(z, "roots", W.roots.total, a); return; }
-    if (now >= m.crowsReady && players.some(p => distance(z, p) >= W.crows.min && distance(z, p) <= W.crows.range)) { m.crowsReady = now + W.crows.cd * cdk * 1000; this.startAct(z, "crows", W.crows.total, a); return; }
-    if (d > z.radius + 40) this.bossMove(z, near, z.speed * dt);
-  }
-  wendigoHazards(z, dt, now) {   // root eruptions (after their warning) and crow storms (damage + slow while you stand in them)
-    if (!this.wHazards.length) return;
-    const W = WENDIGO, keep = [];
-    for (const h of this.wHazards) {
-      if (h.owner !== z.id) { keep.push(h); continue; }
-      if (h.k === "roots") {
-        if (now < h.at) { keep.push(h); continue; }
-        for (const p of this.state.players.values()) if (p.alive && Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .62) < W.roots.r + BODY_R) { this.wHurt(p, z.damage * W.roots.mult); if (!this.untouchable(p)) { p.stunned = Math.max(p.stunned || 0, W.roots.stun); p.charging = false; } }
-        continue;
-      }
-      if (h.k === "crows") {
-        if (now >= h.until) continue;
-        h.tick -= dt; const inside = [...this.state.players.values()].filter(p => p.alive && Math.hypot(p.x - h.x, (p.y - h.y) / .7) < W.crows.r);
-        for (const p of inside) p.slowed = Math.max(p.slowed || 0, W.crows.slow);
-        if (h.tick <= 0) { h.tick = W.crows.every; for (const p of inside) this.wHurt(p, z.damage * W.crows.mult); }
-        keep.push(h);
-      }
-    }
-    this.wHazards = keep;
-  }
   butcherThink(z, dt, now, players) {
     const B = BUTCHER, m = this.bmem(z, now);
     if (!z.enraged && z.hp / z.maxHp < B.enrageAt) {
@@ -2807,7 +2703,6 @@ export class SurvivalRoom extends Room {
         const now = Date.now(); if (now - (this.clangAt || 0) > 140) { this.clangAt = now; this.broadcast("clang", { x: Math.round(z.x + Math.cos(z.aim || 0) * 30), y: Math.round(z.y - 40) }); }
       }
     }
-    if (z.kind === "wendigo" && z.act === "rest") dmg *= WENDIGO.spikes.exposed;   // exposed after Blood Spikes
     z.hp -= dmg;
     p.damageDealt += dmg;
     if (z.boss) p.bossDamage += dmg;
@@ -3016,7 +2911,6 @@ export class SurvivalRoom extends Room {
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
-      if (z.kind === "wendigo") { this.wendigoThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;

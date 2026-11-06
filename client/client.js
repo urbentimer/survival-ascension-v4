@@ -129,8 +129,7 @@ function connected() {
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
   room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
-  room.onMessage("wendigo", onWendigo);
-  room.onMessage("zdead", m => { if (m.k === "wendigo") { fx.push({ ...m, type: "wendigo", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); wMove.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
+  room.onMessage("zdead", m => { if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("frag", m => { const t = performance.now(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
   room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
@@ -160,15 +159,6 @@ const BOSS_INFO = {
       ["🪝", "Meat Hook", "Every 10-15s he hooks the furthest survivor and drags them in: 0.5s helpless, then the cleaver. Only a FIRE AXE swing timed into the hook can DEFLECT it and stagger him.", "#ff9a3c"],
       ["🛡️", "Armoured Front", "Takes half damage from the front. Flank him: shots to his back do full damage.", "#9fc4e8"],
       ["💢", "Berserk (below 30%)", "Faster, hooks more often, and spins in a cleaver whirlwind. Get away from him.", "#ff3737"],
-    ] },
-  wendigo: { wave: 8, portrait: "assets/portraits/wendigo.webp", name: "THE WENDIGO",
-    lore: "An antlered skull on a body of raw muscle and roots. It hunts survivors and punishes anyone who stands still or keeps their distance.",
-    skills: [
-      ["🦴", "Claw Swipe", "Up close it rakes a wide arc in front of it. Don't hug it.", "#ff5a4a"],
-      ["🌿", "Bramble Snare", "Red circles appear under up to 3 survivors: 1 second later roots erupt there (damage + stun). Keep moving.", "#c8a24a"],
-      ["🐦‍⬛", "Crow Storm", "Survivors far away get a crow vortex dropped on them for 5s: damage and slow inside it. Step out.", "#b04aff"],
-      ["🩸", "Blood Spikes", "When you crowd it, a red ring fills up, then spikes burst all around it with knockback. Afterwards it's EXPOSED for 1.6s: +50% damage. Punish it!", "#ff3737"],
-      ["💢", "Enraged (below 35%)", "Faster, every attack comes back sooner, two crow storms at once.", "#ff3737"],
     ] },
 };
 let introAcked = false;
@@ -905,98 +895,6 @@ function drawRobot(r) {
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(r.x, r.y + 3, 15, 5, 0, 0, 7); ctx.fill(); ctx.restore();
   vFrame(vImgs[r.kind], 110, 90, col, rowOf(r.aim || 0), r.x, r.y + 4, 84);
   machineHp(r, 30, r.y - 50);
-}
-// ---------- THE WENDIGO (boss of wave 8; tools/extract-wendigo.py) ----------
-// Sheets: 4 cols x 5 rows (D, DR, R, UR, U; the left side is mirrored), 360x150 cells, feet at (180, 136).
-// Effects: 16 frames (8 x 2) of 176x176, ground at (88, 160). Timings match WENDIGO on the server.
-const wImgs = {};
-for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/wendigo-walk.webp", roots: "assets/sprites/zombies/dir8/wendigo-roots.webp", claw: "assets/sprites/zombies/dir8/wendigo-claw.webp",
-  crows: "assets/sprites/zombies/dir8/wendigo-crows.webp", spikes: "assets/sprites/zombies/dir8/wendigo-spikes.webp", death: "assets/sprites/zombies/dir8/wendigo-death.webp",
-  fxRoots: "assets/sprites/fx/wendigo-roots.webp", fxSlash: "assets/sprites/fx/wendigo-slash.webp", fxCrows: "assets/sprites/fx/wendigo-crows.webp", fxSpikes: "assets/sprites/fx/wendigo-spikes.webp" })) { const im = new Image(); im.src = url; wImgs[k] = im; }
-const WG = { clawWind: .45, spikesWind: .8, spikesR: 240, flat: .62, restLen: 1.6 };
-const wMove = new Map();
-function wRow(a) { const r8 = ROW_OF_OCT[((Math.round((a || 0) / (Math.PI / 4)) % 8) + 8) % 8]; return r8 === 5 ? [3, true] : r8 === 6 ? [2, true] : r8 === 7 ? [1, true] : [r8, false]; }
-function wFx(key, frame, x, y, scale = 1, alpha = 1, rot = 0, flip = false) {   // one effect frame, ground point at (x, y)
-  const im = wImgs[key]; if (!im?.naturalWidth) return; const f = Math.max(0, Math.min(15, frame | 0));
-  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(flip ? -scale : scale, scale);
-  ctx.drawImage(im, (f % 8) * 176, (f >> 3) * 176, 176, 176, -88, -160, 176, 176); ctx.restore();
-}
-function drawWendigo(z) {
-  const now = performance.now(), feet = (z.radius || 46) * .8, t = actTime(z);
-  let mv = wMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; wMove.set(z.id, mv); }
-  const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.42)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, 82, 18, 0, 0, 7); ctx.fill(); ctx.restore();
-  if (z.act === "spikes" && t < WG.spikesWind + .05) {   // danger ring fills up during the wind-up
-    const k = Math.min(1, t / WG.spikesWind); ctx.save(); ctx.fillStyle = `rgba(255,40,50,${.07 + .15 * k})`; ctx.strokeStyle = `rgba(255,60,60,${.45 + .5 * k})`; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, WG.spikesR, WG.spikesR * WG.flat, 0, 0, 7); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "rgba(255,70,60,.25)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, WG.spikesR * k, WG.spikesR * WG.flat * k, 0, 0, 7); ctx.fill(); ctx.restore();
-  }
-  let sheet = "walk", col = 0;
-  if (z.act === "claw") { sheet = "claw"; col = t < .15 ? 0 : t < WG.clawWind ? 1 : t < .7 ? 2 : 3; }
-  else if (z.act === "roots") { sheet = "roots"; col = t < .2 ? 0 : t < .5 ? 1 : t < .9 ? 2 : 3; }
-  else if (z.act === "crows") { sheet = "crows"; col = t < .2 ? 0 : t < .6 ? 1 : t < .95 ? 2 : 3; }
-  else if (z.act === "spikes") { sheet = "spikes"; col = t < .25 ? 0 : t < WG.spikesWind ? 1 : t < 1.1 ? 2 : 3; }
-  else if (z.act !== "rest" && now - mv.at < 200) col = Math.floor(mv.dist / 22) % 4;
-  const [row, flip] = wRow(z.aim), im = wImgs[sheet]?.naturalWidth ? wImgs[sheet] : wImgs.walk;
-  const flashAt = feel.flash.get(z.id); let filter = flashAt && now - flashAt < 90 ? "brightness(2.2)" : "";
-  if (z.act === "rest") filter = (filter ? filter + " " : "") + "brightness(.8) saturate(.75)";
-  else if (z.enraged) filter = (filter ? filter + " " : "") + "drop-shadow(0 0 5px rgba(255,30,30,.85))";
-  ctx.save(); ctx.imageSmoothingEnabled = false; if (filter) ctx.filter = filter; ctx.translate(Math.round(z.x), Math.round(z.y + feet)); if (flip) ctx.scale(-1, 1);
-  ctx.drawImage(im, col * 360, row * 150, 360, 150, -180, -136, 360, 150); ctx.restore();
-  if (z.act === "rest") {   // EXPOSED: the opening after Blood Spikes
-    const pulse = .6 + .4 * Math.sin(now / 90); ctx.save(); ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0b0b";
-    ctx.fillStyle = `rgba(255,220,90,${pulse})`; ctx.strokeText("EXPOSED +50%", z.x, z.y + feet - 128); ctx.fillText("EXPOSED +50%", z.x, z.y + feet - 128); ctx.restore();
-  }
-}
-function onWendigo(m) {
-  const t = performance.now();
-  if (m.k === "claw") fx.push({ ...m, type: "wendigo", k: "slash", t });
-  else if (m.k === "roots") for (const [x, y] of m.pts || []) fx.push({ type: "wendigo", k: "roots", x, y, warn: m.warn, r: m.r, t });
-  else if (m.k === "crows") fx.push({ ...m, type: "wendigo", k: "crows", t });
-  else if (m.k === "spikes") { fx.push({ ...m, type: "wendigo", k: "spikes", t }); shake(10, 380); playSfx("boom", m.x, m.y, .8); }
-}
-function drawWendigoGround() {   // warning circles for the roots, the crow storm's patch of ground
-  const now = performance.now();
-  for (const f of fx) {
-    if (f.type !== "wendigo") continue; const s = (now - f.t) / 1000;
-    if (f.k === "roots" && s < f.warn) {
-      const k = s / f.warn; ctx.save(); ctx.fillStyle = `rgba(200,40,30,${.12 + .18 * k})`; ctx.strokeStyle = `rgba(255,${120 - 80 * k},60,${.6 + .4 * k})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r, f.r * WG.flat, 0, 0, 7); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "rgba(255,90,60,.3)"; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * k, f.r * WG.flat * k, 0, 0, 7); ctx.fill(); ctx.restore();
-    }
-    if (f.k === "crows" && s < f.life) {
-      const a = Math.min(1, s / .4, (f.life - s) / .4); ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = "rgba(60,10,40,.28)"; ctx.strokeStyle = "rgba(200,60,255,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -now / 40;
-      ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r, f.r * .7, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
-    }
-  }
-}
-function drawWendigoFx(f, age) {   // false when finished
-  const s = age / 1000;
-  if (f.k === "slash") {   // claw arc in front of it, turned to the swipe
-    if (s > .5) return false; const a = f.a || 0, flip = Math.cos(a) < 0;
-    wFx("fxSlash", s / .5 * 16, f.x + Math.cos(a) * 70, f.y + 40 + Math.sin(a) * 45, 1.25, 1, flip ? a + Math.PI : a, flip); return true;
-  }
-  if (f.k === "roots") {   // after the warning: roots and thorns erupt
-    const e = s - f.warn; if (e > .85) return false; if (e < 0) return true;
-    wFx("fxRoots", e / .85 * 16, f.x, f.y + 8, f.r / 80); return true;
-  }
-  if (f.k === "crows") {   // grows (frames 0-5), loops the full swarm (6-11) for its life, then scatters (12-15)
-    if (s > f.life + .3) return false; const sc = f.r / 85;
-    const fr = s < .4 ? s / .4 * 6 : s < f.life - .3 ? 6 + ((s - .4) * 9) % 6 : 12 + Math.min(3.99, (s - (f.life - .3)) / .6 * 4);
-    wFx("fxCrows", fr, f.x, f.y + 40, sc); return true;
-  }
-  if (f.k === "spikes") {   // a big burst under it and a ring of smaller ones out to the edge of the danger zone
-    if (s > .9) return false; const fr = s / .9 * 16, R = f.r * .72;
-    for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + .3; wFx("fxSpikes", fr - (i % 3), f.x + Math.cos(a) * R, f.y + 36 + Math.sin(a) * R * WG.flat, .7); }
-    wFx("fxSpikes", fr, f.x, f.y + 44, 1.2); return true;
-  }
-  if (f.k === "death") {   // collapses into a pile of bones and roots, then fades
-    if (s > 4) return false; const im = wImgs.death; if (!im?.naturalWidth) return s < 4;
-    const fr = Math.min(5, Math.floor(s / .22)), a = s > 2.8 ? 1 - (s - 2.8) / 1.2 : 1;
-    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(f.x), Math.round(f.y + 37));
-    ctx.drawImage(im, fr * 300, 0, 300, 200, -150, -188, 300, 200); ctx.restore(); return true;
-  }
-  return false;
 }
 // ---------- THE HIVEMIND (mini boss on waves 2, 6, 10...) ----------
 const hImgs = {};
@@ -1913,7 +1811,6 @@ function drawDashBeams() {
   }
 }
 function drawGroundFx() {
-  drawWendigoGround();
   drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
   const now = performance.now();
@@ -2104,7 +2001,6 @@ function drawZombieDir8(z, img8, side) {
 function drawZombieAny(z) {
   if (z.kind === "hivemind") return drawHivemind(z);
   if (z.kind === "butcher" && butcherImgs.walk.naturalWidth) return drawButcher(z);
-  if (z.kind === "wendigo" && wImgs.walk.naturalWidth) return drawWendigo(z);
   const img = zombieImgs[z.kind], img8 = zdir8[z.kind];
   if (!img || !img.complete || !img.naturalWidth) { drawZombie(z); drawHitFlash(z); return; }   // bosses (no art yet) use the old drawing
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + (z.radius || 14) * 0.8, (z.radius || 14) * 1.05, 4, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -2244,7 +2140,7 @@ function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;con
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','wendigo'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2253,7 +2149,6 @@ function drawShotFx(){
    if(f.type==='briggs'){if(!drawBriggsFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
-   if(f.type==='wendigo'){if(!drawWendigoFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
