@@ -30,8 +30,11 @@ for ri, (y0, y1) in enumerate(runs(fg.any(1), 2)):
         rgb = a[y0 + ys.min():y0 + ys.max() + 1, x0 + xs.min():x0 + xs.max() + 1]
         cells[NAMES[ri][ci]] = np.dstack([rgb, m * 255]).astype(np.uint8)
 SC = 96 / cells['d'].shape[1]
+SQUASH = .72   # Nov 7: shorter than the survivors (keep the length): horizontal + diagonal ones squashed in height; the vertical ones
+               # keep their height (that's their length), their bottom stays where it was so the posts' feet don't move
 for k, rgba in cells.items():
-    im = Image.fromarray(rgba); im = im.resize((round(im.width * SC), round(im.height * SC)), Image.LANCZOS)
+    im = Image.fromarray(rgba); full_h = round(im.height * SC); sq = 1 if k in ('r', 'l') else SQUASH
+    im = im.resize((round(im.width * SC), round(im.height * SC * sq)), Image.LANCZOS)
     q = np.array(im); q[..., 3] = np.where(q[..., 3] > 110, 255, 0); im = Image.fromarray(q)
-    cell = Image.new('RGBA', (110, 110)); cell.alpha_composite(im, ((110 - im.width) // 2, (110 - im.height) // 2))
+    cell = Image.new('RGBA', (110, 110)); cell.alpha_composite(im, ((110 - im.width) // 2, (110 - full_h) // 2 + full_h - im.height))
     cell.save(os.path.join(OUT, f'barricade-{k}.png')); print(k, im.size)
