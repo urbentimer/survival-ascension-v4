@@ -2651,7 +2651,7 @@ window.__saCam = cam; window.__saPred = () => { const m = me_(); return { id: my
 // Every input has a number; the server sends back the last number it applied (player.ack). On each update we start from the
 // server's position and replay the inputs it hasn't applied yet. Small differences fade out over ~0.1s instead of snapping.
 const PRED = { seq: 0, pending: [], x: 0, y: 0, ok: false, ex: 0, ey: 0, grid: null, src: null };
-const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_SOLID = { barricade: 20, turret: 16, fence: 18 }, P_DASH = 140;   // matches DASH_DISTANCE on the server
+const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_DASH = 140;   // matches DASH_DISTANCE on the server
 function predGrid() {
   const src = state?.mapLayout || ""; if (PRED.src === src && PRED.grid) return PRED.grid;
   const pm = paintedMap(), layout = pm ? paintedLayout(pm) : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
@@ -2661,9 +2661,8 @@ function predGrid() {
   }
   PRED.src = src; PRED.grid = grid; return grid;
 }
-function predSolve(p) {   // same as the server's solveCollisions for a survivor
+function predSolve(p) {   // same as the server's solveCollisions for a survivor (deployables don't block survivors)
   const WW = worldW(), WH = worldH(), cx = towerX(), cy = towerY(), boxes = [{ x: cx, y: cy, hw: P_TOWER_HALF, hh: P_TOWER_HALF }, { x: cx + GEN_OFF.x, y: cy + GEN_OFF.y, hw: P_GEN_H, hh: P_GEN_H }];
-  for (const st of state.structures.values()) { if (P_SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: P_SOLID[st.kind], hh: P_SOLID[st.kind] }); else if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 }); }
   const grid = predGrid(), gx = Math.floor(p.x / 160), gy = Math.floor(p.y / 160), seen = new Set();
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (!seen.has(b)) { seen.add(b); boxes.push(b); }
   for (let pass = 0; pass < 2; pass++) for (const b of boxes) {

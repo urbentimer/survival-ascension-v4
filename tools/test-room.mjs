@@ -224,9 +224,9 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   room._dispose(); }
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.scrap = 999;
   p.x = 300; p.y = 200; send(A, "build", { kind: "barricade", x: 360, y: 200 });
-  for (let i = 0; i < 30; i++) send(A, "input", { dx: 1, dy: 0 }), room.lastInputs.set("A", Date.now() - 50);
-  ok(p.x < 360 - 20, `walking into a barricade stops you (x=${Math.round(p.x)}, wall starts at 340)`);
-  p.x = 320; p.y = 200; room.lastDashAt.clear(); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x < 340, `dash can't go through it either (x=${Math.round(p.x)})`);
+  for (let i = 0; i < 40; i++) send(A, "input", { dx: 1, dy: 0 }), room.lastInputs.set("A", Date.now() - 50);
+  ok(p.x > 380, `survivors walk straight through deployables (x=${Math.round(p.x)}, the barricade is at 340-380)`);
+  p.x = 320; p.y = 200; room.lastDashAt.clear(); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > 380, `...and dash through them (x=${Math.round(p.x)})`);
   p.x = 300; p.y = 160; for (let i = 0; i < 40; i++) send(A, "input", { dx: 1, dy: 0 }), room.lastInputs.set("A", Date.now() - 50);
   ok(p.x > 380, "you can walk around it");
   p.x = room.state.worldW / 2; p.y = room.state.worldH / 2; room.solveCollisions(p); ok(Math.hypot(p.x - room.state.worldW / 2, p.y - room.state.worldH / 2) >= 34, "the radio tower base is solid too");

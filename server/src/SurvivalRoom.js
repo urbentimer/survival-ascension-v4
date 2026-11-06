@@ -269,7 +269,7 @@ function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.k
 const AXE_HEAVY = { charge: 1.0, dmgMult: 2.5, range: 100, arc: 1.7, knockback: 36, moveMult: 0.6 };
 const MAX_MEDKITS = 3;
 // Things players and bots can't walk through (half-width of their square). Mines and flame traps are floor traps.
-const SOLID = { barricade: 20, turret: 16, fence: 18 };
+const SOLID = { barricade: 20, turret: 16, fence: 18 };   // deployables that block vehicles (survivors walk through every deployable: Nov 6)
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
@@ -1062,11 +1062,9 @@ export class SurvivalRoom extends Room {
       p.x = clamp(p.x, 18, this.A.width - 18); p.y = clamp(p.y, 18, this.A.height - 18);
     }
   }
-  // Survivors: blocked by the tower base, the generator, solid structures and the map pieces.
+  // Survivors: blocked by the tower base, the generator and the map pieces. Deployables (barricades, turrets, fences...) don't block them.
   solveCollisions(p) {
     const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }, { x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h }];
-    for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
-    for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
     for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
     this.pushOut(p, boxes, BODY_R);
   }
