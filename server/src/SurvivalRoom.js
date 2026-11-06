@@ -51,9 +51,9 @@ const isHiveWave = stage => stage % 4 === 2;
 //   FIREWALK       every 16s, for 8s: every step leaves a burning patch (6s; 9s enraged); standing in it sets you on fire.
 //   SERMON OF ASH  every 15s: kneels for 2.6s; 5 glowing circles land on / around the survivors and erupt into fire pillars
 //                  1s later. While he kneels, hits from BEHIND him do double damage.
-//   WHEEL OF FLAME every 75s (first at 12s): he plants a burning cross where he stands - 4 lines of fire (12, 3, 6 and 9 o'clock,
-//                  620px long) that turn CLOCKWISE for 60s (a full turn every 18s, 2s warning first). Walk clockwise with them to stay clear;
-//                  touching a line hurts and sets you on fire. The centre stays put while he keeps hunting; it dies with him.
+//   WHEEL OF FLAME every 75s (first at 12s): a burning cross around him - 4 lines of fire (12, 3, 6 and 9 o'clock, 620px long)
+//                  that turn CLOCKWISE for 60s (a full turn every 18s, 2s warning first) and FOLLOW HIM as he hunts. Walk clockwise
+//                  with them to stay clear; touching a line hurts and sets you on fire. It dies with him.
 //   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
 //   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
 const PYRE = {
@@ -2355,6 +2355,7 @@ export class SurvivalRoom extends Room {
   pyreHazards(z, now) {   // pillars erupt after their warning; standing in a fire patch keeps you burning; the wheel's lines burn
     const P = PYRE, F = this.pyreFx, wh = F.wheel;
     if (wh && wh.owner === z.id) {
+      wh.x = z.x; wh.y = z.y + z.radius * .8;   // the wheel turns round his feet, wherever he goes
       if (now >= wh.until) F.wheel = null;
       else if (now >= wh.fireAt) for (const p of this.state.players.values()) {
         if (!p.alive || now < (wh.hit.get(p.sessionId) || 0) || !this.onWheel(wh, p, now)) continue;

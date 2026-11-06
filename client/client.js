@@ -167,7 +167,7 @@ const BOSS_INFO = {
       ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
       ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
       ["🙏", "Sermon of Ash", "He kneels and glowing circles land on you. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
-      ["☸️", "Wheel of Flame", "He plants a burning cross: 4 lines of fire (12, 3, 6, 9 o'clock) that turn CLOCKWISE for 60s. Walk clockwise with them to stay clear.", "#ffc04a"],
+      ["☸️", "Wheel of Flame", "4 lines of fire (12, 3, 6, 9 o'clock) spin CLOCKWISE around him for 60s and follow him everywhere. Walk clockwise with them to stay clear.", "#ffc04a"],
       ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the wheel spins faster, the fire lasts longer and the pillars get bigger.", "#ff3737"],
     ] },
 };
@@ -917,7 +917,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-
   trail: "assets/sprites/fx/pyre-trail.webp", ember: "assets/sprites/fx/pyre-ember.webp", ring: "assets/sprites/fx/pyre-swing.webp" })) { const im = new Image(); im.src = url; pyImgs[k] = im; }
 const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 200, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
-let pyreWheel = null;   // the Wheel of Flame: { id, x, y, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise)
+let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
 function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
   const r8 = ROW_OF_OCT[((Math.round((a || 0) / (Math.PI / 4)) % 8) + 8) % 8];
   return r8 === 5 ? [3, true] : r8 === 6 ? [2, true] : r8 === 7 ? [1, true] : [r8, false];
@@ -997,22 +997,23 @@ function drawPyre(z) {
   ctx.restore();
   pyreAura(z, feet, now, true);
 }
-function onPyre(m) {
+function onPyre(m) {   // "wheel" is re-sent when he enrages (spins faster): only a fresh one shakes the screen
   const t = performance.now();
   if (m.k === "patch") fx.push({ type: "pyre", k: "patch", x: m.x, y: m.y, life: m.life, t, seed: Math.random() * 8 });
   else if (m.k === "sermon") for (const [x, y] of m.pts || []) fx.push({ type: "pyre", k: "pillar", x, y, warn: m.warn, r: m.r, big: m.big, t });
   else if (m.k === "swing") fx.push({ type: "pyre", k: "ring", id: m.id, x: m.x, y: m.y, r: m.r, wind: m.wind, t });
   else if (m.k === "firewalk") pyreWalk.set(m.id, t + m.life * 1000);
-  else if (m.k === "wheel") { const fresh = !pyreWheel || pyreWheel.id !== m.id || Math.hypot(pyreWheel.x - m.x, pyreWheel.y - m.y) > 1; pyreWheel = { ...m, t }; if (fresh) { shake(5, 300); playSfx("boom", m.x, m.y, .5); } }
+  else if (m.k === "wheel") { const fresh = !pyreWheel || pyreWheel.id !== m.id || m.warn > 1.5; pyreWheel = { ...m, t }; if (fresh) { shake(5, 300); playSfx("boom", m.x, m.y, .5); } }
   else if (m.k === "ignite") { pyreBurn.set(m.id, t + m.len * 1000); const p = state?.players?.get(m.id); if (p) fx.push({ type: "pyre", k: "ember", id: m.id, t }); }
 }
 function wheelState(now) {   // { e: seconds since planted, a: current angle, k: fire strength 0..1 } or null when it's gone
-  const W = pyreWheel; if (!W) return null; const e = (now - W.t) / 1000;
-  if (e > W.warn + W.life || !state?.zombies?.has(W.id)) { pyreWheel = null; return null; }
-  const on = e - W.warn; return { e, a: W.a + W.w * e, k: on < 0 ? 0 : Math.min(1, on / .3, (W.warn + W.life - e) / 1) };
+  const W = pyreWheel; if (!W) return null; const e = (now - W.t) / 1000, zr = state?.zombies?.get(W.id);
+  if (e > W.warn + W.life || !zr) { pyreWheel = null; return null; }
+  const v = V(zr) || zr, on = e - W.warn;   // centred on his feet (smoothed, like his sprite)
+  W.x = v.x; W.y = v.y + zr.radius * .8; return { e, a: W.a + W.w * e, k: on < 0 ? 0 : Math.min(1, on / .3, (W.warn + W.life - e) / 1) };
 }
-function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, turning clockwise round a burning cross
-  const W = pyreWheel, s = wheelState(now); if (!s || !inView(W.x, W.y, W.len + 60)) return;
+function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, turning clockwise round him
+  const s = wheelState(now), W = pyreWheel; if (!s || !inView(W.x, W.y, W.len + 60)) return;
   const L = W.len, hw = W.hw; ctx.save(); ctx.lineCap = "round";
   for (let i = 0; i < 4; i++) {   // the scorched track under each line
     const c = Math.cos(s.a + i * Math.PI / 2), sn = Math.sin(s.a + i * Math.PI / 2), x2 = W.x + c * L, y2 = W.y + sn * L;
