@@ -772,7 +772,7 @@ function drawBuildWheel() {
   ctx.strokeStyle = "rgba(242,139,54,.35)"; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(me.x, me.y, BUILD_RANGE, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   const opt = BUILD_WHEEL[wheel.pick];
-  const [gImg, gFeet] = opt ? structSprite(opt.id, lineVertical(Math.hypot(spot.x - me.x, spot.y - me.y) > 20 ? Math.atan2(spot.y - me.y, spot.x - me.x) : me.aim || 0)) : [];   // the ghost turns like the real one
+  const [gImg, gFeet] = opt ? structSprite(opt.id, Math.hypot(spot.x - me.x, spot.y - me.y) > 20 ? Math.atan2(spot.y - me.y, spot.x - me.x) : me.aim || 0) : [];   // the ghost turns like the real one
   if (!opt || !opt.action) { if (!(opt && drawObj(gImg, spot.x, spot.y + gFeet, { alpha: .6 }))) { ctx.fillStyle = "rgba(242,139,54,.25)"; ctx.strokeStyle = "#f28b36"; ctx.lineWidth = 2; ctx.fillRect(spot.x - 14, spot.y - 14, 28, 28); ctx.strokeRect(spot.x - 14, spot.y - 14, 28, 28); } }
   ctx.restore();
   // wheel
@@ -2583,9 +2583,9 @@ function drawSurvivor(p){
 }
 // ================= OBJECT ART (client/assets/sprites/objects/<name>.png) =================
 const OBJ_URLS = {
-  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade-line.png",
+  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade-d.png",
   turret: "assets/sprites/objects/turret.png", mine: "assets/sprites/objects/mine.png",
-  fence: "assets/sprites/objects/fence-line.png", barricadeV: "assets/sprites/objects/barricade-line-v.png", fenceV: "assets/sprites/objects/fence-line-v.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
+  fence: "assets/sprites/objects/fence-line.png", barricade_r: "assets/sprites/objects/barricade-r.png", barricade_dr: "assets/sprites/objects/barricade-dr.png", barricade_d: "assets/sprites/objects/barricade-d.png", barricade_dl: "assets/sprites/objects/barricade-dl.png", barricade_l: "assets/sprites/objects/barricade-l.png", barricade_ul: "assets/sprites/objects/barricade-ul.png", barricade_u: "assets/sprites/objects/barricade-u.png", barricade_ur: "assets/sprites/objects/barricade-ur.png", fenceV: "assets/sprites/objects/fence-line-v.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
   medkit: "assets/sprites/objects/medkit.png", ammo: "assets/sprites/objects/ammo.png", weaponCase: "assets/sprites/objects/weaponCase.png",
 };
 const objImgs = {};
@@ -2626,21 +2626,26 @@ function drawLoot(item) {
   px(item.x - 6, item.y - 4 + bob, 12, 8, "#e5c66a"); px(item.x - 6, item.y - 4 + bob, 12, 2, "#fff0a8"); px(item.x - 6, item.y + 3 + bob, 12, 1, "#8a6a1e");
 }
 const STRUCT_BASE = { barricade: 20, turret: 16, fence: 20, mine: 8, flameTrap: 14 };   // barricade + fence: 96px fence lines, same size (tools/make-fenceline.py)
-const LINE_KINDS = { barricade: 1, fence: 1 };
-// Barricade / fence lines go ACROSS the way you face (server: lineAim): facing left/right -> vertical (aim PI/2), up/down -> horizontal (0)
+// Barricade / fence lines go ACROSS the way you face. st.aim = the builder's facing (server snapFace): the barricade has art for
+// 8 facings (tools/extract-barricade8.py, 110x110 cells), the fence a horizontal + a vertical line (facing left/right -> vertical)
+const BAR_DIRS = ["r", "dr", "d", "dl", "l", "ul", "u", "ur"];   // facing 0, 45, 90 ... degrees (screen y down)
 const lineVertical = a => Math.abs(Math.cos(a)) > Math.abs(Math.sin(a));
-function structSprite(kind, vertical) { return LINE_KINDS[kind] && vertical ? [kind + "V", 48] : [kind, STRUCT_BASE[kind] || 14]; }   // [image, feet below the centre]
+function structSprite(kind, face) {   // [image, how far below the centre the image's bottom goes]
+  if (kind === "barricade") return ["barricade_" + BAR_DIRS[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], 45];
+  if (kind === "fence" && lineVertical(face)) return ["fenceV", 48];
+  return [kind, STRUCT_BASE[kind] || 14];
+}
 function drawStructure(st) {
   if (st.kind === "heavyTurret") return drawHeavyTurret(st);
   if (st.kind === "demoCharge") return drawDemoCrate(st);
-  const [img, feet] = structSprite(st.kind, !!st.aim), base = st.y + feet, on = powered(), t = performance.now();
+  const [img, feet] = structSprite(st.kind, st.aim || 0), base = st.y + feet, on = powered(), t = performance.now();
   let flip = false;
   if (st.kind === "turret") { let best = 260, tx = null; for (const z of state.zombies.values()) { const d = Math.hypot(z.x - st.x, z.y - st.y); if (d < best) { best = d; tx = z.x; } } if (tx !== null) flip = tx < st.x; }
   const filter = (st.kind === "fence" || st.kind === "turret" || st.kind === "flameTrap") && !on ? "grayscale(1) brightness(.7)" : st.kind === "fence" && Math.random() < 0.25 ? "brightness(1.5)" : undefined;
   if (!drawObj(img, st.x, base, { flip, filter })) return;
   if (st.kind === "flameTrap" && on) { const f = 0.6 + Math.sin(t / 70 + st.x) * 0.25; const g = ctx.createRadialGradient(st.x, st.y + 4, 2, st.x, st.y + 4, 30); g.addColorStop(0, `rgba(255,140,40,${.45 * f})`); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y + 4, 30, 0, 7); ctx.fill(); }
   if (st.kind === "mine") { if (Math.sin(t / 200 + st.x) > 0.3) { ctx.fillStyle = "rgba(255,60,40,.8)"; ctx.fillRect(st.x - 1, base - 13, 3, 3); } }
-  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.endsWith("V") ? 104 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
+  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.endsWith("V") ? 104 : img.startsWith("barricade_") ? 80 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
 }
 
 // ================= CAMERA + WORLD =================
