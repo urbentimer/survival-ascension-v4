@@ -269,17 +269,16 @@ function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.k
 const AXE_HEAVY = { charge: 1.0, dmgMult: 2.5, range: 100, arc: 1.7, knockback: 36, moveMult: 0.6 };
 const MAX_MEDKITS = 3;
 // Things players and bots can't walk through (half-width of their square). Mines and flame traps are floor traps.
-// Barricade + fence are FENCE LINES built ACROSS the way you face. st.aim = the builder's facing, snapped: the barricade to 8 directions
-// (its own art for each: facing down-right gives a "/" line, right gives a vertical one), the electric fence to 4 (horizontal / vertical art).
+// Barricade + electric fence are FENCE LINES built ACROSS the way you face. st.aim = the builder's facing, snapped to 8 directions
+// (art for each, tools/extract-line8.py: facing down-right gives a "/" line, right gives a vertical one).
 // The line runs at aim + 90deg. Footprint = a strip along the line: half length L, half thickness T (L matches each sprite's length).
 // They block vehicles only; survivors walk through every deployable. Turrets: a plain 16x16 (half) box.
-const LINES = { barricade: 8, fence: 4 };   // facings each one snaps to
+const LINES = { barricade: 8, fence: 8 };   // facings each one snaps to
 const snapFace = (a, n) => { const s = Math.PI * 2 / n; let r = Math.round(a / s) * s; if (r <= -Math.PI) r += Math.PI * 2; if (r > Math.PI) r -= Math.PI * 2; return r; };
-const BAR_L = [38, 40, 46, 40];   // barricade half length by facing (k % 4): right/left (vertical line), "/" diagonal, down/up (horizontal), "" diagonal
+const LINE_L = [38, 40, 46, 40];   // half length by facing (k % 4): right/left (vertical line), "/" diagonal, down/up (horizontal), backslash diagonal
 function lineOf(st) {   // { c, s: the line's direction, L, T } or null
   const k = ((Math.round(st.aim / (Math.PI / 4)) % 8) + 8) % 8, la = st.aim + Math.PI / 2;
-  const L = st.kind === "barricade" ? BAR_L[k % 4] : 46, T = st.kind === "fence" && k % 4 === 0 ? 24 : 16;
-  return { c: Math.cos(la), s: Math.sin(la), L, T };
+  return { c: Math.cos(la), s: Math.sin(la), L: LINE_L[k % 4], T: 16 };
 }
 const footBox = st => { if (LINES[st.kind]) { const l = lineOf(st); return [Math.abs(l.c) * l.L + Math.abs(l.s) * l.T, Math.abs(l.s) * l.L + Math.abs(l.c) * l.T]; } return st.kind === "turret" ? [16, 16] : null; };   // axis box (vehicles)
 const nearFoot = (st, z, pa, pt) => {   // z within pa (along the line) / pt (across it) of the footprint

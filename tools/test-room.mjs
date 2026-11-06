@@ -1123,7 +1123,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   m.wheelReady = 0; z.act = ""; z.x = 1500; z.y = 1200; think(.05); ok(room.pyreFx.wheel, "cast again"); room.killZombie(z, p); ok(!room.pyreFx.wheel, "it dies with him");
   room.state.zombies.set(z.id, z); z.hp = z.maxHp * .3; z.act = ""; z.enraged = false; think(.05); ok(z.enraged, "enraged below 35%");
   room._dispose(); }
-// 54. barricade + electric fence are 96px fence lines (across the way you face) with the same footprint: zombies stop anywhere along a barricade, the fence shocks along its length
+// 54. barricade + electric fence are fence lines in 8 facings (across the way you face) with the same footprint: zombies stop anywhere along a barricade, the fence shocks along its length
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map();
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999;
   p.x = 1000; p.y = 1000; send(A, "build", { kind: "barricade", x: 1000, y: 1100 }); send(A, "build", { kind: "fence", x: 1000, y: 1300 });
@@ -1145,6 +1145,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.spawnZombie(false, "walker"); const z3 = [...room.state.zombies.values()].pop(); z3.speed = 0; z3.x = db.x + 28; z3.y = db.y - 28;   // up-right, on the "/" line
   let d0 = db.hp; for (let i = 0; i < 30; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(db.hp < d0, "a zombie on the diagonal (up-right end) hits it");
   z3.x = db.x + 30; z3.y = db.y + 30; d0 = db.hp; for (let i = 0; i < 30; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(db.hp === d0, "one 42px off the diagonal (down-right) doesn't");
-  p.x = 3000; p.y = 1400; send(A, "build", { kind: "fence", x: 3090, y: 1490 }); const df = [...room.state.structures.values()].pop(); ok([0, Math.PI / 2].some(v => Math.abs(Math.abs(df.aim) - v) < 1e-9) || Math.abs(df.aim - Math.PI) < 1e-9, "the fence snaps to 4 facings");
+  p.x = 3000; p.y = 1400; send(A, "build", { kind: "fence", x: 3090, y: 1490 }); const df = [...room.state.structures.values()].pop(); ok(Math.abs(df.aim - Math.PI / 4) < 1e-9, "the fence has 8 facings too (diagonal)");
+  room.spawnZombie(false, "walker"); const z4 = [...room.state.zombies.values()].pop(); z4.speed = 0; z4.x = df.x - 35; z4.y = df.y + 35; z4.hp = 500; room.state.generatorFuel = 100;
+  for (let i = 0; i < 10; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(z4.hp < 500, "a diagonal fence shocks along its line (down-left end)");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

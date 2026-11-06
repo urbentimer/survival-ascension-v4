@@ -2583,9 +2583,9 @@ function drawSurvivor(p){
 }
 // ================= OBJECT ART (client/assets/sprites/objects/<name>.png) =================
 const OBJ_URLS = {
-  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade-d.png",
+  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade-d.png", fence: "assets/sprites/objects/fence-d.png",
   turret: "assets/sprites/objects/turret.png", mine: "assets/sprites/objects/mine.png",
-  fence: "assets/sprites/objects/fence-line.png", barricade_r: "assets/sprites/objects/barricade-r.png", barricade_dr: "assets/sprites/objects/barricade-dr.png", barricade_d: "assets/sprites/objects/barricade-d.png", barricade_dl: "assets/sprites/objects/barricade-dl.png", barricade_l: "assets/sprites/objects/barricade-l.png", barricade_ul: "assets/sprites/objects/barricade-ul.png", barricade_u: "assets/sprites/objects/barricade-u.png", barricade_ur: "assets/sprites/objects/barricade-ur.png", fenceV: "assets/sprites/objects/fence-line-v.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
+  barricade_r: "assets/sprites/objects/barricade-r.png", barricade_dr: "assets/sprites/objects/barricade-dr.png", barricade_d: "assets/sprites/objects/barricade-d.png", barricade_dl: "assets/sprites/objects/barricade-dl.png", barricade_l: "assets/sprites/objects/barricade-l.png", barricade_ul: "assets/sprites/objects/barricade-ul.png", barricade_u: "assets/sprites/objects/barricade-u.png", barricade_ur: "assets/sprites/objects/barricade-ur.png", fence_r: "assets/sprites/objects/fence-r.png", fence_dr: "assets/sprites/objects/fence-dr.png", fence_d: "assets/sprites/objects/fence-d.png", fence_dl: "assets/sprites/objects/fence-dl.png", fence_l: "assets/sprites/objects/fence-l.png", fence_ul: "assets/sprites/objects/fence-ul.png", fence_u: "assets/sprites/objects/fence-u.png", fence_ur: "assets/sprites/objects/fence-ur.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
   medkit: "assets/sprites/objects/medkit.png", ammo: "assets/sprites/objects/ammo.png", weaponCase: "assets/sprites/objects/weaponCase.png",
 };
 const objImgs = {};
@@ -2625,14 +2625,12 @@ function drawLoot(item) {
   if (item.kind === "gold" && drawIcon("gold", item.x, item.y + bob - 6, 36)) return;
   px(item.x - 6, item.y - 4 + bob, 12, 8, "#e5c66a"); px(item.x - 6, item.y - 4 + bob, 12, 2, "#fff0a8"); px(item.x - 6, item.y + 3 + bob, 12, 1, "#8a6a1e");
 }
-const STRUCT_BASE = { barricade: 20, turret: 16, fence: 20, mine: 8, flameTrap: 14 };   // barricade + fence: 96px fence lines, same size (tools/make-fenceline.py)
-// Barricade / fence lines go ACROSS the way you face. st.aim = the builder's facing (server snapFace): the barricade has art for
-// 8 facings (tools/extract-barricade8.py, 110x110 cells), the fence a horizontal + a vertical line (facing left/right -> vertical)
-const BAR_DIRS = ["r", "dr", "d", "dl", "l", "ul", "u", "ur"];   // facing 0, 45, 90 ... degrees (screen y down)
-const lineVertical = a => Math.abs(Math.cos(a)) > Math.abs(Math.sin(a));
+const STRUCT_BASE = { turret: 16, mine: 8, flameTrap: 14 };   // image bottom below the centre (barricade + fence lines: structSprite)
+// Barricade / electric fence lines go ACROSS the way you face. st.aim = the builder's facing (server snapFace); both have art for
+// 8 facings (tools/extract-line8.py, 110x110 cells; facing right -> a vertical line, down-right -> "/")
+const LINE_DIRS = ["r", "dr", "d", "dl", "l", "ul", "u", "ur"];   // facing 0, 45, 90 ... degrees (screen y down)
 function structSprite(kind, face) {   // [image, how far below the centre the image's bottom goes]
-  if (kind === "barricade") return ["barricade_" + BAR_DIRS[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], 45];
-  if (kind === "fence" && lineVertical(face)) return ["fenceV", 48];
+  if (kind === "barricade" || kind === "fence") return [kind + "_" + LINE_DIRS[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], 45];
   return [kind, STRUCT_BASE[kind] || 14];
 }
 function drawStructure(st) {
@@ -2645,7 +2643,7 @@ function drawStructure(st) {
   if (!drawObj(img, st.x, base, { flip, filter })) return;
   if (st.kind === "flameTrap" && on) { const f = 0.6 + Math.sin(t / 70 + st.x) * 0.25; const g = ctx.createRadialGradient(st.x, st.y + 4, 2, st.x, st.y + 4, 30); g.addColorStop(0, `rgba(255,140,40,${.45 * f})`); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y + 4, 30, 0, 7); ctx.fill(); }
   if (st.kind === "mine") { if (Math.sin(t / 200 + st.x) > 0.3) { ctx.fillStyle = "rgba(255,60,40,.8)"; ctx.fillRect(st.x - 1, base - 13, 3, 3); } }
-  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.endsWith("V") ? 104 : img.startsWith("barricade_") ? 80 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
+  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.includes("_") ? 80 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
 }
 
 // ================= CAMERA + WORLD =================
