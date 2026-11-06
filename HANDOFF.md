@@ -230,3 +230,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Test 53 (Pyre Priest). Cache v=20261106j.
 
 - Nov 6: "Skip to Pyre Priest fight (host)" button in the Esc menu (host online + preview). Server `debugBoss` now takes {wave} (4..48, multiple of 4). Cache v=20261106k.
+
+- Nov 6: Pyre Priest 4th skill **Wheel of Flame** (`PYRE.wheel`): every 75s (first 12s; 15s rest after one ends) he kneels 1.2s (sermon art) and plants a fixed burning cross where he stands: 4 lines (12/3/6/9 o'clock, 620px, half-width 20) turning clockwise (full turn 18s, 14s enraged) for 60s after a 2s warning. Touching a line: 0.45x dmg + on fire, at most every 0.6s. Dies with him. Server: plantWheel/wheelAngle/wheelMsg/onWheel; broadcast "pyre" {k:"wheel",id,x,y,a,w,warn,life,len,hw} (re-sent on enrage; sent to late joiners). Client: pyreWheel, wheelState, drawPyreWheel (dashed warning, glowing lines + trail flames, clockwise arrows, seconds left), night lights. Test 53 extended. Cache v=20261106l.

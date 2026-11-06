@@ -1084,7 +1084,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.spawnZombie(true, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
   ok(z.boss && z.role === "hunter" && z.speed > 225, `a boss that hunts survivors, speed ${z.speed} (Raven 225)`);
   let T = Date.now(); const real = Date.now; const think = sec => { for (let i = 0; i < sec * 20; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); room.tickBurn(.05, T); } finally { Date.now = real; } } };
-  const m = room.pmem(z, T); m.walkReady = m.sermonReady = T + 1e9;
+  const m = room.pmem(z, T); m.walkReady = m.sermonReady = m.wheelReady = T + 1e9;
   // hunts: walks to the nearest survivor, ignoring the tower
   p.x = 1900; p.y = 1200; q.x = 3500; q.y = 2500; p.hp = p.maxHp = q.hp = q.maxHp = 500; m.swingReady = T + 1e9;
   think(.5); ok(z.x > 1560 && z.targetId === "A", `walks straight at the nearest survivor (${Math.round(z.x - 1500)}px in 0.5s)`);
@@ -1106,6 +1106,20 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(Math.abs((hz - z.hp) - 200) < 1, `kneeling: a hit from behind does double (100 -> ${Math.round(hz - z.hp)})`);
   const hz2 = z.hp; room.hitZombie(z, z.aim === Math.atan2(p.y - z.y, p.x - z.x) ? p : q, 100); ok(Math.abs((hz2 - z.hp) - 100) < 1, "...from the front it's normal");
   think(1.0); ok(p.hp < 500 && q.hp < 500 && room.pyreFx.pillars.length === 0, `1s later the pillars erupt on both survivors (${Math.round(500 - p.hp)}, ${Math.round(500 - q.hp)} dmg)`);
-  z.hp = z.maxHp * .3; z.act = ""; think(.05); ok(z.enraged, "enraged below 35%");
+  // wheel of flame: 4 lines from where he stands, turning clockwise for 60s; walking with them is safe; it dies with him
+  z.act = ""; m.sermonReady = T + 1e9; room.pBurn.clear(); z.x = 1500; z.y = 1200; p.x = 1800; p.y = 1200; q.x = 1200; q.y = 1200; p.hp = q.hp = 500; m.wheelReady = 0;
+  think(.05); const wh = room.pyreFx.wheel; ok(z.act === "wheel" && wh && Math.abs(room.wheelAngle(wh, T) + Math.PI / 2) < .01, "Wheel of Flame: planted where he stands, first line at 12 o'clock");
+  ok(Math.abs((wh.until - wh.fireAt) / 1000 - 60) < .01, "it burns for 60s");
+  const a1 = room.wheelAngle(wh, T + 1000); ok(a1 > -Math.PI / 2, "it turns clockwise (screen angle grows)");
+  m.swingReady = m.walkReady = T + 1e9; const stand = { sessionId: "S", alive: true, x: wh.x + 300, y: wh.y - 16 }; ok(room.onWheel(wh, stand, T) && room.onWheel(wh, { ...stand, x: wh.x + 300, y: wh.y - 316 }, T) === false, "a line at 3 o'clock touches someone east of the centre, not north-east");
+  // a survivor riding just behind a line at 300px (walking clockwise at its speed) stays clear for 20s; one standing still gets hit
+  z.x = 3000; z.y = 300; const hp0 = p.hp; let hitWalker = 0, hitStill = 0;
+  for (let i = 0; i < 400; i++) { T += 50; const ang = room.wheelAngle(wh, T) - .3; p.x = wh.x + Math.cos(ang) * 300; p.y = wh.y + Math.sin(ang) * 300 - 16; q.x = wh.x - 250; q.y = wh.y - 16;
+    Date.now = () => T; try { room.pyreHazards(z, T); } finally { Date.now = real; } if (p.hp < hp0) hitWalker++; }
+  ok(hitWalker === 0 && q.hp < 500, `walk clockwise with it and you're safe (${Math.round(500 - q.hp)} dmg to the one standing still)`);
+  ok(Math.abs(2 * Math.PI * 300 / 18 - 105) < 1, "at 300px a line moves ~105px/s: easy to keep pace");
+  T = wh.until + 50; Date.now = () => T; try { room.pyreHazards(z, T); } finally { Date.now = real; } ok(!room.pyreFx.wheel, "gone after 60s");
+  m.wheelReady = 0; z.act = ""; z.x = 1500; z.y = 1200; think(.05); ok(room.pyreFx.wheel, "cast again"); room.killZombie(z, p); ok(!room.pyreFx.wheel, "it dies with him");
+  room.state.zombies.set(z.id, z); z.hp = z.maxHp * .3; z.act = ""; z.enraged = false; think(.05); ok(z.enraged, "enraged below 35%");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

@@ -51,6 +51,9 @@ const isHiveWave = stage => stage % 4 === 2;
 //   FIREWALK       every 16s, for 8s: every step leaves a burning patch (6s; 9s enraged); standing in it sets you on fire.
 //   SERMON OF ASH  every 15s: kneels for 2.6s; 5 glowing circles land on / around the survivors and erupt into fire pillars
 //                  1s later. While he kneels, hits from BEHIND him do double damage.
+//   WHEEL OF FLAME every 75s (first at 12s): he plants a burning cross where he stands - 4 lines of fire (12, 3, 6 and 9 o'clock,
+//                  620px long) that turn CLOCKWISE for 60s (a full turn every 18s, 2s warning first). Walk clockwise with them to stay clear;
+//                  touching a line hurts and sets you on fire. The centre stays put while he keeps hunting; it dies with him.
 //   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
 //   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
 const PYRE = {
@@ -58,6 +61,7 @@ const PYRE = {
   swing:  { trigger: 200, windup: .7, hit: .95, total: 1.6, r: 200, flat: .6, mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
   walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
   sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 5, r: 72, mult: 1.2, back: 2 },
+  wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 20, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
   burn:   { len: 3, dps: .25 },   // fraction of his damage per second
 };
 const PATH_CELL = 40;   // boss path-finding grid
@@ -383,7 +387,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set();
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [] }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -691,7 +695,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -762,6 +766,7 @@ export class SurvivalRoom extends Room {
 
   onJoin(client, options = {}) {
     if (this.state.players.size >= 8) throw new Error("This room is full (8/8).");
+    if (this.pyreFx?.wheel && client.send) setTimeout(() => { try { if (this.pyreFx.wheel) client.send("pyre", this.wheelMsg(Date.now())); } catch {} }, 1500);   // joined mid-wheel: show it
     const p = new PlayerState();
     p.sessionId = client.sessionId;
     p.name = cleanName(options.name) || `Survivor ${this.state.players.size + 1}`;
@@ -2270,7 +2275,7 @@ export class SurvivalRoom extends Room {
   // ---------- THE PYRE PRIEST ----------
   pmem(z, now) {
     let m = this.bossMem.get(z.id);
-    if (!m) { m = { swingReady: now + 1500, walkReady: now + PYRE.walk.first * 1000, walkUntil: 0, sermonReady: now + PYRE.sermon.first * 1000, lastDrop: null }; this.bossMem.set(z.id, m); }
+    if (!m) { m = { swingReady: now + 1500, walkReady: now + PYRE.walk.first * 1000, walkUntil: 0, sermonReady: now + PYRE.sermon.first * 1000, wheelReady: now + PYRE.wheel.first * 1000, lastDrop: null }; this.bossMem.set(z.id, m); }
     return m;
   }
   pyreTargets() { return [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0)); }
@@ -2285,6 +2290,7 @@ export class SurvivalRoom extends Room {
     const P = PYRE, m = this.pmem(z, now), cdk = z.enraged ? P.enrageCd : 1;
     if (!z.enraged && z.hp / z.maxHp < P.enrageAt) {
       z.enraged = true; z.speed *= P.enrageSpeed; this.state.message = "THE PYRE PRIEST IS ENRAGED!"; this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
+      const wh = this.pyreFx.wheel; if (wh && wh.owner === z.id) { wh.a = this.wheelAngle(wh, now); wh.t0 = now; wh.w = Math.PI * 2 / P.wheel.enrageTurn; this.broadcast("pyre", this.wheelMsg(now)); }   // spins faster
     }
     // FIREWALK: a burning patch every few steps while it lasts
     if (now < m.walkUntil) {
@@ -2325,13 +2331,36 @@ export class SurvivalRoom extends Room {
     if (can.length) {
       if (now >= m.walkReady) { m.walkReady = now + P.walk.every * cdk * 1000; m.walkUntil = now + P.walk.life * 1000; m.lastDrop = null; this.broadcast("pyre", { k: "firewalk", id: z.id, life: P.walk.life }); }
       if (d < P.swing.trigger + z.radius && now >= m.swingReady) { m.swingReady = now + P.swing.cd * cdk * 1000; this.startAct(z, "swing", P.swing.total, a); this.broadcast("pyre", { k: "swing", id: z.id, x: Math.round(z.x), y: Math.round(z.y), r: P.swing.r, wind: P.swing.windup }); return; }
+      if (now >= m.wheelReady && !this.pyreFx.wheel && d < 900) { m.wheelReady = now + (P.wheel.life + P.wheel.gap * cdk) * 1000; this.startAct(z, "wheel", P.wheel.cast, a); this.plantWheel(z, now); return; }
       if (now >= m.sermonReady && d < 900) { m.sermonReady = now + P.sermon.cd * cdk * 1000; this.startAct(z, "sermon", P.sermon.total, a); return; }
     }
     if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
     this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it
   }
-  pyreHazards(z, now) {   // pillars erupt after their warning; standing in a fire patch keeps you burning
-    const P = PYRE, F = this.pyreFx;
+  // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)
+  wheelAngle(wh, now) { return wh.a + wh.w * (now - wh.t0) / 1000; }
+  wheelMsg(now) { const wh = this.pyreFx.wheel, W = PYRE.wheel; return { k: "wheel", id: wh.owner, x: Math.round(wh.x), y: Math.round(wh.y), a: +this.wheelAngle(wh, now).toFixed(4), w: +wh.w.toFixed(4), warn: Math.max(0, (wh.fireAt - now) / 1000), life: (wh.until - now) / 1000, len: W.len, hw: W.hw }; }
+  plantWheel(z, now) {
+    const W = PYRE.wheel; this.pyreFx.wheel = { owner: z.id, x: z.x, y: z.y + z.radius * .8, a: -Math.PI / 2, t0: now, w: Math.PI * 2 / (z.enraged ? W.enrageTurn : W.turn), fireAt: now + W.warn * 1000, until: now + (W.warn + W.life) * 1000, hit: new Map() };
+    this.broadcast("pyre", this.wheelMsg(now)); this.state.message = "WHEEL OF FLAME - walk clockwise!";
+  }
+  onWheel(wh, p, now) {   // is this survivor's feet on one of the 4 lines?
+    const dx = p.x - wh.x, dy = p.y + 16 - wh.y, a = this.wheelAngle(wh, now);
+    for (let k = 0; k < 4; k++) {
+      const c = Math.cos(a + k * Math.PI / 2), s = Math.sin(a + k * Math.PI / 2), along = dx * c + dy * s;
+      if (along > -BODY_R && along < PYRE.wheel.len && Math.abs(dy * c - dx * s) < PYRE.wheel.hw + BODY_R * .6) return true;
+    }
+    return false;
+  }
+  pyreHazards(z, now) {   // pillars erupt after their warning; standing in a fire patch keeps you burning; the wheel's lines burn
+    const P = PYRE, F = this.pyreFx, wh = F.wheel;
+    if (wh && wh.owner === z.id) {
+      if (now >= wh.until) F.wheel = null;
+      else if (now >= wh.fireAt) for (const p of this.state.players.values()) {
+        if (!p.alive || now < (wh.hit.get(p.sessionId) || 0) || !this.onWheel(wh, p, now)) continue;
+        if (this.pyreHit(p, z, P.wheel.mult)) wh.hit.set(p.sessionId, now + P.wheel.every * 1000);
+      }
+    }
     if (F.pillars.length) F.pillars = F.pillars.filter(h => {
       if (h.owner !== z.id || now < h.at) return true;
       for (const p of this.state.players.values()) if (Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .7) < P.sermon.r + BODY_R) this.pyreHit(p, z, P.sermon.mult);
@@ -2819,6 +2848,7 @@ export class SurvivalRoom extends Room {
 
   killZombie(z, killer) {
     this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id);
+    if (this.pyreFx.wheel?.owner === z.id) this.pyreFx.wheel = null;   // the Wheel of Flame dies with him
     this.broadcast("zdead", { id: z.id, x: Math.round(z.x), y: Math.round(z.y), k: z.kind });
     if (z.kind === "hivemind") {   // mini boss down: everyone gets paid, gold spills out
       this.hiveMem.delete(z.id);
