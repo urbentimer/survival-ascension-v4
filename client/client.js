@@ -197,7 +197,8 @@ $("ultNow").onclick = () => { room?.send("debugUlt"); closePanels(); };
 $("levelPlus").onclick = () => room?.send("debugLevel");   // test: XP for one more level (the level-up menu then opens as usual)
 $("bossKill").onclick = () => { room?.send("debugBossHp", { kill: true }); closePanels(); };
 $("exploreToggle").onclick = () => room?.send("explore", { on: !state?.explore });
-$("skipButcher").onclick = () => { room?.send("debugBoss"); closePanels(); };
+$("skipButcher").onclick = () => { room?.send("debugBoss", { wave: 4 }); closePanels(); };
+$("skipPyre").onclick = () => { room?.send("debugBoss", { wave: 8 }); closePanels(); };
 $("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
@@ -221,6 +222,7 @@ function renderState() {
   $("waveJump").classList.toggle("hidden", !(SOLO_PREVIEW || state.hostId === myId) || state.phase === "lobby");   // the host can skip to any wave
   for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
+  $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`;
   if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
   $("exploreToggle").textContent = state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves";

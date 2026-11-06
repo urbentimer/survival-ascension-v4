@@ -504,9 +504,10 @@ export class SurvivalRoom extends Room {
       this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
     });
     // Skip the horde and go straight to the Butcher intro. Solo preview, or the host in an online room.
-    this.onMessage("debugBoss", client => {
+    this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
-      if (this.state.waveType !== "boss" || this.state.phase !== "playing") this.jumpToWave(4);   // on a boss wave: that wave's boss
+      const w = Math.round(Number(data?.wave)), want = w >= 4 && w <= 48 && w % 4 === 0 ? w : 0;
+      if (this.state.waveType !== "boss" || this.state.phase !== "playing" || (want && this.state.stage !== want)) this.jumpToWave(want || 4);
       else if (["intro", "fight"].includes(this.state.bossPhase)) return;   // already there
       if (!this.solo) this.state.message = "Host skipped to the boss fight";
       this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;

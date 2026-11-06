@@ -228,3 +228,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
   - Broadcast "pyre" {k: ignite|patch|firewalk|swing|sermon}; state this.pyreFx / this.pBurn reset each wave; debug spawn button "Pyre Priest".
 - Client: pyreAura (scorched dark pool + smoky halo + heat ring behind, embers + smoke in front), drawPyre (distance-based cross-faded walk, telegraph ring, 360° spin, sermon, red enrage glow), drawPyreGround/Fx/Burning, pyreLights (night), drawPyreDread (orange heat haze at the screen edges when he's within 420px of you).
 - Test 53 (Pyre Priest). Cache v=20261106j.
+
+- Nov 6: "Skip to Pyre Priest fight (host)" button in the Esc menu (host online + preview). Server `debugBoss` now takes {wave} (4..48, multiple of 4). Cache v=20261106k.
