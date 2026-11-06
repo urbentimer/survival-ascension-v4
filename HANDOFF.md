@@ -236,3 +236,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 6: Wheel of Flame now FOLLOWS him (centre = his feet every tick on the server; client centres it on his smoothed position). Cache v=20261106m.
 
 - Nov 6: survivors no longer collide with deployables (barricade, turret, fence, Viktor heavy turret): removed from solveCollisions + client predSolve (P_SOLID gone). Vehicles (tank/mecha) are still blocked by them (SOLID). Zombies unchanged (they stop and hit barricades). Test 10 updated. Cache v=20261106n.
+
+- Nov 6: barricade + electric fence are now the same 96x43 FENCE LINE sprites (client/assets/sprites/objects/barricade-line.png, fence-line.png; made by tools/make-fenceline.py from the 1-panel originals copied to tools/art/objects/). Same footprint: server `FOOT` {barricade/fence: half 46x16, turret 16x16} + `nearFoot()`; zombies stop+hit anywhere along a barricade (pad 10x12), the fence shocks along its length (pad 26x30), vehicles are blocked by FOOT. Test 54. Cache v=20261106o.

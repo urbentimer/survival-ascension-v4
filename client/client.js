@@ -2582,9 +2582,9 @@ function drawSurvivor(p){
 }
 // ================= OBJECT ART (client/assets/sprites/objects/<name>.png) =================
 const OBJ_URLS = {
-  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade.png",
+  tower: "assets/sprites/objects/tower.png", generator: "assets/sprites/objects/generator.png", barricade: "assets/sprites/objects/barricade-line.png",
   turret: "assets/sprites/objects/turret.png", mine: "assets/sprites/objects/mine.png",
-  fence: "assets/sprites/objects/fence.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
+  fence: "assets/sprites/objects/fence-line.png", flameTrap: "assets/sprites/objects/flameTrap.png", crate: "assets/sprites/objects/crate.png",
   medkit: "assets/sprites/objects/medkit.png", ammo: "assets/sprites/objects/ammo.png", weaponCase: "assets/sprites/objects/weaponCase.png",
 };
 const objImgs = {};
@@ -2624,7 +2624,7 @@ function drawLoot(item) {
   if (item.kind === "gold" && drawIcon("gold", item.x, item.y + bob - 6, 36)) return;
   px(item.x - 6, item.y - 4 + bob, 12, 8, "#e5c66a"); px(item.x - 6, item.y - 4 + bob, 12, 2, "#fff0a8"); px(item.x - 6, item.y + 3 + bob, 12, 1, "#8a6a1e");
 }
-const STRUCT_BASE = { barricade: 20, turret: 16, fence: 18, mine: 8, flameTrap: 14 };
+const STRUCT_BASE = { barricade: 20, turret: 16, fence: 20, mine: 8, flameTrap: 14 };   // barricade + fence: 96px fence lines, same size (tools/make-fenceline.py)
 function drawStructure(st) {
   if (st.kind === "heavyTurret") return drawHeavyTurret(st);
   if (st.kind === "demoCharge") return drawDemoCrate(st);

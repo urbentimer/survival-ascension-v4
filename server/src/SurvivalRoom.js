@@ -269,7 +269,10 @@ function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.k
 const AXE_HEAVY = { charge: 1.0, dmgMult: 2.5, range: 100, arc: 1.7, knockback: 36, moveMult: 0.6 };
 const MAX_MEDKITS = 3;
 // Things players and bots can't walk through (half-width of their square). Mines and flame traps are floor traps.
-const SOLID = { barricade: 20, turret: 16, fence: 18 };   // deployables that block vehicles (survivors walk through every deployable: Nov 6)
+// Deployable footprints [half width, half height] (centre = where it was placed). Barricade + fence are 96px-wide FENCE LINES (Nov 6).
+// They block vehicles only; survivors walk through every deployable.
+const FOOT = { barricade: [46, 16], fence: [46, 16], turret: [16, 16] };
+const nearFoot = (st, z, px, py) => Math.abs(z.x - st.x) < FOOT[st.kind][0] + px && Math.abs(z.y - st.y) < FOOT[st.kind][1] + py;   // z within (px, py) of the footprint
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
@@ -1497,7 +1500,7 @@ export class SurvivalRoom extends Room {
     const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }];
     {   // tank and mecha
       boxes.push({ x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
-      for (const st of this.state.structures.values()) if (SOLID[st.kind]) boxes.push({ x: st.x, y: st.y, hw: SOLID[st.kind], hh: SOLID[st.kind] });
+      for (const st of this.state.structures.values()) if (FOOT[st.kind]) boxes.push({ x: st.x, y: st.y, hw: FOOT[st.kind][0], hh: FOOT[st.kind][1] });
       for (const st of this.state.structures.values()) if (st.kind === "heavyTurret") boxes.push({ x: st.x, y: st.y - 4, hw: 20, hh: 12 });
     }
     for (const b of this.mapBoxesNear(p.x, p.y)) boxes.push(b);
@@ -3029,7 +3032,7 @@ export class SurvivalRoom extends Room {
         if(target && distance(st,target)<260){target.hp-=18*dt;if(target.hp<=0)this.killZombie(target,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null);}
       }
       if (st.kind === "fence" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
-        for(const z of [...this.state.zombies.values()]) if(distance(st,z)<48) { z.hp-=12*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
+        for(const z of [...this.state.zombies.values()]) if(nearFoot(st, z, 26, 30)) { z.hp-=12*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
       }
       if (st.kind === "flameTrap" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
         for(const z of [...this.state.zombies.values()]) if(distance(st,z)<65) { z.hp-=20*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
@@ -3092,7 +3095,7 @@ export class SurvivalRoom extends Room {
         if (z.attackCooldown <= 0) { this.hitSafe(wall, z); z.attackCooldown = z.boss ? 0.8 : 1.0; }
         continue;
       }
-      const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&distance(st,z)<30);
+      const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&nearFoot(st, z, 10, 12));   // touching the fence line anywhere along it
       if (barricade) {
         z.attackCooldown = Math.max(0, z.attackCooldown - dt);
         if(z.attackCooldown<=0){barricade.hp-=z.damage;z.attackCooldown=1;if(barricade.hp<=0)this.state.structures.delete(barricade.id);}

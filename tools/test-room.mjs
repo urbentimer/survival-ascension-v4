@@ -1123,4 +1123,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   m.wheelReady = 0; z.act = ""; z.x = 1500; z.y = 1200; think(.05); ok(room.pyreFx.wheel, "cast again"); room.killZombie(z, p); ok(!room.pyreFx.wheel, "it dies with him");
   room.state.zombies.set(z.id, z); z.hp = z.maxHp * .3; z.act = ""; z.enraged = false; think(.05); ok(z.enraged, "enraged below 35%");
   room._dispose(); }
+// 54. barricade + electric fence are 96px-wide fence lines with the same footprint: zombies stop anywhere along a barricade, the fence shocks along its length
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map();
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999;
+  p.x = 1000; p.y = 1000; send(A, "build", { kind: "barricade", x: 1000, y: 1100 }); send(A, "build", { kind: "fence", x: 1000, y: 1300 });
+  const [bar, fen] = [...room.state.structures.values()].slice(-2);
+  room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); z.x = bar.x + 40; z.y = bar.y + 20; z.speed = 0;   // near the barricade's right end
+  const h0 = bar.hp; for (let i = 0; i < 30; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(bar.hp < h0, `a zombie at the end of the barricade line hits it (${h0} -> ${Math.round(bar.hp)})`);
+  z.x = fen.x - 60; z.y = fen.y; z.hp = 500; room.state.generatorFuel = 100; for (let i = 0; i < 10; i++) { room.lastTick = Date.now() - 50; room.tick(); }
+  ok(z.hp < 500, `the fence shocks a zombie 60px along it (${Math.round(500 - z.hp)} dmg)`);
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
