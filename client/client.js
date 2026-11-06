@@ -653,14 +653,15 @@ function shotSound(m) {
   const name = m.w === "shotgun" ? "shotgun" : m.w === "pistol" ? "pistol" : "rifle";
   playSfx(name, m.x, m.y, m.id === myId ? 1 : state?.players?.has(m.id) ? .6 : .45);
 }
-let scoreboardOpen = false, firing = false, wheel = null, lastWheelScroll = 0;
+let scoreboardOpen = false, firing = false, wheel = null, placing = null, lastWheelScroll = 0;   // placing: { id } a picked deployable following the mouse
 const me_ = () => state?.players.get(myId);
 function selectSlot(n, cycle = true) { if (room && inMatch()) room.send("slot", { n, cycle }); }
 
-// mouse: left = use, right (hold) = build wheel, wheel = cycle slots
+// mouse: left = use, right (hold) = build wheel, wheel = cycle slots. After picking a deployable: left = place it, right = cancel
 canvas.addEventListener("mousedown", e => {
   if (!inMatch()) return;
   if (e.button === 0 && me_() && !me_().alive) { switchSpectate(1); return; }
+  if (placing && (e.button === 0 || e.button === 2)) { e.preventDefault(); firing = false; if (e.button === 0) placeIt(); else placing = null; return; }
   if (e.button === 0) {
     e.preventDefault(); if (wheel) return;
     if (squadWheel) return;
@@ -672,7 +673,7 @@ canvas.addEventListener("mousedown", e => {
   }
   if (e.button === 2 && state.vehicles?.get(myId)) { e.preventDefault(); const v = state.vehicles.get(myId), me = me_();   // in a vehicle: no build wheel; the mecha swings its saber
     if (v.kind === "mecha" && v.phase === "ride" && me && !anyPanelOpen()) room.send("mechaSlash", { a: aimAngle(me) }); return; }
-  if (e.button === 2) { e.preventDefault(); firing = false; wheel = { x: mouse.x, y: mouse.y, cx: Math.max(WHEEL_R + 30, Math.min(W - WHEEL_R - 30, mouse.sx)), cy: Math.max(WHEEL_R + 30, Math.min(H - WHEEL_R - 30, mouse.sy)), pick: -1 }; }
+  if (e.button === 2) { e.preventDefault(); firing = false; placing = null; wheel = { x: mouse.x, y: mouse.y, cx: Math.max(WHEEL_R + 30, Math.min(W - WHEEL_R - 30, mouse.sx)), cy: Math.max(WHEEL_R + 30, Math.min(H - WHEEL_R - 30, mouse.sy)), pick: -1 }; }
 });
 window.addEventListener("mouseup", e => {
   if (e.button === 0) { firing = false; releaseAxe(); }
@@ -701,6 +702,7 @@ window.addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   if (!inMatch()) return;
   if (k === "enter" && state?.bossPhase === "intro" && !introAcked) { e.preventDefault(); ackBoss(); return; }
+  if (k === "escape" && placing) { e.preventDefault(); placing = null; return; }   // stop placing a deployable
   if (k === "escape") { e.preventDefault(); if (anyPanelOpen()) closePanels(); else { togglePanel("menu"); playSfx("pause"); } return; }
   if (k === "tab") { e.preventDefault(); scoreboardOpen = !scoreboardOpen; return; }
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
@@ -751,30 +753,59 @@ function wheelPick() {
   return ((Math.round((Math.atan2(dy, dx) + Math.PI / 2) / step) % BUILD_WHEEL.length) + BUILD_WHEEL.length) % BUILD_WHEEL.length;
 }
 function canAfford(cost) { return Object.entries(cost).every(([r, n]) => (state?.[r] || 0) >= n); }
-function buildSpot(me) {
-  const dx = wheel.x - me.x, dy = wheel.y - me.y, d = Math.hypot(dx, dy);
-  return d <= BUILD_RANGE ? { x: wheel.x, y: wheel.y } : { x: me.x + dx / d * BUILD_RANGE, y: me.y + dy / d * BUILD_RANGE };
+function buildSpot(me) {   // the mouse, kept within BUILD_RANGE of you (the server clamps the same way)
+  const dx = mouse.x - me.x, dy = mouse.y - me.y, d = Math.hypot(dx, dy);
+  return d <= BUILD_RANGE ? { x: mouse.x, y: mouse.y } : { x: me.x + dx / d * BUILD_RANGE, y: me.y + dy / d * BUILD_RANGE };
 }
-function resolveWheel() {
+const spotFace = (me, spot) => Math.hypot(spot.x - me.x, spot.y - me.y) > 20 ? Math.atan2(spot.y - me.y, spot.x - me.x) : me.aim || 0;   // lines go across this
+function resolveWheel() {   // let go of right-click: actions happen now; a deployable follows the mouse until you left-click (placeIt)
   const me = me_(); const opt = BUILD_WHEEL[wheel.pick];
-  if (!me || !opt || !room || !canAfford(opt.cost)) return;
+  if (!me || !opt || !room) return;
+  if (!canAfford(opt.cost)) { feed.unshift({ text: `Not enough resources for ${opt.name}`, t: Date.now() }); feed.length = Math.min(feed.length, 5); return; }
   if (opt.id === "repairTower") room.send("repairTower", { amount: 250 });
   else if (opt.id === "repairGen") room.send("repairGenerator");
   else if (opt.id === "refuelGen") room.send("refuelGenerator");
-  else { const spot = buildSpot(me); room.send("build", { kind: opt.id, x: Math.round(spot.x), y: Math.round(spot.y) }); }
+  else placing = { id: opt.id };
+}
+function placeProblem(me, spot, opt) {   // why it can't go here (the same checks as the server), or ""
+  if (!canAfford(opt.cost)) return "not enough resources";
+  if (state.structures.size >= 20) return "20 deployables max";
+  const grid = predGrid(), gx = Math.floor(spot.x / 160), gy = Math.floor(spot.y / 160);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (Math.abs(spot.x - b.x) < b.hw + 12 && Math.abs(spot.y - b.y) < b.hh + 12) return "blocked";
+  return "";
+}
+function placeIt() {
+  const me = V(me_()), opt = BUILD_WHEEL.find(o => o.id === placing?.id); if (!me || !opt || !room) { placing = null; return; }
+  const spot = buildSpot(me), why = placeProblem(me, spot, opt);
+  if (why) { feed.unshift({ text: `Can't place the ${opt.name.toLowerCase()} here: ${why}`, t: Date.now() }); feed.length = Math.min(feed.length, 5); return; }
+  room.send("build", { kind: opt.id, x: Math.round(spot.x), y: Math.round(spot.y), face: +spotFace(me, spot).toFixed(3) }); placing = null;
+}
+const PLACE_RANGE = { turret: 260, mine: 42, flameTrap: 65 };   // what it reaches (the server's numbers)
+function drawPlacement(me) {   // a picked deployable follows the mouse: see-through, turned the way it'll be built, green = OK / red = can't
+  const opt = BUILD_WHEEL.find(o => o.id === placing.id), spot = buildSpot(me), face = spotFace(me, spot), bad = placeProblem(me, spot, opt), col = bad ? "255,90,80" : "120,255,150", t = performance.now();
+  ctx.save(); ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
+  ctx.strokeStyle = "rgba(242,139,54,.4)"; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(me.x, me.y, BUILD_RANGE, 0, 7); ctx.stroke();
+  if (PLACE_RANGE[opt.id]) { ctx.strokeStyle = `rgba(${col},.45)`; ctx.beginPath(); ctx.arc(spot.x, spot.y, PLACE_RANGE[opt.id], 0, 7); ctx.stroke(); }
+  ctx.setLineDash([]); ctx.fillStyle = `rgba(${col},${.16 + .06 * Math.sin(t / 150)})`; ctx.strokeStyle = `rgba(${col},.85)`; ctx.lineWidth = 2;
+  if (opt.id === "barricade" || opt.id === "fence") {   // its footprint: a strip along the line (server lineOf)
+    const k = ((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8, L = [38, 40, 46, 40][k % 4]; ctx.save(); ctx.translate(spot.x, spot.y); ctx.rotate(k * Math.PI / 4 + Math.PI / 2);
+    ctx.beginPath(); ctx.roundRect(-L, -16, L * 2, 32, 8); ctx.fill(); ctx.stroke(); ctx.restore();
+  } else { ctx.beginPath(); ctx.ellipse(spot.x, spot.y + 6, 22, 12, 0, 0, 7); ctx.fill(); ctx.stroke(); }
+  const [img, feet] = structSprite(opt.id, face);
+  drawObj(img, spot.x, spot.y + feet, { alpha: .72, filter: bad ? "sepia(1) saturate(4) hue-rotate(-40deg) brightness(.8)" : undefined });
+  ctx.font = "bold 12px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "#000c";
+  const line1 = bad ? `Can't place: ${bad}` : `${opt.name}: left-click to place`, line2 = "right-click / Esc to cancel";
+  ctx.fillStyle = bad ? "#ff8a7a" : "#bfffcf"; ctx.strokeText(line1, spot.x, spot.y - 62); ctx.fillText(line1, spot.x, spot.y - 62);
+  ctx.fillStyle = "#c3ccc9"; ctx.font = "11px Inter, system-ui, sans-serif"; ctx.strokeText(line2, spot.x, spot.y - 48); ctx.fillText(line2, spot.x, spot.y - 48);
+  ctx.restore();
 }
 function drawBuildWheel() {
-  const me = V(me_()); if (!wheel || !me) return;
-  const spot = buildSpot(me), R = WHEEL_R, step = Math.PI * 2 / BUILD_WHEEL.length;
+  const meS = me_(), me = V(meS);
+  if (placing && (!meS?.alive || state.vehicles?.get(myId) || state.phase !== "playing" && state.phase !== "cleared")) placing = null;   // died / got in a vehicle / match over
+  if (placing && me && !wheel) drawPlacement(me);
+  if (!wheel || !me) return;
+  const R = WHEEL_R, step = Math.PI * 2 / BUILD_WHEEL.length;
   ctx.save();
-  // range ring + placement ghost (in the world, under the camera)
-  ctx.save(); ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
-  ctx.strokeStyle = "rgba(242,139,54,.35)"; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(me.x, me.y, BUILD_RANGE, 0, 7); ctx.stroke(); ctx.setLineDash([]);
-  const opt = BUILD_WHEEL[wheel.pick];
-  const [gImg, gFeet] = opt ? structSprite(opt.id, Math.hypot(spot.x - me.x, spot.y - me.y) > 20 ? Math.atan2(spot.y - me.y, spot.x - me.x) : me.aim || 0) : [];   // the ghost turns like the real one
-  if (!opt || !opt.action) { if (!(opt && drawObj(gImg, spot.x, spot.y + gFeet, { alpha: .6 }))) { ctx.fillStyle = "rgba(242,139,54,.25)"; ctx.strokeStyle = "#f28b36"; ctx.lineWidth = 2; ctx.fillRect(spot.x - 14, spot.y - 14, 28, 28); ctx.strokeRect(spot.x - 14, spot.y - 14, 28, 28); } }
-  ctx.restore();
   // wheel
   ctx.fillStyle = "rgba(8,12,14,.82)"; ctx.beginPath(); ctx.arc(wheel.cx, wheel.cy, R + 14, 0, 7); ctx.fill();
   BUILD_WHEEL.forEach((o, i) => {
@@ -797,7 +828,7 @@ function drawBuildWheel() {
     ctx.globalAlpha = 1;
   });
   ctx.fillStyle = "#c3ccc9"; ctx.font = "bold 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center";
-  ctx.fillText(wheel.pick < 0 ? "release to cancel" : "release to " + (BUILD_WHEEL[wheel.pick].action ? "use" : "build"), wheel.cx, wheel.cy + 4);
+  ctx.fillText(wheel.pick < 0 ? "release to cancel" : "release to " + (BUILD_WHEEL[wheel.pick].action ? "use" : "pick"), wheel.cx, wheel.cy + 4);
   ctx.restore();
 }
 

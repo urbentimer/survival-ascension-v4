@@ -630,7 +630,7 @@ export class SurvivalRoom extends Room {
       if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
       st.x = clamp(bx, 30, this.A.width-30); st.y = clamp(by, 30, this.A.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
-      if (LINES[kind]) st.aim = snapFace(bd > 20 ? Math.atan2(by - p.y, bx - p.x) : (p.aim || 0), LINES[kind]);   // the line goes across the way you face
+      if (LINES[kind]) st.aim = snapFace(Number.isFinite(Number(data?.face)) ? Number(data.face) : bd > 20 ? Math.atan2(by - p.y, bx - p.x) : (p.aim || 0), LINES[kind]);   // across the way you face (face: what the client's preview showed)
       this.state.structures.set(st.id, st); p.structuresBuilt++;
       this.state.message = `${p.name} built a ${kind}.`;
     });
