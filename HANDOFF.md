@@ -261,4 +261,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 - Nov 8: Wheel of Flame fire upgraded (option 1 "layer it"): the ChatGPT line strip (now its 8 frames cross-faded, alpha .85) + the Vefects fire-loop flames (drawFireSprite, same as the map fires / Sofea-quality) along each line: dense uneven spacing 17-24px, sizes .4-.66, jitter, breathing. Cache v=20261108f.
 
-- Nov 8: Pyre Priest: no translucent hit-zone shapes. Removed: Censer Swing red ring (tell = his wind-up anim), the gold BACK wedge (label kept), the aura dashed heat ring, the Wheel warning red strips + dashed lines (now a thin glowing crack per line). Sermon pillar warning = the pillar art's first frames (a growing glowing crack) instead of circles. PY.swingR/back removed. Intro card text updated. Cache v=20261108g.
+- Nov 8: the "remove translucent hit-zone shapes" change was REVERTED at the user's request (swing ring, gold BACK wedge, aura heat ring, pillar warning circles, wheel warning strips are back). Cache v=20261108h.
