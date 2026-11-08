@@ -269,6 +269,7 @@ const DANTE = {
     flat: 0.62, bossMult: 0.5, push: 22 },
 };
 function danteLoadout(p) { p.owned = "launcher,pistol"; p.primary = "launcher"; p.secondary = "pistol"; p.weapon = "launcher"; p.activeSlot = 2; }
+function sofeaLoadout(p) { p.owned = "smg,pistol"; p.primary = ""; p.secondary = "smg"; p.weapon = "smg"; p.activeSlot = 3; }   // Nov 9: SMG instead of the rifle (the shop still sells primaries)
 function ravenLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "katana"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
 function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.katanaKills = 0; p.katanaTier = 0; }
 // Fire axe heavy swing: hold the mouse 1 second, release -> wide, hard swing that hits everything in front and knocks zombies back.
@@ -422,6 +423,7 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) if (p.characterClass === "scout") { ravenLoadout(p); ravenReset(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "slasher") { arshanLoadout(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "operator") { sofeaLoadout(p); this.mags.delete(p.sessionId + ":smg"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
       this.state.elapsed = 0;

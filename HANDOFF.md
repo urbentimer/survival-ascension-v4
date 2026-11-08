@@ -270,3 +270,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 9: SHOTGUN visuals: shots with w "shotgun" become fx type "shotgun" -> drawShotgunFx: muzzle blast cone (radial-gradient fan as wide as the spread + ragged flame tongues + white flash, 120ms), 7 loose sparks in the cone, pellet spray (5 glowing streaks flying out to each pellet's end in 40-110ms, spark puff where it stopped), drifting gun-smoke puffs (650ms). Cache v=20261109b.
 
 - Nov 9: weapon balance: PISTOL 14 dmg / 4 per s / 450 range -> 11 / 3.5 / 400 (sustained ~30 dps, was ~42: it out-damaged the paid SMG for free); SMG 6 dmg / 360 range -> 8 / 380 (sustained ~47, between pistol and rifle ~54). Sim 3 bots to wave 12 OK. Cache v=20261109c.
+
+- Nov 9: SOFEA (operator) starts with the SMG instead of the rifle: sofeaLoadout (owned "smg,pistol", primary "", secondary smg, activeSlot 3), applied in "start" like Briggs/Dante. Hero card gear smg/pistol/knife. Test 54c. Cache v=20261109d.

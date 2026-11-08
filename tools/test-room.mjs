@@ -1171,6 +1171,12 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const h1 = p.hp; z.act = ""; m.strikeReady = 0; p.x = 1600; p.y = 1200; think(.05); const aim = z.aim; p.x = 1440; p.y = 1200; think(.5);   // he aimed right, you stepped behind him
   ok(Math.abs(aim) < .01 && p.hp === h1, "step behind him while he winds up: it misses");
   room._dispose(); }
+// 54c. Sofea starts with the SMG (not the rifle); 3 swaps SMG <-> pistol; 2 does nothing until she buys a primary
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "chooseClass", { id: "operator" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.weapon === "smg" && p.activeSlot === 3 && p.owned === "smg,pistol" && !p.owned.includes("rifle") && p.mag > 0, `Sofea starts with the SMG, loaded (${p.weapon}, mag ${p.mag})`);
+  send(A, "slot", { n: 2 }); ok(p.weapon === "smg", "2 (no primary) keeps the SMG");
+  send(A, "slot", { n: 3, cycle: true }); ok(p.weapon === "pistol", "3 again swaps to the pistol");
+  room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999; room.state.generatorFuel = 100; room.state.generatorHp = 500;
