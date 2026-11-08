@@ -108,7 +108,7 @@ function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
-  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: "shot", t: performance.now(), ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
+  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: performance.now(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
   room.onMessage("heal", m => { if (m.id && state?.players?.has(m.id)) regenPlay(m.id, m.k === "medkit"); else fx.push({ type: "healfx", t: performance.now(), ...m }); });   // healing effect on whoever was healed
@@ -2440,12 +2440,55 @@ function drawFeel(){
 function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;const k=(feel.hurtUntil-now)/220;
  const g=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.75);g.addColorStop(0,'rgba(200,30,30,0)');g.addColorStop(1,`rgba(200,30,30,${.45*k})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 
+// SHOTGUN (Nov 9): a muzzle blast cone (a burst of fire the width of the spread + a puff of smoke) and a pellet spray
+// (5 glowing pellets that fly out to where each stopped - its last zombie or a wall - with a spark puff there, plus loose sparks in the cone)
+function drawShotgunFx(f, age) {   // false when finished
+  if (age > 650) return false;
+  const n = f.a.length, aim = f.a[(n - 1) >> 1], mx = f.x + Math.cos(aim) * 18, my = f.y + Math.sin(aim) * 18, rnd = i => { const v = Math.sin(f.seed * 12.9898 + i * 78.233) * 43758.5453; return v - Math.floor(v); };
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  if (age < 120) {   // MUZZLE BLAST: a fan of fire as wide as the pellet spread, white-hot at the barrel
+    const k = age / 120, L = 44 + 46 * Math.min(1, age / 40), spread = (f.a[n - 1] - f.a[0]) / 2 + .22;
+    const g = ctx.createRadialGradient(mx, my, 2, mx, my, L); g.addColorStop(0, `rgba(255,250,220,${1 - k})`); g.addColorStop(.35, `rgba(255,200,90,${.85 * (1 - k)})`); g.addColorStop(1, "rgba(255,90,20,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(mx, my); ctx.arc(mx, my, L, aim - spread, aim + spread); ctx.closePath(); ctx.fill();
+    for (let j = 0; j < 5; j++) {   // ragged tongues of flame
+      const ta = aim + (rnd(j) - .5) * spread * 2, tl = L * (.7 + .5 * rnd(j + 9)), w = .07 + .05 * rnd(j + 4);
+      ctx.fillStyle = `rgba(255,${150 + 80 * rnd(j + 2)},60,${.7 * (1 - k)})`; ctx.beginPath(); ctx.moveTo(mx + Math.cos(ta - w) * 6, my + Math.sin(ta - w) * 6);
+      ctx.lineTo(mx + Math.cos(ta) * tl, my + Math.sin(ta) * tl); ctx.lineTo(mx + Math.cos(ta + w) * 6, my + Math.sin(ta + w) * 6); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = `rgba(255,255,235,${1 - k})`; ctx.beginPath(); ctx.arc(mx, my, 10 * (1 - k) + 3, 0, 7); ctx.fill();
+  }
+  for (let j = 0; j < 7; j++) {   // loose sparks thrown into the cone
+    const life = 150 + 80 * rnd(j + 20); if (age > life) continue; const k = age / life, sa = aim + (rnd(j + 30) - .5) * .7, d = 20 + (60 + 90 * rnd(j + 40)) * Math.sqrt(k);
+    const x = mx + Math.cos(sa) * d, y = my + Math.sin(sa) * d; ctx.strokeStyle = `rgba(255,${190 + 50 * rnd(j)},110,${1 - k})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - Math.cos(sa) * 6, y - Math.sin(sa) * 6); ctx.lineTo(x, y); ctx.stroke();
+  }
+  f.a.forEach((a, j) => {   // PELLET SPRAY: each pellet flies out to where it stopped, a bright streak with a fading trail, then sparks there
+    const len = f.len[j], fly = 40 + 70 * len / 390, c = Math.cos(a), s = Math.sin(a);
+    if (age < fly + 60) {
+      const p = Math.min(1, age / fly), head = 18 + (len - 18) * p, tail = Math.max(18, head - 46), fade = age < fly ? 1 : 1 - (age - fly) / 60;
+      const g = ctx.createLinearGradient(f.x + c * tail, f.y + s * tail, f.x + c * head, f.y + s * head); g.addColorStop(0, "rgba(255,150,60,0)"); g.addColorStop(1, `rgba(255,235,170,${.95 * fade})`);
+      ctx.strokeStyle = g; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(f.x + c * tail, f.y + s * tail); ctx.lineTo(f.x + c * head, f.y + s * head); ctx.stroke();
+      if (age < fly) { ctx.fillStyle = "rgba(255,250,220,.95)"; ctx.beginPath(); ctx.arc(f.x + c * head, f.y + s * head, 2.4, 0, 7); ctx.fill(); }
+    }
+    const e = age - fly; if (e < 0 || e > 200) return;   // impact: a little spark puff where it stopped
+    const k = e / 200, hx = f.x + c * len, hy = f.y + s * len;
+    ctx.fillStyle = `rgba(255,200,110,${.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(hx, hy, 3 + 7 * k, 0, 7); ctx.fill();
+    for (let q = 0; q < 4; q++) { const sa = a + Math.PI + (rnd(j * 7 + q) - .5) * 2.4, d = 4 + 14 * k; ctx.strokeStyle = `rgba(255,220,140,${1 - k})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(hx + Math.cos(sa) * d * .4, hy + Math.sin(sa) * d * .4); ctx.lineTo(hx + Math.cos(sa) * d, hy + Math.sin(sa) * d); ctx.stroke(); }
+  });
+  ctx.globalCompositeOperation = "source-over";   // a puff of gun smoke drifting off the barrel
+  for (let j = 0; j < 4; j++) {
+    const st = 30 + j * 25; if (age < st) continue; const k = Math.min(1, (age - st) / 560), d = 14 + 26 * k + 10 * j, sa = aim + (rnd(j + 50) - .5) * .5;
+    ctx.fillStyle = `rgba(150,145,140,${.22 * (1 - k)})`; ctx.beginPath(); ctx.arc(mx + Math.cos(sa) * d, my + Math.sin(sa) * d - 12 * k, 6 + 14 * k, 0, 7); ctx.fill();
+  }
+  ctx.restore(); return true;
+}
 // Bullet tracers, muzzle flashes and launcher blasts (sent by the server for every player's shots).
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
   const now=performance.now();
   drawPyreBurning();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','shotgun'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2455,6 +2498,7 @@ function drawShotFx(){
    if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='pyre'){if(!drawPyreFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='shotgun'){if(!drawShotgunFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
