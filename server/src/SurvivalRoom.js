@@ -273,7 +273,10 @@ const MAX_MEDKITS = 3;
 // (art for each, tools/extract-line8.py: facing down-right gives a "/" line, right gives a vertical one).
 // The line runs at aim + 90deg. Footprint = a strip along the line: half length L, half thickness T (L matches each sprite's length).
 // They block vehicles only; survivors walk through every deployable. Turrets: a plain 16x16 (half) box.
-const LINES = { barricade: 8, fence: 8 };   // facings each one snaps to
+const LINES = { barricade: 8, fence: 8 };
+// MINE (Nov 8): a zombie within `trigger` sets it off; the blast hits EVERY zombie within r: dmg at the centre down to edge at the rim,
+// pushes them back a little, doesn't go through walls. Credit (kills / XP) goes to whoever placed it.
+const MINE = { trigger: 42, r: 100, dmg: 220, edge: 110, push: 14 };   // facings each one snaps to
 const snapFace = (a, n) => { const s = Math.PI * 2 / n; let r = Math.round(a / s) * s; if (r <= -Math.PI) r += Math.PI * 2; if (r > Math.PI) r -= Math.PI * 2; return r; };
 const LINE_L = [38, 40, 46, 40];   // half length by facing (k % 4): right/left (vertical line), "/" diagonal, down/up (horizontal), backslash diagonal
 function lineOf(st) {   // { c, s: the line's direction, L, T } or null
@@ -3052,9 +3055,9 @@ export class SurvivalRoom extends Room {
       if (st.kind === "flameTrap" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
         for(const z of [...this.state.zombies.values()]) if(distance(st,z)<65) { z.hp-=20*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
       }
-      if (st.kind === "mine" && st.hp > 0) {
-        const victim=[...this.state.zombies.values()].find(z=>distance(st,z)<42);
-        if(victim){victim.hp-=220;st.hp=0;this.state.structures.delete(st.id);if(victim.hp<=0)this.killZombie(victim,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null);}
+      if (st.kind === "mine" && st.hp > 0 && [...this.state.zombies.values()].some(z => distance(st, z) < MINE.trigger)) {   // stepped on: a blast hits everything around it
+        st.hp = 0; this.state.structures.delete(st.id);
+        this.ripples.push({ kind: "mine", owner: st.ownerId, x: st.x, y: st.y, t: Date.now(), at: 0, dmg: MINE.dmg, fall: MINE.edge, r: MINE.r, flat: 1, push: MINE.push, wallSafe: true });
       }
     }
 

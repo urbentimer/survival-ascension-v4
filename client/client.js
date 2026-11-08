@@ -141,7 +141,7 @@ function connected() {
     else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
-  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : 7, 260); });
+  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
@@ -780,7 +780,7 @@ function placeIt() {
   if (why) { feed.unshift({ text: `Can't place the ${opt.name.toLowerCase()} here: ${why}`, t: Date.now() }); feed.length = Math.min(feed.length, 5); return; }
   room.send("build", { kind: opt.id, x: Math.round(spot.x), y: Math.round(spot.y), face: +spotFace(me, spot).toFixed(3) }); placing = null;
 }
-const PLACE_RANGE = { turret: 260, mine: 42, flameTrap: 65 };   // what it reaches (the server's numbers)
+const PLACE_RANGE = { turret: 260, mine: 100, flameTrap: 65 };   // what it reaches (the server's numbers; mine: its blast)
 function drawPlacement(me) {   // a picked deployable follows the mouse: see-through, turned the way it'll be built, green = OK / red = can't
   const opt = BUILD_WHEEL.find(o => o.id === placing.id), spot = buildSpot(me), face = spotFace(me, spot), bad = placeProblem(me, spot, opt), col = bad ? "255,90,80" : "120,255,150", t = performance.now();
   ctx.save(); ctx.translate(-Math.round(cam.x), -Math.round(cam.y));

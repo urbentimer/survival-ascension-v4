@@ -1159,4 +1159,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.lastTick = Date.now() - 50; room.tick(); ok(tu.fire && Math.abs(Math.abs(tu.aim) - Math.PI) < .01, `fires and aims at the zombie on its left (aim ${tu.aim.toFixed(2)})`);
   room.state.generatorFuel = 0; room.lastTick = Date.now() - 50; room.tick(); ok(!tu.fire, "no power: stops firing");
   room._dispose(); }
+// 56. a mine's blast hits every zombie around it (more at the centre), not just the one that stepped on it
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.explosives = 999;
+  p.x = 1000; p.y = 800; send(A, "build", { kind: "mine", x: 1000, y: 900 }); const mine = [...room.state.structures.values()].pop();
+  const at = [[20, 0], [-70, 0], [0, 95], [150, 0]].map(([dx, dy]) => { room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); z.x = mine.x + dx; z.y = mine.y + dy; z.speed = 0; z.hp = z.maxHp = 5000; return z; });
+  let booms = 0; room.broadcast = ((orig) => (t, m) => { if (t === "boom" && m.k === "mine") booms++; return orig.call(room, t, m); })(room.broadcast);
+  for (let i = 0; i < 3; i++) { room.lastTick = Date.now() - 50; room.tick(); }
+  const dmg = at.map(z => Math.round(5000 - z.hp));
+  ok(!room.state.structures.has(mine.id) && booms === 1, "one zombie steps on it: it blows up once (boom broadcast for the explosion)");
+  ok(dmg[0] > 0 && dmg[1] > 0 && dmg[2] > 0 && dmg[3] === 0, `the blast hits the 3 zombies within 100px, not the one at 150px (${dmg.join(", ")})`);
+  ok(dmg[0] > dmg[1] && dmg[1] > dmg[2], "more damage nearer the centre");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
