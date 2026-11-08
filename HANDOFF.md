@@ -262,3 +262,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 8: Wheel of Flame fire upgraded (option 1 "layer it"): the ChatGPT line strip (now its 8 frames cross-faded, alpha .85) + the Vefects fire-loop flames (drawFireSprite, same as the map fires / Sofea-quality) along each line: dense uneven spacing 17-24px, sizes .4-.66, jitter, breathing. Cache v=20261108f.
 
 - Nov 8: the "remove translucent hit-zone shapes" change was REVERTED at the user's request (swing ring, gold BACK wedge, aura heat ring, pillar warning circles, wheel warning strips are back). Cache v=20261108h.
+
+- Nov 8: Pyre Priest speed 184 -> 212 (+15%; enraged 237; only Raven outruns him). NEW basic attack LAMP STRIKE (`PYRE.strike`: when within radius+95 and no big skill ready, every 1.3s: 0.3s wind-up, hit at 0.34s, 150px 120-degree arc in front, 1x dmg, small knockback, no burn). Client: act "strike" = swing sheet wind-up -> follow-through (no spin) + a fiery arc fx (k "strike") + stomp sound; intro card row added. Test 54b. Cache v=20261108i.

@@ -1082,7 +1082,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
   room.state.stage = 8; ok(room.bossKind() === "pyre", "wave 8's boss is the Pyre Priest");
   room.spawnZombie(true, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
-  ok(z.boss && z.role === "hunter" && z.speed === 184, `a boss that hunts survivors, speed ${z.speed} (230 - 20%)`);
+  ok(z.boss && z.role === "hunter" && z.speed === 212, `a boss that hunts survivors, speed ${z.speed} (184 + 15%)`);
   let T = Date.now(); const real = Date.now; const think = sec => { for (let i = 0; i < sec * 20; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); room.tickBurn(.05, T); } finally { Date.now = real; } } };
   const m = room.pmem(z, T); m.walkReady = m.sermonReady = m.wheelReady = T + 1e9;
   // hunts: walks to the nearest survivor, ignoring the tower
@@ -1152,6 +1152,18 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "build", { kind: "barricade", x: 3090, y: 1490, face: -Math.PI / 2 + .1 }); ok(Math.abs([...room.state.structures.values()].pop().aim + Math.PI / 2) < 1e-9, "the facing the client's placement preview showed wins (face, snapped)");
   room.spawnZombie(false, "walker"); const z4 = [...room.state.zombies.values()].pop(); z4.speed = 0; z4.x = df.x - 35; z4.y = df.y + 35; z4.hp = 500; room.state.generatorFuel = 100;
   for (let i = 0; i < 10; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(z4.hp < 500, "a diagonal fence shocks along its line (down-left end)");
+  room._dispose(); }
+// 54b. Pyre Priest's basic attack: Lamp Strike in front of him (not behind), between the big skills
+{ const { room, A, B, send, P } = makeRoom(); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
+  room._handlers.start(A, {}); room.spawnClock = 1e9; room.state.zombies.clear();
+  const p = P(A), q = P(B); q.x = 100; q.y = 100; let T = Date.now() + 5000, real = Date.now;
+  room.spawnZombie(false, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200; p.x = 1600; p.y = 1200; p.hp = p.maxHp = 5000; p.armorPct = 0; p.defence = 0;
+  const m = room.pmem(z, T); m.swingReady = m.walkReady = m.sermonReady = m.wheelReady = T + 1e9;
+  const think = s => { for (let i = 0; i < s / .05; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); } finally { Date.now = real; } } };
+  think(.05); ok(z.act === "strike", "up close with nothing big ready: Lamp Strike");
+  think(.5); ok(p.hp < 5000, `the lamp hits the survivor in front of him (${Math.round(5000 - p.hp)} dmg)`);
+  const h1 = p.hp; z.act = ""; m.strikeReady = 0; p.x = 1600; p.y = 1200; think(.05); const aim = z.aim; p.x = 1440; p.y = 1200; think(.5);   // he aimed right, you stepped behind him
+  ok(Math.abs(aim) < .01 && p.hp === h1, "step behind him while he winds up: it misses");
   room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;

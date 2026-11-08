@@ -45,7 +45,8 @@ const HIVE = {
 };
 const isHiveWave = stage => stage % 4 === 2;
 // THE PYRE PRIEST: boss of wave 8 (user's design + art, Nov 6). A burning cultist swinging a giant censer on a chain.
-// Hunts SURVIVORS only (never the tower, robots or turrets). Walks at 184 (Marcus 190 and Raven 225 outrun him; enraged 206).
+// Hunts SURVIVORS only (never the tower, robots or turrets). Walks at 212 (only Raven, 225, outruns him; enraged 237).
+//   LAMP STRIKE   his basic attack: up close, a quick smash with the burning lamp in front of him (a 120-degree arc, 150px), every 1.3s.
 //   CENSER SWING   someone within 200px: 0.7s wind-up (spinning red ring = the range), then a full 360 spin: damage, knockback,
 //                  sets them on fire. The dash dodge goes straight through it.
 //   FIREWALK       every 16s, for 8s: every step leaves a burning patch (6s; 9s enraged); standing in it sets you on fire.
@@ -57,11 +58,12 @@ const isHiveWave = stage => stage % 4 === 2;
 //   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
 //   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
 const PYRE = {
-  hp: 2400, speed: 184, radius: 40,   // speed: 230 until Nov 8 (-20%)
+  hp: 2400, speed: 212, radius: 40,   // speed: 230 -> 184 (-20%) -> 212 (+15%), Nov 8
   dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
   swing:  { trigger: 260, windup: .7, hit: .95, total: 1.6, r: 260, flat: .6,   // r + trigger: 200 until Nov 8 (+30%)
             mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
   walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
+  strike: { trigger: 95, windup: .3, hit: .34, total: .7, r: 150, arc: Math.PI / 3, mult: 1, push: 45, cd: 1.3 },   // basic attack; arc: half-angle in front
   sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 7, aimed: 3, spread: [110, 400], gap: 110, r: 72, mult: 1.2, back: 2 },   // n pillars: one on each of the `aimed` closest survivors, the rest at random spots around him
   wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 14, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
   burn:   { len: 3, dps: .25 },   // fraction of his damage per second
@@ -2329,6 +2331,14 @@ export class SurvivalRoom extends Room {
           const a = Math.atan2(p.y - z.y, p.x - z.x); this.moveWithCollision(p, Math.cos(a) * P.swing.push, Math.sin(a) * P.swing.push);
         }
       }
+      if (act === "strike" && at(P.strike.hit)) {   // the lamp comes down in front of him
+        for (const p of this.state.players.values()) {
+          const dx = p.x - z.x, dy = p.y - z.y; if (Math.hypot(dx, dy) > P.strike.r + BODY_R) continue;
+          const off = Math.atan2(dy, dx) - z.aim; if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > P.strike.arc) continue;
+          if (!p.alive || this.untouchable(p)) continue;
+          this.hiveHurt(p, z.damage * P.strike.mult); const a = Math.atan2(dy, dx); this.moveWithCollision(p, Math.cos(a) * P.strike.push, Math.sin(a) * P.strike.push);
+        }
+      }
       if (act === "sermon" && at(P.sermon.mark)) {
         const S = P.sermon, tg = this.pyreTargets().sort((a, b) => distance(z, a) - distance(z, b)).slice(0, S.aimed), pts = [];
         const put = (x, y) => pts.push([Math.round(clamp(x, 20, this.A.width - 20)), Math.round(clamp(y, 20, this.A.height - 20))]);
@@ -2356,6 +2366,10 @@ export class SurvivalRoom extends Room {
       if (d < P.swing.trigger + z.radius && now >= m.swingReady) { m.swingReady = now + P.swing.cd * cdk * 1000; this.startAct(z, "swing", P.swing.total, a); this.broadcast("pyre", { k: "swing", id: z.id, x: Math.round(z.x), y: Math.round(z.y), r: P.swing.r, wind: P.swing.windup }); return; }
       if (now >= m.wheelReady && !this.pyreFx.wheel && d < 900) { m.wheelReady = now + (P.wheel.life + P.wheel.gap * cdk) * 1000; this.startAct(z, "wheel", P.wheel.cast, a); this.plantWheel(z, now); return; }
       if (now >= m.sermonReady && d < 900) { m.sermonReady = now + P.sermon.cd * cdk * 1000; this.startAct(z, "sermon", P.sermon.total, a); return; }
+      if (d < P.strike.trigger + z.radius && now >= (m.strikeReady || 0)) {   // nothing big ready and you're in his face: Lamp Strike
+        m.strikeReady = now + P.strike.cd * cdk * 1000; this.startAct(z, "strike", P.strike.total, a);
+        this.broadcast("pyre", { k: "strike", id: z.id, a: Math.round(a * 100) / 100, r: P.strike.r, wind: P.strike.windup }); return;
+      }
     }
     if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
     this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it

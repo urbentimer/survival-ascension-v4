@@ -164,6 +164,7 @@ const BOSS_INFO = {
   pyre: { wave: 8, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
     lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he never stops coming.",
     skills: [
+      ["🏮", "Lamp Strike", "His basic attack: up close he smashes the burning lamp down in front of him every second or so. Get beside or behind him.", "#ffb347"],
       ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
       ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
       ["🙏", "Sermon of Ash", "He kneels and 7 glowing circles appear: under the 3 closest survivors and at random spots around him. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
@@ -951,7 +952,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-
 // Wheel of Flame art (tools/extract-wheel.py): wline = 8 rows of a long fire line (lw x lh, glowing base at y lb);
 // whub = 16 frames of the burning rune (hw x hh, its centre at (hw/2, hc)). The flames always rise UP whichever way a line points (drawPyreWheel)
 const PYW = { lw: 582, lh: 44, lb: 38, hw: 156, hh: 162, hc: 114, hubR: 70, hubScale: 1.45 };
-const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
+const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, strikeWind: .3, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
 let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
 function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
@@ -1018,6 +1019,10 @@ function drawPyre(z) {
     if (t < PY.wind) { const u = t / PY.wind * 1.99; f = Math.floor(u); f2 = f + 1; k = u - f; }
     else if (t < PY.wind + PY.spin) { f = f2 = 2; face += (t - PY.wind) / PY.spin * Math.PI * 2; }   // the 360: censer out, turning all the way round
     else { const u = Math.min(1, (t - PY.wind - PY.spin) / .3); f = 3; f2 = 0; k = u; }
+  } else if (z.act === "strike") {   // Lamp Strike (basic attack): the swing sheet's wind-up, then straight into the follow-through (no spin)
+    sheet = "swing";
+    if (t < PY.strikeWind) { const u = t / PY.strikeWind * 1.99; f = Math.floor(u); f2 = f + 1; k = u - f; }
+    else { const u = Math.min(1, (t - PY.strikeWind) / .4); f = 3; f2 = 0; k = Math.max(0, u - .5) * 2; }
   } else if (z.act === "sermon" || z.act === "wheel") {   // kneels to pray / to plant the Wheel of Flame
     sheet = "sermon"; const T = z.act === "wheel" ? PY.wheelCast : PY.sermon;
     f = t < .25 ? 0 : t < .45 ? 1 : t < T - .35 ? 2 : 3; f2 = Math.min(3, f + 1);
@@ -1038,6 +1043,7 @@ function onPyre(m) {   // "wheel" is re-sent when he enrages (spins faster): onl
   if (m.k === "patch") fx.push({ type: "pyre", k: "patch", x: m.x, y: m.y, life: m.life, t, seed: Math.random() * 8 });
   else if (m.k === "sermon") for (const [x, y] of m.pts || []) fx.push({ type: "pyre", k: "pillar", x, y, warn: m.warn, r: m.r, big: m.big, t });
   else if (m.k === "swing") fx.push({ type: "pyre", k: "ring", id: m.id, x: m.x, y: m.y, r: m.r, wind: m.wind, t });
+  else if (m.k === "strike") fx.push({ type: "pyre", k: "strike", id: m.id, a: m.a, r: m.r, wind: m.wind, t });
   else if (m.k === "firewalk") pyreWalk.set(m.id, t + m.life * 1000);
   else if (m.k === "wheel") { const fresh = !pyreWheel || pyreWheel.id !== m.id || m.warn > 1.5; pyreWheel = { ...m, t }; if (fresh) { shake(5, 300); playSfx("boom", m.x, m.y, .5); } }
   else if (m.k === "ignite") { pyreBurn.set(m.id, t + m.len * 1000); const p = state?.players?.get(m.id); if (p) fx.push({ type: "pyre", k: "ember", id: m.id, t }); }
@@ -1125,6 +1131,18 @@ function drawPyreGround() {   // burning patches, the pillars' warning circles a
 function drawPyreFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "patch") return s < f.life;   // drawn on the ground by drawPyreGround
+  if (f.k === "strike") {   // Lamp Strike: a fiery arc sweeps across the front of him as the lamp comes down
+    const e = s - f.wind; if (e > .32) return false; const zr = state?.zombies?.get(f.id); if (!zr) return false;
+    const v = V(zr) || zr, gy = v.y + zr.radius * .55, R = f.r * .85;
+    if (e < 0) return true;
+    if (!f.hit) { f.hit = true; playSfx("stomp", v.x, v.y, .55); }
+    const sweep = Math.min(1, e / .12), fade = 1 - Math.max(0, e - .12) / .2, a0 = f.a - Math.PI / 3, a1 = a0 + Math.PI * 2 / 3 * sweep;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.translate(v.x, gy - 20); ctx.scale(1, .62);
+    for (const [w, col] of [[26, `rgba(255,70,10,${.35 * fade})`], [12, `rgba(255,160,50,${.6 * fade})`], [4, `rgba(255,240,190,${.9 * fade})`]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+    }
+    ctx.restore(); return true;
+  }
   if (f.k === "pillar") {   // after the warning: a roaring pillar of fire
     const e = s - f.warn; if (e < 0) return true; if (e > .9) return false;
     if (e < .05 && !f.boomed) { f.boomed = true; shake(4, 160); playSfx("boom", f.x, f.y, .45); }
