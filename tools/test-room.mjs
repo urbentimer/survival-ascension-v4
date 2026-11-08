@@ -66,6 +66,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   const backwards = Math.round(sideBefore - side.hp) + [z1, z2, z3].reduce((s, z) => s, 0);
   console.log(`      ${w.padEnd(8)} hits along line: ${hit.join(" / ")}   ammo left ${p.ammo}`);
   if (w === "sniper") ok(hit[0] > 0 && hit[1] > 0 && hit[2] > 0, "sniper pierces through 3 zombies in a line");
+  else if (w === "shotgun") ok(hit[0] > 0 && hit[1] > 0 && hit[2] === 0, "shotgun pellets pierce 2 zombies in a line, not 3");
   else if (w === "launcher") ok(hit[0] > 0 && hit[1] > 0 && hit[2] === 0 && events.some(e => e.type === "boom"), "launcher rocket flies to the aimed spot and explodes there, hitting everything within 80px");
   else ok(hit[0] > 0 && hit[1] === 0, `${w} hits only the first zombie in the line`);
   ok(backwards === 0, `${w}: shooting the opposite way misses`);
@@ -73,6 +74,11 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p); p.owned += ",shotgun"; send(A, "weapon", { id: "shotgun" });
   const zs = [placeZombie(room, 760, 330), placeZombie(room, 780, 380), placeZombie(room, 760, 430)];
   p.lastShot = 0; send(A, "shoot", { a: 0 }); ok(zs.filter(z => z.hp < 500).length >= 2, "shotgun cone hits several zombies spread out in front");
+  { const W = room.state.zombies; W.clear(); const mk = (x, y) => { room.spawnZombie(false, "walker"); const z = [...W.values()].pop(); z.x = x; z.y = y; z.hp = z.maxHp = 5000; z.speed = 0; return z; };
+    const close = mk(p.x + 60, p.y), behind = mk(p.x + 90, p.y); p.lastShot = 0; p.mag = 6; send(A, "shoot", { a: 0 });
+    const dClose = 5000 - close.hp; ok(dClose >= p.damage * 5 - .01 && behind.hp < 5000, `point blank: all 5 pellets at full damage (${Math.round(dClose)}) and they pierce into the zombie behind`);
+    W.clear(); const far = mk(p.x + 370, p.y); p.lastShot = 0; p.mag = 6; send(A, "shoot", { a: 0 }); const dFar = 5000 - far.hp;
+    ok(dFar > 0 && dFar < p.damage * 5 * .6, `reaches 370px (was 260), about half damage per pellet out there (${Math.round(dFar)})`); }
   room._dispose(); }
 { const { room, events, A, send, P } = makeRoom(); const p = P(A); freeze(p); placeZombie(room, 700, 380); const ammo = p.ammo;
   p.lastShot = 0; send(A, "shoot", {}); p.lastShot = 0; send(A, "shoot", { a: "oops" });
