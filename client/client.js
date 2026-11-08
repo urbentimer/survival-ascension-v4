@@ -164,9 +164,9 @@ const BOSS_INFO = {
   pyre: { wave: 8, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
     lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he never stops coming.",
     skills: [
-      ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
+      ["🔥", "Censer Swing", "When you get close he winds the censer back, then spins it all the way round: damage, knockback, and you catch fire. See the wind-up? Dash through it or get out.", "#ff7a2a"],
       ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
-      ["🙏", "Sermon of Ash", "He kneels and 7 glowing circles appear: under the 3 closest survivors and at random spots around him. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
+      ["🙏", "Sermon of Ash", "He kneels and 7 glowing cracks open in the ground: under the 3 closest survivors and at random spots around him. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
       ["☸️", "Wheel of Flame", "4 lines of fire (12, 3, 6, 9 o'clock) spin CLOCKWISE around him for 60s and follow him everywhere. Walk clockwise with them to stay clear.", "#ffc04a"],
       ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the wheel spins faster, the fire lasts longer and the pillars get bigger.", "#ff3737"],
     ] },
@@ -951,7 +951,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-
 // Wheel of Flame art (tools/extract-wheel.py): wline = 8 rows of a long fire line (lw x lh, glowing base at y lb);
 // whub = 16 frames of the burning rune (hw x hh, its centre at (hw/2, hc)). The flames always rise UP whichever way a line points (drawPyreWheel)
 const PYW = { lw: 582, lh: 44, lb: 38, hw: 156, hh: 162, hc: 114, hubR: 70, hubScale: 1.45 };
-const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
+const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
 let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
 function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
@@ -977,8 +977,6 @@ function pyreAura(z, feet, now, front) {   // the scary part: smoke, heat and em
     g = ctx.createRadialGradient(z.x, gy - 40, 6, z.x, gy - 40, 95 + beat * 15);   // heat glow
     g.addColorStop(0, `rgba(255,${110 - en * 40},30,${.22 + beat * .12 + en * .1})`); g.addColorStop(1, "rgba(120,20,0,0)");
     ctx.fillStyle = g; ctx.fillRect(z.x - 120, gy - 160, 240, 200);
-    ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,${80 - en * 50},30,${.25 + beat * .3})`; ctx.setLineDash([3, 9]); ctx.lineDashOffset = -t * 30;   // flickering heat ring
-    ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + beat * 6, 26 + beat * 2, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   } else {
     for (let i = 0; i < 18 + en * 10; i++) {   // embers rising off him, dark smoke curling above
       const ph = (t * (.45 + (i % 5) * .07) + i * .173) % 1, sd = Math.sin(i * 91.7) * 4371.3, r = sd - Math.floor(sd);
@@ -998,16 +996,9 @@ function drawPyre(z) {
     ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(z.x, gy, 4, z.x, gy, 60);
     g.addColorStop(0, "rgba(255,170,40,.55)"); g.addColorStop(1, "rgba(255,60,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(z.x, gy, 60, 22, 0, 0, 7); ctx.fill(); ctx.restore();
   }
-  if (z.act === "swing" && t < PY.wind + .05) {   // telegraph: a spinning red ring = how far the censer reaches
-    const k = Math.min(1, t / PY.wind), R = PY.swingR; ctx.save();
-    ctx.fillStyle = `rgba(255,50,20,${.06 + .14 * k})`; ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * PY.flat, 0, 0, 7); ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,70,40,${.5 + .5 * k})`; ctx.setLineDash([22, 14]); ctx.lineDashOffset = -now / 6;
-    ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * PY.flat, 0, 0, 7); ctx.stroke(); ctx.restore();
-  }
-  if (z.act === "sermon") {   // kneeling: his back is the weak spot (double damage), shown as a gold wedge behind him
+  // (Nov 8: no translucent hit-zone shapes: the Censer Swing's tell is his wind-up animation)
+  if (z.act === "sermon") {   // kneeling: his back is the weak spot (double damage), a "BACK x2" label behind him
     const back = (z.aim || 0) + Math.PI, pulse = .5 + .5 * Math.sin(now / 120); ctx.save();
-    ctx.fillStyle = `rgba(255,210,80,${.1 + .1 * pulse})`; ctx.strokeStyle = `rgba(255,220,100,${.45 + .35 * pulse})`; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(z.x, gy); ctx.ellipse(z.x, gy, 150, 150 * .62, 0, back - PY.back, back + PY.back); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0b0b"; ctx.fillStyle = `rgba(255,225,110,${.7 + .3 * pulse})`;
     const lx = z.x + Math.cos(back) * 105, ly = gy + Math.sin(back) * 60; ctx.strokeText("BACK ×2", lx, ly); ctx.fillText("BACK ×2", lx, ly); ctx.restore();
   }
@@ -1053,11 +1044,10 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
   const L = W.len, hw = W.hw; ctx.save(); ctx.lineCap = "round";
   for (let i = 0; i < 4; i++) {   // the scorched track under each line
     const c = Math.cos(s.a + i * Math.PI / 2), sn = Math.sin(s.a + i * Math.PI / 2), x2 = W.x + c * L, y2 = W.y + sn * L;
-    if (s.k <= 0) {   // warning: red dashed lines, pulsing faster as it's about to light
-      const p = .5 + .5 * Math.sin(now / (60 + 120 * (1 - s.e / W.warn)));
-      ctx.strokeStyle = `rgba(255,60,30,${.12 + .1 * p})`; ctx.lineWidth = hw * 2; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.strokeStyle = `rgba(255,90,40,${.55 + .4 * p})`; ctx.lineWidth = 3; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -now / 8;
-      ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); continue;
+    if (s.k <= 0) {   // warning: a thin glowing crack along each line, pulsing faster as it's about to light
+      const p = .5 + .5 * Math.sin(now / (60 + 120 * (1 - s.e / W.warn))); ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = `rgba(255,120,40,${.35 + .45 * p})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.globalCompositeOperation = "source-over"; continue;
     }
     ctx.globalCompositeOperation = "source-over"; ctx.strokeStyle = `rgba(20,4,2,${.45 * s.k})`; ctx.lineWidth = hw * 2.2; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();   // scorched track
     ctx.globalCompositeOperation = "lighter"; const fl = .85 + .15 * Math.sin(now / 50 + i * 2);   // a glowing crack under the flames
@@ -1107,18 +1097,16 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
   const left = Math.ceil(W.warn + W.life - s.e); ctx.font = "bold 16px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0b0b"; ctx.fillStyle = "#ffd27a";
   ctx.strokeText(left + "s", W.x, W.y + 82); ctx.fillText(left + "s", W.x, W.y + 82); ctx.restore();   // under the rune
 }
-function drawPyreGround() {   // burning patches, the pillars' warning circles and the Wheel of Flame (under everyone)
+function drawPyreGround() {   // burning patches, the pillars' warning cracks and the Wheel of Flame (under everyone)
   const now = performance.now(); drawPyreWheel(now);
   for (const f of fx) {
     if (f.type !== "pyre") continue; const s = (now - f.t) / 1000;
     if (f.k === "patch" && s < f.life) {
       const a = Math.min(1, s / .3, (f.life - s) / .8); pyFx("trail", (s * 9 + f.seed) % 8, f.x, f.y + 14, .42, .82, a);
     }
-    if (f.k === "pillar" && s < f.warn) {
-      const k = s / f.warn, R = f.r; ctx.save();
-      ctx.fillStyle = `rgba(255,${120 - 70 * k},30,${.12 + .2 * k})`; ctx.strokeStyle = `rgba(255,${170 - 110 * k},40,${.6 + .4 * k})`; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(f.x, f.y, R, R * .62, 0, 0, 7); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "rgba(255,150,50,.3)"; ctx.beginPath(); ctx.ellipse(f.x, f.y, R * k, R * .62 * k, 0, 0, 7); ctx.fill(); ctx.restore();
+    if (f.k === "pillar" && s < f.warn) {   // the warning: the pillar art's first frames, a glowing crack in the ground that grows, pulsing faster
+      const k = s / f.warn, p = .7 + .3 * Math.sin(now / (110 - 70 * k));
+      pyFx(f.big ? "pillarBig" : "pillar", k * 1.6, f.x, f.y + 22, (f.big ? .8 : .7) * (.85 + .25 * k), .97, (.55 + .45 * k) * p);
     }
   }
 }
