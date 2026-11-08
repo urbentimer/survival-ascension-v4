@@ -946,7 +946,11 @@ function drawRobot(r) {
 const pyImgs = {};
 for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-walk.webp", swing: "assets/sprites/zombies/dir8/pyre-swing.webp", sermon: "assets/sprites/zombies/dir8/pyre-sermon.webp",
   death: "assets/sprites/zombies/dir8/pyre-death.webp", pillar: "assets/sprites/fx/pyre-pillar.webp", pillarBig: "assets/sprites/fx/pyre-pillar-enraged.webp",
-  trail: "assets/sprites/fx/pyre-trail.webp", ember: "assets/sprites/fx/pyre-ember.webp", ring: "assets/sprites/fx/pyre-swing.webp" })) { const im = new Image(); im.src = url; pyImgs[k] = im; }
+  trail: "assets/sprites/fx/pyre-trail.webp", ember: "assets/sprites/fx/pyre-ember.webp", ring: "assets/sprites/fx/pyre-swing.webp",
+  wline: "assets/sprites/fx/pyre-wheel-line.webp", whub: "assets/sprites/fx/pyre-wheel-hub.webp" })) { const im = new Image(); im.src = url; pyImgs[k] = im; }
+// Wheel of Flame art (tools/extract-wheel.py): wline = 8 rows of a long fire line (lw x lh, glowing base at y lb);
+// whub = 16 frames of the burning rune (hw x hh, its centre at (hw/2, hc)). The flames always rise UP whichever way a line points (drawPyreWheel)
+const PYW = { lw: 582, lh: 44, lb: 38, hw: 156, hh: 162, hc: 114, hubR: 70, hubScale: 1.45 };
 const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
 let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
@@ -1055,20 +1059,30 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
       ctx.strokeStyle = `rgba(255,90,40,${.55 + .4 * p})`; ctx.lineWidth = 3; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -now / 8;
       ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); continue;
     }
-    ctx.globalCompositeOperation = "source-over"; ctx.strokeStyle = `rgba(20,4,2,${.5 * s.k})`; ctx.lineWidth = hw * 2.6; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.globalCompositeOperation = "lighter"; const fl = .85 + .15 * Math.sin(now / 50 + i * 2);
-    for (const [w, col] of [[hw * 2, `rgba(255,70,10,${.3 * s.k * fl})`], [hw, `rgba(255,150,40,${.5 * s.k * fl})`], [4, `rgba(255,235,170,${.75 * s.k})`]]) {
-      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();
-    }
+    ctx.globalCompositeOperation = "source-over"; ctx.strokeStyle = `rgba(20,4,2,${.45 * s.k})`; ctx.lineWidth = hw * 2.2; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke();   // scorched track
+    ctx.globalCompositeOperation = "lighter"; const fl = .85 + .15 * Math.sin(now / 50 + i * 2);   // a glowing crack under the flames
+    for (const [w, col] of [[hw * 1.4, `rgba(255,70,10,${.22 * s.k * fl})`], [3, `rgba(255,220,140,${.6 * s.k})`]]) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(W.x, W.y); ctx.lineTo(x2, y2); ctx.stroke(); }
   }
   ctx.restore();
-  if (s.k > 0) for (let i = 0; i < 4; i++) for (let d = 34; d < L; d += 44) {   // flames dancing along the lines
-    const a = s.a + i * Math.PI / 2, x = W.x + Math.cos(a) * d, y = W.y + Math.sin(a) * d; if (!inView(x, y, 60)) continue;
-    pyFx("trail", (now / 110 + d * .37 + i * 3) % 8, x, y + 12, .3, .82, s.k * .95);
+  const line = pyImgs.wline, hub = pyImgs.whub;
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  if (s.k > 0 && line.naturalWidth) for (let i = 0; i < 4; i++) {
+    const a = s.a + i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a), row = Math.floor(now / 85 + i * 2) % 8, len = Math.min(L - PYW.hubR, PYW.lw); ctx.globalAlpha = s.k;
+    if (Math.abs(c) >= .3) {   // one continuous strip whose base follows the line while its flames stay upright (a shear: x along the line, y straight up)
+      ctx.save(); ctx.translate(W.x + c * PYW.hubR, W.y + sn * PYW.hubR); ctx.transform(c, sn, 0, 1, 0, 0);
+      ctx.drawImage(line, (i * 97) % (PYW.lw - len + 1), row * PYW.lh, len, PYW.lh, 0, -PYW.lb, len, PYW.lh); ctx.restore();
+    } else for (let d = PYW.hubR; d < L; d += 13) {   // (nearly) up-down: a dense column of narrow upright flames
+      const x = W.x + c * d + Math.sin(d * 1.7 + i) * 3, y = W.y + sn * d; if (!inView(x, y, 60)) continue;
+      const u = ((d * 2.3 + i * 131) % (PYW.lw - 20) + (PYW.lw - 20)) % (PYW.lw - 20);
+      ctx.drawImage(line, u, row * PYW.lh, 20, PYW.lh, x - 10, y - PYW.lb, 20, PYW.lh);
+    }
   }
-  ctx.save();   // the burning cross in the middle + seconds left, and arrows showing which way to walk (clockwise)
-  ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(W.x, W.y, 4, W.x, W.y, 70);
-  g.addColorStop(0, `rgba(255,190,80,${.25 + .45 * s.k})`); g.addColorStop(1, "rgba(255,40,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(W.x, W.y, 70, 0, 7); ctx.fill();
+  if (hub.naturalWidth) {   // the burning rune at the centre (faint while it's only a warning)
+    ctx.globalAlpha = s.k > 0 ? s.k : .35 + .25 * Math.sin(now / 90); const f = Math.floor(now / 75) % 16, sc = PYW.hubScale;   // big enough to show round him
+    ctx.drawImage(hub, f * PYW.hw, 0, PYW.hw, PYW.hh, W.x - PYW.hw / 2 * sc, W.y - PYW.hc * sc, PYW.hw * sc, PYW.hh * sc);
+  }
+  ctx.restore();
+  ctx.save();   // seconds left, and arrows showing which way to walk (clockwise)
   ctx.globalCompositeOperation = "source-over"; ctx.lineWidth = 2.5; ctx.strokeStyle = `rgba(255,${s.k ? 200 : 90},80,.75)`;
   for (const R of [130, 330, 530]) for (let i = 0; i < 4; i++) {
     const a0 = s.a + i * Math.PI / 2 + .45, a1 = a0 + Math.min(.6, 70 / R); ctx.beginPath(); ctx.arc(W.x, W.y, R, a0, a1); ctx.stroke();
@@ -1077,7 +1091,7 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
     ctx.fillStyle = ctx.strokeStyle; ctx.fill();
   }
   const left = Math.ceil(W.warn + W.life - s.e); ctx.font = "bold 16px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0b0b"; ctx.fillStyle = "#ffd27a";
-  ctx.strokeText(left + "s", W.x, W.y - 26); ctx.fillText(left + "s", W.x, W.y - 26); ctx.restore();
+  ctx.strokeText(left + "s", W.x, W.y + 82); ctx.fillText(left + "s", W.x, W.y + 82); ctx.restore();   // under the rune
 }
 function drawPyreGround() {   // burning patches, the pillars' warning circles and the Wheel of Flame (under everyone)
   const now = performance.now(); drawPyreWheel(now);
