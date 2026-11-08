@@ -272,3 +272,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 9: weapon balance: PISTOL 14 dmg / 4 per s / 450 range -> 11 / 3.5 / 400 (sustained ~30 dps, was ~42: it out-damaged the paid SMG for free); SMG 6 dmg / 360 range -> 8 / 380 (sustained ~47, between pistol and rifle ~54). Sim 3 bots to wave 12 OK. Cache v=20261109c.
 
 - Nov 9: SOFEA (operator) starts with the SMG instead of the rifle: sofeaLoadout (owned "smg,pistol", primary "", secondary smg, activeSlot 3), applied in "start" like Briggs/Dante. Hero card gear smg/pistol/knife. Test 54c. Cache v=20261109d.
+
+- Nov 9: SNIPER rifle dmg 55 -> 80 + `bigMult` 1.5 (bosses + brutes take x1.5). SIENNA (sniper class) starts with it: siennaLoadout (sniper + pistol), so with her class 114/shot, 172 on bosses/brutes. Shop/GEAR text (GEAR also gained smg + sniper entries). Test 54d. Cache v=20261109e.

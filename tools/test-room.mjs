@@ -1177,6 +1177,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "slot", { n: 2 }); ok(p.weapon === "smg", "2 (no primary) keeps the SMG");
   send(A, "slot", { n: 3, cycle: true }); ok(p.weapon === "pistol", "3 again swaps to the pistol");
   room._dispose(); }
+// 54d. Sienna starts with the sniper; it hits 80 base and +50% on bosses / brutes
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "chooseClass", { id: "sniper" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.weapon === "sniper" && p.activeSlot === 2 && p.owned.includes("sniper") && !p.owned.includes("rifle") && p.mag === 5, `Sienna starts with the sniper rifle (${p.weapon}, mag ${p.mag}, ${p.damage} dmg)`);
+  room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true; room.state.zombies.clear(); room.spawnClock = 1e9; freeze(p); p.x = 1000; p.y = 1000;
+  const mk = (kind, x) => { room.spawnZombie(false, kind); const z = [...room.state.zombies.values()].pop(); z.x = x; z.y = 1000; z.hp = z.maxHp = 9999; z.speed = 0; return z; };
+  const w1 = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); const dw = 9999 - w1.hp; room.state.zombies.clear();
+  const b1 = mk("brute", 1200); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); const db = 9999 - b1.hp;
+  ok(Math.abs(dw - p.damage) < .6 && Math.abs(db - p.damage * 1.5) < .6, `walker takes ${Math.round(dw)}, a brute takes x1.5 (${Math.round(db)})`);
+  room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999; room.state.generatorFuel = 100; room.state.generatorHp = 500;

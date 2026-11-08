@@ -172,7 +172,8 @@ const WEAPONS = {
   shotgun:  { slot: "primary",   dmg: 12, rate: 1.1, range: 390, mag: 6,  reload: 2.0, pellets: 5, spread: 0.21, pelletMult: 1, pierce: 2, falloff: { near: 100, min: 0.5 } },
             // pump, 5-pellet cone. Nov 9: range 260 -> 390, each pellet goes through 2 zombies, and a pellet does FULL damage (2x the old) within
             // 100px, falling to half at max range (the old damage): devastating point blank, same as before far away
-  sniper:   { slot: "primary",   dmg: 55, rate: 0.8, range: 760, mag: 5,  reload: 2.2, pierce: 3 },  // bolt-action, goes through up to 3 zombies
+  sniper:   { slot: "primary",   dmg: 80, rate: 0.8, range: 760, mag: 5,  reload: 2.2, pierce: 3, bigMult: 1.5 },  // bolt-action, goes through up to 3 zombies.
+            // Nov 9: dmg 55 -> 80 (one-shots walkers till ~wave 10, runners all run) + bigMult: x1.5 on bosses and brutes (the big-target gun)
   launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 2.6, splash: 80 } // explodes on first hit
 };
 // Melee (key 1): swing in an arc toward the mouse. cd = seconds between swings, arc = half-angle in radians.
@@ -269,6 +270,7 @@ const DANTE = {
     flat: 0.62, bossMult: 0.5, push: 22 },
 };
 function danteLoadout(p) { p.owned = "launcher,pistol"; p.primary = "launcher"; p.secondary = "pistol"; p.weapon = "launcher"; p.activeSlot = 2; }
+function siennaLoadout(p) { p.owned = "sniper,pistol"; p.primary = "sniper"; p.secondary = "pistol"; p.weapon = "sniper"; p.activeSlot = 2; }   // Nov 9: her own gun (was the rifle)
 function sofeaLoadout(p) { p.owned = "smg,pistol"; p.primary = ""; p.secondary = "smg"; p.weapon = "smg"; p.activeSlot = 3; }   // Nov 9: SMG instead of the rifle (the shop still sells primaries)
 function ravenLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "katana"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
 function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.katanaKills = 0; p.katanaTier = 0; }
@@ -423,6 +425,7 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) if (p.characterClass === "scout") { ravenLoadout(p); ravenReset(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "slasher") { arshanLoadout(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "sniper") { siennaLoadout(p); this.mags.delete(p.sessionId + ":sniper"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "operator") { sofeaLoadout(p); this.mags.delete(p.sessionId + ":smg"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
@@ -915,7 +918,8 @@ export class SurvivalRoom extends Room {
             this.steerMove(h.z, h.z.id, a, B.push * k, q => this.solveZombie(q));
           }
           const fo = w.falloff ? 1 - (1 - w.falloff.min) * Math.max(0, Math.min(1, (h.t - w.falloff.near) / (w.range - w.falloff.near))) : 1;   // shotgun: full up close
-          this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1) * fo);
+          const big = w.bigMult && (h.z.boss || h.z.kind === "brute") ? w.bigMult : 1;   // sniper: bosses + brutes take more
+          this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1) * fo * big);
         }
         if (hits.length) end = hits[hits.length - 1].t;
         if (this.state.friendlyFire) {   // lobby setting: a bullet that crosses a teammate first hurts them (35%)
