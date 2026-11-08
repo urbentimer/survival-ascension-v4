@@ -2664,17 +2664,46 @@ function structSprite(kind, face) {   // [image, how far below the centre the im
   if (kind === "barricade" || kind === "fence") return [kind + "_" + LINE_DIRS[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], 45];
   return [kind, STRUCT_BASE[kind] || 14];
 }
+// TURRET (Nov 8): 8 aims x (idle, fire 1, fire 2) from the user's ChatGPT sheets (tools/extract-turret8.py prints these numbers).
+// The server sets st.aim (at its target) + st.fire; while firing it loops fire1 -> fire2 -> idle, with a tracer on the flash frame.
+const TURRET_ART = { cw: 105, ch: 85, ax: 52, fy: 80, muzzle: [[29, -37], [23, -22], [2, -18], [-22, -26], [-29, -40], [-20, -55], [1, -61], [26, -51]] };   // muzzle per aim r, dr, d ... ur (from the ground point)
+const turretAtlas = new Image(); turretAtlas.src = "assets/sprites/objects/turret8.png";
+const turretSnd = new Map();   // turret id -> when its shooting sound last started
+function turretFrame(st, now) {   // { k: aim 0..7, row: 0 idle / 1 big flash / 2 small flash, gx, gy: ground point }
+  const k = ((Math.round((st.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8, firing = st.fire && powered();
+  return { k, row: firing ? [1, 2, 0][Math.floor(now / 65 + st.x * .37) % 3] : 0, firing, gx: st.x, gy: st.y + 14 };
+}
+function drawTurret(st) {
+  const now = performance.now(), f = turretFrame(st, now), A = TURRET_ART;
+  if (!turretAtlas.complete || !turretAtlas.naturalWidth) return false;
+  ctx.save(); ctx.imageSmoothingEnabled = false; if (!powered()) ctx.filter = "grayscale(1) brightness(.7)";
+  ctx.drawImage(turretAtlas, f.k * A.cw, f.row * A.ch, A.cw, A.ch, Math.round(f.gx - A.ax), Math.round(f.gy - A.fy), A.cw, A.ch); ctx.restore();
+  if (!f.firing) return true;
+  const [mx, my] = A.muzzle[f.k], x0 = f.gx + mx, y0 = f.gy + my, a = st.aim || 0;
+  if (f.row === 1) {   // tracer to the zombie it's shooting (the nearest one along its aim)
+    let tgt = null, best = 275;
+    for (const z of state.zombies.values()) { const d = Math.hypot(z.x - st.x, z.y - st.y); if (d < best && Math.abs(Math.atan2(Math.sin(Math.atan2(z.y - st.y, z.x - st.x) - a), Math.cos(Math.atan2(z.y - st.y, z.x - st.x) - a))) < .5) { best = d; tgt = z; } }
+    const v = tgt && (V(tgt) || tgt), x1 = v ? v.x : st.x + Math.cos(a) * 240, y1 = v ? v.y - 18 : st.y + Math.sin(a) * 240;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,190,80,.35)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,245,200,.85)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+  }
+  if (now - (turretSnd.get(st.id) || 0) > 520) { turretSnd.set(st.id, now); playSfx("turret", st.x, st.y, .7); }   // one burst per clip length
+  return true;
+}
+function turretLights(now) {   // night: muzzle flashes light the dark
+  for (const st of state?.structures?.values() || []) { if (st.kind !== "turret") continue; const f = turretFrame(st, now);
+    if (f.firing && f.row && inView(f.gx, f.gy, 80)) { const [mx, my] = TURRET_ART.muzzle[f.k]; lightHole(f.gx + mx - cam.x, f.gy + my - cam.y, f.row === 1 ? 85 : 55, f.row === 1 ? .75 : .45); } }
+}
 function drawStructure(st) {
   if (st.kind === "heavyTurret") return drawHeavyTurret(st);
   if (st.kind === "demoCharge") return drawDemoCrate(st);
   const [img, feet] = structSprite(st.kind, st.aim || 0), base = st.y + feet, on = powered(), t = performance.now();
-  let flip = false;
-  if (st.kind === "turret") { let best = 260, tx = null; for (const z of state.zombies.values()) { const d = Math.hypot(z.x - st.x, z.y - st.y); if (d < best) { best = d; tx = z.x; } } if (tx !== null) flip = tx < st.x; }
-  const filter = (st.kind === "fence" || st.kind === "turret" || st.kind === "flameTrap") && !on ? "grayscale(1) brightness(.7)" : st.kind === "fence" && Math.random() < 0.25 ? "brightness(1.5)" : undefined;
-  if (!drawObj(img, st.x, base, { flip, filter })) return;
+  const filter = (st.kind === "fence" || st.kind === "flameTrap") && !on ? "grayscale(1) brightness(.7)" : st.kind === "fence" && Math.random() < 0.25 ? "brightness(1.5)" : undefined;
+  if (!(st.kind === "turret" ? drawTurret(st) : drawObj(img, st.x, base, { filter }))) return;
   if (st.kind === "flameTrap" && on) { const f = 0.6 + Math.sin(t / 70 + st.x) * 0.25; const g = ctx.createRadialGradient(st.x, st.y + 4, 2, st.x, st.y + 4, 30); g.addColorStop(0, `rgba(255,140,40,${.45 * f})`); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y + 4, 30, 0, 7); ctx.fill(); }
   if (st.kind === "mine") { if (Math.sin(t / 200 + st.x) > 0.3) { ctx.fillStyle = "rgba(255,60,40,.8)"; ctx.fillRect(st.x - 1, base - 13, 3, 3); } }
-  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.includes("_") ? 80 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
+  if (st.hp < st.maxHp && st.kind !== "mine") { const w = 34, top = img.includes("_") ? 80 : st.kind === "turret" ? 68 : 52; ctx.fillStyle = "#241f1c"; ctx.fillRect(st.x - w / 2, base - top, w, 4); ctx.fillStyle = "#c9a35a"; ctx.fillRect(st.x - w / 2, base - top, w * Math.max(0, st.hp / st.maxHp), 4); }
 }
 
 // ================= CAMERA + WORLD =================
@@ -3143,6 +3172,7 @@ function drawNight() {
   if (view && view !== me) lightHole(view.x - cam.x, view.y - 10 - cam.y, NIGHT.playerR, 1);   // spectating: see around the teammate you're watching
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
   pyreLights(now);   // the Pyre Priest and his fires light the night
+  turretLights(now);
   ctx.drawImage(darkCv, 0, 0);
   // zombies out in the dark: only a faint pair of glowing eyes gives them away
   if (nightK > .5) {

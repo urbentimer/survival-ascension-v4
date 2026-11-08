@@ -45,5 +45,8 @@ public StructureState() { }
 
 		[Type(9, "number")]
 		public float life = default(float);
+
+		[Type(10, "boolean")]
+		public bool fire = default(bool);
 	}
 }

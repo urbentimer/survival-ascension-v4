@@ -33,7 +33,8 @@ defineTypes(LootState, { id: "string", kind: "string", x: "number", y: "number",
 export class StructureState extends Schema {}
 defineTypes(StructureState, {
   id: "string", kind: "string", x: "number", y: "number",
-  hp: "number", maxHp: "number", ownerId: "string", aim: "number", deploy: "number", life: "number"   // life: seconds left (Astra's safehouse)
+  hp: "number", maxHp: "number", ownerId: "string", aim: "number", deploy: "number", life: "number",   // life: seconds left (Astra's safehouse)
+  fire: "boolean"   // turret: shooting right now (aim = at its target)
 });
 // Viktor's combat robots (his ultimate)
 export class RobotState extends Schema {}

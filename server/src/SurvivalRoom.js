@@ -630,6 +630,7 @@ export class SurvivalRoom extends Room {
       if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
       st.x = clamp(bx, 30, this.A.width-30); st.y = clamp(by, 30, this.A.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
+      if (kind === "turret") st.aim = Number.isFinite(Number(data?.face)) ? Number(data.face) : bd > 20 ? Math.atan2(by - p.y, bx - p.x) : 0;   // faces away from you until it has a target
       if (LINES[kind]) st.aim = snapFace(Number.isFinite(Number(data?.face)) ? Number(data.face) : bd > 20 ? Math.atan2(by - p.y, bx - p.x) : (p.aim || 0), LINES[kind]);   // across the way you face (face: what the client's preview showed)
       this.state.structures.set(st.id, st); p.structuresBuilt++;
       this.state.message = `${p.name} built a ${kind}.`;
@@ -3042,8 +3043,9 @@ export class SurvivalRoom extends Room {
     for (const st of this.state.structures.values()) {
       if (st.kind === "turret" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
         const target=[...this.state.zombies.values()].filter(z=>distance(st,z)<260).sort((a,b)=>distance(st,a)-distance(st,b)).find(z=>this.lineClear(st,z));
+        st.fire = !!target; if (target) st.aim = Math.atan2(target.y - st.y, target.x - st.x);   // the client turns it + plays its firing loop
         if(target && distance(st,target)<260){target.hp-=18*dt;if(target.hp<=0)this.killZombie(target,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null);}
-      }
+      } else if (st.kind === "turret") st.fire = false;   // no power
       if (st.kind === "fence" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
         for(const z of [...this.state.zombies.values()]) if(nearFoot(st, z, 26, 30)) { z.hp-=12*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
       }

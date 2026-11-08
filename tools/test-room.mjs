@@ -1150,4 +1150,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.spawnZombie(false, "walker"); const z4 = [...room.state.zombies.values()].pop(); z4.speed = 0; z4.x = df.x - 35; z4.y = df.y + 35; z4.hp = 500; room.state.generatorFuel = 100;
   for (let i = 0; i < 10; i++) { room.lastTick = Date.now() - 50; room.tick(); } ok(z4.hp < 500, "a diagonal fence shocks along its line (down-left end)");
   room._dispose(); }
+// 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
+  room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999; room.state.generatorFuel = 100; room.state.generatorHp = 500;
+  p.x = 1000; p.y = 1000; send(A, "build", { kind: "turret", x: 1000, y: 1100, face: Math.PI / 2 }); const tu = [...room.state.structures.values()].pop();
+  ok(tu.kind === "turret" && Math.abs(tu.aim - Math.PI / 2) < 1e-9 && !tu.fire, "placed facing away from you, not firing");
+  room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); z.x = tu.x - 150; z.y = tu.y; z.speed = 0; z.hp = 9999;
+  room.lastTick = Date.now() - 50; room.tick(); ok(tu.fire && Math.abs(Math.abs(tu.aim) - Math.PI) < .01, `fires and aims at the zombie on its left (aim ${tu.aim.toFixed(2)})`);
+  room.state.generatorFuel = 0; room.lastTick = Date.now() - 50; room.tick(); ok(!tu.fire, "no power: stops firing");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
