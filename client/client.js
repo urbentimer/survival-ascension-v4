@@ -1067,16 +1067,30 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
   const line = pyImgs.wline, hub = pyImgs.whub;
   ctx.save(); ctx.globalCompositeOperation = "lighter";
   if (s.k > 0 && line.naturalWidth) for (let i = 0; i < 4; i++) {
-    const a = s.a + i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a), row = Math.floor(now / 85 + i * 2) % 8, len = Math.min(L - PYW.hubR, PYW.lw); ctx.globalAlpha = s.k;
-    if (Math.abs(c) >= .3) {   // one continuous strip whose base follows the line while its flames stay upright (a shear: x along the line, y straight up)
-      ctx.save(); ctx.translate(W.x + c * PYW.hubR, W.y + sn * PYW.hubR); ctx.transform(c, sn, 0, 1, 0, 0);
-      ctx.drawImage(line, (i * 97) % (PYW.lw - len + 1), row * PYW.lh, len, PYW.lh, 0, -PYW.lb, len, PYW.lh); ctx.restore();
-    } else for (let d = PYW.hubR; d < L; d += 13) {   // (nearly) up-down: a dense column of narrow upright flames
-      const x = W.x + c * d + Math.sin(d * 1.7 + i) * 3, y = W.y + sn * d; if (!inView(x, y, 60)) continue;
-      const u = ((d * 2.3 + i * 131) % (PYW.lw - 20) + (PYW.lw - 20)) % (PYW.lw - 20);
-      ctx.drawImage(line, u, row * PYW.lh, 20, PYW.lh, x - 10, y - PYW.lb, 20, PYW.lh);
+    const a = s.a + i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a), len = Math.min(L - PYW.hubR, PYW.lw);
+    const ft = now / 85 + i * 2, rows = [Math.floor(ft) % 8, (Math.floor(ft) + 1) % 8], k = ft - Math.floor(ft);   // its 8 frames cross-faded (no flicker)
+    for (const [row, al] of [[rows[0], 1], [rows[1], k]]) {
+      ctx.globalAlpha = s.k * al * .85;
+      if (Math.abs(c) >= .3) {   // one continuous strip whose base follows the line while its flames stay upright (a shear: x along the line, y straight up)
+        ctx.save(); ctx.translate(W.x + c * PYW.hubR, W.y + sn * PYW.hubR); ctx.transform(c, sn, 0, 1, 0, 0);
+        ctx.drawImage(line, (i * 97) % (PYW.lw - len + 1), row * PYW.lh, len, PYW.lh, 0, -PYW.lb, len, PYW.lh); ctx.restore();
+      } else for (let d = PYW.hubR; d < L; d += 13) {   // (nearly) up-down: a dense column of narrow upright flames
+        const x = W.x + c * d + Math.sin(d * 1.7 + i) * 3, y = W.y + sn * d; if (!inView(x, y, 60)) continue;
+        const u = ((d * 2.3 + i * 131) % (PYW.lw - 20) + (PYW.lw - 20)) % (PYW.lw - 20);
+        ctx.drawImage(line, u, row * PYW.lh, 20, PYW.lh, x - 10, y - PYW.lb, 20, PYW.lh);
+      }
     }
   }
+  ctx.restore();
+  if (s.k > 0) { ctx.save(); const t = now / 1000;   // soft roaring flames along the lines: the same fire-loop art as the map fires (smooth flipbook + glow pass)
+    for (let i = 0; i < 4; i++) { const a = s.a + i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a);
+      for (let d = PYW.hubR + 8, j = 0; d < L - 8; j++, d += 17 + 7 * Math.abs(Math.sin(j * 12.9898 + i * 3.1))) {   // dense, uneven spacing: one wall of fire, not a row of candles
+        const r1 = Math.abs(Math.sin(j * 78.233 + i * 1.7)), x = W.x + c * d + (r1 - .5) * 8, y = W.y + sn * d + (r1 - .5) * 4; if (!inView(x, y, 70)) continue;
+        const sc = .4 + .26 * r1 + .07 * Math.sin(t * 1.7 + j * 1.3);   // mixed sizes, each one breathing
+        drawFireSprite(x, y + 3, sc, j * 3.7 + i * 5, t, s.k * (d > L - 60 ? (L - d) / 60 : 1));
+      } }
+    ctx.restore(); }
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
   if (hub.naturalWidth) {   // the burning rune at the centre (faint while it's only a warning)
     ctx.globalAlpha = s.k > 0 ? s.k : .35 + .25 * Math.sin(now / 90); const f = Math.floor(now / 75) % 16, sc = PYW.hubScale;   // big enough to show round him
     ctx.drawImage(hub, f * PYW.hw, 0, PYW.hw, PYW.hh, W.x - PYW.hw / 2 * sc, W.y - PYW.hc * sc, PYW.hw * sc, PYW.hh * sc);
