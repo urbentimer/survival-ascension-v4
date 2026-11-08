@@ -1076,13 +1076,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(1000 - p.hp === Math.round(100 * .36 - p.defence) && 1000 - q.hp === 68, `a 100 hit: Briggs takes ${1000 - p.hp} (36 - his 5 defence), Raven ${1000 - q.hp}`);
   const g0 = p.currency = 999; send(A, "buy", { id: "armor" }); ok(p.currency === 999, "the shop doesn't sell armour any more");
   room._dispose(); }
-// 53. THE PYRE PRIEST (wave 8 boss): hunts survivors only, faster than them; Censer Swing (dodgeable), Firewalk, Sermon of Ash (x2 from behind), burning
+// 53. THE PYRE PRIEST (wave 8 boss): hunts survivors only; Censer Swing (dodgeable), Firewalk, Sermon of Ash (x2 from behind), burning
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
   room.mapBoxesNear = () => []; room.mapGrid = new Map();
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
   room.state.stage = 8; ok(room.bossKind() === "pyre", "wave 8's boss is the Pyre Priest");
   room.spawnZombie(true, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
-  ok(z.boss && z.role === "hunter" && z.speed > 225, `a boss that hunts survivors, speed ${z.speed} (Raven 225)`);
+  ok(z.boss && z.role === "hunter" && z.speed === 184, `a boss that hunts survivors, speed ${z.speed} (230 - 20%)`);
   let T = Date.now(); const real = Date.now; const think = sec => { for (let i = 0; i < sec * 20; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); room.tickBurn(.05, T); } finally { Date.now = real; } } };
   const m = room.pmem(z, T); m.walkReady = m.sermonReady = m.wheelReady = T + 1e9;
   // hunts: walks to the nearest survivor, ignoring the tower

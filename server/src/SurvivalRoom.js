@@ -45,7 +45,7 @@ const HIVE = {
 };
 const isHiveWave = stage => stage % 4 === 2;
 // THE PYRE PRIEST: boss of wave 8 (user's design + art, Nov 6). A burning cultist swinging a giant censer on a chain.
-// Hunts SURVIVORS only (never the tower, robots or turrets) and walks faster than any survivor's base speed.
+// Hunts SURVIVORS only (never the tower, robots or turrets). Walks at 184 (Marcus 190 and Raven 225 outrun him; enraged 206).
 //   CENSER SWING   someone within 200px: 0.7s wind-up (spinning red ring = the range), then a full 360 spin: damage, knockback,
 //                  sets them on fire. The dash dodge goes straight through it.
 //   FIREWALK       every 16s, for 8s: every step leaves a burning patch (6s; 9s enraged); standing in it sets you on fire.
@@ -57,7 +57,8 @@ const isHiveWave = stage => stage % 4 === 2;
 //   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
 //   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
 const PYRE = {
-  hp: 2400, speed: 230, radius: 40, dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
+  hp: 2400, speed: 184, radius: 40,   // speed: 230 until Nov 8 (-20%)
+  dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
   swing:  { trigger: 200, windup: .7, hit: .95, total: 1.6, r: 200, flat: .6, mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
   walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
   sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 5, r: 72, mult: 1.2, back: 2 },

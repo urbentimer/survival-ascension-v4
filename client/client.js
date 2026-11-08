@@ -162,7 +162,7 @@ const BOSS_INFO = {
       ["💢", "Berserk (below 30%)", "Faster, hooks more often, and spins in a cleaver whirlwind. Get away from him.", "#ff3737"],
     ] },
   pyre: { wave: 8, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
-    lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he is faster than all of you.",
+    lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he never stops coming.",
     skills: [
       ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
       ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
