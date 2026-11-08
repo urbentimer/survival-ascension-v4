@@ -225,7 +225,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
   ok(p.damage === 16.5 && p.fireRate > 4.5, `rifle is full-auto: ${p.damage} dmg x ${p.fireRate.toFixed(1)}/s (assault), more than the pistol`);
   p.xp = 999; send(A, "upgrade", { id: "damage" }); ok(p.damage === 19.8, `damage upgrade is +20% (${p.damage})`);
-  send(A, "slot", { n: 3 }); ok(p.weapon === "pistol" && p.damage === 18.5, `...and carries over to the pistol (${p.damage})`);
+  send(A, "slot", { n: 3 }); ok(p.weapon === "pistol" && p.damage === 14.5, `...and carries over to the pistol (${p.damage})`);
   ok(p.ammo === 240, "you start with 240 spare ammo");
   room._dispose(); }
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.scrap = 999;
