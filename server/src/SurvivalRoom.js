@@ -59,10 +59,11 @@ const isHiveWave = stage => stage % 4 === 2;
 const PYRE = {
   hp: 2400, speed: 184, radius: 40,   // speed: 230 until Nov 8 (-20%)
   dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
-  swing:  { trigger: 200, windup: .7, hit: .95, total: 1.6, r: 200, flat: .6, mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
+  swing:  { trigger: 260, windup: .7, hit: .95, total: 1.6, r: 260, flat: .6,   // r + trigger: 200 until Nov 8 (+30%)
+            mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
   walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
-  sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 5, r: 72, mult: 1.2, back: 2 },
-  wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 20, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
+  sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 7, aimed: 3, spread: [110, 400], gap: 110, r: 72, mult: 1.2, back: 2 },   // n pillars: one on each of the `aimed` closest survivors, the rest at random spots around him
+  wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 14, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
   burn:   { len: 3, dps: .25 },   // fraction of his damage per second
 };
 const PATH_CELL = 40;   // boss path-finding grid
@@ -2329,10 +2330,13 @@ export class SurvivalRoom extends Room {
         }
       }
       if (act === "sermon" && at(P.sermon.mark)) {
-        const tg = this.pyreTargets().sort((a, b) => distance(z, a) - distance(z, b)), pts = [];
-        for (let i = 0; i < P.sermon.n && tg.length; i++) {   // the first pillar on each survivor, the rest around them
-          const p = tg[i % tg.length], first = i < tg.length, a = Math.random() * Math.PI * 2, d = first ? 0 : 70 + Math.random() * 60;
-          pts.push([Math.round(clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20)), Math.round(clamp(p.y + 16 + Math.sin(a) * d * .7, 20, this.A.height - 20))]);
+        const S = P.sermon, tg = this.pyreTargets().sort((a, b) => distance(z, a) - distance(z, b)).slice(0, S.aimed), pts = [];
+        const put = (x, y) => pts.push([Math.round(clamp(x, 20, this.A.width - 20)), Math.round(clamp(y, 20, this.A.height - 20))]);
+        for (const p of tg) put(p.x, p.y + 16);   // one under each of the 3 closest survivors (their feet)
+        for (let tries = 0; pts.length < S.n && tries < 80; tries++) {   // the rest: random spots around him, not on top of each other
+          const a = Math.random() * Math.PI * 2, d = S.spread[0] + Math.random() * (S.spread[1] - S.spread[0]), x = z.x + Math.cos(a) * d, y = z.y + z.radius * .55 + Math.sin(a) * d * .7;
+          if (tries < 60 && pts.some(([px, py]) => Math.hypot(px - x, py - y) < S.gap)) continue;
+          put(x, y);
         }
         for (const [x, y] of pts) this.pyreFx.pillars.push({ x, y, at: now + P.sermon.warn * 1000, owner: z.id });
         if (pts.length) this.broadcast("pyre", { k: "sermon", id: z.id, pts, warn: P.sermon.warn, r: P.sermon.r, big: z.enraged ? 1 : 0 });

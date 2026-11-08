@@ -842,7 +842,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.zombies.clear(); p.abilityCooldown = 0; const wx = 1000; room.mapGrid = new Map(); room.mapBoxesNear = () => [{ x: wx + 50, y: 900, hw: 50, hh: 200 }]; p.x = 400; p.y = 900;
   send(A, "ability", { a: 0 }); fast(40); ok(!room.hooks.has("A") && p.x > 900 && p.x < wx, `...or hooks a wall and pulls him up to it (x=${Math.round(p.x)}, wall at ${wx})`);
   // miss
-  room.mapBoxesNear = () => []; p.abilityCooldown = 0; send(A, "ability", { a: Math.PI }); p.x = 2000; fast(40); ok(!room.hooks.has("A") && p.abilityCooldown > 2.5 && p.abilityCooldown <= 4, `a miss reels back: 4s cooldown (${p.abilityCooldown.toFixed(1)}s)`);
+  room.mapBoxesNear = () => []; room.spawnClock = 1e9; room.state.zombies.clear(); p.abilityCooldown = 0; send(A, "ability", { a: Math.PI }); p.x = 2000; fast(40);   // no zombie spawning into the hook's path (it made this flaky) ok(!room.hooks.has("A") && p.abilityCooldown > 2.5 && p.abilityCooldown <= 4, `a miss reels back: 4s cooldown (${p.abilityCooldown.toFixed(1)}s)`);
   // Q
   p.ultKills = 100; tick(1); send(A, "ult", {}); ok(room.spins.has("A"), "Q: Crimson Cyclone");
   const z1 = placeZombie(room, p.x + 240, p.y, 1e4), z2 = placeZombie(room, p.x + 400, p.y, 1e4);
@@ -1101,7 +1101,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const patch = room.pyreFx.patches[0]; q.x = patch.x; q.y = patch.y - 16; think(.1); ok(room.pBurn.has("B"), "standing in a patch sets you on fire");
   // sermon: kneels, pillars land on survivors and erupt after 1s; double damage from behind
   m.walkUntil = 0; room.pyreFx.patches = []; room.pBurn.clear(); z.act = ""; z.x = 1500; z.y = 1200; p.x = 1800; p.y = 1200; q.x = 1200; q.y = 1200; p.hp = q.hp = 500; m.sermonReady = 0;
-  think(.6); ok(z.act === "sermon" && room.pyreFx.pillars.length === 5 && p.hp === 500, `Sermon of Ash: kneels, 5 pillars marked, no damage yet (${room.pyreFx.pillars.length})`);
+  think(.6); ok(z.act === "sermon" && room.pyreFx.pillars.length === 7 && p.hp === 500, `Sermon of Ash: kneels, 7 pillars marked, no damage yet (${room.pyreFx.pillars.length})`);
+  { const pl = room.pyreFx.pillars, onP = pl.filter(c => Math.hypot(c.x - p.x, c.y - p.y - 16) < 2).length, onQ = pl.filter(c => Math.hypot(c.x - q.x, c.y - q.y - 16) < 2).length;
+    const rest = pl.filter(c => Math.hypot(c.x - p.x, c.y - p.y - 16) >= 2 && Math.hypot(c.x - q.x, c.y - q.y - 16) >= 2);
+    ok(onP === 1 && onQ === 1 && rest.length === 5 && rest.every(c => { const d = Math.hypot(c.x - z.x, (c.y - z.y - z.radius * .55) / .7); return d >= 105 && d <= 405; }), "one pillar under each survivor (3 closest), the other 5 at random spots around him"); }
   const face = z.aim, hz = z.hp; room.hitZombie(z, z.aim === Math.atan2(p.y - z.y, p.x - z.x) ? q : p, 100);
   ok(Math.abs((hz - z.hp) - 200) < 1, `kneeling: a hit from behind does double (100 -> ${Math.round(hz - z.hp)})`);
   const hz2 = z.hp; room.hitZombie(z, z.aim === Math.atan2(p.y - z.y, p.x - z.x) ? p : q, 100); ok(Math.abs((hz2 - z.hp) - 100) < 1, "...from the front it's normal");

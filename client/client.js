@@ -166,7 +166,7 @@ const BOSS_INFO = {
     skills: [
       ["🔥", "Censer Swing", "When you get close, a spinning red ring shows his reach. Then he spins the censer all the way round: damage, knockback, and you catch fire. Dash through it or get out.", "#ff7a2a"],
       ["👣", "Firewalk", "For 8s every step he takes leaves burning ground. Don't stand in it: it sets you on fire.", "#ffb02a"],
-      ["🙏", "Sermon of Ash", "He kneels and glowing circles land on you. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
+      ["🙏", "Sermon of Ash", "He kneels and 7 glowing circles appear: under the 3 closest survivors and at random spots around him. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
       ["☸️", "Wheel of Flame", "4 lines of fire (12, 3, 6, 9 o'clock) spin CLOCKWISE around him for 60s and follow him everywhere. Walk clockwise with them to stay clear.", "#ffc04a"],
       ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the wheel spins faster, the fire lasts longer and the pillars get bigger.", "#ff3737"],
     ] },
@@ -947,7 +947,7 @@ const pyImgs = {};
 for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-walk.webp", swing: "assets/sprites/zombies/dir8/pyre-swing.webp", sermon: "assets/sprites/zombies/dir8/pyre-sermon.webp",
   death: "assets/sprites/zombies/dir8/pyre-death.webp", pillar: "assets/sprites/fx/pyre-pillar.webp", pillarBig: "assets/sprites/fx/pyre-pillar-enraged.webp",
   trail: "assets/sprites/fx/pyre-trail.webp", ember: "assets/sprites/fx/pyre-ember.webp", ring: "assets/sprites/fx/pyre-swing.webp" })) { const im = new Image(); im.src = url; pyImgs[k] = im; }
-const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 200, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
+const PY = { cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
 let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
 function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
