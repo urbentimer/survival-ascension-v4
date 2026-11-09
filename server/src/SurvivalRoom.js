@@ -90,7 +90,7 @@ const ROBOT = {
 const ROBOT_R = 13;
 const BOSS_HP_PER_PLAYER = 0.6;                      // boss health +60% for every survivor after the first (bots count)
 const BOSS_WAVE = { horde: 45, introWait: 25, escortEvery: 3.2, escortMax: 14, straggleGrace: 15, straggleMax: 3 };   // straggle: 15s after the horde ends, 3 or fewer left -> they vanish and the boss comes anyway
-const ringZone = (dx, dy) => Math.hypot(dx, dy / 0.55);   // distance on the flat ground ellipse the shockwaves are drawn as
+const ringZone = (dx, dy) => hyp(dx, dy / 0.55);   // distance on the flat ground ellipse the shockwaves are drawn as
 const SLAM = { trigger: 115, radius: 140, windup: 0.8, total: 1.45, cooldown: 5.5, stun: 1.3, dmgMult: 1.5 };
 // How far past its body edge a zombie can hit (brutes have long, heavy arms).
 const ATTACK_REACH = { brute: 48, mutant: 52 }, DEFAULT_REACH = 22;
@@ -344,7 +344,8 @@ const BREAK_SECONDS = 60;   // Nov 9: the break between waves lasts until EVERY 
 const BREAK_GO = 3;          // ...then a 3s "here they come" before the wave
 const BOT_NAMES = ["Ava", "Rex", "Juno", "Kai", "Mira", "Odin", "Zed", "Nova"];
 const rand = (a, b) => a + Math.random() * (b - a);
-const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const hyp = (x, y) => Math.sqrt(x * x + y * y);   // not Math.hypot: 3x slower in V8, and these run tens of thousands of times a second
+const distance = (a, b) => hyp(a.x - b.x, a.y - b.y);
 
 export class SurvivalRoom extends Room {
   maxClients = 8;
@@ -388,10 +389,7 @@ export class SurvivalRoom extends Room {
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
     const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
-    this.mapGrid = new Map();               // 160px cells -> solid boxes touching that cell (fast lookups)
-    for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
-      const k = gx + "," + gy; if (!this.mapGrid.has(k)) this.mapGrid.set(k, []); this.mapGrid.get(k).push(b);
-    }
+    this.setMapBoxes(mapBoxes(layout));
     if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
   }
   onCreateRest(options) {
@@ -417,7 +415,7 @@ export class SurvivalRoom extends Room {
     this.lootSequence = 0;
     this.zombieSequence = 0;
     this.lastInputs = new Map();
-    this.enraged = new Set();
+    this.enraged = new Set(); this.zStuck = new Map(); this.away = new Set();   // away: survivors whose connection dropped (30s to reconnect)
     this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
@@ -619,7 +617,7 @@ export class SurvivalRoom extends Room {
       this.state[kind] -= pay; apply(gain, p); this.state.message = done(p, gain);
     };
     this.onMessage("repairTower", (client) => {
-      const p = this.state.players.get(client.sessionId); if (!p || Math.hypot(p.x - this.A.cx, p.y - this.A.cy) > STATION_R.tower) return;   // next to the tower
+      const p = this.state.players.get(client.sessionId); if (!p || hyp(p.x - this.A.cx, p.y - this.A.cy) > STATION_R.tower) return;   // next to the tower
       station(client, this.state.towerMaxHp - this.state.towerHp, "scrap", STATION_STEP.tower.amt, STATION_STEP.tower.cost,
         (g, p) => { this.state.towerHp = Math.min(this.state.towerMaxHp, this.state.towerHp + g); p.towerRepairs += g; }, (p, g) => `${p.name} repaired the radio tower (+${Math.round(g)} HP).`);
     });
@@ -638,15 +636,16 @@ export class SurvivalRoom extends Room {
       const kind = String(data?.kind || "");
       const costs = { barricade:{scrap:15,hp:450}, turret:{scrap:35,electronics:8,hp:300}, mine:{scrap:8,explosives:3,hp:1}, fence:{scrap:25,electronics:5,hp:250}, flameTrap:{scrap:20,fuel:8,hp:180} };
       const cfg = costs[kind];
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || !cfg || this.state.structures.size >= 20) return;
+      const built = [...this.state.structures.values()].filter(st => costs[st.kind]).length;   // the 20 cap counts deployables only (not Viktor's heavy turret or Astra's safehouse)
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || !cfg || built >= 20 || !["playing", "cleared"].includes(this.state.phase)) return;
       if (this.state.scrap < (cfg.scrap||0) || this.state.electronics < (cfg.electronics||0) || this.state.explosives < (cfg.explosives||0) || this.state.fuel < (cfg.fuel||0)) return;
-      { let tx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, ty = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y; const td = Math.hypot(tx - p.x, ty - p.y);
+      { let tx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, ty = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y; const td = hyp(tx - p.x, ty - p.y);
         if (td > BUILD_RANGE) { tx = p.x + (tx - p.x) / td * BUILD_RANGE; ty = p.y + (ty - p.y) / td * BUILD_RANGE; }
         if (this.blockedByMap(tx, ty, 12)) { this.state.message = `${p.name}: can't build inside that.`; return; } }
       this.state.scrap -= cfg.scrap||0; this.state.electronics -= cfg.electronics||0; this.state.explosives -= cfg.explosives||0; this.state.fuel -= cfg.fuel||0;
       const st = new StructureState(); st.id = `s${++this.structureSequence}`; st.kind = kind;
       let bx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, by = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y;
-      const bd = Math.hypot(bx - p.x, by - p.y);
+      const bd = hyp(bx - p.x, by - p.y);
       if (bd > BUILD_RANGE) { bx = p.x + (bx - p.x) / bd * BUILD_RANGE; by = p.y + (by - p.y) / bd * BUILD_RANGE; }
       st.x = clamp(bx, 30, this.A.width-30); st.y = clamp(by, 30, this.A.height-30);
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
@@ -711,7 +710,7 @@ export class SurvivalRoom extends Room {
 
   beginBreak() {   // the wave is over: every zombie left dies (no stragglers), the ground clears; nobody's ready yet. Survivors can walk around + build.
     this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false;
-    this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.dots.clear(); this.taunt.clear();
+    this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.dots.clear(); this.taunt.clear(); this.sweepZombieMemory();
     this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn.clear();
   }
   startNextWave() {
@@ -721,7 +720,7 @@ export class SurvivalRoom extends Room {
     s.elapsed = 0;
     s.bossSpawned = false;
     s.bossDead = false;
-    s.zombies.clear();
+    s.zombies.clear(); this.sweepZombieMemory();
     s.phase = "playing";
     this.downs.clear();
     for (const p of s.players.values()) { p.hp = p.maxHp; p.alive = true; p.bledOut = false; p.bleedout = 0; }
@@ -730,6 +729,7 @@ export class SurvivalRoom extends Room {
   }
 
   resetMatch() {
+    this.away.clear();
     const s = this.state;
     s.stage = 1; s.elapsed = 0; s.matchTime = 0; s.totalKills = 0;
     s.bossSpawned = false; s.bossDead = false; s.waveType = "normal"; s.remaining = 0;
@@ -831,8 +831,17 @@ export class SurvivalRoom extends Room {
   }
 
   onDispose() { this.log("info", "room", `room closed (reached wave ${this.state.stage}, ${this.state.totalKills || 0} kills)`); }
-  onLeave(client, consented) {
+  // A dropped connection mid-match (wifi blip, phone screen off, Render hiccup) keeps the survivor's seat for 30s: the client reconnects
+  // with its token and carries on with the same hero, level and gear. While away they stand still and can't be hurt or targeted.
+  async onLeave(client, consented) {
     const p = this.state.players.get(client.sessionId);
+    if (p && !consented && !p.isBot && this.state.phase !== "lobby" && typeof this.allowReconnection === "function") {
+      this.away.add(client.sessionId); this.lastInputs.delete(client.sessionId); this.inQ?.delete(client.sessionId); p.charging = false; p.reviveTargetId = ""; p.reviveProgress = 0;
+      this.state.message = `${p.name} lost connection... holding their spot for 30s.`; this.log("warn", "leave", `${p.name} lost connection: 30s to come back`, client);
+      try { const back = await this.allowReconnection(client, 30); this.away.delete(client.sessionId); this.state.message = `${p.name} is back!`; this.log("info", "join", `${p.name} reconnected`, client);
+        if (this.pyreFx?.wheel) setTimeout(() => { try { if (this.pyreFx.wheel) (back || client).send("pyre", this.wheelMsg(Date.now())); } catch {} }, 1500); return; }
+      catch { this.away.delete(client.sessionId); if (!this.state.players.has(client.sessionId)) return; }   // never came back (or the match was reset meanwhile)
+    }
     if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
     this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId); this.hooks.delete(client.sessionId); this.spins.delete(client.sessionId);
@@ -858,15 +867,7 @@ export class SurvivalRoom extends Room {
   spawnZombie(boss = false, forceKind = "") {
     if (this.state.explore) return;
     // appear somewhere on a ring around the radio tower, out of the players' view
-    let x, y;
-    if (this.painted) {   // painted map: they walk in where the streets leave the picture
-      const sp = this.painted.spawns, tot = sp.reduce((t, q) => t + q[2], 0); let r = Math.random() * tot, q = sp[0];
-      for (const c of sp) { r -= c[2]; if (r <= 0) { q = c; break; } }
-      x = clamp(q[0] + rand(-24, 24), 20, this.A.width - 20); y = clamp(q[1] + rand(-24, 24), 20, this.A.height - 20);
-    } else {
-      const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
-      x = clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20); y = clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20);
-    }
+    const { x, y } = this.spawnPoint();
 
     const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
@@ -1009,7 +1010,7 @@ export class SurvivalRoom extends Room {
       for (const z of this.state.zombies.values()) {
         if (z.kind !== "butcher" || z.act !== "hook" || (z.actLen - z.slam) < BUTCHER.hook.aim || !(z.hookD > 0)) continue;
         const tx = z.x + Math.cos(z.aim) * z.hookD, ty = z.y + Math.sin(z.aim) * z.hookD;
-        if (Math.hypot(tx - p.x, ty - p.y) <= DEFLECT.reach && this.canDeflect(p, z, now, 1)) this.deflectHook(z, p, now);
+        if (hyp(tx - p.x, ty - p.y) <= DEFLECT.reach && this.canDeflect(p, z, now, 1)) this.deflectHook(z, p, now);
       }
     }
     if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
@@ -1082,9 +1083,16 @@ export class SurvivalRoom extends Room {
   }
 
   // Solid map pieces (buildings, wrecks, trees...) near a point.
-  mapBoxesNear(x, y) {
-    const gx = Math.floor(x / 160), gy = Math.floor(y / 160), out = new Set();
-    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of this.mapGrid?.get((gx + i) + "," + (gy + j)) || []) out.add(b);
+  setMapBoxes(boxes) {   // 160px cells -> solid boxes touching that cell (fast lookups); tests plant their own walls with it
+    this.mapGrid = new Map();
+    for (const b of boxes) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
+      const k = (gx + 8) * 4096 + (gy + 8); let cell = this.mapGrid.get(k); if (!cell) this.mapGrid.set(k, cell = []); cell.push(b);
+    }
+  }
+  mapBoxesNear(x, y) {   // the solid pieces around (x, y); hot path (every move, every ray step): integer cell keys, no Set, a stamp dedupes boxes
+    const gx = Math.floor(x / 160), gy = Math.floor(y / 160), out = [], st = this.boxStamp = (this.boxStamp || 0) + 1, grid = this.mapGrid;
+    if (!grid) return out;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const cell = grid.get((gx + i + 8) * 4096 + (gy + j + 8)); if (cell) for (const b of cell) if (b._s !== st) { b._s = st; out.push(b); } }
     return out;
   }
   // Is this point inside (or within pad of) a solid map piece?
@@ -1096,11 +1104,11 @@ export class SurvivalRoom extends Room {
   pushOut(p, boxes, r) {
     for (let pass = 0; pass < 2; pass++) for (const b of boxes) {
       const cx = clamp(p.x, b.x - b.hw, b.x + b.hw), cy = clamp(p.y, b.y - b.hh, b.y + b.hh);
-      let dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+      let dx = p.x - cx, dy = p.y - cy, d = hyp(dx, dy);
       if (d >= r) continue;
       if (d < 0.001) { // centre is inside the box: push out the shortest way
         const exits = [[b.x - b.hw - r - p.x, 0], [b.x + b.hw + r - p.x, 0], [0, b.y - b.hh - r - p.y], [0, b.y + b.hh + r - p.y]];
-        const [ex, ey] = exits.sort((m, n) => Math.hypot(...m) - Math.hypot(...n))[0];
+        const [ex, ey] = exits.sort((m, n) => hyp(...m) - hyp(...n))[0];
         p.x += ex; p.y += ey;
       } else { p.x = cx + dx / d * r; p.y = cy + dy / d * r; }
       p.x = clamp(p.x, 18, this.A.width - 18); p.y = clamp(p.y, 18, this.A.height - 18);
@@ -1115,15 +1123,15 @@ export class SurvivalRoom extends Room {
   // Zombies: blocked by the map pieces only (they attack barricades/the tower instead of walking around them).
   // Spitter lobs a glob of acid at (tx, ty). It flies for a moment (players can dodge), then lands as a puddle.
   spit(z, tx, ty, atTower = false) {
-    const sx = z.x, sy = z.y - 26, flight = Math.max(.35, Math.hypot(tx - sx, ty - sy) / ACID.speed);
+    const sx = z.x, sy = z.y - 26, flight = Math.max(.35, hyp(tx - sx, ty - sy) / ACID.speed);
     this.spits.push({ tx, ty, land: Date.now() + flight * 1000, dmg: z.damage, atTower });
     this.broadcast("spit", { sx: Math.round(sx), sy: Math.round(sy), tx: Math.round(tx), ty: Math.round(ty), ms: Math.round(flight * 1000) });
   }
   acidLand(s) {
     if (s.atTower) { this.state.towerHp = Math.max(0, this.state.towerHp - s.dmg * 1.5); if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } return; }
-    for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && Math.hypot(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
+    for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && hyp(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
     for (const p of this.state.players.values()) {   // direct hit
-      if (!p.alive || this.untouchable(p) || Math.hypot(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
+      if (!p.alive || this.untouchable(p) || hyp(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
       const dealt = this.armorHit(p, s.dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
     }
     const pu = new PuddleState(); pu.id = "a" + (++this.puddleSeq); pu.x = Math.round(s.tx); pu.y = Math.round(s.ty);
@@ -1147,19 +1155,20 @@ export class SurvivalRoom extends Room {
     for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
-  separateZombies() {
-    const grid = new Map(), C = 64;
-    for (const z of this.state.zombies.values()) { const k = Math.floor(z.x / C) + "," + Math.floor(z.y / C); (grid.get(k) || grid.set(k, []).get(k)).push(z); }
+  separateZombies() {   // keep the crowd from stacking: 64px buckets (integer keys), plain numbers read once per zombie
+    const grid = new Map(), C = 64, K = 4096;
+    for (const z of this.state.zombies.values()) { const k = (Math.floor(z.x / C) + 8) * K + Math.floor(z.y / C) + 8; let cell = grid.get(k); if (!cell) grid.set(k, cell = []); cell.push(z); }
     for (const z of this.state.zombies.values()) {
       if (z.slam > 0) continue;
-      const gx = Math.floor(z.x / C), gy = Math.floor(z.y / C);
-      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const o of grid.get((gx + i) + "," + (gy + j)) || []) {
+      let zx = z.x, zy = z.y; const zr = Math.min(z.radius, 30), gx = Math.floor(zx / C) + 8, gy = Math.floor(zy / C) + 8; let moved = false;
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const cell = grid.get((gx + i) * K + gy + j); if (!cell) continue; for (const o of cell) {
         if (o === z) continue;
-        const dx = z.x - o.x, dy = z.y - o.y, d = Math.hypot(dx, dy), min = (Math.min(z.radius, 30) + Math.min(o.radius, 30)) * .75;
-        if (d >= min) continue;
-        const push = (min - d) * .25, ux = d > .01 ? dx / d : Math.random() - .5, uy = d > .01 ? dy / d : Math.random() - .5;
-        z.x = clamp(z.x + ux * push, 5, this.A.width - 5); z.y = clamp(z.y + uy * push, 5, this.A.height - 5);
-      }
+        const dx = zx - o.x, dy = zy - o.y, min = zr + Math.min(o.radius, 30); const min2 = min * min * .5625, d2 = dx * dx + dy * dy;   // .75² : they may overlap a little
+        if (d2 >= min2) continue;
+        const d = Math.sqrt(d2), push = (min * .75 - d) * .25, ux = d > .01 ? dx / d : Math.random() - .5, uy = d > .01 ? dy / d : Math.random() - .5;
+        zx = clamp(zx + ux * push, 5, this.A.width - 5); zy = clamp(zy + uy * push, 5, this.A.height - 5); moved = true;
+      } }
+      if (moved) { z.x = zx; z.y = zy; }
     }
   }
   // ---------- Viktor: Heavy Turret + Robot Squad ----------
@@ -1273,7 +1282,7 @@ export class SurvivalRoom extends Room {
         if (now - e.t < e.at * 1000) { left.push(e); continue; }
         const owner = this.state.players.get(e.owner) || null, flat = e.flat || 1, ep = { x: e.x, y: e.y - 4 };
         for (const z of [...this.state.zombies.values()]) {
-          const d = Math.hypot(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
+          const d = hyp(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
           if (e.wallSafe && !this.lineClear(ep, z)) continue;   // rocket blasts don't go through walls
           if (!z.boss && d > 0.1 && e.push) this.steerMove(z, z.id, Math.atan2(z.y - e.y, z.x - e.x), e.push, q => this.solveZombie(q));
           const dmg = (e.fall != null ? e.dmg - (e.dmg - e.fall) * Math.min(1, d / e.r) : e.dmg) * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);   // fall: damage at the edge
@@ -1348,11 +1357,11 @@ export class SurvivalRoom extends Room {
         if (!z || !this.lineClear(p, z) || distance(p, z) > H.range) { this.endHook(p, h, now, H.cd); continue; }
         tx = h.hx = z.x; ty = h.hy = z.y; stop = z.radius + BODY_R + H.stop;
       }
-      const dist = Math.hypot(tx - p.x, ty - p.y);
+      const dist = hyp(tx - p.x, ty - p.y);
       if (dist <= stop + 1) { this.endHook(p, h, now, H.cd); continue; }
       const step = Math.min(H.pull * dt, dist - stop), ox = p.x, oy = p.y;
       this.moveWithCollision(p, (tx - p.x) / dist * step, (ty - p.y) / dist * step);
-      if (Math.hypot(p.x - ox, p.y - oy) < step * 0.3) { if (++h.stuck >= 3) { this.endHook(p, h, now, H.cd); continue; } } else h.stuck = 0;
+      if (hyp(p.x - ox, p.y - oy) < step * 0.3) { if (++h.stuck >= 3) { this.endHook(p, h, now, H.cd); continue; } } else h.stuck = 0;
       p.facing = tx > p.x ? 1 : -1; this.lastMoveAt.set(id, now);
     }
   }
@@ -1523,14 +1532,14 @@ export class SurvivalRoom extends Room {
     return true;
   }
   moveVehicle(p, v, dx, dy, dt) {
-    const K = SOFEA[v.kind], mag = Math.hypot(dx, dy), now = Date.now();
+    const K = SOFEA[v.kind], mag = hyp(dx, dy), now = Date.now();
     if (mag < 0.01 || dt <= 0) return;
     const ox = p.x, oy = p.y, step = K.speed * dt, n = Math.max(1, Math.ceil(step / 8));
     for (let i = 0; i < n; i++) {
       p.x = clamp(p.x + dx / mag * step / n, K.body, this.A.width - K.body); p.y = clamp(p.y + dy / mag * step / n, K.body, this.A.height - K.body);
       this.solveVehicle(p, v);
     }
-    const moved = Math.hypot(p.x - ox, p.y - oy);
+    const moved = hyp(p.x - ox, p.y - oy);
     v.x = p.x; v.y = p.y; if (v.kind === "tank") v.hull = Math.atan2(dy, dx);
     if (moved / dt >= SOFEA.tank.crush.minSpeed) { this.vmem(p).movingUntil = now + 160; if (v.kind === "tank") this.tankCrush(p, v, now, ox, oy); }
     if (dx) p.facing = dx > 0 ? 1 : -1; this.lastMoveAt.set(p.sessionId, now);
@@ -1587,7 +1596,7 @@ export class SurvivalRoom extends Room {
     while (m.gunT >= G.every) {
       m.gunT -= G.every;
       for (const z of [...this.state.zombies.values()]) {
-        const d = Math.hypot(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > G.range) continue;
+        const d = hyp(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > G.range) continue;
         let da = Math.atan2(z.y - v.y, z.x - v.x) - v.aim; da = Math.atan2(Math.sin(da), Math.cos(da));
         if (Math.abs(da) > G.cone / 2 && d > z.radius) continue;
         this.hitZombie(z, p, G.dmg * scale * (z.boss ? G.bossMult : 1));
@@ -1609,7 +1618,7 @@ export class SurvivalRoom extends Room {
   zombiesInCone(v, a, range, cone) {   // every zombie in the cone that she can see (walls block it)
     const out = [];
     for (const z of this.state.zombies.values()) {
-      const d = Math.hypot(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > range) continue;
+      const d = hyp(z.x - v.x, z.y - v.y); if (d - z.radius * .5 > range) continue;
       let da = Math.atan2(z.y - v.y, z.x - v.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(da) > cone / 2 && d > z.radius + 6) continue;
       if (!this.lineClear(v, z)) continue;
@@ -1640,7 +1649,7 @@ export class SurvivalRoom extends Room {
     this.state.vehicles.delete(v.id);
     const m = this.vmem(p);
     if (v.phase === "ride") {
-      const zfree = (x, y) => ![...this.state.zombies.values()].some(z => Math.hypot(z.x - x, z.y - y) < z.radius + BODY_R);
+      const zfree = (x, y) => ![...this.state.zombies.values()].some(z => hyp(z.x - x, z.y - y) < z.radius + BODY_R);
       const side = v.kind === "tank" ? { x: v.x - Math.sin(v.hull) * 52, y: v.y + Math.cos(v.hull) * 52 } : { x: v.x, y: v.y };
       const spot = this.clearSpot(side.x, side.y, BODY_R + 2, 180, zfree) || this.clearSpot(v.x, v.y, BODY_R + 2, 240) || (this.vehicleFits(m.safe.x, m.safe.y, BODY_R) ? m.safe : { x: this.A.cx, y: this.A.cy + TOWER_HALF + 40 });
       p.x = spot.x; p.y = spot.y; this.solveCollisions(p);
@@ -1726,7 +1735,7 @@ export class SurvivalRoom extends Room {
     const out = [];
     for (let d = 46; d <= 226 && out.length < n; d += 30) for (let i = 0; i < 12 && out.length < n; i++) {
       const a = (i + d / 60) / 12 * Math.PI * 2, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-      if (!this.vehicleFits(x, y, ROBOT_R + 2) || out.some(o => Math.hypot(o.x - x, o.y - y) < 30)) continue;
+      if (!this.vehicleFits(x, y, ROBOT_R + 2) || out.some(o => hyp(o.x - x, o.y - y) < 30)) continue;
       out.push({ x, y });
     }
     return out.length >= n ? out : null;
@@ -1745,8 +1754,8 @@ export class SurvivalRoom extends Room {
   }
   safeSite(p) {   // centred on Astra; else the nearest centre within 120px that still has him inside the yard
     const S = ASTRA.safe, inner = S.half - S.wall - BODY_R, c = [];
-    for (let dx = -S.search; dx <= S.search; dx += 20) for (let dy = -S.search; dy <= S.search; dy += 20) if (Math.hypot(dx, dy) <= S.search) c.push([dx, dy]);
-    c.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+    for (let dx = -S.search; dx <= S.search; dx += 20) for (let dy = -S.search; dy <= S.search; dy += 20) if (hyp(dx, dy) <= S.search) c.push([dx, dy]);
+    c.sort((a, b) => hyp(...a) - hyp(...b));
     for (const [dx, dy] of c) { const cx = p.x + dx, cy = p.y + dy; if (Math.abs(dx) < inner && Math.abs(dy) < inner && this.safeFits(cx, cy)) return { x: cx, y: cy }; }
     return null;
   }
@@ -1825,7 +1834,7 @@ export class SurvivalRoom extends Room {
     const r = Math.min(z.radius, 34) * .8 + 14;
     for (const b of this.safeBoxes) {
       const qx = clamp(z.x, b.x - b.hw, b.x + b.hw), qy = clamp(z.y, b.y - b.hh, b.y + b.hh);
-      if (Math.hypot(z.x - qx, z.y - qy) < r) return { b, x: qx, y: qy };
+      if (hyp(z.x - qx, z.y - qy) < r) return { b, x: qx, y: qy };
     }
     return null;
   }
@@ -2063,11 +2072,11 @@ export class SurvivalRoom extends Room {
         p.x = sd.fx + (sd.tx - sd.fx) * t; p.y = sd.fy + (sd.ty - sd.fy) * t; p.dashT = Math.max(0, RAVEN.dash.time * (1 - t));
         const k = ravenKatana(p), c = CLASS_STATS.scout || CLASS_STATS.assault;
         const dmg = Math.round(k.dmg * RAVEN.dash.mult * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
-        const sx = p.x - sd.px, sy = p.y - sd.py, sl = Math.hypot(sx, sy) || 1;   // everything along the bit of path covered this tick
+        const sx = p.x - sd.px, sy = p.y - sd.py, sl = hyp(sx, sy) || 1;   // everything along the bit of path covered this tick
         for (const z of [...this.state.zombies.values()]) {
           if (sd.hit.has(z.id)) continue;
           const u = Math.max(0, Math.min(1, ((z.x - sd.px) * sx + (z.y - sd.py) * sy) / (sl * sl)));
-          if (Math.hypot(z.x - (sd.px + sx * u), z.y - (sd.py + sy * u)) < z.radius + RAVEN.dash.width) { sd.hit.add(z.id); this.katanaHit(z, p, dmg); }
+          if (hyp(z.x - (sd.px + sx * u), z.y - (sd.py + sy * u)) < z.radius + RAVEN.dash.width) { sd.hit.add(z.id); this.katanaHit(z, p, dmg); }
         }
         sd.px = p.x; sd.py = p.y;
         if (t >= 1) { this.shadowDash.delete(p.sessionId); this.solveCollisions(p); p.dashT = 0; p.shadow = RAVEN.shadow; this.broadcast("shadow", { k: "vanish", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) }); }
@@ -2133,7 +2142,7 @@ export class SurvivalRoom extends Room {
   }
   nearestZombie(x, y, range, needLine = true) {
     let best = null, bd = range;
-    for (const z of this.state.zombies.values()) { const d = Math.hypot(z.x - x, z.y - y); if (d < bd && (!needLine || this.lineClear({ x, y }, z))) { bd = d; best = z; } }
+    for (const z of this.state.zombies.values()) { const d = hyp(z.x - x, z.y - y); if (d < bd && (!needLine || this.lineClear({ x, y }, z))) { bd = d; best = z; } }
     return best;
   }
   updateMachines(dt, now) {
@@ -2197,9 +2206,9 @@ export class SurvivalRoom extends Room {
         // only shoots zombies inside its circle (the same 300px ground oval the player sees, flattened .6 for perspective)
         let z = null, bd = 1;
         for (const c of this.state.zombies.values()) {
-          const e = Math.hypot((c.x - r.hx) / ROBOT_LEASH, (c.y - r.hy) / (ROBOT_LEASH * .6));
+          const e = hyp((c.x - r.hx) / ROBOT_LEASH, (c.y - r.hy) / (ROBOT_LEASH * .6));
           let off = Math.atan2(c.y - r.hy, c.x - r.hx) - (r.face ?? 0); off = Math.atan2(Math.sin(off), Math.cos(off));   // inside the 70-degree cone?
-          if (e <= 1 && Math.abs(off) <= R.cone * Math.PI / 360 && Math.hypot(c.x - r.x, c.y - r.y) < bd * 1e4 && this.lineClear(r, c)) { const d = Math.hypot(c.x - r.x, c.y - r.y) / 1e4; if (d < bd) { bd = d; z = c; } }
+          if (e <= 1 && Math.abs(off) <= R.cone * Math.PI / 360 && hyp(c.x - r.x, c.y - r.y) < bd * 1e4 && this.lineClear(r, c)) { const d = hyp(c.x - r.x, c.y - r.y) / 1e4; if (d < bd) { bd = d; z = c; } }
         }
         if (z) {
           r.aim = Math.atan2(z.y - (r.y - 14), z.x - r.x);
@@ -2214,7 +2223,7 @@ export class SurvivalRoom extends Room {
       }
       const gd = distance(r, goal);
       if (gd > 8) { const a = Math.atan2(goal.y - r.y, goal.x - r.x); this.steerMove(r, r.id, a, Math.min(gd, R.speed * dt), e => this.solveRobot(e)); if (!r.act || r.act === "buff") r.aim = a; }
-      const hd = Math.hypot(r.x - r.hx, r.y - r.hy);   // the hunter never strays more than ROBOT_LEASH from its spot
+      const hd = hyp(r.x - r.hx, r.y - r.hy);   // the hunter never strays more than ROBOT_LEASH from its spot
       if (r.kind === "hunter" && hd > ROBOT_LEASH) { r.x = r.hx + (r.x - r.hx) / hd * ROBOT_LEASH; r.y = r.hy + (r.y - r.hy) / hd * ROBOT_LEASH; }
     }
     // robots keep a little space from survivors and from each other (so they never cover Viktor)
@@ -2282,7 +2291,7 @@ export class SurvivalRoom extends Room {
         }
       }
       if (z.act === "slam" && t0 < H.slam.windup && t1 >= H.slam.windup) {
-        for (const p of this.state.players.values()) if (p.alive && Math.hypot(p.x - z.x, (p.y - z.y) / H.slam.flat) < H.slam.radius) { this.hiveHurt(p, z.damage * H.slam.mult); p.stunned = Math.max(p.stunned || 0, H.slam.stun); p.charging = false; }
+        for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < H.slam.radius) { this.hiveHurt(p, z.damage * H.slam.mult); p.stunned = Math.max(p.stunned || 0, H.slam.stun); p.charging = false; }
         this.broadcast("hive", { k: "slam", x: Math.round(z.x), y: Math.round(z.y), r: H.slam.radius });
       }
       if (z.act === "jump") {
@@ -2290,7 +2299,7 @@ export class SurvivalRoom extends Room {
         if (t1 > J.up && t0 < J.land) { const k = Math.min(1, (t1 - J.up) / (J.land - J.up)); z.x = m.jx0 + (m.jx1 - m.jx0) * k; z.y = m.jy0 + (m.jy1 - m.jy0) * k; }
         if (t0 < J.land && t1 >= J.land) {
           this.solveZombie(z);
-          for (const p of this.state.players.values()) if (p.alive && Math.hypot(p.x - z.x, (p.y - z.y) / H.slam.flat) < J.radius) this.hiveHurt(p, z.damage * J.mult);
+          for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < J.radius) this.hiveHurt(p, z.damage * J.mult);
           this.broadcast("hive", { k: "land", x: Math.round(z.x), y: Math.round(z.y), r: J.radius });
         }
       }
@@ -2336,7 +2345,7 @@ export class SurvivalRoom extends Room {
     }
     // FIREWALK: a burning patch every few steps while it lasts
     if (now < m.walkUntil) {
-      if (!m.lastDrop || Math.hypot(z.x - m.lastDrop.x, z.y - m.lastDrop.y) >= P.walk.step) {
+      if (!m.lastDrop || hyp(z.x - m.lastDrop.x, z.y - m.lastDrop.y) >= P.walk.step) {
         const life = z.enraged ? P.walk.patchEnraged : P.walk.patch, x = Math.round(z.x), y = Math.round(z.y + z.radius * .55);
         this.pyreFx.patches.push({ x, y, until: now + life * 1000, owner: z.id }); m.lastDrop = { x: z.x, y: z.y };
         this.broadcast("pyre", { k: "patch", x, y, life });
@@ -2346,14 +2355,14 @@ export class SurvivalRoom extends Room {
       const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, act = z.act, at = x => t0 < x && t1 >= x;
       if (act === "swing" && at(P.swing.hit)) {
         for (const p of this.state.players.values()) {
-          if (Math.hypot(p.x - z.x, (p.y - z.y) / P.swing.flat) > P.swing.r + BODY_R) continue;
+          if (hyp(p.x - z.x, (p.y - z.y) / P.swing.flat) > P.swing.r + BODY_R) continue;
           if (!this.pyreHit(p, z, P.swing.mult)) continue;
           const a = Math.atan2(p.y - z.y, p.x - z.x); this.moveWithCollision(p, Math.cos(a) * P.swing.push, Math.sin(a) * P.swing.push);
         }
       }
       if (act === "strike" && at(P.strike.hit)) {   // the lamp comes down in front of him
         for (const p of this.state.players.values()) {
-          const dx = p.x - z.x, dy = p.y - z.y; if (Math.hypot(dx, dy) > P.strike.r + BODY_R) continue;
+          const dx = p.x - z.x, dy = p.y - z.y; if (hyp(dx, dy) > P.strike.r + BODY_R) continue;
           const off = Math.atan2(dy, dx) - z.aim; if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > P.strike.arc) continue;
           if (!p.alive || this.untouchable(p)) continue;
           this.hiveHurt(p, z.damage * P.strike.mult); const a = Math.atan2(dy, dx); this.moveWithCollision(p, Math.cos(a) * P.strike.push, Math.sin(a) * P.strike.push);
@@ -2365,7 +2374,7 @@ export class SurvivalRoom extends Room {
         for (const p of tg) put(p.x, p.y + 16);   // one under each of the 3 closest survivors (their feet)
         for (let tries = 0; pts.length < S.n && tries < 80; tries++) {   // the rest: random spots around him, not on top of each other
           const a = Math.random() * Math.PI * 2, d = S.spread[0] + Math.random() * (S.spread[1] - S.spread[0]), x = z.x + Math.cos(a) * d, y = z.y + z.radius * .55 + Math.sin(a) * d * .7;
-          if (tries < 60 && pts.some(([px, py]) => Math.hypot(px - x, py - y) < S.gap)) continue;
+          if (tries < 60 && pts.some(([px, py]) => hyp(px - x, py - y) < S.gap)) continue;
           put(x, y);
         }
         for (const [x, y] of pts) this.pyreFx.pillars.push({ x, y, at: now + P.sermon.warn * 1000, owner: z.id });
@@ -2409,7 +2418,7 @@ export class SurvivalRoom extends Room {
     const len = hits.length ? hits[hits.length - 1].t : wall;
     this.broadcast("deadeye", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: +a.toFixed(3), len: Math.round(len), w: held, hits: hits.map(h => Math.round(h.t)) });
   }
-  nearGen(p) { return Math.hypot(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
+  nearGen(p) { return hyp(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
   // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)
   wheelAngle(wh, now) { return wh.a + wh.w * (now - wh.t0) / 1000; }
   wheelMsg(now) { const wh = this.pyreFx.wheel, W = PYRE.wheel; return { k: "wheel", id: wh.owner, x: Math.round(wh.x), y: Math.round(wh.y), a: +this.wheelAngle(wh, now).toFixed(4), w: +wh.w.toFixed(4), warn: Math.max(0, (wh.fireAt - now) / 1000), life: (wh.until - now) / 1000, len: W.len, hw: W.hw }; }
@@ -2437,12 +2446,12 @@ export class SurvivalRoom extends Room {
     }
     if (F.pillars.length) F.pillars = F.pillars.filter(h => {
       if (h.owner !== z.id || now < h.at) return true;
-      for (const p of this.state.players.values()) if (Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .7) < P.sermon.r + BODY_R) this.pyreHit(p, z, P.sermon.mult);
+      for (const p of this.state.players.values()) if (hyp(p.x - h.x, (p.y + 16 - h.y) / .7) < P.sermon.r + BODY_R) this.pyreHit(p, z, P.sermon.mult);
       return false;
     });
     if (F.patches.length) {
       F.patches = F.patches.filter(h => h.until > now);
-      for (const p of this.state.players.values()) if (p.alive && F.patches.some(h => h.owner === z.id && Math.hypot(p.x - h.x, (p.y + 16 - h.y) / .7) < P.walk.r + BODY_R * .6)) this.ignite(p, z);
+      for (const p of this.state.players.values()) if (p.alive && F.patches.some(h => h.owner === z.id && hyp(p.x - h.x, (p.y + 16 - h.y) / .7) < P.walk.r + BODY_R * .6)) this.ignite(p, z);
     }
   }
   tickBurn(dt, now) {   // survivors on fire (Pyre Priest)
@@ -2541,7 +2550,7 @@ export class SurvivalRoom extends Room {
   butcher_hookback() {}
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now(); }   // up in the helicopter / inside a safehouse / mid-dash
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -2581,7 +2590,7 @@ export class SurvivalRoom extends Room {
     if (d > stop) {
       const step = Math.min(d - stop, H.pullSpeed * dt), bx = p.x, by = p.y;
       this.moveWithCollision(p, -Math.cos(ang) * step, -Math.sin(ang) * step);
-      m.stuck = Math.hypot(p.x - bx, p.y - by) < step * .3 ? m.stuck + dt : 0;
+      m.stuck = hyp(p.x - bx, p.y - by) < step * .3 ? m.stuck + dt : 0;
     }
     z.hookD = distance(z, p);
     if (distance(z, p) <= stop + 2 || m.stuck > .3) {   // arrived (or snagged on something): hold them and CHOP
@@ -2643,25 +2652,35 @@ export class SurvivalRoom extends Room {
     }
     g = { GW, GH, blocked }; (this.pathGrids || (this.pathGrids = new Map())).set(k, g); return g;
   }
-  flowField(t, r) {   // steps-to-target for every cell (BFS from the target's cell), rebuilt at most every 0.4s per target
+  flowField(t, r) {   // steps-to-target for every cell (BFS from the target's cell), rebuilt at most every 0.4s per target cell
     const C = PATH_CELL, g = this.pathGrid(r), { GW, GH } = g, tx = clamp(Math.floor(t.x / C), 0, GW - 1), ty = clamp(Math.floor(t.y / C), 0, GH - 1);
-    const key = tx + "," + ty + "," + Math.round(r), now = Date.now(), hit = this.flowCache?.get(key);
+    const key = (ty * GW + tx) * 64 + Math.round(r), now = Date.now(), cache = this.flowCache || (this.flowCache = new Map()), hit = cache.get(key);
     if (hit && now - hit.at < 400) return hit;
-    const safe = this.safeBoxes.map(b => ({ ...b, hw: b.hw + r, hh: b.hh + r }));
-    const bad = k => g.blocked[k] || (safe.length && safe.some(b => Math.abs((k % GW + .5) * C - b.x) < b.hw && Math.abs((Math.floor(k / GW) + .5) * C - b.y) < b.hh));
-    const dist = new Float32Array(GW * GH).fill(Infinity), q = new Int32Array(GW * GH); let qh = 0, qt = 0;
+    // one blocked map for this field: the map pieces + Astra's safehouse walls (no per-cell closure in the hot loop)
+    let bad = g.blocked;
+    if (this.safeBoxes.length) {
+      bad = new Uint8Array(g.blocked);
+      for (const b of this.safeBoxes) { const hw = b.hw + r, hh = b.hh + r, x0 = clamp(Math.floor((b.x - hw) / C), 0, GW - 1), x1 = clamp(Math.floor((b.x + hw) / C), 0, GW - 1), y0 = clamp(Math.floor((b.y - hh) / C), 0, GH - 1), y1 = clamp(Math.floor((b.y + hh) / C), 0, GH - 1);
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) bad[y * GW + x] = 1; }
+    }
+    const dist = hit?.dist || new Float32Array(GW * GH); dist.fill(Infinity); const q = this.flowQ && this.flowQ.length >= GW * GH ? this.flowQ : (this.flowQ = new Int32Array(GW * GH)); let qh = 0, qt = 0;
     const start = ty * GW + tx; dist[start] = 0; q[qt++] = start;
     while (qh < qt) {
       const k = q[qh++], x = k % GW, y = (k - x) / GW, d0 = dist[k];
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
-        const nk = ny * GW + nx; if (bad(nk)) continue;
-        if (dx && dy && (bad(y * GW + nx) || bad(ny * GW + x))) continue;   // no cutting corners
-        const nd = d0 + (dx && dy ? 1.414 : 1); if (nd < dist[nk]) { dist[nk] = nd; q[qt++] = nk; }
-      }
+      const up = y > 0, dn = y < GH - 1, lf = x > 0, rt = x < GW - 1;
+      const bU = up ? bad[k - GW] : 1, bD = dn ? bad[k + GW] : 1, bL = lf ? bad[k - 1] : 1, bR = rt ? bad[k + 1] : 1;
+      if (up && !bU && d0 + 1 < dist[k - GW]) { dist[k - GW] = d0 + 1; q[qt++] = k - GW; }
+      if (dn && !bD && d0 + 1 < dist[k + GW]) { dist[k + GW] = d0 + 1; q[qt++] = k + GW; }
+      if (lf && !bL && d0 + 1 < dist[k - 1]) { dist[k - 1] = d0 + 1; q[qt++] = k - 1; }
+      if (rt && !bR && d0 + 1 < dist[k + 1]) { dist[k + 1] = d0 + 1; q[qt++] = k + 1; }
+      // diagonals: never cut a corner (it would walk into it)
+      if (up && lf && !bU && !bL && !bad[k - GW - 1] && d0 + 1.414 < dist[k - GW - 1]) { dist[k - GW - 1] = d0 + 1.414; q[qt++] = k - GW - 1; }
+      if (up && rt && !bU && !bR && !bad[k - GW + 1] && d0 + 1.414 < dist[k - GW + 1]) { dist[k - GW + 1] = d0 + 1.414; q[qt++] = k - GW + 1; }
+      if (dn && lf && !bD && !bL && !bad[k + GW - 1] && d0 + 1.414 < dist[k + GW - 1]) { dist[k + GW - 1] = d0 + 1.414; q[qt++] = k + GW - 1; }
+      if (dn && rt && !bD && !bR && !bad[k + GW + 1] && d0 + 1.414 < dist[k + GW + 1]) { dist[k + GW + 1] = d0 + 1.414; q[qt++] = k + GW + 1; }
     }
-    const f = { at: now, dist, GW, GH }; (this.flowCache || (this.flowCache = new Map())).set(key, f);
-    if (this.flowCache.size > 40) this.flowCache.delete(this.flowCache.keys().next().value);
+    const f = hit || { at: now, dist, GW, GH }; f.at = now; cache.set(key, f);
+    if (cache.size > 160) for (const [k, v] of cache) { if (now - v.at > 2000) cache.delete(k); if (cache.size <= 120) break; }   // drop fields nobody asked for lately
     return f;
   }
   nextWaypoint(z, t, r) {   // down the flow field from z: the furthest of the next 8 steps that z can walk to in a straight line
@@ -2682,14 +2701,15 @@ export class SurvivalRoom extends Room {
   // Boss walking: straight at the target when the way is clear; otherwise toward a waypoint on the flow field, kept until reached
   // (so he commits to one way round a building instead of flip-flopping), sliding along walls.
   bossMove(z, t, dist) {
-    const r = Math.min(z.radius || 14, 34) * .8, now = Date.now(); let m = this.bossPath?.get(z.id);
-    if (!m) { m = { wp: null, until: 0 }; (this.bossPath || (this.bossPath = new Map())).set(z.id, m); }
-    if (this.wideClear(z, t, r)) { m.wp = null; this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
+    const r = Math.round(Math.min(z.radius || 14, 34) * .8 / 4) * 4, now = Date.now(); let m = this.bossPath?.get(z.id);
+    if (!m) { m = { wp: null, until: 0, clear: false, checkAt: 0 }; (this.bossPath || (this.bossPath = new Map())).set(z.id, m); }
+    if (now >= m.checkAt) { m.clear = this.wideClear(z, t, r); m.checkAt = now + (m.clear ? 150 : 250); }   // the straight-line test is the dear part: not every tick for every zombie
+    if (m.clear) { m.wp = null; this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
     if (!m.wp || distance(z, m.wp) < 14 || now > m.until) { m.wp = this.nextWaypoint(z, t, r); m.until = now + 1500; }
     if (!m.wp) { this.steerMove(z, z.id, Math.atan2(t.y - z.y, t.x - z.x), dist, e => this.solveZombie(e)); return; }
     const a = Math.atan2(m.wp.y - z.y, m.wp.x - z.x), x0 = z.x, y0 = z.y, step = Math.min(dist, distance(z, m.wp));
     z.x = clamp(z.x + Math.cos(a) * step, 5, this.A.width - 5); z.y = clamp(z.y + Math.sin(a) * step, 5, this.A.height - 5); this.solveZombie(z);
-    if (Math.hypot(z.x - x0, z.y - y0) < step * .3) m.wp = null;   // blocked (another zombie, a new structure): plan again next tick
+    if (hyp(z.x - x0, z.y - y0) < step * .3) m.wp = null;   // blocked (another zombie, a new structure): plan again next tick
   }
   // Walk toward angle `ang`; if something solid is in the way, slide around it (keeps going round the same side for a while).
   steerMove(e, key, ang, dist, solve) {
@@ -2697,7 +2717,7 @@ export class SurvivalRoom extends Room {
     const now = Date.now(), x0 = e.x, y0 = e.y;
     const tryDir = (a) => {
       e.x = clamp(x0 + Math.cos(a) * dist, 5, this.A.width - 5); e.y = clamp(y0 + Math.sin(a) * dist, 5, this.A.height - 5); solve(e);
-      return Math.hypot(e.x - x0, e.y - y0);
+      return hyp(e.x - x0, e.y - y0);
     };
     const offs = now < st.until ? [0, st.off] : [0];   // straight first: a remembered sidestep must not keep a zombie circling once the way is clear
     for (const o of [...offs, .6 * st.side, 1.1 * st.side, 1.6 * st.side, -.6 * st.side, -1.1 * st.side]) {
@@ -2713,7 +2733,7 @@ export class SurvivalRoom extends Room {
   }
   // Move in small steps so fast moves (dash) can't skip through a wall.
   moveWithCollision(p, dx, dy) {
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
+    const steps = Math.max(1, Math.ceil(hyp(dx, dy) / 8));
     for (let i = 0; i < steps; i++) {
       p.x = clamp(p.x + dx / steps, 18, this.A.width - 18); p.y = clamp(p.y + dy / steps, 18, this.A.height - 18);
       this.solveCollisions(p);
@@ -2764,7 +2784,7 @@ export class SurvivalRoom extends Room {
       if (bd < 240) { mx += (b.x - boss.x) / bd * 1.6; my += (b.y - boss.y) / bd * 1.6; }
       if (boss.act === "chop") {
         const cx = boss.x + Math.cos(boss.aim) * BUTCHER.chop.offset, cy = boss.y + Math.sin(boss.aim) * BUTCHER.chop.offset, zd = ringZone(b.x - cx, b.y - cy);
-        if (zd < BUTCHER.chop.rings[2] + 20) { const dd = Math.hypot(b.x - cx, b.y - cy) || 1; mx = (b.x - cx) / dd * 3; my = (b.y - cy) / dd * 3; }
+        if (zd < BUTCHER.chop.rings[2] + 20) { const dd = hyp(b.x - cx, b.y - cy) || 1; mx = (b.x - cx) / dd * 3; my = (b.y - cy) / dd * 3; }
       }
     }
     // Keep a little personal space from other survivors so bots don't stack on top of each other.
@@ -2776,7 +2796,7 @@ export class SurvivalRoom extends Room {
     }
     // Swap strafe direction when hugging a wall.
     if (b.x < 40 || b.x > this.A.width - 40 || b.y < 40 || b.y > this.A.height - 40) brain.strafe *= -1;
-    const mag = Math.hypot(mx, my);
+    const mag = hyp(mx, my);
     if (mag > 0.01) {
       this.steerMove(b, b.sessionId, Math.atan2(my, mx), b.speed * 0.9 * (b.slowed > 0 ? 0.5 : 1) * dt, e => this.solveCollisions(e));
       if (Math.abs(mx) > 0.05) { b.facing = mx > 0 ? 1 : -1; this.lastMoveAt.set(b.sessionId, now); }
@@ -2828,7 +2848,7 @@ export class SurvivalRoom extends Room {
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
       const c = this.demoOf(b);
       if (!c && b.ultReady && nearD < 260) this.useUlt(b);
-      else if (c && c.deploy <= 0 && [...this.state.zombies.values()].filter(z => Math.hypot(z.x - c.x, z.y - c.y) < 200).length >= 4) this.useUlt(b);
+      else if (c && c.deploy <= 0 && [...this.state.zombies.values()].filter(z => hyp(z.x - c.x, z.y - c.y) < 200).length >= 4) this.useUlt(b);
     }
     if (b.characterClass === "scout") {   // Raven bot: katana when close, storm when crowded
       if (near && nearD < 105 && b.activeSlot === 1) this.meleeAttack(b, Math.atan2(near.y - b.y, near.x - b.x));
@@ -2852,24 +2872,28 @@ export class SurvivalRoom extends Room {
       if (nearD < (v.kind === "heli" ? SOFEA.heli.gun.range + 150 : v.kind === "mecha" ? SOFEA.mecha.flame.range + 10 : SOFEA.tank.shot.range)) this.vehicleFire(b, Math.atan2(near.y - b.y, near.x - b.x) + rand(-.08, .08), nearD);
     } else if (distance(b, center) > 200) { mx = center.x - b.x; my = center.y - b.y; }
     const ox = b.x, oy = b.y; this.moveVehicle(b, v, mx, my, dt);
-    if (Math.hypot(b.x - ox, b.y - oy) < 0.5 && (mx || my)) brain.strafe = -(brain.strafe || 1);
+    if (hyp(b.x - ox, b.y - oy) < 0.5 && (mx || my)) brain.strafe = -(brain.strafe || 1);
   }
 
   // Zombies along a straight line from the player, nearest first.
   // How far a straight line from (x, y) at angle a goes before hitting a solid map piece (or `range` if nothing).
-  wallDist(x, y, a, range) {
-    const dx = Math.cos(a), dy = Math.sin(a); let best = range; const seen = new Set();
+  wallDist(x, y, a, range) {   // distance along the ray to the first solid map piece, or range (hot path: bullets, bot sight, path-finding)
+    const dx = Math.cos(a), dy = Math.sin(a), st = this.rayStamp = (this.rayStamp || 0) + 1, grid = this.mapGrid; let best = range;
+    if (!grid) return best;
     for (let t = 0; t <= range + 160; t += 120) {
-      for (const b of this.mapBoxesNear(x + dx * t, y + dy * t)) {
-        if (seen.has(b)) continue; seen.add(b);
-        // ray vs box (slab test)
-        let t0 = 0, t1 = best;
-        for (const [o, d, lo, hi] of [[x, dx, b.x - b.hw, b.x + b.hw], [y, dy, b.y - b.hh, b.y + b.hh]]) {
-          if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = Infinity; break; } continue; }
-          let ta = (lo - o) / d, tb = (hi - o) / d; if (ta > tb) [ta, tb] = [tb, ta];
-          t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) break;
+      const px = x + dx * t, py = y + dy * t, gx = Math.floor(px / 160), gy = Math.floor(py / 160);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const cell = grid.get((gx + i + 8) * 4096 + (gy + j + 8)); if (!cell) continue;
+        for (const b of cell) {
+          if (b._r === st) continue; b._r = st;
+          // ray vs box (slab test)
+          let t0 = 0, t1 = best;
+          if (Math.abs(dx) < 1e-9) { if (x < b.x - b.hw || x > b.x + b.hw) continue; }
+          else { let ta = (b.x - b.hw - x) / dx, tb = (b.x + b.hw - x) / dx; if (ta > tb) { const q = ta; ta = tb; tb = q; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) continue; }
+          if (Math.abs(dy) < 1e-9) { if (y < b.y - b.hh || y > b.y + b.hh) continue; }
+          else { let ta = (b.y - b.hh - y) / dy, tb = (b.y + b.hh - y) / dy; if (ta > tb) { const q = ta; ta = tb; tb = q; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) continue; }
+          if (t0 < best) best = t0;
         }
-        if (t0 <= t1 && t0 < best) best = t0;
       }
       if (t > best) break;
     }
@@ -2892,6 +2916,7 @@ export class SurvivalRoom extends Room {
 
   // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
   downPlayer(target) {
+    if (!target.alive) { target.hp = 0; return; }   // already down (several zombies bit them in the same tick): one down, not five shorter bleed-outs
     this.log("info", "player", `${target.name} went down (wave ${this.state.stage})`, target.sessionId);
     this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
     const downs = (this.downs.get(target.sessionId) || 0) + 1;
@@ -2920,8 +2945,39 @@ export class SurvivalRoom extends Room {
     if (z.hp <= 0) this.killZombie(z, p);
   }
 
+  // Stuck watchdog (sims: 3 zombies wedged in a corner held a boss wave open forever). A walking zombie that hasn't moved 24px in 4s
+  // switches to the flow field; if that doesn't free it within 5s it comes back in from a spawn point.
+  stuckWatch(z, now, walking) {
+    let m = this.zStuck.get(z.id);
+    if (!m) { m = { x: z.x, y: z.y, at: now, flowUntil: 0 }; this.zStuck.set(z.id, m); return false; }
+    if (!walking || hyp(z.x - m.x, z.y - m.y) > 24) { m.x = z.x; m.y = z.y; m.at = now; return now < m.flowUntil; }
+    if (now - m.at > 4000) {
+      if (now < m.flowUntil || now < m.flowUntil + 1500) {   // the flow field didn't free it either: re-enter the map
+        const sp = this.spawnPoint(); z.x = sp.x; z.y = sp.y; this.solveZombie(z); this.bossPath?.delete(z.id); this.steer.delete(z.id);
+        m.x = z.x; m.y = z.y; m.at = now; m.flowUntil = 0; return false;
+      }
+      m.flowUntil = now + 5000; m.at = now; this.bossPath?.delete(z.id); return true;
+    }
+    return now < m.flowUntil;
+  }
+  spawnPoint() {   // where zombies come in: the streets leaving a painted map, or a ring around the tower
+    if (this.painted) {
+      const sp = this.painted.spawns, tot = sp.reduce((t, q) => t + q[2], 0); let r = Math.random() * tot, q = sp[0];
+      for (const c of sp) { r -= c[2]; if (r <= 0) { q = c; break; } }
+      return { x: clamp(q[0] + rand(-24, 24), 20, this.A.width - 20), y: clamp(q[1] + rand(-24, 24), 20, this.A.height - 20) };
+    }
+    const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
+    return { x: clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20), y: clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20) };
+  }
+  forgetZombie(id) {   // per-zombie bookkeeping that would otherwise pile up for the life of the room (7,000+ kills a match)
+    this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);
+  }
+  sweepZombieMemory() {   // after zombies.clear(): drop every id that's gone
+    for (const m of [this.steer, this.slamReady, this.lungeAng, this.bossMem, this.bossPath, this.zStuck, this.hiveMem, this.dots, this.taunt]) if (m) for (const k of m.keys()) if (typeof k === "string" && k[0] === "z" && !this.state.zombies.has(k)) m.delete(k);
+    for (const k of this.enraged) if (!this.state.zombies.has(k)) this.enraged.delete(k);
+  }
   killZombie(z, killer) {
-    this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id);
+    this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
     if (this.pyreFx.wheel?.owner === z.id) this.pyreFx.wheel = null;   // the Wheel of Flame dies with him
     this.broadcast("zdead", { id: z.id, x: Math.round(z.x), y: Math.round(z.y), k: z.kind });
     if (z.kind === "hivemind") {   // mini boss down: everyone gets paid, gold spills out
@@ -2990,7 +3046,7 @@ export class SurvivalRoom extends Room {
     if (p.stunned > 0 || this.shadowDash.has(sid) || this.hooks?.has(sid)) { this.lastInputs.set(sid, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
     const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
     const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
-    const mag = Math.hypot(dx, dy) || 1;
+    const mag = hyp(dx, dy) || 1;
     const now = Date.now();
     const previous = this.lastInputs.get(sid) || (now - 50);
     this.lastInputs.set(sid, now);
@@ -3012,7 +3068,7 @@ export class SurvivalRoom extends Room {
     if (now - (this.lastDashAt.get(sid) || 0) < DASH_COOLDOWN * 1000) return;
     let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
     if (!dx && !dy) dx = p.facing || 1;
-    const mag = Math.hypot(dx, dy);
+    const mag = hyp(dx, dy);
     this.lastDashAt.set(sid, now); this.dodgeUntil.set(sid, now + DASH_IFRAMES * 1000);   // 0.25s nothing can hurt you
     const x0 = p.x, y0 = p.y;
     this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);
@@ -3103,19 +3159,22 @@ export class SurvivalRoom extends Room {
     }
     if (this.state.generatorFuel > 0 && this.state.generatorHp > 0) this.state.generatorFuel = Math.max(0,this.state.generatorFuel-dt*0.025);
     else if (this.state.generatorHp <= 0 || this.state.generatorFuel <= 0) this.state.generatorHp = Math.max(0,this.state.generatorHp-dt*0.1);
+    const zList = this.state.structures.size ? [...this.state.zombies.values()] : null, powered = this.state.generatorFuel > 0 && this.state.generatorHp > 0;   // one list for every deployable this tick
+    const credit = st => this.state.players.get(st.ownerId) || this.state.players.values().next().value || null;
     for (const st of this.state.structures.values()) {
-      if (st.kind === "turret" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
-        const target=[...this.state.zombies.values()].filter(z=>distance(st,z)<260).sort((a,b)=>distance(st,a)-distance(st,b)).find(z=>this.lineClear(st,z));
+      if (st.kind === "turret" && powered) {
+        let target = null, bd = 260;   // nearest zombie in range it can see
+        for (const z of zList) { const d = distance(st, z); if (d < bd && this.lineClear(st, z)) { bd = d; target = z; } }
         st.fire = !!target; if (target) st.aim = Math.atan2(target.y - st.y, target.x - st.x);   // the client turns it + plays its firing loop
-        if(target && distance(st,target)<260){target.hp-=18*dt;if(target.hp<=0)this.killZombie(target,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null);}
+        if (target) { target.hp -= 18 * dt; if (target.hp <= 0) this.killZombie(target, credit(st)); }
       } else if (st.kind === "turret") st.fire = false;   // no power
-      if (st.kind === "fence" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
-        for(const z of [...this.state.zombies.values()]) if(nearFoot(st, z, 26, 30)) { z.hp-=12*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
+      if (st.kind === "fence" && powered) {
+        for (const z of zList) if (this.state.zombies.has(z.id) && nearFoot(st, z, 26, 30)) { z.hp -= 12 * dt; if (z.hp <= 0) this.killZombie(z, credit(st)); }
       }
-      if (st.kind === "flameTrap" && this.state.generatorFuel > 0 && this.state.generatorHp > 0) {
-        for(const z of [...this.state.zombies.values()]) if(distance(st,z)<65) { z.hp-=20*dt; if(z.hp<=0)this.killZombie(z,this.state.players.get(st.ownerId)||[...this.state.players.values()][0]||null); }
+      if (st.kind === "flameTrap" && powered) {
+        for (const z of zList) if (this.state.zombies.has(z.id) && distance(st, z) < 65) { z.hp -= 20 * dt; if (z.hp <= 0) this.killZombie(z, credit(st)); }
       }
-      if (st.kind === "mine" && st.hp > 0 && [...this.state.zombies.values()].some(z => distance(st, z) < MINE.trigger)) {   // stepped on: a blast hits everything around it
+      if (st.kind === "mine" && st.hp > 0 && zList.some(z => this.state.zombies.has(z.id) && distance(st, z) < MINE.trigger)) {   // stepped on: a blast hits everything around it
         st.hp = 0; this.state.structures.delete(st.id);
         this.ripples.push({ kind: "mine", owner: st.ownerId, x: st.x, y: st.y, t: Date.now(), at: 0, dmg: MINE.dmg, fall: MINE.edge, r: MINE.r, flat: 1, push: MINE.push, wallSafe: true });
       }
@@ -3124,8 +3183,10 @@ export class SurvivalRoom extends Room {
     const players = [...this.state.players.values()].filter(p => p.alive);
     const machines = [...[...this.state.robots.values()].filter(r => r.kind !== "worker"), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
     const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
-    const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId));   // invisible Raven / Sofea up in her helicopter: zombies can't get her
+    const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId) && !this.away.has(p.sessionId));   // invisible Raven / Sofea up in her helicopter / someone reconnecting: zombies can't get them
     const shelter = this.shelterGuard();   // survivors inside a finished safehouse: zombies outside can't touch them
+    const barricades = []; for (const st of this.state.structures.values()) if (st.kind === "barricade") barricades.push(st);
+    const seenXY = seen.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
     for (const z of [...this.state.zombies.values()]) {
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
@@ -3133,13 +3194,14 @@ export class SurvivalRoom extends Room {
       if (z.kind === "pyre") { this.pyreThink(z, dt, now, taunted); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
-      const nearestPlayer = seen.length ? seen.reduce((a,b)=>distance(z,a)<distance(z,b)?a:b) : null;
+      const zx = z.x, zy = z.y; let nearestPlayer = null, nd = Infinity;
+      for (const q of seenXY) { const dx = q[0] - zx, dy = q[1] - zy, d2 = dx * dx + dy * dy; if (d2 < nd) { nd = d2; nearestPlayer = q[2]; } }
       const tower = {x: this.A.cx, y: this.A.cy};
       let target = taunted ? taunted : z.boss ? nearestPlayer   // War Cry: Briggs first; bosses hunt survivors only
         : z.role === "hunter" ? (nearestPlayer || tower) : tower;
-      if (z.role === "hunter" && !z.boss && !taunted) {   // hunters also go for Viktor's turret and robots if they're closer
-        let bd = distance(z, target);
-        for (const m of machines) { const md = distance(z, m); if (md < bd) { bd = md; target = m; } }
+      if (z.role === "hunter" && !z.boss && !taunted && machXY.length) {   // hunters also go for Viktor's turret and robots if they're closer
+        let bd = (target.x - zx) ** 2 + (target.y - zy) ** 2;
+        for (const m of machXY) { const dx = m[0] - zx, dy = m[1] - zy, md = dx * dx + dy * dy; if (md < bd) { bd = md; target = m[2]; } }
       }
       const isMachine = !!target.maxHp && !target.sessionId;
       z.targetId = target.sessionId || "";
@@ -3173,7 +3235,7 @@ export class SurvivalRoom extends Room {
         if (z.attackCooldown <= 0) { this.hitSafe(wall, z); z.attackCooldown = z.boss ? 0.8 : 1.0; }
         continue;
       }
-      const barricade = [...this.state.structures.values()].find(st=>st.kind==="barricade"&&nearFoot(st, z, 10, 12));   // touching the fence line anywhere along it
+      const barricade = barricades.length ? barricades.find(st => st.hp > 0 && nearFoot(st, z, 10, 12)) : null;   // touching the line anywhere along it
       if (barricade) {
         z.attackCooldown = Math.max(0, z.attackCooldown - dt);
         if(z.attackCooldown<=0){barricade.hp-=z.damage;z.attackCooldown=1;if(barricade.hp<=0)this.state.structures.delete(barricade.id);}
@@ -3181,9 +3243,9 @@ export class SurvivalRoom extends Room {
         // Spitters keep their distance and lob acid from range.
         if (d < ACID.backOff) this.steerMove(z, z.id, a + Math.PI, z.speed * dt, e => this.solveZombie(e));
       } else if (d > (z.kind === "mutant" ? z.radius + 10 : z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) - 4)) {
-        if (this.flow) this.bossMove(z, target, z.speed * dt);   // maps with walls and dead ends: walk the flow field like the bosses
+        if (this.flow || this.stuckWatch(z, now, true)) this.bossMove(z, target, z.speed * dt);   // maps with walls and dead ends (or a zombie wedged on one): walk the flow field like the bosses
         else this.steerMove(z, z.id, a, z.speed * dt, e => this.solveZombie(e));   // mutants keep closing in while they slash
-      }
+      } else this.stuckWatch(z, now, false);
       z.attackCooldown = Math.max(0, z.attackCooldown - dt);   // stops at 0: no network traffic while it just walks
       if (d < z.radius + (ATTACK_REACH[z.kind] || DEFAULT_REACH) && z.attackCooldown <= 0) {
         if (isMachine) {
@@ -3191,6 +3253,7 @@ export class SurvivalRoom extends Room {
         } else if (z.kind === "mutant" && target.sessionId) {
           // mutants only hurt survivors with their charged whip (above)
         } else if (target.sessionId) {
+          if (!target.alive) continue;   // went down a moment ago (another zombie got them this tick): pick a new target next tick
           if (this.untouchable(target)) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered: the bite misses
           const dealt = this.armorHit(target, z.damage); target.hp-=dealt; target.damageTaken+=dealt;
           if(target.hp<=0)this.downPlayer(target);

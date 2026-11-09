@@ -28,7 +28,7 @@ const result = await build({
   format: "iife",
   platform: "browser",
   target: "es2020",
-  minify: true,
+  minify: !process.env.SA_NOMIN,   // SA_NOMIN=1: readable names for CPU profiles (tools/dist/preview-dev.html)
   write: false,
   plugins: [soloPlugin],
   define: { __SOLO__: "true" },
@@ -75,5 +75,6 @@ ${inlineAssets(body)}
 <script>${js}</script>
 `;
 mkdirSync(join(here, "dist"), { recursive: true });
-writeFileSync(join(here, "dist/preview.html"), page);
-console.log(`preview.html written (${(page.length / 1024).toFixed(0)} KB)`);
+const outName = process.env.SA_NOMIN ? "dist/preview-dev.html" : "dist/preview.html";
+writeFileSync(join(here, outName), page);
+console.log(`${outName.slice(5)} written (${(page.length / 1024).toFixed(0)} KB)`);

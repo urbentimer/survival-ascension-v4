@@ -10,7 +10,7 @@ const defaultEndpoint = location.protocol === "https:" ? `wss://${location.host}
 const endpoint = serverInput || GAME_SERVER || defaultEndpoint;
 const client = new Client(endpoint);
 let room = null, myId = "", state = null, keys = {}, lastInput = 0, lastShoot = 0, dashReady = true, selectedClass = loadProfile().characterClass || "assault";
-const canvas = $("arena"), ctx = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
+const canvas = $("arena"), W = canvas.width, H = canvas.height; let ctx = canvas.getContext("2d");   // let: the ground cache paints chunks through the same helpers
 // Crash-proof drawing: count save/restore depth so a sprite that throws halfway can't leave the camera offset broken
 // (that froze everyone's screen on wave 3), and never let a tiny negative radius throw.
 let ctxDepth = 0;
@@ -65,11 +65,17 @@ const WHEEL_R = 210;
 const BUILD_RANGE = 160;
 
 // ===================== SCREENS & CONNECTION =====================
-function status(text, good = false) { $("connection").textContent = text; $("connection").style.borderColor = good ? "#4d9c68" : "#8a6852"; }
+function status(text, good = false) { txt("connection", text); $("connection").style.borderColor = good ? "#4d9c68" : "#8a6852"; }
 function message(text) { toast(text); }
+// DOM writes only when the value changed: the HUD re-renders on every server patch (20/s); rewriting identical text or HTML
+// still costs the browser a style/layout pass that competes with the canvas frame.
+const domCache = new Map();
+function txt(id, v) { v = String(v); if (domCache.get("t" + id) === v) return; domCache.set("t" + id, v); $(id).textContent = v; }
+function html(id, v) { if (domCache.get("h" + id) === v) return; domCache.set("h" + id, v); $(id).innerHTML = v; }
+function sty(id, prop, v) { const k = "s" + id + prop; if (domCache.get(k) === v) return; domCache.set(k, v); $(id).style[prop] = v; }
 function showOverlay(title, text) {
   $("shop").classList.add("hidden"); $("breakBtns").classList.add("hidden"); $("overlay").classList.remove("hidden");
-  $("overlayTitle").textContent = title; $("overlayText").textContent = text;
+  txt("overlayTitle", title); txt("overlayText", text);
   $("nextStage").classList.add("hidden"); $("restartGame").classList.add("hidden");
 }
 function hideOverlay() { $("overlay").classList.add("hidden"); }
@@ -100,8 +106,11 @@ async function joinRoom() {
   try { status("Joining…"); room = await withWakeUp("Joining…", () => client.joinById(code, joinOptions())); connected(); }
   catch (e) { status("Join failed"); message(e.message || "Could not join room. Check the code and server."); }
 }
+const RECON_KEY = "sa-recon";   // sessionStorage: this tab's reconnection token, so a refresh rejoins the match it was in (the server holds the seat 30s)
+const rememberSeat = () => { try { if (!SOLO_PREVIEW && room?.reconnectionToken) sessionStorage.setItem(RECON_KEY, JSON.stringify({ token: room.reconnectionToken, at: Date.now() })); } catch {} };
+const forgetSeat = () => { try { sessionStorage.removeItem(RECON_KEY); } catch {} };
 function connected() {
-  myId = room.sessionId; status("Connected · " + room.roomId, true);
+  myId = room.sessionId; status("Connected · " + room.roomId, true); rememberSeat();
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
   room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: performance.now() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
@@ -141,10 +150,33 @@ function connected() {
   room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
-    status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
+    const dropped = code !== 1000 && code !== 4000 && state && state.phase !== "lobby" && !SOLO_PREVIEW && room?.reconnectionToken;   // 1000 = you left on purpose, 4000 = kicked
+    if (dropped) { reconnectRoom(room.reconnectionToken); return; }   // a wifi blip / sleeping phone: the server holds your spot for 30s
+    forgetSeat(); status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
     document.body.classList.remove("in-match"); closePanels(); $("gameArea").classList.add("hidden");
   });
   room.onError((code, msg) => message("Room error: " + msg));
+}
+// Connection dropped mid-match: try to get back in with the reconnection token (the server keeps the seat for 30s), a few times.
+let reconnecting = false;
+async function reconnectRoom(token) {
+  if (reconnecting) return; reconnecting = true; room = null;
+  const feedMsg = t => { feed.unshift({ text: t, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
+  status("Reconnecting…"); feedMsg("Connection lost. Reconnecting…");
+  for (let i = 0; i < 6; i++) {
+    try { room = await client.reconnect(token); connected(); reconnecting = false; feedMsg("Reconnected."); toast("Reconnected"); return; }
+    catch (e) { console.warn("[reconnect]", i + 1, e?.message || e); await new Promise(r => setTimeout(r, 1500 + i * 1200)); }
+  }
+  reconnecting = false; forgetSeat(); status("Disconnected"); state = null; toast("Couldn't reconnect. Create or join a room to play again."); renderLobbyRoom();
+  document.body.classList.remove("in-match"); closePanels(); $("gameArea").classList.add("hidden");
+}
+// Page refreshed mid-match (F5, a phone reloading the tab): rejoin the same room with the saved token instead of starting over.
+async function rejoinAfterRefresh() {
+  let saved = null; try { saved = JSON.parse(sessionStorage.getItem(RECON_KEY) || "null"); } catch {}
+  if (SOLO_PREVIEW || !saved?.token || Date.now() - saved.at > 20 * 60 * 1000) return;
+  status("Rejoining your match…");
+  try { room = await client.reconnect(saved.token); connected(); toast("Back in your match."); }
+  catch (e) { forgetSeat(); status("Not connected"); console.warn("[rejoin]", e?.message || e); }
 }
 document.addEventListener("click", e => { const b = e.target.closest?.("button"); if (b) b.blur(); });
 $("create").onclick = createRoom; $("join").onclick = joinRoom;
@@ -176,15 +208,15 @@ function renderBossIntro() {
   const show = phase === "intro" && !introAcked;
   $("bossIntro").classList.toggle("hidden", !show);
   $("bossWaitBanner").classList.toggle("hidden", !(phase === "intro" && introAcked));
-  if (phase === "intro") $("bossWaitBanner").textContent = `Waiting for teammates… ${state.introReady || 0}/${state.introNeed || 1} ready`;
-  if (!show || $("bossIntro").dataset.kind === kind) { if (show) $("bossIntroWait").textContent = `${state.introReady || 0}/${state.introNeed || 1} survivors ready`; return; }
+  if (phase === "intro") txt("bossWaitBanner", `Waiting for teammates… ${state.introReady || 0}/${state.introNeed || 1} ready`);
+  if (!show || $("bossIntro").dataset.kind === kind) { if (show) txt("bossIntroWait", `${state.introReady || 0}/${state.introNeed || 1} survivors ready`); return; }
   $("bossIntro").dataset.kind = kind;
   const info = BOSS_INFO[kind] || { wave: state.stage, name: String(kind).replace(/[A-Z]/g, m => " " + m).toUpperCase(), lore: "A new horror approaches. Nobody has survived it long enough to tell.", skills: [["❓", "Unknown", "Stay together and keep moving.", "#888"]] };
-  $("bossIntroWave").textContent = `BOSS · WAVE ${state.stage}`;
-  $("bossIntroName").textContent = info.name; $("bossIntroLore").textContent = info.lore;
+  txt("bossIntroWave", `BOSS · WAVE ${state.stage}`);
+  txt("bossIntroName", info.name); txt("bossIntroLore", info.lore);
   $("bossIntroImg").src = info.portrait || ""; $("bossIntroImg").hidden = !info.portrait;
-  $("bossIntroSkills").innerHTML = info.skills.map(([ico, name, txt, c]) => `<li style="--c:${c}"><span class="ico" aria-hidden="true">${ico}</span><span><b>${escapeHtml(name)}</b>${txt}</span></li>`).join("");
-  $("bossIntroWait").textContent = `${state.introReady || 0}/${state.introNeed || 1} survivors ready`;
+  html("bossIntroSkills", info.skills.map(([ico, name, txt, c]) => `<li style="--c:${c}"><span class="ico" aria-hidden="true">${ico}</span><span><b>${escapeHtml(name)}</b>${txt}</span></li>`).join(""));
+  txt("bossIntroWait", `${state.introReady || 0}/${state.introNeed || 1} survivors ready`);
   setTimeout(() => $("bossAck").focus(), 50);
 }
 function ackBoss() { if (!introAcked && state?.bossPhase === "intro") { introAcked = true; room?.send("ackBoss"); renderBossIntro(); } }
@@ -216,20 +248,22 @@ $("lvlBadge").onclick = () => togglePanel("levelUp");
 // ===================== RENDER (runs on every server update, ~20x a second) =====================
 const feed = []; let lastMessage = "";
 function inMatch() { return !!(room && state && state.phase !== "lobby"); }
+let lastPhaseSeen = "";
 function renderState() {
   if (!state || !room) return;
   const players = [...state.players.values()], me = state.players.get(myId), host = state.hostId === myId;
   saveProfile(me);
   if (me?.characterClass && me.characterClass !== selectedClass) setSelectedClass(me.characterClass, false);
-  renderLobbyRoom();
+  if (state.phase === "lobby" || lastPhaseSeen !== state.phase) renderLobbyRoom();   // the lobby page is hidden mid-match: no point rebuilding it on every patch
+  lastPhaseSeen = state.phase;
   $("exploreToggle").classList.toggle("hidden", !host || state.phase !== "playing");
   $("waveJump").classList.toggle("hidden", !(SOLO_PREVIEW || state.hostId === myId) || state.phase === "lobby");   // the host can skip to any wave
   for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
   $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); $("noCdToggle").textContent = `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`;
-  if (SOLO_PREVIEW) $("hookSpd").textContent = (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)";
-  $("exploreToggle").textContent = state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves";
+  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
+  if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
+  txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
   // switch between lobby page and full-screen game
   const playingNow = state.phase !== "lobby";
   document.body.classList.toggle("in-match", playingNow);
@@ -241,18 +275,18 @@ function renderState() {
   if (!$("equip").classList.contains("hidden")) renderEquip(me);
   // event feed from server messages
   if (state.message && state.message !== lastMessage) { lastMessage = state.message; feed.unshift({ text: state.message, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
-  $("feed").innerHTML = feed.filter(f => Date.now() - f.t < 7000).map(f => `<li style="opacity:${Date.now() - f.t > 5500 ? .35 : 1}">${escapeHtml(f.text)}</li>`).join("");
+  html("feed", feed.filter(f => Date.now() - f.t < 7000).map(f => `<li style="opacity:${Date.now() - f.t > 5500 ? .35 : 1}">${escapeHtml(f.text)}</li>`).join(""));
   // big screens: wave cleared + shop, downed, win/loss
   const brk = state.phase === "cleared", humans = [...state.players.values()].filter(p => !p.isBot), nReady = humans.filter(p => p.ready).length, secs = Math.ceil(state.countdown || 0);
   const go = brk && humans.length && nReady === humans.length, info = go ? `Here they come in ${secs}s!` : `Ready ${nReady}/${humans.length} · next wave in ${secs}s`;
   if (!brk) breakMin = false;
   $("breakBar").classList.toggle("hidden", !(brk && breakMin));
   document.body.classList.toggle("break-cursor", brk);   // the break: a normal mouse pointer (the crosshair is only drawn mid-wave)
-  for (const id of ["breakReady", "bbReady"]) { const b = $(id); b.textContent = me?.ready ? "✓ READY" : "READY"; b.classList.toggle("is-ready", !!me?.ready); }
-  if (brk && breakMin) { hideOverlay(); $("bbTitle").textContent = `WAVE ${state.stage} CLEARED`; $("bbInfo").textContent = info; }
+  for (const id of ["breakReady", "bbReady"]) { txt(id, me?.ready ? "✓ READY" : "READY"); $(id).classList.toggle("is-ready", !!me?.ready); }
+  if (brk && breakMin) { hideOverlay(); txt("bbTitle", `WAVE ${state.stage} CLEARED`); txt("bbInfo", info); }
   else if (brk) {
     showOverlay("WAVE " + state.stage + " CLEARED!", `Shop, then press READY. The next wave starts when everyone is ready (60s max). ${info}. Minimize this to move around and build first; press F next to the tower or generator to repair it.`);
-    $("breakBtns").classList.remove("hidden"); $("nextStage").textContent = "START NOW"; $("nextStage").classList.toggle("hidden", !host); renderShop(me);
+    $("breakBtns").classList.remove("hidden"); txt("nextStage", "START NOW"); $("nextStage").classList.toggle("hidden", !host); renderShop(me);
   } else if (state.phase === "victory") {
     showOverlay("CAMPAIGN COMPLETE!", "You survived all 50 waves and defeated the final boss. Victory!" + (host ? "" : " Waiting for the host to start a new match."));
     $("restartGame").classList.toggle("hidden", !host);
@@ -264,8 +298,8 @@ function renderState() {
   const watching = me && !me.alive && state.phase === "playing", tgt = watching ? viewTarget() : null;
   $("spectate").classList.toggle("hidden", !watching);
   if (watching) {
-    $("specTitle").textContent = me.bledOut ? "YOU BLED OUT · back next wave" : `YOU ARE DOWN · bleed-out in ${Math.ceil(me.bleedout || 0)}s · a teammate can press F next to you`;
-    $("specWho").textContent = tgt && tgt !== me ? `Watching ${tgt.isBot ? "🤖 " : ""}${tgt.name}` : "Nobody left standing";
+    txt("specTitle", me.bledOut ? "YOU BLED OUT · back next wave" : `YOU ARE DOWN · bleed-out in ${Math.ceil(me.bleedout || 0)}s · a teammate can press F next to you`);
+    txt("specWho", tgt && tgt !== me ? `Watching ${tgt.isBot ? "🤖 " : ""}${tgt.name}` : "Nobody left standing");
     $("specHint").classList.toggle("hidden", aliveMates().length < 2);
   }
 }
@@ -274,35 +308,35 @@ const pct = (v, max) => Math.max(0, Math.min(100, (v / (max || 1)) * 100)) + "%"
 function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function renderHud(me, players) {
   // top left: wave, timer, zombies, day/night
-  $("hudWave").textContent = state.stage;
+  txt("hudWave", state.stage);
   const hiveUp = [...state.zombies.values()].some(z => z.kind === "hivemind");
-  $("hudTimer").textContent = state.explore ? "EXPLORE MODE" : state.waveType !== "boss" ? ((state.elapsed || 0) >= 90 && hiveUp ? "KILL THE HIVEMIND" : fmtTime(90 - (state.elapsed || 0)))
+  txt("hudTimer", state.explore ? "EXPLORE MODE" : state.waveType !== "boss" ? ((state.elapsed || 0) >= 90 && hiveUp ? "KILL THE HIVEMIND" : fmtTime(90 - (state.elapsed || 0)))
     : state.bossPhase === "horde" ? (state.elapsed < 45 ? "BOSS WAVE · horde " + fmtTime(45 - (state.elapsed || 0)) : "BOSS WAVE · clear the horde")
-    : state.bossPhase === "intro" ? "THE BOSS IS COMING" : "BOSS FIGHT";
+    : state.bossPhase === "intro" ? "THE BOSS IS COMING" : "BOSS FIGHT");
   renderBossIntro();
-  $("hudZombies").textContent = state.zombies.size + (state.zombies.size === 1 ? " zombie" : " zombies");
-  $("hudClock").textContent = state.isNight ? "NIGHT" : "DAY";
+  txt("hudZombies", state.zombies.size + (state.zombies.size === 1 ? " zombie" : " zombies"));
+  txt("hudClock", state.isNight ? "NIGHT" : "DAY");
   // top centre: tower, generator, boss
-  $("towerText").textContent = Math.ceil(state.towerHp || 0).toLocaleString() + " / " + (state.towerMaxHp || 10000).toLocaleString();
-  $("towerBar").style.width = pct(state.towerHp, state.towerMaxHp);
-  $("towerBar").style.background = (state.towerHp || 0) < (state.towerMaxHp || 10000) * 0.25 ? "#e45b4d" : "#58ce8b";
-  $("genText").textContent = Math.ceil(state.generatorFuel || 0) + "% fuel · " + Math.ceil(state.generatorHp || 0) + " HP";
-  $("genBar").style.width = pct(state.generatorHp, state.generatorMaxHp);
+  txt("towerText", Math.ceil(state.towerHp || 0).toLocaleString() + " / " + (state.towerMaxHp || 10000).toLocaleString());
+  sty("towerBar", "width", pct(state.towerHp, state.towerMaxHp));
+  sty("towerBar", "background", (state.towerHp || 0) < (state.towerMaxHp || 10000) * 0.25 ? "#e45b4d" : "#58ce8b");
+  txt("genText", Math.ceil(state.generatorFuel || 0) + "% fuel · " + Math.ceil(state.generatorHp || 0) + " HP");
+  sty("genBar", "width", pct(state.generatorHp, state.generatorMaxHp));
   const boss = [...state.zombies.values()].find(z => z.boss) || [...state.zombies.values()].find(z => z.kind === "hivemind");
   $("bossBox").classList.toggle("hidden", !boss);
   if (boss) {
-    $("bossName").textContent = (boss.kind === "hivemind" ? "THE HIVEMIND · MINI BOSS" : BOSS_INFO[boss.kind]?.name || String(boss.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()) + (boss.enraged ? " · ENRAGED" : "");
-    $("bossText").textContent = Math.ceil(boss.hp).toLocaleString(); $("bossBar").style.width = pct(boss.hp, boss.maxHp);
+    txt("bossName", (boss.kind === "hivemind" ? "THE HIVEMIND · MINI BOSS" : BOSS_INFO[boss.kind]?.name || String(boss.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()) + (boss.enraged ? " · ENRAGED" : ""));
+    txt("bossText", Math.ceil(boss.hp).toLocaleString()); sty("bossBar", "width", pct(boss.hp, boss.maxHp));
   }
   // top right: team list under the minimap
-  $("team").innerHTML = players.map(p => `<div class="team-row"><i style="background:${p.color}"></i><span>${p.isBot ? "🤖 " : ""}${escapeHtml(p.name)}${p.sessionId === myId ? " (you)" : ""}</span>${p.alive ? `<span>${Math.ceil(p.hp)}</span>` : `<em>${p.bledOut ? "OUT" : "DOWN " + Math.ceil(p.bleedout || 0) + "s"}</em>`}<div class="hbar"><span style="width:${pct(p.alive ? p.hp : 0, p.maxHp)}"></span></div></div>`).join("");
+  html("team", players.map(p => `<div class="team-row"><i style="background:${p.color}"></i><span>${p.isBot ? "🤖 " : ""}${escapeHtml(p.name)}${p.sessionId === myId ? " (you)" : ""}</span>${p.alive ? `<span>${Math.ceil(p.hp)}</span>` : `<em>${p.bledOut ? "OUT" : "DOWN " + Math.ceil(p.bleedout || 0) + "s"}</em>`}<div class="hbar"><span style="width:${pct(p.alive ? p.hp : 0, p.maxHp)}"></span></div></div>`).join(""));
   // bottom right: team resources
-  $("resources").innerHTML = ["scrap", "electronics", "explosives", "fuel"].map(r => `<span title="${r}">${icon(r)}<b>${Math.floor(state[r] || 0)}</b></span>`).join("");
+  html("resources", ["scrap", "electronics", "explosives", "fuel"].map(r => `<span title="${r}">${icon(r)}<b>${Math.floor(state[r] || 0)}</b></span>`).join(""));
   if (!me) return;
   // bottom left: you
-  $("hpText").textContent = Math.ceil(me.hp) + " / " + me.maxHp; $("hpBar").style.width = pct(me.hp, me.maxHp);
-  const maxLv = me.level >= MAX_LEVEL; $("hudLevel").textContent = "LV " + me.level; $("xpText").textContent = maxLv ? "MAX LEVEL" : me.xp + " / " + me.xpNext + " XP"; $("xpBar").style.width = maxLv ? "100%" : pct(me.xp, me.xpNext);
-  $("hudGold").innerHTML = icon("gold") + (me.currency || 0) + "g"; $("hudDef").textContent = "DEF " + (me.defence || 0); $("hudClass").textContent = String(me.characterClass).toUpperCase();
+  txt("hpText", Math.ceil(me.hp) + " / " + me.maxHp); sty("hpBar", "width", pct(me.hp, me.maxHp));
+  const maxLv = me.level >= MAX_LEVEL; txt("hudLevel", "LV " + me.level); txt("xpText", maxLv ? "MAX LEVEL" : me.xp + " / " + me.xpNext + " XP"); sty("xpBar", "width", maxLv ? "100%" : pct(me.xp, me.xpNext));
+  html("hudGold", icon("gold") + (me.currency || 0) + "g"); txt("hudDef", "DEF " + (me.defence || 0)); txt("hudClass", String(me.characterClass).toUpperCase());
   const pc = "hud-portrait p-" + me.characterClass; if ($("hudPortrait").className !== pc) $("hudPortrait").className = pc;
   // bottom centre: hotbar
   renderHotbar(me);
@@ -348,19 +382,21 @@ function renderHotbar(me) {
   if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
-  if (hb !== hotbarHtml) { $("hotbar").innerHTML = hb; hotbarHtml = hb; }
+  if (hb !== hotbarHtml) { html("hotbar", hb); hotbarHtml = hb; }
   const dashLeft = Math.max(0, dashReadyAt - performance.now()) / 1000;
-  $("dashChip").textContent = dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"; $("dashChip").classList.toggle("ready", dashLeft <= 0);
-  $("ammoLine").textContent = me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press C" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "";
+  txt("dashChip", dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"); $("dashChip").classList.toggle("ready", dashLeft <= 0);
+  txt("ammoLine", me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press C" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "");
 }
 
 function renderScoreboard(players) {
+  $("scoreboard").classList.toggle("hidden", !scoreboardOpen || state.phase === "cleared");
+  if ($("scoreboard").classList.contains("hidden")) return;   // nothing to see: don't rebuild the table 20 times a second
   const ranked = players.slice().sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)));
   const rows = ranked.map((p, i) => `<tr class="${i === 0 && p.kills > 0 ? "leader" : ""}"><td>${i === 0 && p.kills > 0 ? "👑 " : ""}${i + 1}. ${escapeHtml(p.name)}${p.sessionId === myId ? " (YOU)" : ""}</td><td>${p.kills}</td><td>${Math.round(p.bossDamage || 0)}</td><td>${p.revives || 0}</td><td>${Math.round(p.towerRepairs || 0)}</td><td>${p.structuresBuilt || 0}</td><td>${Math.round(p.damageDealt || 0)}</td><td>${Math.round(p.damageTaken || 0)}</td></tr>`).join("");
   const done = ["cleared", "victory", "defeat"].includes(state.phase);
   const awardKeys = [["Zombie Slayer", "kills"], ["Boss Hunter", "bossDamage"], ["Lifesaver", "revives"], ["Guardian", "towerRepairs"], ["Master Engineer", "structuresBuilt"]];
   const awards = awardKeys.map(([label, key]) => { const w = players.slice().sort((a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0))[0]; return w && Number(w[key]) > 0 ? `${label}: ${escapeHtml(w.name)}` : ""; }).filter(Boolean);
-  $("scoreboard").innerHTML = `<h3>${done ? "MATCH RESULTS" : "LIVE KILL LEADERBOARD"}</h3><table><thead><tr><th>Survivor</th><th>Kills</th><th>Boss dmg</th><th>Revives</th><th>Tower repair</th><th>Builds</th><th>Damage dealt</th><th>Damage taken</th></tr></thead><tbody>${rows}</tbody></table>${done && awards.length ? `<div class="scorehint">${awards.join(" · ")}</div>` : ""}<div class="scorehint">Team kills: ${state.totalKills || 0} · Press TAB to toggle</div>`;
+  html("scoreboard", `<h3>${done ? "MATCH RESULTS" : "LIVE KILL LEADERBOARD"}</h3><table><thead><tr><th>Survivor</th><th>Kills</th><th>Boss dmg</th><th>Revives</th><th>Tower repair</th><th>Builds</th><th>Damage dealt</th><th>Damage taken</th></tr></thead><tbody>${rows}</tbody></table>${done && awards.length ? `<div class="scorehint">${awards.join(" · ")}</div>` : ""}<div class="scorehint">Team kills: ${state.totalKills || 0} · Press TAB to toggle</div>`);
   $("scoreboard").classList.toggle("hidden", !scoreboardOpen || state.phase === "cleared");
 }
 
@@ -417,15 +453,15 @@ function renderLevelUp(me) {
   const ready = !!(me && state.phase === "playing" && me.xp >= me.xpNext && me.level < MAX_LEVEL);
   const n = ready ? pendingLevelUps(me) : 0;
   $("lvlBadge").classList.toggle("hidden", !ready);
-  $("lvlBadge").textContent = `▲ LEVEL UP${n > 1 ? " ×" + n : ""} · press U`;
+  txt("lvlBadge", `▲ LEVEL UP${n > 1 ? " ×" + n : ""} · press U`);
   if (!ready) { $("levelUp").classList.add("hidden"); levelUpBuiltFor = ""; return; }
   if ($("levelUp").classList.contains("hidden")) return;
-  $("levelUpCount").textContent = n > 1 ? n + " upgrades ready" : "1 upgrade ready";
+  txt("levelUpCount", n > 1 ? n + " upgrades ready" : "1 upgrade ready");
   $("levelUpHint").textContent = me.alive ? `Press 1–${upgradeChoices(me).length} or click. U or Esc to close. The fight keeps going.` : "You're down. Pick once a teammate revives you.";
   const key = me.level + "|" + me.alive;
   if (key !== levelUpBuiltFor) {
     levelUpBuiltFor = key; levelUpWaitUntil = 0;
-    $("levelUpChoices").innerHTML = upgradeChoices(me).map(([id, title, desc], i) => `<button class="button" data-upgrade="${id}"><kbd>${i + 1}</kbd><span><b>${title}</b><small>${desc}</small></span></button>`).join("");
+    html("levelUpChoices", upgradeChoices(me).map(([id, title, desc], i) => `<button class="button" data-upgrade="${id}"><kbd>${i + 1}</kbd><span><b>${title}</b><small>${desc}</small></span></button>`).join(""));
   }
   const locked = !me.alive || Date.now() < levelUpWaitUntil;
   $("levelUpChoices").querySelectorAll("button").forEach(b => b.disabled = locked);
@@ -462,7 +498,7 @@ function renderEquip(me) {
     const it = items[i];
     cells.push(it ? `<button class="bag-slot" data-kind="${it.kind}" data-id="${it.id}" title="${escapeHtml(it.name)}: double-click to equip">${icon(it.id)}${escapeHtml(it.name)}<small>${it.sub}</small></button>` : `<div class="bag-slot" aria-hidden="true"></div>`);
   }
-  $("bag").innerHTML = cells.join(""); $("bagCount").textContent = items.length + " / 20";
+  html("bag", cells.join("")); txt("bagCount", items.length + " / 20");
 }
 // Backpack: click = select (shows what it is), double-click = equip it and put it in your hand.
 const bagName = b => b.textContent.replace(/(primary|secondary|melee)$/, "");
@@ -813,7 +849,7 @@ function resolveWheel() {   // let go of right-click: actions happen now; a depl
 }
 function placeProblem(me, spot, opt) {   // why it can't go here (the same checks as the server), or ""
   if (!canAfford(opt.cost)) return "not enough resources";
-  if (state.structures.size >= 20) return "20 deployables max";
+  if ([...state.structures.values()].filter(st => BUILD_WHEEL.some(o => o.id === st.kind)).length >= 20) return "20 deployables max";
   const grid = predGrid(), gx = Math.floor(spot.x / 160), gy = Math.floor(spot.y / 160);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (Math.abs(spot.x - b.x) < b.hw + 12 && Math.abs(spot.y - b.y) < b.hh + 12) return "blocked";
   return "";
@@ -2240,11 +2276,10 @@ function drawMutantWhip(z, img8, info) {
   const tg = state.players.get(z.targetId), face = tg ? Math.atan2(tg.y - z.y, tg.x - z.x) : zombieAngle(z);
   const row = ROW_OF_OCT[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], feet = z.radius ? z.radius * 0.8 : 12, C = ZD8_CELLS.mutant;
   ctx.save(); ctx.translate(Math.round(z.x), Math.round(z.y)); ctx.imageSmoothingEnabled = false;
-  const charging = t < .38, flash = feel.flash.get(z.id);
-  if (flash && now - flash < 90) ctx.filter = "brightness(2.6)";
-  else if (charging) { const g = .5 + .5 * Math.sin(now / 45); ctx.filter = `drop-shadow(0 0 ${4 + 5 * g}px rgba(255,40,70,.95)) brightness(${1 + .25 * g})`; }   // glowing red while it coils: your warning
+  const charging = t < .38, flash = feel.flash.get(z.id), flashing = flash && now - flash < 90;
+  if (!flashing && charging) { const g = .5 + .5 * Math.sin(now / 45); ctx.filter = `drop-shadow(0 0 ${4 + 5 * g}px rgba(255,40,70,.95)) brightness(${1 + .25 * g})`; }   // glowing red while it coils: your warning
   const shake = charging ? (Math.random() - .5) * 2.5 : 0;
-  ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX + shake, feet - C.feetY, C.cellW, C.cellH);
+  flashDraw(flashing, () => ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX + shake, feet - C.feetY, C.cellW, C.cellH));
   if (t > .46 && t < .78 && mutantClaw.naturalWidth) {   // claw marks rip across in front of it
     const k = (t - .46) / .32; ctx.filter = "none"; ctx.globalAlpha = 1 - k * k;
     ctx.drawImage(mutantClaw, 0, row * C.cellH, C.cellW, C.cellH, -C.anchorX + Math.cos(face) * 44, feet - C.feetY - 8 + Math.sin(face) * 26, C.cellW, C.cellH);
@@ -2301,8 +2336,7 @@ function drawZombieSprite(z, img, alpha = 1, forceFrame = -1, facing = 0) {
   const sc = ZSIDE_SCALE[z.kind] || 1;
   ctx.save(); ctx.translate(Math.round(z.x), Math.round(z.y) + feet); ctx.scale(f * sc, sc); ctx.translate(0, -feet); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
   const flash = feel.flash.get(z.id);
-  if (flash && now - flash < 90) ctx.filter = "brightness(2.6)";
-  ctx.drawImage(img, frame * ZSPR.cellW, 0, ZSPR.cellW, ZSPR.cellH, -ZSPR.anchorX, feet - ZSPR.cellH, ZSPR.cellW, ZSPR.cellH);
+  flashDraw(flash && now - flash < 90, () => ctx.drawImage(img, frame * ZSPR.cellW, 0, ZSPR.cellW, ZSPR.cellH, -ZSPR.anchorX, feet - ZSPR.cellH, ZSPR.cellW, ZSPR.cellH));
   ctx.restore();
   return { feet, h: info.h };
 }
@@ -2315,8 +2349,8 @@ function drawZombieDir8(z, img8, side) {
     const frame = t < .25 ? 0 : t < .5 ? 1 : t < SLAM_T.windup ? 2 : t < SLAM_T.windup + .15 ? 3 : t < SLAM_T.windup + .38 ? 4 : 5;
     const row = ROW_OF_OCT[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8], feet = z.radius ? z.radius * 0.8 : 12, C = SLAM_CELL;
     ctx.save(); ctx.translate(Math.round(z.x), Math.round(z.y)); ctx.imageSmoothingEnabled = false;
-    const flash = feel.flash.get(z.id); if (flash && now - flash < 90) ctx.filter = "brightness(2.6)";
-    ctx.drawImage(slamImg, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX, feet - C.feetY, C.cellW, C.cellH);
+    const flash = feel.flash.get(z.id);
+    flashDraw(flash && now - flash < 90, () => ctx.drawImage(slamImg, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX, feet - C.feetY, C.cellW, C.cellH));
     ctx.restore();
     return { feet, h: info.h };
   }
@@ -2335,9 +2369,9 @@ function drawZombieDir8(z, img8, side) {
   else frame = Math.floor((now + seed) / (info.walk * .55)) % anim.walk;
   const feet = z.radius ? z.radius * 0.8 : 12;
   ctx.save(); ctx.translate(Math.round(z.x), Math.round(z.y)); ctx.imageSmoothingEnabled = false;
-  const flash = feel.flash.get(z.id); if (flash && now - flash < 90) ctx.filter = "brightness(2.6)";
+  const flash = feel.flash.get(z.id);
   const C = ZD8_CELLS[z.kind] || ZD8_CELLS.runner;
-  ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX, feet - C.feetY - bob, C.cellW, C.cellH);
+  flashDraw(flash && now - flash < 90, () => ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX, feet - C.feetY - bob, C.cellW, C.cellH));
   if (anim.claw !== undefined && attacking && since > .14 && since < .46) {   // claw marks flash in front of it
     const k = (since - .14) / .32; ctx.filter = "none"; ctx.globalAlpha = 1 - k * k;
     ctx.drawImage(img8, anim.claw * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX + Math.cos(face) * 38, feet - C.feetY - 10 + Math.sin(face) * 24, C.cellW, C.cellH);
@@ -2566,12 +2600,15 @@ function drawShotFx(){
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
    if(f.type==='slam'){const k=age/520;ctx.save();ctx.globalAlpha=.7*(1-k);ctx.strokeStyle='#e8d2a6';ctx.lineWidth=6*(1-k)+2;ctx.beginPath();ctx.ellipse(f.x,f.y+20,f.r*(.3+.8*k),f.r*.5*(.3+.8*k),0,0,7);ctx.stroke();ctx.restore();continue;}
    ctx.save();
-   if(f.type==='shot'){const k=1-age/140;ctx.globalAlpha=k;ctx.strokeStyle=TRACER[f.w]||'#ffcf66';ctx.lineWidth=f.w==='sniper'?3:2;ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;
-    f.a.forEach((a,j)=>{const ox=f.x+Math.cos(a)*16,oy=f.y+Math.sin(a)*16;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(f.x+Math.cos(a)*f.len[j],f.y+Math.sin(a)*f.len[j]);ctx.stroke();});
+   if(f.type==='shot'){const k=1-age/140,col=TRACER[f.w]||'#ffcf66',lw=f.w==='sniper'?3:2;ctx.lineCap='round';
+    ctx.beginPath();for(let j=0;j<f.a.length;j++){const a=f.a[j];ctx.moveTo(f.x+Math.cos(a)*16,f.y+Math.sin(a)*16);ctx.lineTo(f.x+Math.cos(a)*f.len[j],f.y+Math.sin(a)*f.len[j]);}
+    ctx.globalAlpha=k*.35;ctx.strokeStyle=col;ctx.lineWidth=lw+5;ctx.stroke();   // the glow: a wide soft pass (no shadowBlur: that was a blur per bullet, every frame)
+    ctx.globalAlpha=k;ctx.lineWidth=lw;ctx.stroke();
     if(age<60){ctx.fillStyle='#fff3c4';ctx.beginPath();ctx.arc(f.x+Math.cos(f.a[0])*20,f.y+Math.sin(f.a[0])*20,5,0,7);ctx.fill();}}
    else if(f.type==='swing'&&f.m==='katana'&&ravenSlashImg.naturalWidth){if(!drawRavenSlash(f,age)){ctx.restore();fx.splice(i,1);continue;}}
-   else if(f.type==='swing'){const life=f.heavy?280:160;if(age>life){ctx.restore();fx.splice(i,1);continue;}const k=age/life;ctx.globalAlpha=.8*(1-k);ctx.strokeStyle=f.heavy?'#ffd9a0':'#f3f6f2';ctx.lineWidth=f.heavy?9:4;ctx.shadowColor='#ffffff';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.75+.25*k),f.a-f.arc*(1-k*.4),f.a+f.arc*(1-k*.4));ctx.stroke();}
-   else{const k=age/380;ctx.globalAlpha=1-k;ctx.strokeStyle='#ff8a3d';ctx.lineWidth=4;ctx.shadowColor='#ff8a3d';ctx.shadowBlur=16;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.35+.65*k),0,7);ctx.stroke();ctx.fillStyle='rgba(255,170,80,.25)';ctx.fill();}
+   else if(f.type==='swing'){const life=f.heavy?280:160;if(age>life){ctx.restore();fx.splice(i,1);continue;}const k=age/life,lw=f.heavy?9:4;ctx.lineCap='round';ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.75+.25*k),f.a-f.arc*(1-k*.4),f.a+f.arc*(1-k*.4));
+    ctx.globalAlpha=.3*(1-k);ctx.strokeStyle='#ffffff';ctx.lineWidth=lw+8;ctx.stroke();ctx.globalAlpha=.8*(1-k);ctx.strokeStyle=f.heavy?'#ffd9a0':'#f3f6f2';ctx.lineWidth=lw;ctx.stroke();}
+   else{const k=age/380;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.35+.65*k),0,7);ctx.globalAlpha=.35*(1-k);ctx.strokeStyle='#ff8a3d';ctx.lineWidth=14;ctx.stroke();ctx.globalAlpha=1-k;ctx.lineWidth=4;ctx.stroke();ctx.fillStyle='rgba(255,170,80,.25)';ctx.fill();}
    ctx.restore();}
 }
 function drawCrosshair(){
@@ -2865,7 +2902,7 @@ const worldW = () => state?.worldW || 3600, worldH = () => state?.worldH || 2280
 const towerX = () => state?.towerX || worldW() / 2, towerY = () => state?.towerY || worldH() / 2;   // the radio tower (painted maps: where it's painted)
 const paintedMap = () => { const s = state?.mapLayout; return s && s.startsWith("P:") ? PAINTED[s.slice(2)] || null : null; };
 const cam = { x: 0, y: 0, ready: false, last: 0 };
-window.__saCam = cam; window.__saPred = () => { const m = me_(); return { id: myId, px: PRED.x, ex: PRED.ex, sx: m?.x, ack: m?.ack, seq: PRED.seq, n: PRED.pending.length, sp: m?.speed }; }; if (SOLO_PREVIEW) window.__saState = () => ({ state, me: me_(), scorches, corpses }); // read-only hook used by automated smoothness tests
+window.__saCam = cam; window.__saRoom = () => room; window.__saPred = () => { const m = me_(); return { id: myId, px: PRED.x, ex: PRED.ex, sx: m?.x, ack: m?.ack, seq: PRED.seq, n: PRED.pending.length, sp: m?.speed }; }; if (SOLO_PREVIEW) window.__saState = () => ({ state, me: me_(), scorches, corpses, room }); // read-only hook used by automated smoothness tests
 // ===================== OWN-PLAYER PREDICTION =====================
 // Your survivor moves the instant you press a key (same speed + wall rules as the server), instead of waiting a round trip.
 // Every input has a number; the server sends back the last number it applied (player.ack). On each update we start from the
@@ -3095,13 +3132,16 @@ function drawWorld(){
 // ---------- Fallen Dynasty (Nov 5): a city of Chinese pieces on straight roads (mapLayout.js buildDynastyLayout / dynastyGround) ----------
 let dynGroundCache = null;
 function drawDynastyWorld() {
-  const WW = worldW(), WH = worldH(), vx = cam.x - 2, vy = cam.y - 2, vw = W + 4, vh = H + 4;
+  const WW = worldW(), WH = worldH();
   if (!dynGroundCache || dynGroundCache.w !== WW) dynGroundCache = { w: WW, g: dynastyGround(WW, WH) };
-  const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
-  const grass = pattern("dgrass"); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
-  for (const g of dynGroundCache.g) { const p = pattern("d" + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
-    if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
-  ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
+  const ready = ["dgrass", ...new Set(dynGroundCache.g.map(g => "d" + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
+  drawGroundCached("dyn" + WW + "x" + WH + ":" + ready, (vx, vy, vw, vh) => {
+    const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
+    const grass = pattern("dgrass"); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
+    for (const g of dynGroundCache.g) { const p = pattern("d" + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
+      if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
+    ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
+  });
   syncDecor();
   const tall = [];
   for (const d of decor) {
@@ -3154,6 +3194,9 @@ function drawPaintedWorld(pm) {
 // bottom centre), then a soft smoke puff 48x48 at (0, 104)
 const mapFireImg = new Image(); mapFireImg.src = "assets/sprites/fx/fire-loop.webp";
 const MFIRE = { n: 16, w: 72, h: 104, fps: 15, puff: 48 };
+// Hit flash without ctx.filter: draw the sprite, then (while flashing) add it to itself twice. "lighter" saturates toward white the
+// way brightness(2.6) did, but costs two plain drawImage calls instead of a filtered offscreen pass per hit zombie per frame.
+function flashDraw(flashing, draw) { draw(); if (flashing) { const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = "lighter"; draw(); draw(); ctx.globalCompositeOperation = op; } }
 function drawFireSprite(x, y, sc, phase, t, alpha = 1) {   // one burning fire: the flipbook, cross-faded frame to frame, with a bright additive pass
   if (!mapFireImg.naturalWidth) return;
   const ft = t * MFIRE.fps + phase, f = Math.floor(ft) % MFIRE.n, f2 = (f + 1) % MFIRE.n, w = MFIRE.w * sc, h = MFIRE.h * sc;
@@ -3228,29 +3271,55 @@ function drawPaintedOverlay(fires) {
   });
   ctx.restore();
 }
+// ---- ground cache: the static ground (grass, roads, plaza, tiles, map edge) is painted once per 512px chunk into an offscreen canvas and
+// blitted after that. Before this every frame re-filled the whole viewport with 10-20 overlapping pattern fills (the single biggest draw cost).
+const GROUND_CHUNK = 512, groundChunks = new Map(); let groundKey = "";
+function strHash(t) { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
+function drawGroundCached(key, paint) {   // paint(x0, y0, w, h) draws that world rect with the normal helpers (ctx is the chunk while it runs)
+  if (key !== groundKey) { groundKey = key; groundChunks.clear(); }
+  const C = GROUND_CHUNK, gx0 = Math.floor((cam.x - 64) / C), gy0 = Math.floor((cam.y - 64) / C), gx1 = Math.floor((cam.x + W + 64) / C), gy1 = Math.floor((cam.y + H + 64) / C);
+  for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+    const k = gx * 4096 + gy; let c = groundChunks.get(k);
+    if (!c) {
+      if (groundChunks.size >= 36) groundChunks.delete(groundChunks.keys().next().value);   // far-away chunks go first (insertion order)
+      c = document.createElement("canvas"); c.width = c.height = C; const g = c.getContext("2d"), main = ctx;
+      ctx = g; g.imageSmoothingEnabled = false; g.translate(-gx * C, -gy * C);
+      try { paint(gx * C, gy * C, C, C); } catch (e) { reportError(e, "ground"); } finally { ctx = main; }
+      groundChunks.set(k, c);
+    }
+    ctx.drawImage(c, gx * C, gy * C);
+  }
+}
 function drawWorldArt(grassP, asphaltP, plazaP, walkP) {
   const WW = worldW(), WH = worldH(), cx = WW / 2, cy = WH / 2, R = roads();
-  const vx = cam.x - 2, vy = cam.y - 2, vw = W + 4, vh = H + 4;
-  const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
-  // overgrown lots, then sidewalks, roads and the concrete plaza around the tower
-  fill(grassP, 0, 0, WW, WH);
-
-  const SW = 26;
-  for (const r of R.h) fill(walkP, 0, r.y - r.w / 2 - SW, WW, r.w + SW * 2);
-  for (const r of R.v) fill(walkP, r.x - r.w / 2 - SW, 0, r.w + SW * 2, WH);
-  ctx.save(); ctx.beginPath(); ctx.roundRect(cx - 300, cy - 250, 600, 470, 40); ctx.clip(); fill(plazaP, cx - 300, cy - 250, 600, 470); ctx.restore();
-  for (const r of R.h) { fill(asphaltP, 0, r.y - r.w / 2, WW, r.w); px(0, r.y - r.w / 2 - 3, WW, 3, "#4f5a5a"); px(0, r.y + r.w / 2, WW, 3, "#323b3c"); }
-  for (const r of R.v) { fill(asphaltP, r.x - r.w / 2, 0, r.w, WH); px(r.x - r.w / 2 - 3, 0, 3, WH, "#4f5a5a"); px(r.x + r.w / 2, 0, 3, WH, "#323b3c"); }
-  // lane markings (skip the crossing in the middle of the plaza)
-  for (const r of R.h) for (let x = Math.floor(cam.x / 54) * 54 + 12; x < cam.x + W; x += 54) if (!(r.main && Math.abs(x - cx) < 300)) px(x, r.y - 2, 24, 4, r.main ? "#7d6d4c" : "#665e4b");
-  for (const r of R.v) for (let y = Math.floor(cam.y / 54) * 54 + 10; y < cam.y + H; y += 54) if (!(r.main && Math.abs(y - cy) < 250)) px(r.x - 2, y, 4, 24, r.main ? "#7d6d4c" : "#665e4b");
-  // map edge
-  ctx.fillStyle = "#0c1012"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);
-  px(0, 0, WW, 4, "#3d4441"); px(0, WH - 4, WW, 4, "#3d4441"); px(0, 0, 4, WH, "#3d4441"); px(WW - 4, 0, 4, WH, "#3d4441");
+  drawGroundCached("city" + WW + "x" + WH + ":" + strHash(state?.mapLayout || ""), (vx, vy, vw, vh) => {
+    const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
+    // overgrown lots, then sidewalks, roads and the concrete plaza around the tower
+    fill(grassP, 0, 0, WW, WH);
+    const SW = 26;
+    for (const r of R.h) fill(walkP, 0, r.y - r.w / 2 - SW, WW, r.w + SW * 2);
+    for (const r of R.v) fill(walkP, r.x - r.w / 2 - SW, 0, r.w + SW * 2, WH);
+    ctx.save(); ctx.beginPath(); ctx.roundRect(cx - 300, cy - 250, 600, 470, 40); ctx.clip(); fill(plazaP, cx - 300, cy - 250, 600, 470); ctx.restore();
+    for (const r of R.h) { fill(asphaltP, 0, r.y - r.w / 2, WW, r.w); px(0, r.y - r.w / 2 - 3, WW, 3, "#4f5a5a"); px(0, r.y + r.w / 2, WW, 3, "#323b3c"); }
+    for (const r of R.v) { fill(asphaltP, r.x - r.w / 2, 0, r.w, WH); px(r.x - r.w / 2 - 3, 0, 3, WH, "#4f5a5a"); px(r.x + r.w / 2, 0, 3, WH, "#323b3c"); }
+    // lane markings (skip the crossing in the middle of the plaza)
+    for (const r of R.h) for (let x = Math.floor(vx / 54) * 54 + 12; x < vx + vw; x += 54) if (!(r.main && Math.abs(x - cx) < 300)) px(x, r.y - 2, 24, 4, r.main ? "#7d6d4c" : "#665e4b");
+    for (const r of R.v) for (let y = Math.floor(vy / 54) * 54 + 10; y < vy + vh; y += 54) if (!(r.main && Math.abs(y - cy) < 250)) px(r.x - 2, y, 4, 24, r.main ? "#7d6d4c" : "#665e4b");
+    // map edge
+    ctx.fillStyle = "#0c1012"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);
+    px(0, 0, WW, 4, "#3d4441"); px(0, WH - 4, WW, 4, "#3d4441"); px(0, 0, 4, WH, "#3d4441"); px(WW - 4, 0, 4, WH, "#3d4441");
+  });
   syncDecor();
   const tall = [];
   for (const d of decor) { if (!inView(d.x, d.y - 60, 200)) continue; if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => drawMapObj(d) }); }
   drawWorldObjects(tall);
+}
+let crownCv = null;
+function crownSprite() {
+  if (crownCv) return crownCv;
+  const c = document.createElement("canvas"); c.width = 48; c.height = 40; const g = c.getContext("2d");
+  g.font = 'bold 22px serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.shadowColor = '#ffd84d'; g.shadowBlur = 12; g.fillStyle = '#ffd84d'; g.fillText('♛', 24, 30);
+  return crownCv = c;
 }
 function drawWorldObjects(extra) {
   const WW = worldW(), WH = worldH(), cx = towerX(), cy = towerY();
@@ -3277,7 +3346,7 @@ function drawWorldObjects(extra) {
   for (const f of mechaLate.splice(0)) { const d = ctxDepth; ctx.save(); try { f(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }     // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
-  if (leader && leader.kills > 0) { ctx.save(); ctx.font = 'bold 22px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = 12; ctx.fillStyle = '#ffd84d'; ctx.fillText('♛', leader.x, leader.y - 60); ctx.restore(); }
+  if (leader && leader.kills > 0) ctx.drawImage(crownSprite(), Math.round(leader.x) - 24, Math.round(leader.y) - 60 - 30);   // the kill leader's glowing crown (rendered once: a blurred glyph per frame was a full blur pass)
   drawShotFx();
   drawReviveRing(); drawAstraShield();
   drawCrosshair();
@@ -3288,13 +3357,30 @@ let vignette = null;
 // Each player only sees their own light (no shared vision). playerR = 20% of the screen width (V toggles 30% in the solo preview).
 const NIGHT = { playerR: 240, lightR: 125, lightAlpha: .55, dark: .95 };
 const VISION_STEPS = [0.2, 0.3];
-const darkCv = document.createElement("canvas"); darkCv.width = W; darkCv.height = H; const dctx = darkCv.getContext("2d");
+// The darkness layer is built at half resolution (a quarter of the pixels to fill and punch holes in) and scaled up with smoothing:
+// soft light edges look the same and the night costs a fraction of a full-size layer.
+const DARK_SCALE = .5, darkCv = document.createElement("canvas"); darkCv.width = Math.ceil(W * DARK_SCALE); darkCv.height = Math.ceil(H * DARK_SCALE); const dctx = darkCv.getContext("2d"); dctx.scale(DARK_SCALE, DARK_SCALE);
 let nightK = 0, nightLast = 0, forceNight = false;   // forceNight: N key in the solo preview, to test the look
 const isNightView = () => !!state && (state.isNight || forceNight);
+let eyeGlowCv = null;
+function eyeGlow() {   // a 16x16 glowing green dot, blurred once
+  if (eyeGlowCv) return eyeGlowCv;
+  const c = document.createElement("canvas"); c.width = c.height = 16; const g = c.getContext("2d");
+  g.fillStyle = "rgba(200,255,110,1)"; g.shadowColor = "#b8ff6a"; g.shadowBlur = 6; g.fillRect(7, 7, 2, 2); g.fillRect(7, 7, 2, 2);
+  return eyeGlowCv = c;
+}
+// A light in the dark: punches a soft hole in the darkness layer. The radial gradient is rendered once per (radius, alpha) and reused:
+// building a gradient for every lamp, fire and explosion on every frame added up on big maps.
+const holeCache = new Map();   // radius (8px steps) -> the hole at full strength; the light's strength is the draw's globalAlpha
 function lightHole(x, y, r, a) {
-  const g = dctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(.55, `rgba(0,0,0,${a})`); g.addColorStop(1, "rgba(0,0,0,0)");
-  dctx.fillStyle = g; dctx.fillRect(x - r, y - r, r * 2, r * 2);
+  const R = Math.max(8, Math.round(r / 8) * 8); let c = holeCache.get(R);
+  if (!c) {
+    if (holeCache.size > 40) holeCache.clear();
+    c = document.createElement("canvas"); c.width = c.height = R * 2; const g = c.getContext("2d"), gr = g.createRadialGradient(R, R, 0, R, R, R);
+    gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(.55, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, R * 2, R * 2); holeCache.set(R, c);
+  }
+  dctx.globalAlpha = Math.max(0, Math.min(1, a)); dctx.drawImage(c, x - R, y - R); dctx.globalAlpha = 1;
 }
 function drawNight() {
   const now = performance.now(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
@@ -3325,15 +3411,15 @@ function drawNight() {
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
   pyreLights(now);   // the Pyre Priest and his fires light the night
   turretLights(now);
-  ctx.drawImage(darkCv, 0, 0);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(darkCv, 0, 0, W, H); ctx.restore();
   // zombies out in the dark: only a faint pair of glowing eyes gives them away
   if (nightK > .5) {
     ctx.save(); ctx.globalCompositeOperation = "lighter";
     for (const z0 of state.zombies.values()) {
       const z = V(z0); if (z.kind === "mutant" || !inView(z.x, z.y, 0) || litAt(z.x, z.y)) continue;   // mutants have no glowing eyes: you don't see them coming
       const blink = Math.sin(now / 900 + z.x * .7) > .93 ? .15 : 1, ex = z.x - cam.x, ey = z.y - cam.y - (z.boss ? 58 : z.kind === "brute" ? 66 : 30), sp = z.boss ? 6 : 3;
-      ctx.fillStyle = `rgba(200,255,110,${.75 * blink * nightK})`; ctx.shadowColor = "#b8ff6a"; ctx.shadowBlur = 6;
-      ctx.fillRect(ex - sp - 1, ey, 2, 2); ctx.fillRect(ex + sp - 1, ey, 2, 2);
+      ctx.globalAlpha = .75 * blink * nightK; const g = eyeGlow();   // pre-blurred dot: a shadowBlur per zombie was a blur pass each, every frame
+      ctx.drawImage(g, ex - sp - 8, ey - 7); ctx.drawImage(g, ex + sp - 8, ey - 7);
     }
     ctx.restore();
   }
@@ -3535,27 +3621,27 @@ function setView(v) {
 function renderLobbyRoom() {
   const inRoom = !!(room && state), players = inRoom ? [...state.players.values()] : [], host = inRoom && state.hostId === myId, me = inRoom ? state.players.get(myId) : null;
   $("lsConnect").hidden = inRoom; $("lsRoom").hidden = !inRoom; $("ls").classList.toggle("guest", !host);
-  $("lsHostNote").textContent = !inRoom ? "create a room" : host ? "host" : "host only";
+  txt("lsHostNote", !inRoom ? "create a room" : host ? "host" : "host only");
   if (inRoom) {
-    $("codeDisplay").textContent = ls.hideCode ? "•".repeat(Math.min(9, room.roomId.length)) : room.roomId;
-    $("roomCount").textContent = `${players.length} / 8 PLAYERS`;
+    txt("codeDisplay", ls.hideCode ? "•".repeat(Math.min(9, room.roomId.length)) : room.roomId);
+    txt("roomCount", `${players.length} / 8 PLAYERS`);
     const rows = players.map(p => `<div class="ls-pl"><span class="cr">${p.isHost ? "♛" : ""}</span><i class="av p-${p.characterClass || "assault"}"></i><span class="nm">${escapeHtml(p.name)}${p.isBot ? "<small>AI</small>" : p.sessionId === myId ? "<small>YOU</small>" : ""}</span><span class="st${p.ready ? " ok" : ""}">${p.ready ? "READY" : "NOT READY"}<i class="dot">${p.ready ? "✓" : ""}</i>${host && !p.isHost ? `<button class="x" data-kick="${p.sessionId}" data-bot="${p.isBot ? 1 : ""}" title="Remove">×</button>` : ""}</span></div>`);
     for (let i = players.length; i < 8; i++) rows.push(`<button class="ls-pl empty" data-invite="1" title="${host ? "Click to add an AI teammate (or use INVITE to bring friends)" : "Copy the invite link"}"><span class="plus">+</span><span>Invite player</span>${host ? "<small>+ AI</small>" : ""}</button>`);
     setHtml("lobbyPlayers", rows.join(""));
     setHtml("lsParty", players.map(p => { const o = rosterOf(p.characterClass); return `<div class="ls-pc${p.ready ? " ok" : ""}"><div class="top"><div class="av p-${o.id}"></div><div><b>${escapeHtml(p.name)}</b><small>${o.name}</small></div></div>${p.isHost ? '<span class="cr">♛</span>' : ""}${host && !p.isHost ? `<button class="x" data-kick="${p.sessionId}" data-bot="${p.isBot ? 1 : ""}" title="Remove">–</button>` : ""}<div class="rs">${p.ready ? "✓ READY" : "○ NOT READY"}</div></div>`; }).join(""));
     const humans = players.filter(p => !p.isBot), readyN = humans.filter(p => p.ready).length, all = readyN === humans.length;
     const btn = $("startGame"); btn.disabled = false; btn.classList.toggle("on", !host && !!me?.ready);
-    if (host) { $("readyLabel").textContent = all ? "START MISSION" : "START ANYWAY"; $("readySub").textContent = `${readyN} / ${humans.length} READY`; }
-    else { $("readyLabel").textContent = me?.ready ? "READY!" : "READY UP"; $("readySub").textContent = me?.ready ? "click to cancel · waiting for the host" : `${readyN} / ${humans.length} READY`; }
+    if (host) { txt("readyLabel", all ? "START MISSION" : "START ANYWAY"); txt("readySub", `${readyN} / ${humans.length} READY`); }
+    else { txt("readyLabel", me?.ready ? "READY!" : "READY UP"); txt("readySub", me?.ready ? "click to cancel · waiting for the host" : `${readyN} / ${humans.length} READY`); }
     // mission settings
-    const site = state.mapSite || 0; $("mapName").textContent = SITE_NAMES[site][0]; $("mapSub").textContent = SITE_NAMES[site][1];
-    $("setDifficulty").textContent = (state.difficulty || "normal").toUpperCase();
-    $("setWaveMode").textContent = state.waveMode === "ascension" ? "ASCENSION (∞)" : "CAMPAIGN (50)";
-    $("setFriendlyFire").textContent = state.friendlyFire ? "ON" : "OFF"; $("setExtraLoot").textContent = state.extraLoot ? "ON" : "OFF";
+    const site = state.mapSite || 0; txt("mapName", SITE_NAMES[site][0]); txt("mapSub", SITE_NAMES[site][1]);
+    txt("setDifficulty", (state.difficulty || "normal").toUpperCase());
+    txt("setWaveMode", state.waveMode === "ascension" ? "ASCENSION (∞)" : "CAMPAIGN (50)");
+    txt("setFriendlyFire", state.friendlyFire ? "ON" : "OFF"); txt("setExtraLoot", state.extraLoot ? "ON" : "OFF");
     $("setNoCd").checked = !!state.noCd;
     if (ls.mapSrc !== state.mapLayout) { ls.mapSrc = state.mapLayout; drawMapThumb(); }
   } else {
-    setHtml("lsParty", ""); $("readyLabel").textContent = "CREATE A ROOM"; $("readySub").textContent = "or join a friend's room"; $("startGame").classList.remove("on");
+    setHtml("lsParty", ""); txt("readyLabel", "CREATE A ROOM"); txt("readySub", "or join a friend's room"); $("startGame").classList.remove("on");
   }
 }
 function drawMapThumb() {   // a little satellite view of the chosen map (from the layout the server sent)
@@ -3678,3 +3764,4 @@ function savePrefs() { try { localStorage.setItem("sa-prefs", JSON.stringify({ s
 try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; $("sfxToggle").textContent = "Sound effects: OFF"; } if (pr.music === false) { musicOn = false; $("setAmbient").checked = false; $("musicToggle").textContent = "Music: OFF"; } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
 { const q = new URLSearchParams(location.search).get("room"); if (q) { $("roomCode").value = q; toast("Type your name and press JOIN to enter your friend's room."); } }   // invite links
 setSelectedClass(selectedClass, false); renderLobbyRoom(); drawMapThumb();
+rejoinAfterRefresh();
