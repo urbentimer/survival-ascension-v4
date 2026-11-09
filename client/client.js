@@ -247,6 +247,7 @@ function renderState() {
   const go = brk && humans.length && nReady === humans.length, info = go ? `Here they come in ${secs}s!` : `Ready ${nReady}/${humans.length} · next wave in ${secs}s`;
   if (!brk) breakMin = false;
   $("breakBar").classList.toggle("hidden", !(brk && breakMin));
+  document.body.classList.toggle("break-cursor", brk);   // the break: a normal mouse pointer (the crosshair is only drawn mid-wave)
   for (const id of ["breakReady", "bbReady"]) { const b = $(id); b.textContent = me?.ready ? "✓ READY" : "READY"; b.classList.toggle("is-ready", !!me?.ready); }
   if (brk && breakMin) { hideOverlay(); $("bbTitle").textContent = `WAVE ${state.stage} CLEARED`; $("bbInfo").textContent = info; }
   else if (brk) {

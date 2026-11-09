@@ -51,7 +51,7 @@ body.in-match #lobby,body.in-match .guide{display:none}
 .battle-side .stat{grid-column:span 2;order:1;padding:8px 10px}.battle-side .stat:nth-child(3),.battle-side .stat:nth-child(4){grid-column:span 3;order:2}
 .battle-side .stat b{font-size:17px;white-space:nowrap}
 #clockLabel{flex:0 0 auto;text-align:right}
-body.in-match #arena{cursor:none}
+body.in-match #arena{cursor:none}body.in-match.break-cursor #arena{cursor:default}
 
 /* SHOP (break between waves) */
 #botControls .button{font-size:11px}
@@ -532,5 +532,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261109l"></script>
+<script type="module" src="./client.js?v=20261109m"></script>
 </body></html>
