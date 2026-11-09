@@ -297,6 +297,10 @@ function renderHud(me, players) {
 }
 
 let hotbarHtml = "";
+function moreGuns(me, n) {   // " ⇄+1": you own other guns for this slot (press the key again to swap)
+  const own = (me.owned || "").split(","), cur = n === 2 ? me.primary : me.secondary, more = own.filter(id => WEAPON_INFO[id] && WEAPON_INFO[id].slot === n && id !== cur).length;
+  return more ? ` ⇄+${more}` : "";
+}
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
@@ -306,8 +310,8 @@ function renderHotbar(me) {
   const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / (me.reloadTotal || w.reload)) * 100 : 0;
   const slots = [
     { n: 1, name: (MELEE_INFO[me.melee] || MELEE_INFO.knife).name, sub: rav && me.melee === "katana" ? (tier >= 5 ? "T5 MAX" : `T${tier} · ${kk % 50}/50`) : "melee", ic: icon(me.melee || "knife") },
-    { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
-    { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
+    { n: 2, name: (WEAPON_INFO[me.primary]?.name || "—") + moreGuns(me, 2), sub: gunSub(me.primary), ic: icon(me.primary) },
+    { n: 3, name: (WEAPON_INFO[me.secondary]?.name || "—") + moreGuns(me, 3), sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
     { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),

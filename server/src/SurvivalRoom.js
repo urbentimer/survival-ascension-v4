@@ -3074,9 +3074,10 @@ export class SurvivalRoom extends Room {
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){   // Nov 9: never switches what you're holding - it goes in your bag (press 2 / 3 to cycle to it); an EMPTY slot gets it
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
+        // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap). The hotbar shows "+1" when there's more to swap to.
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);
-        p.ammo+=30; this.unlockWeapon(p,found); if(!p[slot]) p[slot]=found;
+        p.ammo+=30; this.unlockWeapon(p,found); const slotN=slot==="primary"?2:3; if(!had&&p.activeSlot!==slotN) p[slot]=found;
         this.state.message=had?`${p.name} found a ${item.rarity} ${found} (+30 ammo)`:`${p.name} found a ${item.rarity} ${found}! Press ${slot==="primary"?2:3} to switch to it.`;}
       this.state.loot.delete(item.id);
     }

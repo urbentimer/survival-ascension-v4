@@ -1219,6 +1219,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const lw = [...room.state.loot.values()].find(l => l.kind === "weapon"), held = p.weapon, ammo = p.ammo; room.lastTick = Date.now() - 50; room.tick();
   ok(lw && !room.state.loot.has(lw.id) && p.weapon === held && p.owned.includes("shotgun") && p.ammo === ammo + 30, `found a shotgun: still holding the ${held}, it's in the bag (+30 ammo)`);
   send(A, "slot", { n: 2, cycle: true }); ok(p.weapon === "shotgun", "press 2 to cycle to it");
+  send(A, "slot", { n: 3 }); room.spawnZombie(false, "walker"); const z2 = [...room.state.zombies.values()].pop(); z2.x = p.x + 5; z2.y = p.y;   // now holding the pistol, find a sniper
+  { const rnd = Math.random, seq = [.1, .98]; let ri = 0; Math.random = () => ri < seq.length ? seq[ri++] : .5; try { room.killZombie(z2, p); } finally { Math.random = rnd; } }
+  room.lastTick = Date.now() - 50; room.tick(); ok(p.weapon === "pistol" && p.primary === "sniper", `holding the pistol: still the pistol, and the sniper is ready in slot 2 (${p.primary})`);
+  send(A, "slot", { n: 2, cycle: true }); ok(p.weapon === "sniper", "one press of 2 equips it");
   room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
