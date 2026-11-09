@@ -114,7 +114,7 @@ button.bag-slot.sel{border-color:#f28b36;background:#2c2219;box-shadow:inset 0 0
 .menu-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.menu-actions .button{flex:1}
 .controls{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px}.controls div{display:flex;justify-content:space-between;gap:8px;align-items:center}.controls span{color:#cdd6d3;text-align:right}
 @media(max-width:520px){.controls{grid-template-columns:1fr}}
-#gameArea .overlay{position:absolute;inset:0;z-index:8}
+#gameArea .overlay{position:absolute;inset:0;z-index:8}.break-btns{display:flex;gap:8px;margin:12px 0 6px}.break-btns .button{flex:1}.button.is-ready{background:#2f6b45;border-color:#7fd39b}.break-bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:7;display:flex;gap:10px;align-items:center;background:#0d1418ee;border:1px solid #65737a;border-top:2px solid var(--orange);border-radius:4px;padding:7px 10px;font-size:13px;white-space:nowrap;max-width:calc(100% - 24px)}.break-bar b{letter-spacing:.08em;color:#ffd27a}.break-bar .button{padding:6px 10px;font-size:12px}
 #gameArea .scoreboard{position:absolute;top:110px;left:50%;right:auto;transform:translateX(-50%);z-index:5}
 
 /* item / hotbar icons (client/assets/icons, cut by tools/extract-icons.py) */
@@ -457,6 +457,7 @@ body.in-match #ls{display:none}
 </main>
 <section id="gameArea" class="hidden" aria-label="Game">
  <canvas id="arena" width="1200" height="760"></canvas>
+ <div id="breakBar" class="break-bar hidden" aria-live="polite"><b id="bbTitle">WAVE CLEARED</b><span id="bbInfo"></span><button class="button" id="bbShop">🛒 SHOP (B)</button><button class="button primary" id="bbReady">READY</button></div>
  <div class="hud hud-tl">
   <div class="hud-wave"><small>WAVE</small><b id="hudWave">1</b><span>/ 50</span></div>
   <div class="hud-line"><span id="hudTimer">1:30</span> · <span id="hudZombies">0 zombies</span> · <span id="hudClock">DAY</span></div>
@@ -529,7 +530,7 @@ body.in-match #ls{display:none}
  </div>
  <div id="bossWaitBanner" class="boss-wait hidden"></div>
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
- <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><button class="button primary hidden" id="nextStage">START NOW</button><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
+ <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261109j"></script>
+<script type="module" src="./client.js?v=20261109k"></script>
 </body></html>

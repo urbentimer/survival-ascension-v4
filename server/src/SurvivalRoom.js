@@ -340,7 +340,8 @@ const SHOP = {
   explosives:  { price: 15,  label: "Explosives +5 (team)" }
 };
 const KILL_GOLD = { brute: 3, mutant: 5, spitter: 2 };
-const BREAK_SECONDS = 20;
+const BREAK_SECONDS = 60;   // Nov 9: the break between waves lasts until EVERY player presses Ready (bots always are) - at most 60s
+const BREAK_GO = 3;          // ...then a 3s "here they come" before the wave
 const BOT_NAMES = ["Ava", "Rex", "Juno", "Kai", "Mira", "Odin", "Zed", "Nova"];
 const rand = (a, b) => a + Math.random() * (b - a);
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -576,6 +577,7 @@ export class SurvivalRoom extends Room {
       if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
     // ---- lobby: name, READY UP, mission settings (host) ----
     this.onMessage("setName", (client, data) => { const p = this.state.players.get(client.sessionId), n = cleanName(data?.name); if (p && n && this.state.phase === "lobby") p.name = n; });
+    this.onMessage("breakReady", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && this.state.phase === "cleared") p.ready = data?.on == null ? !p.ready : !!data.on; });   // between waves
     this.onMessage("ready", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && this.state.phase === "lobby" && !p.isHost) p.ready = data?.on == null ? !p.ready : !!data.on; });
     this.onMessage("kick", (client, data) => {   // host removes a player from the lobby
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || !data?.id || data.id === client.sessionId) return;
@@ -707,9 +709,10 @@ export class SurvivalRoom extends Room {
     });
   }
 
+  beginBreak() { this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false; }   // nobody's ready yet
   startNextWave() {
     const s = this.state;
-    this.inBreak = false; s.countdown = 0;
+    this.inBreak = false; s.countdown = 0; for (const p of s.players.values()) p.ready = false;
     s.stage++;
     s.elapsed = 0;
     s.bossSpawned = false;
@@ -3029,7 +3032,8 @@ export class SurvivalRoom extends Room {
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
     if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
     if (this.state.phase === "cleared") {
-      if (!this.inBreak) { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      if (!this.inBreak) this.beginBreak();
+      if (this.state.countdown > BREAK_GO && [...this.state.players.values()].every(p => p.isBot || p.ready)) this.state.countdown = BREAK_GO;   // everyone's ready
       this.state.countdown = Math.max(0, this.state.countdown - dt);
       if (this.state.countdown <= 0) this.startNextWave();
       return;
@@ -3037,7 +3041,7 @@ export class SurvivalRoom extends Room {
     if (this.state.phase !== "playing") return;
     if (this.bossOverAt && now >= this.bossOverAt) {   // boss died a few seconds ago: wave over
       this.bossOverAt = 0; this.state.zombies.clear(); this.state.puddles.clear(); this.spits = [];
-      this.state.phase = this.state.stage === 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.phase = this.state.stage === 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") this.beginBreak();
       this.state.message = this.state.stage === 50 && this.state.waveMode !== "ascension" ? "THE APOCALYPSE HAS FALLEN — CAMPAIGN VICTORY!" : `Boss defeated! Wave ${this.state.stage} cleared.`;
       return;
     }
@@ -3201,7 +3205,7 @@ export class SurvivalRoom extends Room {
     const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
     if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }
     if (this.state.elapsed >= 90 && !hiveAlive && this.state.waveType === "normal" && this.state.phase === "playing") {
-      this.state.phase = this.state.stage >= 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") { this.inBreak = true; this.state.countdown = BREAK_SECONDS; }
+      this.state.phase = this.state.stage >= 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") this.beginBreak();
       this.state.message = `Wave ${this.state.stage} survived! Host can launch the next wave.`;
     }
     if ([...this.state.players.values()].every(p=>!p.alive) && this.state.players.size>0 && this.state.phase==="playing") {

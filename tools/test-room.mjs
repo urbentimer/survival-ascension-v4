@@ -96,9 +96,12 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 // 4. countdown between waves
 { const { room, A, send } = makeRoom(); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();
   ok(room.state.phase === "cleared", "wave ends after 90s");
-  room.lastTick = Date.now() - 50; room.tick(); ok(room.state.countdown > 19 && room.state.countdown <= 20, "20-second break countdown starts (shop open)");
-  for (let i = 0; i < 260 && room.state.phase === "cleared"; i++) { room.lastTick = Date.now() - 100; room.tick(); }
-  ok(room.state.phase === "playing" && room.state.stage === 2, "next wave starts by itself when the countdown ends");
+  room.lastTick = Date.now() - 50; room.tick(); ok(room.state.countdown > 59 && room.state.countdown <= 60, "break: up to 60s (shop open)");
+  for (let i = 0; i < 20; i++) { room.lastTick = Date.now() - 100; room.tick(); } ok(room.state.phase === "cleared", "nobody ready: still on break after 2s");
+  send(A, "breakReady", { on: true }); room.lastTick = Date.now() - 100; room.tick(); ok(room.state.phase === "cleared" && room.state.countdown > 50, "one of two ready: still waiting");
+  send({ sessionId: "B" }, "breakReady", { on: true }); room.lastTick = Date.now() - 100; room.tick(); ok(room.state.countdown <= 3, `everyone ready: 3s to go (${room.state.countdown.toFixed(1)})`);
+  for (let i = 0; i < 60 && room.state.phase === "cleared"; i++) { room.lastTick = Date.now() - 100; room.tick(); }
+  ok(room.state.phase === "playing" && room.state.stage === 2 && ![...room.state.players.values()].some(p => p.ready), "next wave starts (ready flags reset)");
   room.hiveSpawned = true; room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick(); room.lastTick = Date.now() - 50; room.tick();   // (wave 2's Hivemind: tested in 31)
   send({ sessionId: "B" }, "nextStage"); ok(room.state.phase === "cleared", "non-host cannot skip the countdown");
   send(A, "nextStage"); ok(room.state.phase === "playing" && room.state.stage === 3, "host START NOW skips the countdown");

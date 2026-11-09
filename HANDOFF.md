@@ -286,3 +286,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 9 (fix): user felt weapon pickups "gave nothing". Now: not holding that slot -> the new gun goes INTO the slot (p[slot]=found, one press of 2/3 equips it); holding that slot -> stays in the bag (press again to swap). Hotbar shows "Rifle ⇄+1" (moreGuns) when you own other guns for that slot. Test 54f extended. Cache v=20261109i.
 
 - Nov 9: hotbar "⇄+1" badge (moreGuns) REVERTED at the user's request (pickup slot behaviour kept). Cache v=20261109j.
+
+- Nov 9: BETWEEN WAVES = READY-UP: break lasts until every human presses READY (bots always ready; PlayerState.ready reused, reset at break start + wave start; msg "breakReady"), max 60s (BREAK_SECONDS), then 3s (BREAK_GO). Host START NOW kept. Client: READY / ▾ MINIMIZE · BUILD FIRST / START NOW (host) buttons under the shop; minimized = top bar "WAVE n CLEARED · Ready x/y · next wave in Ns [SHOP (B)] [READY]" so you can move + build; B toggles. Test 4 rewritten. Cache v=20261109k.

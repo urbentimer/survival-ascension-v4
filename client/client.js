@@ -68,7 +68,7 @@ const BUILD_RANGE = 160;
 function status(text, good = false) { $("connection").textContent = text; $("connection").style.borderColor = good ? "#4d9c68" : "#8a6852"; }
 function message(text) { toast(text); }
 function showOverlay(title, text) {
-  $("shop").classList.add("hidden"); $("overlay").classList.remove("hidden");
+  $("shop").classList.add("hidden"); $("breakBtns").classList.add("hidden"); $("overlay").classList.remove("hidden");
   $("overlayTitle").textContent = title; $("overlayText").textContent = text;
   $("nextStage").classList.add("hidden"); $("restartGame").classList.add("hidden");
 }
@@ -203,7 +203,12 @@ function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (
 $("waveJumpGo").onclick = jumpToWave;
 $("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
-$("nextStage").onclick = () => room?.send("nextStage"); $("restartGame").onclick = () => room?.send("restart");
+$("nextStage").onclick = () => room?.send("nextStage");
+// BETWEEN WAVES (Nov 9): the break lasts until everyone's READY (60s max). The shop window can be minimized to a bar so you can move and build.
+let breakMin = false;
+const toggleBreakReady = () => { const me = me_(); room?.send("breakReady", { on: !me?.ready }); };
+$("breakReady").onclick = toggleBreakReady; $("bbReady").onclick = toggleBreakReady;
+$("breakMin").onclick = () => { breakMin = true; }; $("bbShop").onclick = () => { breakMin = false; }; $("restartGame").onclick = () => room?.send("restart");
 $("resume").onclick = () => closePanels();
 $("leave").onclick = () => { closePanels(); room?.leave(); };
 $("lvlBadge").onclick = () => togglePanel("levelUp");
@@ -238,9 +243,15 @@ function renderState() {
   if (state.message && state.message !== lastMessage) { lastMessage = state.message; feed.unshift({ text: state.message, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
   $("feed").innerHTML = feed.filter(f => Date.now() - f.t < 7000).map(f => `<li style="opacity:${Date.now() - f.t > 5500 ? .35 : 1}">${escapeHtml(f.text)}</li>`).join("");
   // big screens: wave cleared + shop, downed, win/loss
-  if (state.phase === "cleared") {
-    showOverlay("WAVE " + state.stage + " CLEARED!", "Spend your gold before the next wave. Build with right-click once it starts; press F next to the tower or generator to repair it.");
-    $("nextStage").textContent = "START NOW"; $("nextStage").classList.toggle("hidden", !host); renderShop(me);
+  const brk = state.phase === "cleared", humans = [...state.players.values()].filter(p => !p.isBot), nReady = humans.filter(p => p.ready).length, secs = Math.ceil(state.countdown || 0);
+  const go = brk && humans.length && nReady === humans.length, info = go ? `Here they come in ${secs}s!` : `Ready ${nReady}/${humans.length} · next wave in ${secs}s`;
+  if (!brk) breakMin = false;
+  $("breakBar").classList.toggle("hidden", !(brk && breakMin));
+  for (const id of ["breakReady", "bbReady"]) { const b = $(id); b.textContent = me?.ready ? "✓ READY" : "READY"; b.classList.toggle("is-ready", !!me?.ready); }
+  if (brk && breakMin) { hideOverlay(); $("bbTitle").textContent = `WAVE ${state.stage} CLEARED`; $("bbInfo").textContent = info; }
+  else if (brk) {
+    showOverlay("WAVE " + state.stage + " CLEARED!", `Shop, then press READY. The next wave starts when everyone is ready (60s max). ${info}. Minimize this to move around and build first; press F next to the tower or generator to repair it.`);
+    $("breakBtns").classList.remove("hidden"); $("nextStage").textContent = "START NOW"; $("nextStage").classList.toggle("hidden", !host); renderShop(me);
   } else if (state.phase === "victory") {
     showOverlay("CAMPAIGN COMPLETE!", "You survived all 50 waves and defeated the final boss. Victory!" + (host ? "" : " Waiting for the host to start a new match."));
     $("restartGame").classList.toggle("hidden", !host);
@@ -379,7 +390,7 @@ function renderShop(me) {
   };
   shopBought = "";
   box.innerHTML = `<div class="shop-top"><div class="wallet${goldChanged ? " bump" : ""}">${icon("gold")}<div><small>YOUR GOLD</small><b>${gold}</b></div></div>
-    <div class="shop-timer"><b id="shopSecs">${secs}</b><small>seconds until<br>wave ${state.stage + 1}</small></div></div>` +
+    <div class="shop-timer"><b id="shopSecs">${secs}</b><small>seconds at most<br>until wave ${state.stage + 1}</small></div></div>` +
     SHOP_ITEMS.map(([group, items]) => `<div class="shop-group"><span>${group.toUpperCase()}</span><div class="shop-items">${items.map(it => card(it, group)).join("")}</div></div>`).join("");
 }
 $("shop").addEventListener("click", e => { const b = e.target.closest("button[data-buy]"); if (b && !b.disabled) { shopBought = b.dataset.buy; room?.send("buy", { id: b.dataset.buy }); } });
@@ -717,6 +728,7 @@ window.addEventListener("keydown", e => {
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
   else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
+  else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
   else if (k === "f" && !e.repeat) { if (!tryRevive()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
