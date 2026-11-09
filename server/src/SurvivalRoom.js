@@ -298,7 +298,8 @@ const nearFoot = (st, z, pa, pt) => {   // z within pa (along the line) / pt (ac
   return Math.abs(dx * l.c + dy * l.s) < l.L + pa && Math.abs(dy * l.c - dx * l.s) < l.T + pt;
 };
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
-const STATION_R = { tower: 125, gen: 90 };   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
+const STATION_R = { tower: 125, gen: 90 };
+const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
 const BUILD_RANGE = 160;
@@ -605,29 +606,29 @@ export class SurvivalRoom extends Room {
       this.state.message=`${rescuer.name} is reviving ${target.name}...`;
     });
     this.onMessage("reviveStop", client => { const r = this.state.players.get(client.sessionId); if (r) { r.reviveTargetId = ""; r.reviveProgress = 0; } });   // let go of F
-    this.onMessage("repairTower", (client, data) => {
+    // Repair / refuel (F next to the tower / generator). Nov 9: you only pay for what's missing - near full costs less, full costs nothing -
+    // and with too little for a full step you get what you can afford. STATION_STEP: one press = up to `amt` for `cost`.
+    const station = (client, need, kind, amt, cost, apply, done) => {
       const p = this.state.players.get(client.sessionId);
-      const amount = Math.max(0, Math.min(2000, Number(data?.amount) || 0));
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || amount <= 0) return;
-      if (Math.hypot(p.x - this.A.cx, p.y - this.A.cy) > STATION_R.tower) return;   // next to the tower
-      const cost = Math.ceil(amount / 25);
-      if (this.state.scrap < cost || this.state.towerHp >= this.state.towerMaxHp) return;
-      this.state.scrap -= cost;
-      this.state.towerHp = Math.min(this.state.towerMaxHp, this.state.towerHp + amount);
-      p.towerRepairs += amount;
-      this.state.message = `${p.name} repaired the radio tower (+${amount} HP).`;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || need < 1) return;
+      const have = this.state[kind], gain = Math.min(amt, need, have * amt / cost); if (gain <= 0) return;   // what you can afford
+      const pay = Math.max(1, Math.ceil(cost * gain / amt - 1e-9)); if (pay > have) return;
+      this.state[kind] -= pay; apply(gain, p); this.state.message = done(p, gain);
+    };
+    this.onMessage("repairTower", (client) => {
+      const p = this.state.players.get(client.sessionId); if (!p || Math.hypot(p.x - this.A.cx, p.y - this.A.cy) > STATION_R.tower) return;   // next to the tower
+      station(client, this.state.towerMaxHp - this.state.towerHp, "scrap", STATION_STEP.tower.amt, STATION_STEP.tower.cost,
+        (g, p) => { this.state.towerHp = Math.min(this.state.towerMaxHp, this.state.towerHp + g); p.towerRepairs += g; }, (p, g) => `${p.name} repaired the radio tower (+${Math.round(g)} HP).`);
     });
     this.onMessage("refuelGenerator", (client) => {
-      const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.fuel < 10 || this.state.generatorFuel >= 100 || !this.nearGen(p)) return;
-      this.state.fuel -= 10; this.state.generatorFuel = Math.min(100, this.state.generatorFuel + 25);
-      this.state.message = `${p.name} refuelled the generator.`;
+      const p = this.state.players.get(client.sessionId); if (!p || !this.nearGen(p)) return;
+      station(client, 100 - this.state.generatorFuel, "fuel", STATION_STEP.fuel.amt, STATION_STEP.fuel.cost,
+        g => { this.state.generatorFuel = Math.min(100, this.state.generatorFuel + g); }, p => `${p.name} refuelled the generator.`);
     });
     this.onMessage("repairGenerator", (client) => {
-      const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.scrap < 15 || this.state.generatorHp >= this.state.generatorMaxHp || !this.nearGen(p)) return;
-      this.state.scrap -= 15; this.state.generatorHp = Math.min(this.state.generatorMaxHp, this.state.generatorHp + 300);
-      this.state.message = `${p.name} repaired the generator.`;
+      const p = this.state.players.get(client.sessionId); if (!p || !this.nearGen(p)) return;
+      station(client, this.state.generatorMaxHp - this.state.generatorHp, "scrap", STATION_STEP.gen.amt, STATION_STEP.gen.cost,
+        g => { this.state.generatorHp = Math.min(this.state.generatorMaxHp, this.state.generatorHp + g); }, p => `${p.name} repaired the generator.`);
     });
     this.onMessage("build", (client, data) => {
       const p = this.state.players.get(client.sessionId);

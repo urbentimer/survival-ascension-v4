@@ -735,18 +735,23 @@ function tryRevive() {
 }
 // TOWER / GENERATOR (Nov 9): stand next to one and press (or hold) F. Tower: 10 scrap = +250 HP. Generator: repairs (15 scrap, +300 HP)
 // and/or refuels (10 fuel, +25%), whichever it needs. Same ranges as the server (STATION_R).
-const STATION = { tower: 125, gen: 90, every: 300 };
+const STATION = { tower: 125, gen: 90, every: 300 };   // the server checks the same distances
 function nearStation(me) {
   if (!me?.alive || !state || state.vehicles?.get(myId)) return null;
   const dt = Math.hypot(me.x - towerX(), me.y - towerY()), dg = Math.hypot(me.x - towerX() - GEN_OFF.x, me.y - towerY() - GEN_OFF.y);
   return dg <= STATION.gen && dg < dt ? "gen" : dt <= STATION.tower ? "tower" : null;
 }
+const STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // matches the server's STATION_STEP
+function stationCost(need, kind, step) {   // what one press costs: only the missing part (you never pay for nothing); null = full
+  if (need < 1) return null; const have = state[kind] || 0, gain = Math.min(step.amt, need, have * step.amt / step.cost);
+  return { pay: Math.max(1, Math.ceil(step.cost * Math.min(step.amt, need) / step.amt - 1e-9)), afford: gain > 0 && Math.ceil(step.cost * gain / step.amt - 1e-9) <= have };
+}
 function stationPlan(st) {   // what F does right now: [{ msg, label, cost, ok, why }]
-  if (st === "tower") { const full = state.towerHp >= state.towerMaxHp, cost = { scrap: 10 };
-    return [{ msg: "repairTower", data: { amount: 250 }, label: "Repair tower", cost: "10 scrap", ok: !full && canAfford(cost), why: full ? "full health" : "need 10 scrap" }]; }
-  const hurt = state.generatorHp < state.generatorMaxHp, low = state.generatorFuel < 100;
-  return [{ msg: "repairGenerator", label: "Repair generator", cost: "15 scrap", ok: hurt && canAfford({ scrap: 15 }), why: hurt ? "need 15 scrap" : "full health" },
-          { msg: "refuelGenerator", label: "Refuel", cost: "10 fuel", ok: low && canAfford({ fuel: 10 }), why: low ? "need 10 fuel" : "tank full" }];
+  const row = (msg, label, need, kind, step, fullWhy) => { const c = stationCost(need, kind, step);
+    return { msg, label, cost: c ? `${c.pay} ${kind}` : "", ok: !!c && c.afford, why: !c ? fullWhy : `need ${kind}` }; };
+  if (st === "tower") return [row("repairTower", "Repair tower", state.towerMaxHp - state.towerHp, "scrap", STEP.tower, "full health")];
+  return [row("repairGenerator", "Repair generator", state.generatorMaxHp - state.generatorHp, "scrap", STEP.gen, "full health"),
+          row("refuelGenerator", "Refuel", 100 - state.generatorFuel, "fuel", STEP.fuel, "tank full")];
 }
 let lastStationUse = 0;
 function stationUse() {

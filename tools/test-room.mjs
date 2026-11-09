@@ -1194,6 +1194,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.x = cx - 70; p.y = cy; send(A, "repairTower", { amount: 250 }); ok(room.state.towerHp === 5250 && room.state.scrap === 989, "next to the tower: +250 HP for 10 scrap");
   p.x = cx + 118 + 50; p.y = cy + 6; send(A, "repairGenerator"); send(A, "refuelGenerator");
   ok(room.state.generatorHp === 800 && room.state.generatorFuel === 45, "next to the generator: repair (+300) and refuel (+25%)");
+  // no waste: full = free and nothing happens; nearly full = pay only for what's missing; short on supplies = what you can afford
+  room.state.generatorFuel = 100; const f0 = room.state.fuel; send(A, "refuelGenerator"); ok(room.state.fuel === f0, "tank full: refuelling costs nothing");
+  room.state.generatorFuel = 95; send(A, "refuelGenerator"); ok(room.state.fuel === f0 - 2 && room.state.generatorFuel === 100, `5%% missing: 2 fuel, not 10 (${f0 - room.state.fuel})`);
+  p.x = cx - 70; p.y = cy; room.state.towerHp = room.state.towerMaxHp - 50; let s0 = room.state.scrap; send(A, "repairTower", { amount: 250 });
+  ok(room.state.scrap === s0 - 2 && room.state.towerHp === room.state.towerMaxHp, `tower 50 HP short: 2 scrap, not 10 (${s0 - room.state.scrap})`);
+  s0 = room.state.scrap; send(A, "repairTower", { amount: 250 }); ok(room.state.scrap === s0, "full tower: nothing spent");
+  room.state.towerHp = 5000; room.state.scrap = 4; send(A, "repairTower", { amount: 250 }); ok(room.state.scrap === 0 && room.state.towerHp === 5100, `only 4 scrap: +100 HP for 4 (${room.state.towerHp})`);
   room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
