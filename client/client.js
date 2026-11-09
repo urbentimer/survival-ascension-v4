@@ -903,7 +903,7 @@ function releaseAxe() {
 const SOLO_PREVIEW = typeof __SOLO__ !== "undefined" && __SOLO__ === true;
 const DASH_CD_MS = 5000;   // matches DASH_COOLDOWN on the server
 function sendControls(t) {
-  if (!room || !state || state.phase !== "playing") return;
+  if (!room || !state || (state.phase !== "playing" && state.phase !== "cleared")) return;   // the break: you can walk (the server ignores shots then)
   const me = me_(); if (!me?.alive) return;
   const ride = state.vehicles?.get(myId);
   if (t - lastInput > 45) {
@@ -2906,7 +2906,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
 // not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
 // the server's smooth updates instead, and prediction picks up again right after
 const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || performance.now() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
-const predicting = me => !!(me && me.alive && state?.phase === "playing" && !state.vehicles?.get(myId) && !(me.stunned > 0) && !serverDriven(me));
+const predicting = me => !!(me && me.alive && (state?.phase === "playing" || state?.phase === "cleared") && !state.vehicles?.get(myId) && !(me.stunned > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
   if (!PRED.ok) { PRED.x = me.x; PRED.y = me.y; PRED.ok = true; PRED.ex = PRED.ey = 0; }

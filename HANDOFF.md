@@ -288,3 +288,5 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Nov 9: hotbar "⇄+1" badge (moreGuns) REVERTED at the user's request (pickup slot behaviour kept). Cache v=20261109j.
 
 - Nov 9: BETWEEN WAVES = READY-UP: break lasts until every human presses READY (bots always ready; PlayerState.ready reused, reset at break start + wave start; msg "breakReady"), max 60s (BREAK_SECONDS), then 3s (BREAK_GO). Host START NOW kept. Client: READY / ▾ MINIMIZE · BUILD FIRST / START NOW (host) buttons under the shop; minimized = top bar "WAVE n CLEARED · Ready x/y · next wave in Ns [SHOP (B)] [READY]" so you can move + build; B toggles. Test 4 rewritten. Cache v=20261109k.
+
+- Nov 9 (fix): at the end of a wave every zombie left is removed (beginBreak clears zombies, puddles, spits, dots, taunts, Pyre fx/burns) and survivors can WALK during the break (applyMove + client sendControls/predicting allow phase "cleared"; shots/skills still need "playing"). Test 4 extended. Cache v=20261109l.

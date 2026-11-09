@@ -94,8 +94,10 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   room.lastDashAt.set("A", Date.now() - 5100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 5s"); room._dispose(); }
 
 // 4. countdown between waves
-{ const { room, A, send } = makeRoom(); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();
-  ok(room.state.phase === "cleared", "wave ends after 90s");
+{ const { room, A, send, P } = makeRoom(); for (let i = 0; i < 4; i++) room.spawnZombie(false, "walker"); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();
+  ok(room.state.phase === "cleared" && room.state.zombies.size === 0, "wave ends after 90s: every zombie left dies");
+  { const p = P(A), x0 = p.x; room.mapBoxesNear = () => []; for (let i = 0; i < 6; i++) { send(A, "input", { dx: 1, dy: 0 }); room.lastInputs.set("A", Date.now() - 50); }
+    ok(p.x > x0 + 20, `the break: you can walk around (moved ${Math.round(p.x - x0)}px)`); }
   room.lastTick = Date.now() - 50; room.tick(); ok(room.state.countdown > 59 && room.state.countdown <= 60, "break: up to 60s (shop open)");
   for (let i = 0; i < 20; i++) { room.lastTick = Date.now() - 100; room.tick(); } ok(room.state.phase === "cleared", "nobody ready: still on break after 2s");
   send(A, "breakReady", { on: true }); room.lastTick = Date.now() - 100; room.tick(); ok(room.state.phase === "cleared" && room.state.countdown > 50, "one of two ready: still waiting");

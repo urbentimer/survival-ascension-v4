@@ -709,7 +709,11 @@ export class SurvivalRoom extends Room {
     });
   }
 
-  beginBreak() { this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false; }   // nobody's ready yet
+  beginBreak() {   // the wave is over: every zombie left dies (no stragglers), the ground clears; nobody's ready yet. Survivors can walk around + build.
+    this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false;
+    this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.dots.clear(); this.taunt.clear();
+    this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn.clear();
+  }
   startNextWave() {
     const s = this.state;
     this.inBreak = false; s.countdown = 0; for (const p of s.players.values()) p.ready = false;
@@ -2982,7 +2986,7 @@ export class SurvivalRoom extends Room {
     }
   }
   applyMove(sid, p, data) {
-    if (!p.alive || this.state.phase !== "playing" || this.state.vehicles.has(sid)) return;
+    if (!p.alive || !["playing", "cleared"].includes(this.state.phase) || this.state.vehicles.has(sid)) return;   // the break: walk around and build
     if (p.stunned > 0 || this.shadowDash.has(sid) || this.hooks?.has(sid)) { this.lastInputs.set(sid, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
     const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
     const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
