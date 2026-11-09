@@ -1185,6 +1185,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const w1 = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); const dw = 9999 - w1.hp; room.state.zombies.clear();
   const b1 = mk("brute", 1200); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); const db = 9999 - b1.hp;
   ok(Math.abs(dw - p.damage) < .6 && Math.abs(db - p.damage * 1.5) < .6, `walker takes ${Math.round(dw)}, a brute takes x1.5 (${Math.round(db)})`);
+  // Dead Eye (E): aimed, 12x the held gun's shot, pierce from the gun
+  room.state.zombies.clear(); const z1 = mk("walker", 1200), z2 = mk("walker", 1260), z3 = mk("walker", 1320), z4 = mk("walker", 1380), off = mk("walker", 1000); off.y = 800;
+  let de = 0; const ob = room.broadcast; room.broadcast = (t, m) => { if (t === "deadeye") de++; return ob.call(room, t, m); };
+  p.abilityCooldown = 0; send(A, "ability", { a: 0 });
+  const per = 9999 - z1.hp;
+  ok(de === 1 && Math.abs(per - p.damage * 12) < 2 && z2.hp < 9999 && z3.hp < 9999 && z4.hp === 9999 && off.hp === 9999, `Dead Eye: aimed (the zombie off to the side is safe), 12x the sniper (${Math.round(per)}), through 3 like the sniper`);
+  for (const z of [z1, z2, z3]) z.hp = 9999; send(A, "slot", { n: 3 }); p.abilityCooldown = 0; send(A, "ability", { a: 0 });
+  ok(p.weapon === "pistol" && Math.abs((9999 - z1.hp) - p.damage * 12) < 2 && z2.hp === 9999, `holding the pistol: 12x the pistol (${Math.round(9999 - z1.hp)}), hits just 1`);
+  z1.hp = 9999; send(A, "slot", { n: 1 }); p.abilityCooldown = 0; send(A, "ability", { a: 0 });
+  ok(p.activeSlot === 1 && Math.abs((9999 - z1.hp) - per) < 2, `holding the knife: it uses her sniper (${Math.round(9999 - z1.hp)})`);
   room._dispose(); }
 // 54e. repair / refuel only next to the tower / generator (the client's F prompt)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "playing"; room.state.scrap = room.state.fuel = 999;

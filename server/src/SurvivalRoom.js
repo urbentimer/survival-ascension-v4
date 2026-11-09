@@ -298,6 +298,7 @@ const nearFoot = (st, z, pa, pt) => {   // z within pa (along the line) / pt (ac
   return Math.abs(dx * l.c + dy * l.s) < l.L + pa && Math.abs(dy * l.c - dx * l.s) < l.T + pt;
 };
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
+const DEAD_EYE = { mult: 12 };   // Sienna's E: 12x one shot of the gun she holds (see deadEye)
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
@@ -1057,7 +1058,7 @@ export class SurvivalRoom extends Room {
     if(cls==="engineer") this.summonRobot(p, data?.kind);
     else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
-    else if(cls==="sniper"){const z=[...this.state.zombies.values()].filter(z=>distance(p,z)<650).sort((a,b)=>distance(p,a)-distance(p,b)).find(z=>this.lineClear(p,z));if(z){const hit=Math.min(z.hp,p.damage*12);z.hp-=hit;p.damageDealt+=hit;if(z.boss)p.bossDamage+=hit;if(z.hp<=0)this.killZombie(z,p);}}
+    else if(cls==="sniper") this.deadEye(p);
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
     else {p.buffDamage=MARCUS.rush.dmg;p.buffRate=MARCUS.rush.rate;p.skillT=MARCUS.rush.t;applyLoadout(p);this.broadcast("rush",{id:p.sessionId});}   // ends in updateMarcus
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
@@ -2385,6 +2386,21 @@ export class SurvivalRoom extends Room {
     }
     if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
     this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it
+  }
+  // SIENNA's DEAD EYE (E, Nov 9): one huge AIMED shot where the mouse points = 12x a shot of her gun. Its damage, reach and how many zombies it
+  // goes through come from the gun: sniper pierces 3 (+50% on bosses / brutes), shotgun fires a slug worth all 5 pellets that pierces 2,
+  // launcher a round that blows up on the first zombie (12x its blast), others hit 1. Holding a melee weapon: it uses her gun (primary first).
+  deadEye(p) {
+    const held = WEAPONS[p.weapon] && p.activeSlot !== 1 ? p.weapon : WEAPONS[p.primary] ? p.primary : WEAPONS[p.secondary] ? p.secondary : "pistol";
+    const w = WEAPONS[held], c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault, a = p.aim || 0, now = Date.now();
+    const dmg = w.dmg * (w.pellets || 1) * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * DEAD_EYE.mult;
+    const wall = this.wallDist(p.x, p.y, a, w.range), hits = this.rayHits(p, a, wall).slice(0, w.splash ? 1 : (w.pierce || 1));
+    for (const h of hits) {
+      if (w.splash) { this.ripples.push({ kind: "rocket", owner: p.sessionId, x: h.z.x, y: h.z.y, t: now, at: 0, dmg, r: w.splash, flat: 1, push: 14, wallSafe: true }); continue; }
+      this.hitZombie(h.z, p, dmg * (w.bigMult && (h.z.boss || h.z.kind === "brute") ? w.bigMult : 1));
+    }
+    const len = hits.length ? hits[hits.length - 1].t : wall;
+    this.broadcast("deadeye", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: +a.toFixed(3), len: Math.round(len), w: held, hits: hits.map(h => Math.round(h.t)) });
   }
   nearGen(p) { return Math.hypot(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
   // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)

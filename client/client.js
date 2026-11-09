@@ -104,6 +104,7 @@ function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true);
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
+  room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: performance.now() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: performance.now(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
@@ -2470,6 +2471,23 @@ function drawFeel(){
 function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;const k=(feel.hurtUntil-now)/220;
  const g=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.75);g.addColorStop(0,'rgba(200,30,30,0)');g.addColorStop(1,`rgba(200,30,30,${.45*k})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 
+// SIENNA's DEAD EYE (Nov 9): a thick glacier-blue beam down the aimed line, a muzzle flare, and a burst on every zombie it went through
+function drawDeadEye(f, age) {
+  if (age > 520) return false;
+  const k = age / 520, c = Math.cos(f.a), s = Math.sin(f.a), x0 = f.x + c * 20, y0 = f.y + s * 20, x1 = f.x + c * f.len, y1 = f.y + s * f.len;
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  for (const [w, col] of [[18 * (1 - k) + 4, `rgba(120,200,255,${.35 * (1 - k)})`], [7 * (1 - k) + 2, `rgba(190,240,255,${.8 * (1 - k)})`], [2.5, `rgba(255,255,255,${1 - k})`]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+  if (age < 140) { const g = ctx.createRadialGradient(x0, y0, 2, x0, y0, 46); g.addColorStop(0, `rgba(255,255,255,${1 - age / 140})`); g.addColorStop(1, "rgba(120,200,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x0, y0, 46, 0, 7); ctx.fill(); }
+  for (const t of f.hits || []) {   // a burst of ice-blue shards on each zombie it hit
+    const hx = f.x + c * t, hy = f.y + s * t - 16, r = 10 + 34 * k;
+    ctx.fillStyle = `rgba(170,230,255,${.55 * (1 - k)})`; ctx.beginPath(); ctx.arc(hx, hy, r * .6, 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgba(230,250,255,${1 - k})`; ctx.lineWidth = 2;
+    for (let q = 0; q < 8; q++) { const qa = q * Math.PI / 4 + f.a; ctx.beginPath(); ctx.moveTo(hx + Math.cos(qa) * r * .35, hy + Math.sin(qa) * r * .35); ctx.lineTo(hx + Math.cos(qa) * r, hy + Math.sin(qa) * r); ctx.stroke(); }
+  }
+  ctx.restore(); return true;
+}
 // SHOTGUN (Nov 9): a muzzle blast cone (a burst of fire the width of the spread + a puff of smoke) and a pellet spray
 // (5 glowing pellets that fly out to where each stopped - its last zombie or a wall - with a spark puff there, plus loose sparks in the cone)
 function drawShotgunFx(f, age) {   // false when finished
@@ -2518,7 +2536,7 @@ const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',s
 function drawShotFx(){
   const now=performance.now();
   drawPyreBurning();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','shotgun'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2529,6 +2547,7 @@ function drawShotFx(){
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='pyre'){if(!drawPyreFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='shotgun'){if(!drawShotgunFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='deadeye'){if(!drawDeadEye(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
@@ -3422,7 +3441,7 @@ const ROSTER = [
     skills: [{ k: "E", n: "Sky Barrage", card: "skyBarrage", cd: 8, t: "3 rockets up, 3 down around your mouse." },
              { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }], gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
-    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "A huge shot at the nearest zombie in sight." }], gear: ["sniper", "pistol", "knife"] },
+    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "One huge aimed shot where you point: 12x a shot of the gun you're holding. It goes through as many zombies as that gun does (sniper 3, shotgun 2, launcher explodes). Holding melee? It uses your gun." }], gear: ["sniper", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic arrives: everyone within 300px of you heals 30% of their max HP at once. For 20s he revives downed teammates first (2.5s each), then heals the injured (5 HP/s)." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s." },
