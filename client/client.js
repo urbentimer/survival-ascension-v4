@@ -113,6 +113,7 @@ function connected() {
   myId = room.sessionId; status("Connected · " + room.roomId, true); rememberSeat();
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
+  awayIds.clear(); room.onMessage("away", m => { if (m.on) awayIds.add(m.id); else awayIds.delete(m.id); });   // a teammate's connection dropped / came back
   room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: performance.now() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: performance.now(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
@@ -1109,12 +1110,12 @@ function drawPyre(z) {
     k = t < .25 ? t / .25 : t < .45 ? (t - .25) / .2 : t < T - .35 ? 0 : 0;
   } else if (now - mv.at < 160) { const u = mv.dist / PY.step; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
   const [row, flip] = pyRow(face), im = pyImgs[sheet]?.naturalWidth ? pyImgs[sheet] : pyImgs.walk;
-  const flashAt = feel.flash.get(z.id); let filter = flashAt && now - flashAt < 90 ? "brightness(2.2)" : "";
-  if (z.enraged) filter = (filter ? filter + " " : "") + "drop-shadow(0 0 6px rgba(255,60,20,.9))";
-  else if (z.act === "sermon" && f === 2) filter = (filter ? filter + " " : "") + "drop-shadow(0 0 8px rgba(255,170,40,.85))";
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; if (filter) ctx.filter = filter;
+  const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
+  if (z.enraged) bossGlow(z.x, gy - 75, "255,60,20", 120, .5 + .2 * Math.sin(now / 90));   // red halo (was a drop-shadow filter on a 300x185 sprite every frame)
+  else if (z.act === "sermon" && f === 2) bossGlow(z.x, gy - 60, "255,170,40", 130, .6);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.translate(Math.round(z.x), Math.round(gy)); if (flip) ctx.scale(-1, 1);
-  blendCells(im, 0, row * PY.ch, PY.cw, PY.ch, f, f2, k, -PY.ax, -PY.fy);
+  flashDraw(flashing, () => blendCells(im, 0, row * PY.ch, PY.cw, PY.ch, f, f2, k, -PY.ax, -PY.fy));
   ctx.restore();
   pyreAura(z, feet, now, true);
 }
@@ -1291,7 +1292,7 @@ function drawHivemind(z) {
   const now = performance.now(), feet = (z.radius || 44) * .8, t = actTime(z);
   let mv = hiveMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; hiveMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
-  const flashAt = feel.flash.get(z.id), filter = flashAt && now - flashAt < 90 ? "brightness(2.2)" : "";
+  const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
   let lift = 0;
   if (z.act === "jump" && t > HV.jumpUp && t < HV.jumpLand) lift = Math.sin(Math.PI * (t - HV.jumpUp) / (HV.jumpLand - HV.jumpUp)) * 70;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); const sh = 1 - lift / 140; ctx.ellipse(z.x, z.y + feet, 70 * sh, 16 * sh, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -1304,11 +1305,11 @@ function drawHivemind(z) {
   if (z.act === "bite") { row = 0; col = Math.min(4, Math.floor(t / (.95 / 5))); }
   else if (z.act === "slam") { row = 1; col = t < .2 ? 0 : t < HV.slamWind ? 1 : t < HV.slamWind + .12 ? 2 : t < HV.slamWind + .35 ? 3 : t < 1.1 ? 4 : 5; }
   else if (z.act === "jump") { row = 2; col = t < HV.jumpUp ? 0 : t < .5 ? 1 : t < .7 ? 2 : t < HV.jumpLand ? 3 : t < 1.05 ? 4 : 5; }
-  ctx.save(); ctx.imageSmoothingEnabled = false; if (filter) ctx.filter = filter; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift)));
-  if (row >= 0 && act?.naturalWidth) { if (flip) ctx.scale(-1, 1); ctx.drawImage(act, col * 260, row * 230, 260, 230, -130, -226, 260, 230); }
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift)));
+  if (row >= 0 && act?.naturalWidth) { if (flip) ctx.scale(-1, 1); flashDraw(flashing, () => ctx.drawImage(act, col * 260, row * 230, 260, 230, -130, -226, 260, 230)); }
   else if (crawl?.naturalWidth) {
     const r8 = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8], c = now - mv.at < 200 ? Math.floor(mv.dist / 14) % 6 : 0;
-    ctx.drawImage(crawl, c * 210, r8 * 150, 210, 150, -105, -144, 210, 150);
+    flashDraw(flashing, () => ctx.drawImage(crawl, c * 210, r8 * 150, 210, 150, -105, -144, 210, 150));
   }
   ctx.restore();
 }
@@ -2020,10 +2021,10 @@ function actTime(z) {
   if (!st || st.act !== z.act) { st = { act: z.act, start: now - Math.max(0, (z.actLen || 0) - (z.slam || 0)) * 1000 }; bAct.set(z.id, st); }
   return (now - st.start) / 1000;
 }
-function bFrame(sheet, frame, row, x, y, feet, filter) {
+function bFrame(sheet, frame, row, x, y, feet, flash) {
   const im = butcherImgs[sheet], C = BCELL[sheet]; if (!im?.naturalWidth) return;
-  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.imageSmoothingEnabled = false; if (filter) ctx.filter = filter;
-  ctx.drawImage(im, frame * C.w, row * C.h, C.w, C.h, -C.ax, feet - C.fy, C.w, C.h); ctx.restore();
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.imageSmoothingEnabled = false;
+  flashDraw(flash, () => ctx.drawImage(im, frame * C.w, row * C.h, C.w, C.h, -C.ax, feet - C.fy, C.w, C.h)); ctx.restore();
 }
 function drawChain(x0, y0, x1, y1, withHook = true) {
   const ch = butcherImgs.chain, hk = butcherImgs.hookFx, a = Math.atan2(y1 - y0, x1 - x0), len = Math.hypot(x1 - x0, y1 - y0);
@@ -2034,9 +2035,9 @@ function drawChain(x0, y0, x1, y1, withHook = true) {
 }
 function drawButcher(z) {
   const now = performance.now(), t = actTime(z), feet = z.radius * .8, row = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8];
-  const flashAt = feel.flash.get(z.id), flash = flashAt && now - flashAt < 90;
-  const filter = flash ? "brightness(2.2)" : z.enraged ? `drop-shadow(0 0 ${6 + 4 * Math.sin(now / 90)}px rgba(255,30,30,.9))` : "";
+  const flashAt = feel.flash.get(z.id), flash = flashAt && now - flashAt < 90, filter = flash;   // bFrame(..., flash): additive flash, no ctx.filter
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, 46, 12, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (z.enraged) bossGlow(z.x, z.y - 40, "255,30,30", 110, .5 + .2 * Math.sin(now / 90));   // enraged: red halo behind him
   const handX = z.x + Math.cos(z.aim || 0) * 34, handY = z.y - 52 + Math.sin(z.aim || 0) * 18;
   if (z.act === "chop") {
     const W = Math.max(.2, (z.actLen || 1.35) - BT.chopAfter);
@@ -2275,11 +2276,13 @@ function drawMutantWhip(z, img8, info) {
   let frame = 0; for (const [t0, f] of WHIP_T.frames) if (t >= t0) frame = f;
   const tg = state.players.get(z.targetId), face = tg ? Math.atan2(tg.y - z.y, tg.x - z.x) : zombieAngle(z);
   const row = ROW_OF_OCT[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8], feet = z.radius ? z.radius * 0.8 : 12, C = ZD8_CELLS.mutant;
+  const charging = t < .38, flash = feel.flash.get(z.id), flashing = flash && now - flash < 90, g = .5 + .5 * Math.sin(now / 45);
+  if (charging) bossGlow(z.x, z.y - 14, "255,40,70", 40 + 10 * g, .45 + .35 * g);   // glowing red while it coils: your warning (a mutant horde used to be a drop-shadow filter per mutant per frame)
   ctx.save(); ctx.translate(Math.round(z.x), Math.round(z.y)); ctx.imageSmoothingEnabled = false;
-  const charging = t < .38, flash = feel.flash.get(z.id), flashing = flash && now - flash < 90;
-  if (!flashing && charging) { const g = .5 + .5 * Math.sin(now / 45); ctx.filter = `drop-shadow(0 0 ${4 + 5 * g}px rgba(255,40,70,.95)) brightness(${1 + .25 * g})`; }   // glowing red while it coils: your warning
   const shake = charging ? (Math.random() - .5) * 2.5 : 0;
-  flashDraw(flashing, () => ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX + shake, feet - C.feetY, C.cellW, C.cellH));
+  const cell = () => ctx.drawImage(img8, frame * C.cellW, row * C.cellH, C.cellW, C.cellH, -C.anchorX + shake, feet - C.feetY, C.cellW, C.cellH);
+  flashDraw(flashing, cell);
+  if (charging && !flashing) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .3 * g; cell(); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; }   // brightens as it coils
   if (t > .46 && t < .78 && mutantClaw.naturalWidth) {   // claw marks rip across in front of it
     const k = (t - .46) / .32; ctx.filter = "none"; ctx.globalAlpha = 1 - k * k;
     ctx.drawImage(mutantClaw, 0, row * C.cellH, C.cellW, C.cellH, -C.anchorX + Math.cos(face) * 44, feet - C.feetY - 8 + Math.sin(face) * 26, C.cellW, C.cellH);
@@ -2666,11 +2669,24 @@ function drawSurvivorLabels(p) {
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 20, 8, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
     ctx.restore();
   }
-  ctx.fillStyle = "#f2ead9"; ctx.font = "11px monospace"; ctx.textAlign = "center";
   const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
-  ctx.fillText(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift);
-  if (!p.alive) { ctx.fillStyle = "#ff7568"; ctx.fillText(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32); }
+  drawLabel(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift, "#f2ead9");
+  if (awayIds.has(p.sessionId)) drawLabel("RECONNECTING…", p.x, p.y - nameLift - 13, "#9fd8ff");   // their connection dropped: the server holds the seat 30s
+  if (!p.alive) drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, "#ff7568");
 }
+// Name tags: text is rasterised once per (string, colour) and blitted after that (fillText for every survivor every frame added up).
+const labelCache = new Map();
+function drawLabel(text, x, y, color) {
+  const key = color + "|" + text; let c = labelCache.get(key);
+  if (!c) {
+    if (labelCache.size > 200) labelCache.clear();
+    const m = document.createElement("canvas"), g = m.getContext("2d"); g.font = "11px monospace"; const w = Math.ceil(g.measureText(text).width) + 4;
+    m.width = w; m.height = 16; const g2 = m.getContext("2d"); g2.font = "11px monospace"; g2.textAlign = "center"; g2.textBaseline = "alphabetic"; g2.fillStyle = color; g2.fillText(text, w / 2, 12);
+    c = m; labelCache.set(key, c);
+  }
+  ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - 12));
+}
+const awayIds = new Set();   // survivors whose connection dropped (server "away" messages)
 // ---------- 8-direction survivor sprites (art: client/assets/sprites/dir8/<class>.png) ----------
 // Made by tools/extract-directions.py: one block of 8 rows per weapon (order in "blocks").
 // Rows: down, down-right, right, up-right, up, up-left, left, down-left.
@@ -2740,6 +2756,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
   else if (p.shadow > 0) ravenHidden(p);
+  else if (awayIds.has(p.sessionId)) ctx.globalAlpha = .55;   // reconnecting: faded out, frozen where they stood
   if (flip) ctx.scale(-1, 1);   // mirrored diagonal (the cell is centred on the feet, so it flips in place)
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
@@ -3196,6 +3213,13 @@ const mapFireImg = new Image(); mapFireImg.src = "assets/sprites/fx/fire-loop.we
 const MFIRE = { n: 16, w: 72, h: 104, fps: 15, puff: 48 };
 // Hit flash without ctx.filter: draw the sprite, then (while flashing) add it to itself twice. "lighter" saturates toward white the
 // way brightness(2.6) did, but costs two plain drawImage calls instead of a filtered offscreen pass per hit zombie per frame.
+// Boss glow (enraged / sermon) without a drop-shadow filter: one cached additive blob behind the sprite, scaled to size.
+const glowCache = new Map();
+function bossGlow(x, y, rgb, r, alpha) {
+  let c = glowCache.get(rgb);
+  if (!c) { c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d"), gr = g.createRadialGradient(64, 64, 4, 64, 64, 64); gr.addColorStop(0, `rgba(${rgb},.9)`); gr.addColorStop(.45, `rgba(${rgb},.35)`); gr.addColorStop(1, `rgba(${rgb},0)`); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); glowCache.set(rgb, c); }
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha; ctx.drawImage(c, x - r, y - r * .8, r * 2, r * 1.6); ctx.restore();
+}
 function flashDraw(flashing, draw) { draw(); if (flashing) { const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = "lighter"; draw(); draw(); ctx.globalCompositeOperation = op; } }
 function drawFireSprite(x, y, sc, phase, t, alpha = 1) {   // one burning fire: the flipbook, cross-faded frame to frame, with a bright additive pass
   if (!mapFireImg.naturalWidth) return;
@@ -3273,7 +3297,9 @@ function drawPaintedOverlay(fires) {
 }
 // ---- ground cache: the static ground (grass, roads, plaza, tiles, map edge) is painted once per 512px chunk into an offscreen canvas and
 // blitted after that. Before this every frame re-filled the whole viewport with 10-20 overlapping pattern fills (the single biggest draw cost).
-const GROUND_CHUNK = 512, groundChunks = new Map(); let groundKey = "";
+// Phones / small laptops (<= 4 cores or a coarse pointer) get 384px chunks and keep fewer: ~24 x 0.6MB instead of 36 x 1MB of canvases.
+const LOW_END = (navigator.hardwareConcurrency || 8) <= 4 || matchMedia?.("(pointer: coarse)")?.matches || false;
+const GROUND_CHUNK = LOW_END ? 384 : 512, GROUND_KEEP = LOW_END ? 24 : 30, groundChunks = new Map(); let groundKey = "";
 function strHash(t) { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
 function drawGroundCached(key, paint) {   // paint(x0, y0, w, h) draws that world rect with the normal helpers (ctx is the chunk while it runs)
   if (key !== groundKey) { groundKey = key; groundChunks.clear(); }
@@ -3281,7 +3307,11 @@ function drawGroundCached(key, paint) {   // paint(x0, y0, w, h) draws that worl
   for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
     const k = gx * 4096 + gy; let c = groundChunks.get(k);
     if (!c) {
-      if (groundChunks.size >= 36) groundChunks.delete(groundChunks.keys().next().value);   // far-away chunks go first (insertion order)
+      if (groundChunks.size >= GROUND_KEEP) {   // full: drop the chunk farthest from the camera
+        let far = null, fd = -1; const ccx = (cam.x + W / 2) / C, ccy = (cam.y + H / 2) / C;
+        for (const key of groundChunks.keys()) { const kx = Math.floor(key / 4096), ky = key - kx * 4096, d = (kx + .5 - ccx) ** 2 + (ky + .5 - ccy) ** 2; if (d > fd) { fd = d; far = key; } }
+        groundChunks.delete(far);
+      }
       c = document.createElement("canvas"); c.width = c.height = C; const g = c.getContext("2d"), main = ctx;
       ctx = g; g.imageSmoothingEnabled = false; g.translate(-gx * C, -gy * C);
       try { paint(gx * C, gy * C, C, C); } catch (e) { reportError(e, "ground"); } finally { ctx = main; }

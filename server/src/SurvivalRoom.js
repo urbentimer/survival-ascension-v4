@@ -98,7 +98,8 @@ const ATTACK_REACH = { brute: 48, mutant: 52 }, DEFAULT_REACH = 22;
 // that it does WHILE running, without stopping.
 // Its attack is a CHARGED WHIP: coil (glows, slows down: your warning) -> lunge forward -> whip slash hits everyone
 // in a wide arc -> brief recovery. Times in seconds from the start of the attack (z.slam counts down from total).
-const MUTANT = { trigger: 150, charge: .38, lungeEnd: .56, hit: .47, total: .9, cooldown: 1.0, chargeSpeed: .35, lungeSpeed: 430, arc: 1.2, dmgMult: 1.6 };
+const MUTANT = { trigger: 150, charge: .38, lungeEnd: .56, hit: .47, total: .9, cooldown: 1.0, chargeSpeed: .35, lungeSpeed: 430, arc: 1.2, dmgMult: 1.25, night: 1.15 };   // Nov 9: 1.6 -> 1.25, night x1.15 (others x1.3): a whip at wave 14 took 45% of a hero
+const HIT_CAP = .4;   // no single hit from an ordinary zombie (not a boss) takes more than 40% of your max HP: late waves scale damage forever and brutes/mutants one-shot otherwise
 // Which zombies make up each wave: % of walker, runner, brute, spitter, mutant (adds up to 100).
 // Waves 1-16 are hand-tuned (runners from wave 1, brutes from wave 3 at 20%, spitters from 5, mutants from 9).
 // From 17 on, waves cycle through themes (rush, siege, mutant horde, boss) and walkers slowly thin out.
@@ -778,7 +779,7 @@ export class SurvivalRoom extends Room {
     if (s.bossPhase === "horde") {
       if (this.spawnClock <= 0 && s.elapsed < BOSS_WAVE.horde) {
         this.spawnZombie(false);   // the horde uses the wave's normal mix; once the boss is out, only walkers come
-        const early = { 4: 1.3 }[s.stage]; this.spawnClock = early || Math.max(0.3, 1.15 - s.stage * 0.018);
+        const early = { 4: 1.3 }[s.stage]; this.spawnClock = (early || Math.max(0.3, 1.15 - s.stage * 0.018)) / this.spawnScale();
       }
       if (s.elapsed >= BOSS_WAVE.horde + BOSS_WAVE.straggleGrace && s.zombies.size > 0 && s.zombies.size <= BOSS_WAVE.straggleMax && ![...s.zombies.values()].some(z => z.boss))
         s.zombies.clear();   // a last straggler stuck far away doesn't hold the boss back (sims: the wave could hang forever)
@@ -838,9 +839,10 @@ export class SurvivalRoom extends Room {
     if (p && !consented && !p.isBot && this.state.phase !== "lobby" && typeof this.allowReconnection === "function") {
       this.away.add(client.sessionId); this.lastInputs.delete(client.sessionId); this.inQ?.delete(client.sessionId); p.charging = false; p.reviveTargetId = ""; p.reviveProgress = 0;
       this.state.message = `${p.name} lost connection... holding their spot for 30s.`; this.log("warn", "leave", `${p.name} lost connection: 30s to come back`, client);
-      try { const back = await this.allowReconnection(client, 30); this.away.delete(client.sessionId); this.state.message = `${p.name} is back!`; this.log("info", "join", `${p.name} reconnected`, client);
+      this.broadcast("away", { id: client.sessionId, on: true });   // clients: "RECONNECTING…" tag + faded sprite
+      try { const back = await this.allowReconnection(client, 30); this.away.delete(client.sessionId); this.broadcast("away", { id: client.sessionId, on: false }); this.state.message = `${p.name} is back!`; this.log("info", "join", `${p.name} reconnected`, client);
         if (this.pyreFx?.wheel) setTimeout(() => { try { if (this.pyreFx.wheel) (back || client).send("pyre", this.wheelMsg(Date.now())); } catch {} }, 1500); return; }
-      catch { this.away.delete(client.sessionId); if (!this.state.players.has(client.sessionId)) return; }   // never came back (or the match was reset meanwhile)
+      catch { this.away.delete(client.sessionId); this.broadcast("away", { id: client.sessionId, on: false }); if (!this.state.players.has(client.sessionId)) return; }   // never came back (or the match was reset meanwhile)
     }
     if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
@@ -876,7 +878,7 @@ export class SurvivalRoom extends Room {
     z.id = `z${++this.zombieSequence}`; z.kind = kind; z.x = x; z.y = y;
     z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
     z.hp = z.maxHp; z.speed = ({walker:57,runner:125,brute:34,spitter:28,mutant:105}[kind] || (boss?42:55)) * (this.state.isNight?1.2:1);
-    z.damage = ({walker:8,runner:7,brute:18,spitter:6,mutant:16}[kind] || (boss?28:10)) * scale * (this.state.isNight?1.3:1);
+    z.damage = ({walker:8,runner:7,brute:18,spitter:6,mutant:16}[kind] || (boss?28:10)) * scale * (this.state.isNight ? (kind === "mutant" ? MUTANT.night : 1.3) : 1);
     const D = DIFFICULTY[this.state.difficulty] || DIFFICULTY.normal; z.maxHp *= D.hp; z.hp = z.maxHp; z.damage *= D.dmg;   // lobby difficulty
     z.radius = boss ? 42 : kind === "brute" ? 33 : kind === "mutant" ? 18 : 14; z.attackCooldown = 0;   // brutes are 50% bigger than before
     this.solveZombie(z);   // don't appear inside a building
@@ -1132,7 +1134,7 @@ export class SurvivalRoom extends Room {
     for (const m of [...this.state.robots.values(), ...this.state.structures.values()]) if (((this.state.robots.has(m.id) && m.kind !== "worker") || m.kind === "heavyTurret") && hyp(m.x - s.tx, m.y - s.ty) < ACID.splash + 14) this.damageMachine(m, s.dmg * 2);
     for (const p of this.state.players.values()) {   // direct hit
       if (!p.alive || this.untouchable(p) || hyp(p.x - s.tx, p.y - s.ty) > ACID.splash) continue;
-      const dealt = this.armorHit(p, s.dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+      const dealt = this.armorHit(p, s.dmg, { boss: false }); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);   // spitters are ordinary zombies: capped
     }
     const pu = new PuddleState(); pu.id = "a" + (++this.puddleSeq); pu.x = Math.round(s.tx); pu.y = Math.round(s.ty);
     pu.r = ACID.radius; pu.life = ACID.life; pu.maxLife = ACID.life;
@@ -2268,7 +2270,7 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y) });
     return z;
   }
-  armorHit(p, raw) { return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) - (p.defence || 0))); }   // percent armour first, then flat defence
+  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
   hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000 }; this.hiveMem.set(z.id, m);
@@ -2622,7 +2624,7 @@ export class SurvivalRoom extends Room {
       if (!p.alive || this.untouchable(p)) continue; const pd = distance(z, p); if (pd > reach) continue;
       let diff = Math.atan2(p.y - z.y, p.x - z.x) - ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) > MUTANT.arc && pd > z.radius + BODY_R + 4) continue;
-      const dealt = this.armorHit(p, z.damage * MUTANT.dmgMult); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
+      const dealt = this.armorHit(p, z.damage * MUTANT.dmgMult, z); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p);
     }
     this.broadcast("whip", { x: Math.round(z.x), y: Math.round(z.y), a: Math.round(ang * 100) / 100 });
   }
@@ -2630,7 +2632,7 @@ export class SurvivalRoom extends Room {
   bruteSlam(z) {
     for (const p of this.state.players.values()) {
       if (!p.alive || this.untouchable(p) || distance(p, z) > SLAM.radius + BODY_R) continue;
-      const dealt = this.armorHit(p, z.damage * SLAM.dmgMult); p.hp -= dealt; p.damageTaken += dealt;
+      const dealt = this.armorHit(p, z.damage * SLAM.dmgMult, z); p.hp -= dealt; p.damageTaken += dealt;
       p.stunned = Math.max(p.stunned || 0, SLAM.stun); p.charging = false;
       if (p.hp <= 0) this.downPlayer(p);
     }
@@ -2960,6 +2962,9 @@ export class SurvivalRoom extends Room {
     }
     return now < m.flowUntil;
   }
+  // Nov 9: the spawn formula was tuned for a full squad; 4-player sims died around wave 38-46 and solo runs by wave 6.
+  // Smaller squads meet fewer zombies (boss HP already scales per player): 1-2 players x0.7, 3-4 x0.85, 5+ x1.
+  spawnScale() { const n = this.state.players.size; return n <= 2 ? .7 : n <= 4 ? .85 : 1; }
   spawnPoint() {   // where zombies come in: the streets leaving a painted map, or a ring around the tower
     if (this.painted) {
       const sp = this.painted.spawns, tot = sp.reduce((t, q) => t + q[2], 0); let r = Math.random() * tot, q = sp[0];
@@ -3152,10 +3157,10 @@ export class SurvivalRoom extends Room {
     if (this.state.waveType === "boss") this.bossWaveTick(dt, now);
     else if (this.spawnClock <= 0 && this.state.elapsed < 90) {
       this.spawnZombie();
-      // Waves 1-6 are a warm-up that ramps up smoothly; wave 7+ uses the normal formula.
-      const early = { 1: 2.6, 2: 2.0, 3: 1.6, 4: 1.3, 5: 1.1, 6: 0.95 }[this.state.stage];   // warm-up waves: ~35 / 45 / 56 / 69 / 82 / 95 zombies
-      if (!early && Math.random() < Math.min(.65,.15 + this.state.stage*.01)) this.spawnZombie();
-      this.spawnClock = early || Math.max(0.24, 1.15 - this.state.stage * 0.018);
+      // Waves 1-6 are a warm-up that ramps up smoothly; wave 7+ uses the normal formula. Small squads get fewer (spawnScale).
+      const early = { 1: 2.6, 2: 2.0, 3: 1.6, 4: 1.3, 5: 1.1, 6: 0.95 }[this.state.stage], sc = this.spawnScale();   // warm-up waves: ~35 / 45 / 56 / 69 / 82 / 95 zombies (full squad)
+      if (!early && Math.random() < Math.min(.65,.15 + this.state.stage*.01) * sc) this.spawnZombie();
+      this.spawnClock = (early || Math.max(0.24, 1.15 - this.state.stage * 0.018)) / sc;
     }
     if (this.state.generatorFuel > 0 && this.state.generatorHp > 0) this.state.generatorFuel = Math.max(0,this.state.generatorFuel-dt*0.025);
     else if (this.state.generatorHp <= 0 || this.state.generatorFuel <= 0) this.state.generatorHp = Math.max(0,this.state.generatorHp-dt*0.1);
@@ -3255,7 +3260,7 @@ export class SurvivalRoom extends Room {
         } else if (target.sessionId) {
           if (!target.alive) continue;   // went down a moment ago (another zombie got them this tick): pick a new target next tick
           if (this.untouchable(target)) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered: the bite misses
-          const dealt = this.armorHit(target, z.damage); target.hp-=dealt; target.damageTaken+=dealt;
+          const dealt = this.armorHit(target, z.damage, z); target.hp-=dealt; target.damageTaken+=dealt;
           if(target.hp<=0)this.downPlayer(target);
         } else {
           this.state.towerHp=Math.max(0,this.state.towerHp-z.damage*(z.boss?2:1));

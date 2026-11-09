@@ -16,7 +16,7 @@ namespace SurvivalAscension
         ColyseusClient client;
 
         // effect messages the server sends (dash trails, explosions, heals...). Not drawn yet: listed so the SDK doesn't warn.
-        static readonly string[] Broadcasts = { "arshan", "astra", "boom", "bossDead", "briggs", "chop", "clang", "dash", "deflect", "frag", "demo", "heal",
+        static readonly string[] Broadcasts = { "arshan", "astra", "away", "boom", "bossDead", "briggs", "chop", "clang", "dash", "deflect", "frag", "demo", "heal",
             "hive", "hooked", "katanaTier", "laser", "deadeye", "pyre", "roar", "rush", "shadow", "shot", "sky", "slam", "sofea", "spit", "summon", "swing", "whip", "wreck", "zdead" };
         public event Action<string, object> Effect;   // (type, message) for when you add effects
 
