@@ -632,6 +632,7 @@ export class SurvivalRoom extends Room {
     const station = (client, need, kind, amt, cost, apply, done) => {
       const p = this.state.players.get(client.sessionId);
       if (!p?.alive || this.state.vehicles.has(client.sessionId) || need < 1) return;
+      if (p.characterClass === "operator") cost /= 2;   // Sofea's trait (Mechanic): repairs and refuels cost her half
       const have = this.state[kind], gain = Math.min(amt, need, have * amt / cost); if (gain <= 0) return;   // what you can afford
       const pay = Math.max(1, Math.ceil(cost * gain / amt - 1e-9)); if (pay > have) return;
       this.state[kind] -= pay; apply(gain, p); this.state.message = done(p, gain);
@@ -3304,7 +3305,7 @@ export class SurvivalRoom extends Room {
     for(const rescuer of this.state.players.values()) if(rescuer.reviveTargetId){
       const target=this.state.players.get(rescuer.reviveTargetId);
       if(!rescuer.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85){rescuer.reviveTargetId="";rescuer.reviveProgress=0;}
-      else {rescuer.reviveProgress+=dt;if(rescuer.reviveProgress>=5){target.alive=true;target.bleedout=0;target.hp=Math.max(30,Math.round(target.maxHp*.35));rescuer.revives++;rescuer.reviveTargetId="";rescuer.reviveProgress=0;this.state.message=`${rescuer.name} revived ${target.name}!`;}}
+      else {rescuer.reviveProgress+=dt;if(rescuer.reviveProgress>=(rescuer.characterClass==="dispatcher"?2.5:5)){ /* Astra's trait (Field Commander): revives in 2.5s */target.alive=true;target.bleedout=0;target.hp=Math.max(30,Math.round(target.maxHp*.35));rescuer.revives++;rescuer.reviveTargetId="";rescuer.reviveProgress=0;this.state.message=`${rescuer.name} revived ${target.name}!`;}}
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){

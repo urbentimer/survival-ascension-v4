@@ -1324,4 +1324,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     ok(ev.some(e => e.k === "call") && run.length === 4 + 2 * 2 && run.every(r => r.role === "hunter"), `call of the horde at 66%: ${run.length} runners that hunt survivors (4 + 2 per survivor)`);
     step(200); z.hp = z.maxHp * .3; step(2000); ok(ev.filter(e => e.k === "call").length === 2 && z.enraged, "second call at 33%, and below 35% he's enraged"); }
   room._dispose(); }
+// 61. traits: Astra revives in 2.5s (Field Commander), Sofea pays half for repairs / refuels (Mechanic)
+{ const { room, A, B, send, P } = makeRoom(); const r = P(A), f = P(B); room.setMapBoxes([]);
+  r.characterClass = "dispatcher"; r.x = 1000; r.y = 1000; f.x = 1030; f.y = 1000; room.downPlayer(f);
+  let t = Date.now(); const T = n => { for (let i = 0; i < n; i++) { t += 100; room.lastTick = t - 100; const real = Date.now; Date.now = () => t; try { room.tick(); } finally { Date.now = real; } } };
+  send(A, "revive", { targetId: "B" }); T(26); ok(f.alive, "Astra (Field Commander): revives a downed teammate in 2.5s");
+  r.characterClass = "operator"; r.x = room.A.cx + 60; r.y = room.A.cy; room.state.towerHp = room.state.towerMaxHp - 250; room.state.scrap = 100;
+  send(A, "repairTower"); ok(room.state.scrap === 95 && room.state.towerHp === room.state.towerMaxHp, `Sofea (Mechanic): a full 250 HP tower repair costs her 5 scrap, not 10 (paid ${100 - room.state.scrap})`);
+  r.characterClass = "assault"; room.state.towerHp = room.state.towerMaxHp - 250; send(A, "repairTower"); ok(room.state.scrap === 85, "anyone else pays the normal 10");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

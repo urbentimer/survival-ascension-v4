@@ -393,7 +393,7 @@ function renderHotbar(me) {
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
     slots.splice(2, 0, { n: 9, key: "R", card: "crimsonAegis", name: "Crimson Aegis: pilot a mecha for 30s. Hold click = flame jet, right click = lightsaber, R = step out. 100s cooldown", sub: mv ? (mv.phase === "call" ? "TRANSFORMING…" : `MECHA ${Math.ceil(mv.left)}s · R out`) : rc > 0 ? "cooldown" : "READY", active: mv ? (mv.phase === "call" ? 1 : mv.left / 30) : 0, frac: !mv && rc > 0 ? rc / 100 : 0, cd: !mv && rc > 0 ? Math.ceil(rc) : 0 });
   }
-  if (jug) slots.splice(2, 0, { n: 8, key: "PASSIVE", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
+  if (jug) slots.splice(2, 0, { n: 8, key: "TRAIT", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // beside E
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { html("hotbar", hb); hotbarHtml = hb; }
@@ -812,7 +812,8 @@ function stationCost(need, kind, step) {   // what one press costs: only the mis
   return { pay: Math.max(1, Math.ceil(step.cost * Math.min(step.amt, need) / step.amt - 1e-9)), afford: gain > 0 && Math.ceil(step.cost * gain / step.amt - 1e-9) <= have };
 }
 function stationPlan(st) {   // what F does right now: [{ msg, label, cost, ok, why }]
-  const row = (msg, label, need, kind, step, fullWhy) => { const c = stationCost(need, kind, step);
+  const half = me_()?.characterClass === "operator";   // Sofea's trait (Mechanic): half price
+  const row = (msg, label, need, kind, step, fullWhy) => { const c = stationCost(need, kind, half ? { ...step, cost: step.cost / 2 } : step);
     return { msg, label, cost: c ? `${c.pay} ${kind}` : "", ok: !!c && c.afford, why: !c ? fullWhy : `need ${kind}` }; };
   if (st === "tower") return [row("repairTower", "Repair tower", state.towerMaxHp - state.towerHp, "scrap", STEP.tower, "full health")];
   return [row("repairGenerator", "Repair generator", state.generatorMaxHp - state.generatorHp, "scrap", STEP.gen, "full health"),
@@ -836,10 +837,10 @@ function drawStationPrompt() {   // "[F] Repair tower · 10 scrap" over your hea
 function drawReviveRing() {   // progress ring around the teammate you're reviving
   if (!reviving || !state) return; const me = V(me_()), t = V(state.players.get(reviving.id));
   if (!me || !t || !me_()?.alive || state.players.get(reviving.id)?.alive || Math.hypot(t.x - me.x, t.y - me.y) > 85) { reviving = null; return; }   // done, or walked off (the server cancels too)
-  const k = Math.min(1, (performance.now() - reviving.t0) / 5000);
+  const L = me_()?.characterClass === "dispatcher" ? 2.5 : 5, k = Math.min(1, (performance.now() - reviving.t0) / (L * 1000));   // Astra's trait: Field Commander
   ctx.save(); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, 0, 7); ctx.stroke();
   ctx.strokeStyle = "#7dff9a"; ctx.shadowColor = "#7dff9a"; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.fillStyle = "#eaffef"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.fillText(`REVIVING ${Math.ceil(5 - k * 5)}s`, t.x, t.y - 38); ctx.restore();
+  ctx.shadowBlur = 0; ctx.fillStyle = "#eaffef"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.fillText(`REVIVING ${Math.ceil(L - k * L)}s`, t.x, t.y - 38); ctx.restore();
 }
 
 // build wheel: hold right-click, move toward an option, release
@@ -3753,30 +3754,37 @@ requestAnimationFrame(frame);
 const ROSTER = [
   { id: "assault", name: "MARCUS", role: "ASSAULT", cat: "assault", hp: 110, dmg: 17, spd: 190, def: 0, desc: "Balanced frontline fighter. Fast rifle fire and a damage rush when the horde closes in.",
     skills: [{ k: "E", n: "Combat Rush", cd: 15, t: "+50% damage and +25% attack speed (guns and melee) for 6 seconds." },
-             { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }],
+    trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
-             { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." },
-             { k: "PASSIVE", n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too." }], gear: ["shotgun", "pistol", "knife"] },
+             { k: "Q", n: "War Cry", cd: 60, card: "warCry", t: "Taunts every zombie within 350px, halves damage taken and boosts teammates' damage +25%. Shotgun spam, no ammo, for 10s." }],
+    trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
              { k: "Q", n: "Sky Reign", card: "skyReign", cd: 60, t: "Fly a gunship for 30s over everything: its machine gun shreds every zombie in a 90° cone where you aim. Zombies can't reach you." },
-             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px, 60° cone). Right click: a lightsaber sweep (120px, 80 dmg). R again to step out." }], gear: ["smg", "pistol", "knife"] },
+             { k: "R", n: "Crimson Aegis", card: "crimsonAegis", cd: 100, t: "Transform into the Crimson Aegis mecha for 30s. Hold click: flame jet (190px, 60° cone). Right click: a lightsaber sweep (120px, 80 dmg). R again to step out." }],
+    trait: { n: "Mechanic", t: "She keeps machines running: repairing the tower and the generator and refuelling cost her half the scrap and fuel." }, gear: ["smg", "pistol", "knife"] },
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
-             { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }],
+    trait: { n: "Tinkerer", t: "Robot charges refill on their own (+1 every 25s, up to 3) and his gear gives him 1 armour: every hit does 1 less damage. Slightly lower damage (×0.97)." }, gear: ["rifle", "pistol", "knife"] },
   { id: "scout", name: "RAVEN", role: "SCOUT", cat: "assault", hp: 90, dmg: 15, spd: 225, def: 0, desc: "Katana only. Dashes through the horde, vanishes, then strikes with a burning blade.",
     skills: [{ k: "E", n: "Shadow Pass", card: "shadowPass", cd: 25, t: "Dash through zombies and vanish. Your next attack ignites the katana." },
-             { k: "Q", n: "Blade Storm", card: "bladeStorm", cd: 60, t: "A whirlwind of katana slashes around you." }], gear: ["katana"] },
+             { k: "Q", n: "Blade Storm", card: "bladeStorm", cd: 60, t: "A whirlwind of katana slashes around you." }],
+    trait: { n: "Katana Mastery", t: "Her blade levels up every 50 katana kills: T1 +25% dmg · T2 hits 5, wider · T3 bleed · T4 +30% speed · T5 every 4th slash crits ×2.5. Fastest hero." }, gear: ["katana"] },
   { id: "demolitionist", name: "DANTE", role: "DEMOLITIONIST", cat: "assault", hp: 105, dmg: 18, spd: 175, def: 0, desc: "If it's standing, it's a target. Rockets land wherever you click.",
     skills: [{ k: "E", n: "Sky Barrage", card: "skyBarrage", cd: 8, t: "3 rockets up, 3 down around your mouse." },
-             { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }], gear: ["launcher", "pistol", "knife"] },
+             { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }],
+    trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
-    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "One huge aimed shot where you point: 12x a shot of the gun you're holding. It goes through as many zombies as that gun does (sniper 3, shotgun 2, launcher explodes). Holding melee? It uses your gun." }], gear: ["sniper", "pistol", "knife"] },
+    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "One huge aimed shot where you point: 12x a shot of the gun you're holding. It goes through as many zombies as that gun does (sniper 3, shotgun 2, launcher explodes). Holding melee? It uses your gun." }],
+    trait: { n: "Marksman", t: "Every shot counts: +43% damage with every weapon, but she fires slower (×0.65). Her sniper also does +50% to bosses and brutes." }, gear: ["sniper", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic arrives: everyone within 300px of you heals 30% of their max HP at once. For 20s he revives downed teammates first (2.5s each), then heals the injured (5 HP/s)." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s." },
-             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s." }], gear: ["rifle", "pistol", "knife"] },
+             { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s." }],
+    trait: { n: "Field Commander", t: "Trained for emergencies: she revives downed teammates twice as fast (2.5s instead of 5s)." }, gear: ["rifle", "pistol", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
 const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, pierces 3, +50% vs bosses & brutes", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
@@ -3814,6 +3822,9 @@ function renderHero() {
   art.hidden = !src; $("heroSprite").hidden = !!src;
   if (src && art.getAttribute("src") !== src) { art.classList.remove("in"); art.src = src; requestAnimationFrame(() => requestAnimationFrame(() => art.classList.add("in"))); }
 }
+// TRAIT: what a hero is always good at (always on, no key). Shown last on the hero card and on the SKILLS page.
+const TRAIT_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.2 6.6.8-4.9 4.6 1.3 6.6L12 17l-5.9 3.2 1.3-6.6L2.5 9l6.6-.8z"/></svg>';
+const traitRow = (r, style = "") => `<div class="ls-ab trait"${style}>${r.trait.card ? `<div class="icon card-${r.trait.card}"></div>` : `<div class="icon">${TRAIT_ICON}</div>`}<div><div class="t"><span class="k">TRAIT</span><span class="n">${r.trait.n.toUpperCase()}</span><span class="cd">ALWAYS ON</span></div><p>${r.trait.t}</p></div></div>`;
 function skillIcon(s, r) { return s.card ? `<div class="icon card-${s.card}"></div>` : `<div class="icon"><svg viewBox="0 0 24 24">${ROLE_ICON[r.cat]}</svg></div>`; }
 function gearIcon(id) { return `<span class="gi">${icon(id === "katana" ? "katana" : id) || ""}</span>`; }
 function renderSide() {
@@ -3822,6 +3833,7 @@ function renderSide() {
   if (ls.tab === "abilities") {
     const rows = r.skills.map(s => `<div class="ls-ab">${skillIcon(s, r)}<div><div class="t"><span class="k">${s.k}</span><span class="n">${s.n.toUpperCase()}</span>${s.cd ? `<span class="cd">${clock}${s.cd}s</span>` : ""}</div><p>${s.t}</p></div></div>`);
     if (!r.skills.some(s => s.k === "Q")) rows.push(`<div class="ls-ab" style="opacity:.55"><div class="icon"><svg viewBox="0 0 24 24"><path d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z"/></svg></div><div><div class="t"><span class="k">Q</span><span class="n">ULTIMATE</span></div><p>Coming soon.</p></div></div>`);
+    if (r.trait) rows.push(traitRow(r));
     $("sideBody").innerHTML = rows.join("");
   } else if (ls.tab === "gear") {
     $("sideBody").innerHTML = r.gear.map(g => `<div class="ls-gear">${gearIcon(g) || '<span class="gi"></span>'}<div><b>${(WEAPON_INFO[g]?.name || MELEE_INFO[g]?.name || g).toUpperCase()}</b><small>${GEAR[g] || ""}</small></div></div>`).join("")
@@ -3836,7 +3848,7 @@ function renderPages() {
     <h4>STARTING GEAR</h4><div class="ls-grid">${r.gear.map(g => `<div class="ls-gear">${gearIcon(g) || '<span class="gi"></span>'}<div><b>${(WEAPON_INFO[g]?.name || MELEE_INFO[g]?.name || g).toUpperCase()}</b><small>${GEAR[g] || ""}</small></div></div>`).join("")}</div>
     <h4>ALL GUNS</h4><div style="overflow-x:auto"><table class="ls-wtable"><tr><th>GUN</th><th>MAGAZINE</th><th>RELOAD</th><th>FIRE</th></tr>${Object.entries(WEAPON_INFO).map(([k, w]) => `<tr class="${r.gear.includes(k) ? "mine" : ""}"><td>${w.name}</td><td>${w.infinite ? "∞" : w.mag}</td><td>${w.reload}s</td><td>${w.auto ? "full auto" : "single"}</td></tr>`).join("")}</table></div>
     <h4>MELEE</h4><div class="ls-grid">${Object.entries(MELEE_INFO).map(([k, m]) => `<div class="ls-gear">${gearIcon(k)}<div><b>${m.name.toUpperCase()}</b><small>${GEAR[k] || ""} · ${m.cd}s per swing</small></div></div>`).join("")}</div>`;
-  $("skillsPage").innerHTML = `<h2>SKILLS</h2><p>Every operator's skills. E = skill, Q = ultimate (unlocks after 100 kills), R = Astra's third skill.</p><div class="ls-grid">${ROSTER.map(o => `<div class="ls-op"><div class="h"><i class="p-${o.id}"></i><div><b>${o.name}</b><small>${o.role}</small></div></div>${o.skills.map(s => `<div class="ls-ab" style="grid-template-columns:52px 1fr">${skillIcon(s, o).replace('class="icon"', 'class="icon" style="width:52px;height:52px"').replace('class="icon" style="background', 'class="icon" style="width:52px;height:52px;background')}<div><div class="t"><span class="k">${s.k}</span><span class="n" style="font-size:17px">${s.n.toUpperCase()}</span>${s.cd ? `<span class="cd">${s.cd}s</span>` : ""}</div><p>${s.t}</p></div></div>`).join("")}</div>`).join("")}</div>`;
+  $("skillsPage").innerHTML = `<h2>SKILLS</h2><p>Every operator's skills. E = skill, Q = ultimate (unlocks after 100 kills), R = Astra's third skill. TRAIT = always on.</p><div class="ls-grid">${ROSTER.map(o => `<div class="ls-op"><div class="h"><i class="p-${o.id}"></i><div><b>${o.name}</b><small>${o.role}</small></div></div>${o.skills.map(s => `<div class="ls-ab" style="grid-template-columns:52px 1fr">${skillIcon(s, o).replace('class="icon"', 'class="icon" style="width:52px;height:52px"').replace('class="icon" style="background', 'class="icon" style="width:52px;height:52px;background')}<div><div class="t"><span class="k">${s.k}</span><span class="n" style="font-size:17px">${s.n.toUpperCase()}</span>${s.cd ? `<span class="cd">${s.cd}s</span>` : ""}</div><p>${s.t}</p></div></div>`).join("")}${o.trait ? traitRow(o, ' style="grid-template-columns:52px 1fr"') : ""}</div>`).join("")}</div>`;
   $("manualPage").innerHTML = `<h2>FIELD MANUAL</h2>
     <h4>OBJECTIVE</h4><p>Protect the radio tower in the middle of the map. If it falls, the team loses. Every 4th wave is a boss fight; the Hivemind mini boss shows up between them. Campaign mode ends with the final boss on wave 50; Ascension mode never ends.</p>
     <h4>CONTROLS</h4><div class="ls-keys">${[["W A S D", "Walk"], ["Mouse", "Aim · hold left click to shoot"], ["1 / 2 / 3", "Melee / primary / secondary"], ["4", "Medkit"], ["E", "Skill"], ["Q", "Ultimate (after 100 kills)"], ["R", "3rd skill (Astra: Safehouse)"], ["C", "Reload early (reloading is automatic when empty)"], ["Space", "Dash"], ["F", "Revive a downed teammate"], ["T", "Equipment"], ["Right click", "Build wheel (hold)"], ["U", "Level-up picker"], ["Tab", "Scoreboard"], ["Esc", "Menu"]].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join("")}</div>
