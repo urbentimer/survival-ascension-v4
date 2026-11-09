@@ -298,6 +298,7 @@ const nearFoot = (st, z, pa, pt) => {   // z within pa (along the line) / pt (ac
   return Math.abs(dx * l.c + dy * l.s) < l.L + pa && Math.abs(dy * l.c - dx * l.s) < l.T + pt;
 };
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
+const STATION_R = { tower: 125, gen: 90 };   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
 const BUILD_RANGE = 160;
@@ -608,6 +609,7 @@ export class SurvivalRoom extends Room {
       const p = this.state.players.get(client.sessionId);
       const amount = Math.max(0, Math.min(2000, Number(data?.amount) || 0));
       if (!p?.alive || this.state.vehicles.has(client.sessionId) || amount <= 0) return;
+      if (Math.hypot(p.x - this.A.cx, p.y - this.A.cy) > STATION_R.tower) return;   // next to the tower
       const cost = Math.ceil(amount / 25);
       if (this.state.scrap < cost || this.state.towerHp >= this.state.towerMaxHp) return;
       this.state.scrap -= cost;
@@ -617,13 +619,13 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("refuelGenerator", (client) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.fuel < 10 || this.state.generatorFuel >= 100) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.fuel < 10 || this.state.generatorFuel >= 100 || !this.nearGen(p)) return;
       this.state.fuel -= 10; this.state.generatorFuel = Math.min(100, this.state.generatorFuel + 25);
       this.state.message = `${p.name} refuelled the generator.`;
     });
     this.onMessage("repairGenerator", (client) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.scrap < 15 || this.state.generatorHp >= this.state.generatorMaxHp) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || this.state.scrap < 15 || this.state.generatorHp >= this.state.generatorMaxHp || !this.nearGen(p)) return;
       this.state.scrap -= 15; this.state.generatorHp = Math.min(this.state.generatorMaxHp, this.state.generatorHp + 300);
       this.state.message = `${p.name} repaired the generator.`;
     });
@@ -2383,6 +2385,7 @@ export class SurvivalRoom extends Room {
     if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
     this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it
   }
+  nearGen(p) { return Math.hypot(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
   // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)
   wheelAngle(wh, now) { return wh.a + wh.w * (now - wh.t0) / 1000; }
   wheelMsg(now) { const wh = this.pyreFx.wheel, W = PYRE.wheel; return { k: "wheel", id: wh.owner, x: Math.round(wh.x), y: Math.round(wh.y), a: +this.wheelAngle(wh, now).toFixed(4), w: +wh.w.toFixed(4), warn: Math.max(0, (wh.fireAt - now) / 1000), life: (wh.until - now) / 1000, len: W.len, hw: W.hw }; }

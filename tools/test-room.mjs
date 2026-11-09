@@ -1186,6 +1186,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const b1 = mk("brute", 1200); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); const db = 9999 - b1.hp;
   ok(Math.abs(dw - p.damage) < .6 && Math.abs(db - p.damage * 1.5) < .6, `walker takes ${Math.round(dw)}, a brute takes x1.5 (${Math.round(db)})`);
   room._dispose(); }
+// 54e. repair / refuel only next to the tower / generator (the client's F prompt)
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "playing"; room.state.scrap = room.state.fuel = 999;
+  room.state.towerHp = 5000; room.state.generatorHp = 500; room.state.generatorFuel = 20; const cx = room.A.cx, cy = room.A.cy;
+  p.x = cx + 600; p.y = cy; send(A, "repairTower", { amount: 250 }); send(A, "repairGenerator"); send(A, "refuelGenerator");
+  ok(room.state.towerHp === 5000 && room.state.generatorHp === 500 && room.state.generatorFuel === 20, "far away: nothing happens");
+  p.x = cx - 70; p.y = cy; send(A, "repairTower", { amount: 250 }); ok(room.state.towerHp === 5250 && room.state.scrap === 989, "next to the tower: +250 HP for 10 scrap");
+  p.x = cx + 118 + 50; p.y = cy + 6; send(A, "repairGenerator"); send(A, "refuelGenerator");
+  ok(room.state.generatorHp === 800 && room.state.generatorFuel === 45, "next to the generator: repair (+300) and refuel (+25%)");
+  room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999; room.state.generatorFuel = 100; room.state.generatorHp = 500;

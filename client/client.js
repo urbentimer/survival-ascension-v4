@@ -49,13 +49,9 @@ const BUILD_WHEEL = [
   { id: "mine",       name: "Mine",             cost: { scrap: 8, explosives: 3 } },
   { id: "fence",      name: "Elec. fence",   cost: { scrap: 25, electronics: 5 } },
   { id: "flameTrap",  name: "Flame trap",       cost: { scrap: 20, fuel: 8 } },
-  { id: "repairTower", name: "Repair tower",    cost: { scrap: 10 }, action: true },
-  { id: "repairGen",   name: "Repair gen.", cost: { scrap: 15 }, action: true },
-  { id: "refuelGen",   name: "Refuel gen.", cost: { fuel: 10 }, action: true },
-];
+];   // (repair tower / repair + refuel generator: an F prompt when you stand next to them, Nov 9: stationPrompt)
 // picture shown in the build wheel for each option
-const WHEEL_PIC = { barricade: { obj: "barricade" }, turret: { obj: "turret" }, mine: { obj: "mine" }, fence: { obj: "fence" }, flameTrap: { obj: "flameTrap" },
-  repairTower: { obj: "tower" }, repairGen: { obj: "generator" }, refuelGen: { icon: "fuel" } };
+const WHEEL_PIC = { barricade: { obj: "barricade" }, turret: { obj: "turret" }, mine: { obj: "mine" }, fence: { obj: "fence" }, flameTrap: { obj: "flameTrap" } };
 // icon for any item id (CSS classes .ic-<id> in index.html; ammo uses the rifle)
 const ICON_ID = { heavyTurret: 1, robotSquad: 1, knife: 1, bat: 1, axe: 1, katana: 1, pistol: 1, smg: 1, rifle: 1, shotgun: 1, sniper: 1, launcher: 1, medkit: 1, grenade: 1, armor: 1, scrap: 1, electronics: 1, explosives: 1, fuel: 1, gold: 1, ammo: "rifle" };
 const icon = id => { const k = ICON_ID[id] === 1 ? id : ICON_ID[id]; return k ? `<i class="ic ic-${k}" aria-hidden="true"></i>` : ""; };
@@ -242,7 +238,7 @@ function renderState() {
   $("feed").innerHTML = feed.filter(f => Date.now() - f.t < 7000).map(f => `<li style="opacity:${Date.now() - f.t > 5500 ? .35 : 1}">${escapeHtml(f.text)}</li>`).join("");
   // big screens: wave cleared + shop, downed, win/loss
   if (state.phase === "cleared") {
-    showOverlay("WAVE " + state.stage + " CLEARED!", "Spend your gold before the next wave. Build and repair with right-click once it starts.");
+    showOverlay("WAVE " + state.stage + " CLEARED!", "Spend your gold before the next wave. Build with right-click once it starts; press F next to the tower or generator to repair it.");
     $("nextStage").textContent = "START NOW"; $("nextStage").classList.toggle("hidden", !host); renderShop(me);
   } else if (state.phase === "victory") {
     showOverlay("CAMPAIGN COMPLETE!", "You survived all 50 waves and defeated the final boss. Victory!" + (host ? "" : " Waiting for the host to start a new match."));
@@ -720,7 +716,7 @@ window.addEventListener("keydown", e => {
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
   else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
-  else if (k === "f" && !e.repeat) tryRevive();
+  else if (k === "f" && !e.repeat) { if (!tryRevive()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
   else if (k === "v" && SOLO_PREVIEW) { const i = (VISION_STEPS.indexOf(NIGHT.playerR / W) + 1) % VISION_STEPS.length; NIGHT.playerR = Math.round(VISION_STEPS[i] * W); feed.unshift({ text: `Test: night vision ${Math.round(VISION_STEPS[i] * 100)}% (${NIGHT.playerR}px) · V to switch`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
@@ -735,6 +731,37 @@ function tryRevive() {
   const me = me_(); if (!me?.alive || !state) return;
   const target = [...state.players.values()].find(p => !p.alive && !p.bledOut && Math.hypot(p.x - me.x, p.y - me.y) < 85);
   if (target) { room.send("revive", { targetId: target.sessionId }); reviving = { id: target.sessionId, t0: performance.now() }; }
+  return !!target;
+}
+// TOWER / GENERATOR (Nov 9): stand next to one and press (or hold) F. Tower: 10 scrap = +250 HP. Generator: repairs (15 scrap, +300 HP)
+// and/or refuels (10 fuel, +25%), whichever it needs. Same ranges as the server (STATION_R).
+const STATION = { tower: 125, gen: 90, every: 300 };
+function nearStation(me) {
+  if (!me?.alive || !state || state.vehicles?.get(myId)) return null;
+  const dt = Math.hypot(me.x - towerX(), me.y - towerY()), dg = Math.hypot(me.x - towerX() - GEN_OFF.x, me.y - towerY() - GEN_OFF.y);
+  return dg <= STATION.gen && dg < dt ? "gen" : dt <= STATION.tower ? "tower" : null;
+}
+function stationPlan(st) {   // what F does right now: [{ msg, label, cost, ok, why }]
+  if (st === "tower") { const full = state.towerHp >= state.towerMaxHp, cost = { scrap: 10 };
+    return [{ msg: "repairTower", data: { amount: 250 }, label: "Repair tower", cost: "10 scrap", ok: !full && canAfford(cost), why: full ? "full health" : "need 10 scrap" }]; }
+  const hurt = state.generatorHp < state.generatorMaxHp, low = state.generatorFuel < 100;
+  return [{ msg: "repairGenerator", label: "Repair generator", cost: "15 scrap", ok: hurt && canAfford({ scrap: 15 }), why: hurt ? "need 15 scrap" : "full health" },
+          { msg: "refuelGenerator", label: "Refuel", cost: "10 fuel", ok: low && canAfford({ fuel: 10 }), why: low ? "need 10 fuel" : "tank full" }];
+}
+let lastStationUse = 0;
+function stationUse() {
+  const st = nearStation(me_()); if (!st || !room) return false; lastStationUse = performance.now();
+  for (const a of stationPlan(st)) if (a.ok) room.send(a.msg, a.data);
+  return true;
+}
+function drawStationPrompt() {   // "[F] Repair tower · 10 scrap" over your head when you're next to it (hold F to keep going)
+  const meS = me_(), st = nearStation(meS); if (!st || wheel || placing) return;
+  if (keys.f && !reviving && performance.now() - lastStationUse > STATION.every) stationUse();
+  const me = V(meS), plan = stationPlan(st), x = me.x - Math.round(cam.x), y0 = me.y - Math.round(cam.y) - 78;
+  ctx.save(); ctx.font = "bold 12px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "#000c";
+  plan.forEach((a, i) => { const t = a.ok ? `[F] ${a.label} · ${a.cost}` : `${a.label}: ${a.why}`, y = y0 - (plan.length - 1 - i) * 16;
+    ctx.fillStyle = a.ok ? "#ffd27a" : "#9aa3a0"; ctx.strokeText(t, x, y); ctx.fillText(t, x, y); });
+  ctx.restore();
 }
 function drawReviveRing() {   // progress ring around the teammate you're reviving
   if (!reviving || !state) return; const me = V(me_()), t = V(state.players.get(reviving.id));
@@ -763,10 +790,7 @@ function resolveWheel() {   // let go of right-click: actions happen now; a depl
   const me = me_(); const opt = BUILD_WHEEL[wheel.pick];
   if (!me || !opt || !room) return;
   if (!canAfford(opt.cost)) { feed.unshift({ text: `Not enough resources for ${opt.name}`, t: Date.now() }); feed.length = Math.min(feed.length, 5); return; }
-  if (opt.id === "repairTower") room.send("repairTower", { amount: 250 });
-  else if (opt.id === "repairGen") room.send("repairGenerator");
-  else if (opt.id === "refuelGen") room.send("refuelGenerator");
-  else placing = { id: opt.id };
+  placing = { id: opt.id };
 }
 function placeProblem(me, spot, opt) {   // why it can't go here (the same checks as the server), or ""
   if (!canAfford(opt.cost)) return "not enough resources";
@@ -804,6 +828,7 @@ function drawBuildWheel() {
   const meS = me_(), me = V(meS);
   if (placing && (!meS?.alive || state.vehicles?.get(myId) || state.phase !== "playing" && state.phase !== "cleared")) placing = null;   // died / got in a vehicle / match over
   if (placing && me && !wheel) drawPlacement(me);
+  drawStationPrompt();
   if (!wheel || !me) return;
   const R = WHEEL_R, step = Math.PI * 2 / BUILD_WHEEL.length;
   ctx.save();
@@ -829,7 +854,7 @@ function drawBuildWheel() {
     ctx.globalAlpha = 1;
   });
   ctx.fillStyle = "#c3ccc9"; ctx.font = "bold 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center";
-  ctx.fillText(wheel.pick < 0 ? "release to cancel" : "release to " + (BUILD_WHEEL[wheel.pick].action ? "use" : "pick"), wheel.cx, wheel.cy + 4);
+  ctx.fillText(wheel.pick < 0 ? "release to cancel" : "release to " + "pick", wheel.cx, wheel.cy + 4);
   ctx.restore();
 }
 
@@ -3461,7 +3486,7 @@ function renderPages() {
     <h4>OBJECTIVE</h4><p>Protect the radio tower in the middle of the map. If it falls, the team loses. Every 4th wave is a boss fight; the Hivemind mini boss shows up between them. Campaign mode ends with the final boss on wave 50; Ascension mode never ends.</p>
     <h4>CONTROLS</h4><div class="ls-keys">${[["W A S D", "Walk"], ["Mouse", "Aim · hold left click to shoot"], ["1 / 2 / 3", "Melee / primary / secondary"], ["4", "Medkit"], ["E", "Skill"], ["Q", "Ultimate (after 100 kills)"], ["R", "3rd skill (Astra: Safehouse)"], ["C", "Reload early (reloading is automatic when empty)"], ["Space", "Dash"], ["F", "Revive a downed teammate"], ["T", "Equipment"], ["Right click", "Build wheel (hold)"], ["U", "Level-up picker"], ["Tab", "Scoreboard"], ["Esc", "Menu"]].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join("")}</div>
     <h4>TEAMWORK</h4><p>Stand next to a downed teammate and hold F for 5 seconds to revive them. If nobody gets there in time they sit out until the next wave. When you're down you can watch your teammates fight.</p>
-    <h4>BUILD & REPAIR</h4><p>Hold right click for the build wheel: barricades, turrets, mines, electric fences and flame traps. Turrets, fences and traps need the generator: keep it fuelled and repaired.</p>
+    <h4>BUILD & REPAIR</h4><p>Hold right click for the build wheel: barricades, turrets, mines, electric fences and flame traps. Turrets, fences and traps need the generator: keep it fuelled and repaired. To repair the tower or repair / refuel the generator, stand next to it and press (or hold) F.</p>
     <h4>LEVELLING & SHOP</h4><p>Kills give XP. Each level lets you pick an upgrade (press U). Between waves the shop opens: spend gold on guns, melee weapons and medkits.</p>`;
 }
 function setView(v) {
