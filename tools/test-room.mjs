@@ -1212,6 +1212,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   s0 = room.state.scrap; send(A, "repairTower", { amount: 250 }); ok(room.state.scrap === s0, "full tower: nothing spent");
   room.state.towerHp = 5000; room.state.scrap = 4; send(A, "repairTower", { amount: 250 }); ok(room.state.scrap === 0 && room.state.towerHp === 5100, `only 4 scrap: +100 HP for 4 (${room.state.towerHp})`);
   room._dispose(); }
+// 54f. picking up a weapon never switches what you're holding (it goes in your bag; 2 cycles to it)
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "playing"; room.spawnClock = 1e9; room.state.zombies.clear(); room.state.loot.clear();
+  room.spawnZombie(false, "walker"); const z = [...room.state.zombies.values()].pop(); z.x = p.x + 5; z.y = p.y;
+  const rnd = Math.random, seq = [.1, .95]; let ri = 0; Math.random = () => ri < seq.length ? seq[ri++] : .5; try { room.killZombie(z, p); } finally { Math.random = rnd; }   // .95 = a Rare weapon drop
+  const lw = [...room.state.loot.values()].find(l => l.kind === "weapon"), held = p.weapon, ammo = p.ammo; room.lastTick = Date.now() - 50; room.tick();
+  ok(lw && !room.state.loot.has(lw.id) && p.weapon === held && p.owned.includes("shotgun") && p.ammo === ammo + 30, `found a shotgun: still holding the ${held}, it's in the bag (+30 ammo)`);
+  send(A, "slot", { n: 2, cycle: true }); ok(p.weapon === "shotgun", "press 2 to cycle to it");
+  room._dispose(); }
 // 55. the turret tells the clients where it aims and when it fires (8-direction art + firing loop)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true;
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear(); room.state.scrap = room.state.electronics = 999; room.state.generatorFuel = 100; room.state.generatorHp = 500;
