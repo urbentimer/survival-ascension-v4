@@ -68,6 +68,24 @@ const PYRE = {
   wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 14, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
   burn:   { len: 3, dps: .25 },   // fraction of his damage per second
 };
+// ---------- THE SCREAMER (boss, wave 12, Nov 10) ----------
+// A ranged boss: keeps 180-320px from his target and backs off when you close in.
+//   SHRIEK (basic)        60° cone in front (~300px): damage + knockback. 3+ survivors in his face -> it goes all round him.
+//   ECHO RINGS            3 sound rings (5 enraged) roll out from his feet 0.6s apart to 520px; each = damage + slow. Dash through one (i-frames).
+//   RESONANCE             marks 2 survivors; 3s later each mark bursts (140px) and hurts everyone inside: the marked one walks away from the team.
+//   DEAFENING WAIL        2.5s wind-up, then a wail across the map: anyone he can SEE = big damage + 1.5s stun. Cover = buildings, the tower,
+//                         the generator, a barricade, Astra's safehouse. During the wind-up his throat takes x2 from the front; 8% of his HP
+//                         in that window and he CHOKES (2s stagger, wail cancelled).
+//   CALL OF THE HORDE     at 66% and 33% HP: runners pour in from the map edges (4 + 2 per survivor), +30% speed for 10s, and they hunt survivors.
+//   Enraged below 35%: faster, cooldowns x0.75, 5 rings per cast.
+const SCREAMER = {
+  hp: 2300, speed: 150, radius: 36, dmg: 24, keep: [180, 320], enrageAt: .35, enrageSpeed: 1.15, enrageCd: .75,
+  shriek: { trigger: 300, windup: .45, hit: .5, total: .95, r: 300, arc: .52, mult: 1, push: 120, cd: 2.6, crowd: 3, crowdR: 95, allR: 170 },
+  rings:  { first: 6, cd: 10, n: 3, enrN: 5, gap: .6, speed: 380, max: 520, w: 30, mult: .6, slow: 1.2 },
+  mark:   { first: 10, cd: 14, n: 2, delay: 3, r: 140, mult: 1.1, cast: .7 },
+  wail:   { first: 15, cd: 22, wind: 2.5, total: 3.6, mult: 1.4, stun: 1.5, choke: .08, chokeLen: 2, throat: 2, maxD: 1400 },
+  horde:  { at: [.66, .33], n: 4, per: 2, frenzy: 1.3, life: 10, cast: 1.6 },
+};
 const PATH_CELL = 40;   // boss path-finding grid
 const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
 // ---------- VIKTOR (Engineer) ----------
@@ -417,7 +435,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set(); this.zStuck = new Map(); this.away = new Set();   // away: survivors whose connection dropped (30s to reconnect)
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -518,7 +536,8 @@ export class SurvivalRoom extends Room {
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
-      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre"].includes(kind)) return;
+      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer"].includes(kind)) return;
+      if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
       if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
       if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
       const was = this.state.explore; this.state.explore = false;
@@ -712,7 +731,7 @@ export class SurvivalRoom extends Room {
   beginBreak() {   // the wave is over: every zombie left dies (no stragglers), the ground clears; nobody's ready yet. Survivors can walk around + build.
     this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false;
     this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.dots.clear(); this.taunt.clear(); this.sweepZombieMemory();
-    this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn.clear();
+    this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.pBurn.clear();
   }
   startNextWave() {
     const s = this.state;
@@ -738,7 +757,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -873,7 +892,7 @@ export class SurvivalRoom extends Room {
 
     const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
-    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, pyre:PYRE.hp, plagueBrute:1500, screamer:1100, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
+    const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, pyre:PYRE.hp, plagueBrute:1500, screamer:SCREAMER.hp, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
     const z = new ZombieState();
     z.id = `z${++this.zombieSequence}`; z.kind = kind; z.x = x; z.y = y;
     z.maxHp = base * scale * (boss ? 1 + BOSS_HP_PER_PLAYER * Math.max(0, this.state.players.size - 1) : 1);
@@ -886,6 +905,7 @@ export class SurvivalRoom extends Room {
     z.role = boss || TOWER_KINDS[kind] ? "tower" : "hunter"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false;
     if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = 40; }
     if (kind === "pyre") { z.speed = PYRE.speed; z.radius = PYRE.radius; z.damage = PYRE.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }   // hunts survivors only
+    if (kind === "screamer") { z.speed = SCREAMER.speed; z.radius = SCREAMER.radius; z.damage = SCREAMER.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }
     if (kind === "spitter") z.attackCooldown = 0.6 + Math.random() * 1.6;   // spitters don't all fire at once
     this.state.zombies.set(z.id, z);
   }
@@ -2325,6 +2345,138 @@ export class SurvivalRoom extends Room {
     }
     if (d > z.radius + 40) this.bossMove(z, near, z.speed * dt);
   }
+  // ---------- THE SCREAMER ----------
+  smem(z, now) {
+    let m = this.bossMem.get(z.id); const S = SCREAMER;
+    if (!m) { m = { shriekReady: now + 1500, ringsReady: now + S.rings.first * 1000, markReady: now + S.mark.first * 1000, wailReady: now + S.wail.first * 1000, hordeDone: 0, ringsLeft: 0, ringAt: 0, wailTaken: 0, crowd: false }; this.bossMem.set(z.id, m); }
+    return m;
+  }
+  screamerChoke(z, m) {   // the team burst his throat during the wind-up: the wail is cancelled
+    if (z.act !== "wail") return;
+    this.startAct(z, "choke", SCREAMER.wail.chokeLen); m.wailTaken = 0;
+    this.state.message = "THE SCREAMER IS CHOKING!"; this.broadcast("scream", { k: "choke", id: z.id, len: SCREAMER.wail.chokeLen });
+  }
+  // Can the Screamer see this survivor? Buildings, the tower, the generator, Astra's safehouse walls and barricades block the wail.
+  wailCover(z, p) {
+    const d = distance(z, p); if (d < 1) return false; const a = Math.atan2(p.y - z.y, p.x - z.x);
+    if (this.wallDist(z.x, z.y, a, d) < d - 6) return true;
+    const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }, { x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h }, ...this.safeBoxes];
+    if (this.boxRayDist(z.x, z.y, a, d, boxes) < d - 6) return true;
+    for (const st of this.state.structures.values()) {   // a barricade line crossing the line of sight (segment vs segment)
+      if (st.kind !== "barricade" || st.hp <= 0) continue; const l = lineOf(st);
+      const ax = st.x - l.c * l.L, ay = st.y - l.s * l.L, bx = st.x + l.c * l.L, by = st.y + l.s * l.L;
+      const cross = (ux, uy, vx, vy) => ux * vy - uy * vx, rx = p.x - z.x, ry = p.y - z.y, sx = bx - ax, sy = by - ay, den = cross(rx, ry, sx, sy);
+      if (Math.abs(den) < 1e-6) continue;
+      const t = cross(ax - z.x, ay - z.y, sx, sy) / den, u = cross(ax - z.x, ay - z.y, rx, ry) / den;
+      if (t > 0 && t < 1 && u >= -.15 && u <= 1.15) return true;
+    }
+    return false;
+  }
+  botCover(b, z) {   // nearest spot out of the Screamer's sight: behind the tower, the generator or a map piece near the bot
+    const cands = [{ x: this.A.cx, y: this.A.cy, h: TOWER_HALF }, { x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, h: GEN_OFF.h }];
+    for (const bx of this.mapBoxesNear(b.x, b.y)) cands.push({ x: bx.x, y: bx.y, h: Math.min(bx.hw, bx.hh) });
+    let best = null, bd = 420;
+    for (const c of cands) {
+      const d0 = hyp(c.x - z.x, c.y - z.y) || 1, spot = { x: c.x + (c.x - z.x) / d0 * (c.h + 34), y: c.y + (c.y - z.y) / d0 * (c.h + 34) }, d = distance(b, spot);
+      if (d < bd && !this.blockedByMap(spot.x, spot.y, 10)) { bd = d; best = spot; }
+    }
+    return best;
+  }
+  screamerTargets() { return [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0)); }
+  screamerThink(z, dt, now, taunted) {
+    const S = SCREAMER, m = this.smem(z, now), cdk = z.enraged ? S.enrageCd : 1, F = this.scrFx;
+    if (!z.enraged && z.hp / z.maxHp < S.enrageAt) { z.enraged = true; z.speed *= S.enrageSpeed; this.state.message = "THE SCREAMER IS ENRAGED!"; this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) }); }
+    this.screamerHazards(z, now);
+    // CALL OF THE HORDE at 66% / 33% (each once), even mid-attack it waits for the current act to end
+    const hpk = z.hp / z.maxHp;
+    if (!z.act && m.hordeDone < S.horde.at.length && hpk < S.horde.at[m.hordeDone]) {
+      m.hordeDone++; this.startAct(z, "call", S.horde.cast, z.aim);
+      const n = S.horde.n + S.horde.per * [...this.state.players.values()].filter(p => p.alive).length, was = this.state.explore; this.state.explore = false;
+      for (let i = 0; i < n; i++) { this.spawnZombie(false, "runner"); const r = [...this.state.zombies.values()].pop(); if (r?.kind !== "runner") continue; r.role = "hunter"; r.speed *= S.horde.frenzy; F.frenzy.set(r.id, now + S.horde.life * 1000); }
+      this.state.explore = was; this.state.message = "CALL OF THE HORDE: runners incoming!"; this.broadcast("scream", { k: "call", id: z.id, len: S.horde.cast }); return;
+    }
+    if (z.act) {
+      const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, act = z.act, at = x => t0 < x && t1 >= x;
+      if (act === "shriek" && at(S.shriek.hit)) {
+        const R = m.crowd ? S.shriek.allR : S.shriek.r;
+        for (const p of this.state.players.values()) {
+          if (!p.alive || this.untouchable(p)) continue; const dx = p.x - z.x, dy = p.y - z.y, d = hyp(dx, dy); if (d > R + BODY_R) continue;
+          if (!m.crowd) { const off = Math.atan2(dy, dx) - z.aim; if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > S.shriek.arc) continue; }
+          this.hiveHurt(p, z.damage * S.shriek.mult); const a = Math.atan2(dy, dx); this.moveWithCollision(p, Math.cos(a) * S.shriek.push, Math.sin(a) * S.shriek.push);
+        }
+      }
+      if (act === "pulse" && m.ringsLeft > 0 && now >= m.ringAt) {   // one ring every 0.6s while he pulses
+        m.ringsLeft--; m.ringAt = now + S.rings.gap * 1000; const x = Math.round(z.x), y = Math.round(z.y + z.radius * .55);
+        F.rings.push({ owner: z.id, x, y, t0: now, hit: new Set() }); this.broadcast("scream", { k: "ring", id: z.id, x, y, sp: S.rings.speed, max: S.rings.max, big: z.enraged ? 1 : 0 });
+      }
+      if (act === "mark" && at(S.mark.cast * .6)) {
+        const pool = this.screamerTargets(); if (pool.length) {
+          // marks go on the survivors with the most teammates around them (that's who the burst hurts most)
+          const crowd = p => pool.filter(q => q !== p && distance(p, q) < S.mark.r * 1.6).length;
+          const picks = pool.sort((a, b) => crowd(b) - crowd(a) || Math.random() - .5).slice(0, S.mark.n);
+          for (const p of picks) F.marks.push({ owner: z.id, id: p.sessionId, at: now + S.mark.delay * 1000 });
+          this.state.message = "RESONANCE: marked survivors, get away from your team!";
+          this.broadcast("scream", { k: "mark", id: z.id, ids: picks.map(p => p.sessionId), delay: S.mark.delay, r: S.mark.r });
+        }
+      }
+      if (act === "wail" && at(S.wail.wind)) {   // the wail lands: everyone he can see
+        const hit = [];
+        for (const p of this.state.players.values()) {
+          if (!p.alive || this.untouchable(p) || distance(z, p) > S.wail.maxD || this.wailCover(z, p)) continue;
+          this.hiveHurt(p, z.damage * S.wail.mult); p.stunned = Math.max(p.stunned || 0, S.wail.stun); p.charging = false; hit.push(p.sessionId);
+        }
+        this.broadcast("scream", { k: "wail", id: z.id, x: Math.round(z.x), y: Math.round(z.y), hit, stun: S.wail.stun });
+      }
+      if (z.act === act && z.slam <= 0) { if (act === "wail") m.wailTaken = 0; z.act = ""; }
+      return;
+    }
+    // targets: survivors he can hurt (Briggs' taunt still pulls him)
+    const can = this.screamerTargets(), pool = taunted && can.includes(taunted) ? [taunted] : can.length ? can : [...this.state.players.values()].filter(p => p.alive);
+    if (!pool.length) return;
+    const near = pool.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
+    z.targetId = near.sessionId; z.aim = a;
+    if (can.length) {
+      if (now >= m.wailReady && d < S.wail.maxD * .8) { m.wailReady = now + S.wail.cd * cdk * 1000; m.wailTaken = 0; this.startAct(z, "wail", S.wail.total, a); this.state.message = "THE SCREAMER IS ABOUT TO WAIL: TAKE COVER!"; this.broadcast("scream", { k: "wailWind", id: z.id, wind: S.wail.wind }); return; }
+      if (now >= m.markReady && can.length) { m.markReady = now + S.mark.cd * cdk * 1000; this.startAct(z, "mark", S.mark.cast, a); this.broadcast("scream", { k: "markCast", id: z.id, len: S.mark.cast }); return; }
+      if (now >= m.ringsReady && d < S.rings.max) {
+        const n = z.enraged ? S.rings.enrN : S.rings.n; m.ringsReady = now + S.rings.cd * cdk * 1000; m.ringsLeft = n; m.ringAt = now + 250;
+        this.startAct(z, "pulse", .25 + (n - 1) * S.rings.gap + .35, a); return;
+      }
+      if (d < S.shriek.trigger + z.radius && now >= m.shriekReady) {
+        m.shriekReady = now + S.shriek.cd * cdk * 1000; m.crowd = can.filter(p => distance(z, p) < S.shriek.crowdR + z.radius).length >= S.shriek.crowd;
+        this.startAct(z, "shriek", S.shriek.total, a); this.broadcast("scream", { k: "shriek", id: z.id, a: Math.round(a * 100) / 100, r: m.crowd ? S.shriek.allR : S.shriek.r, arc: m.crowd ? Math.PI : S.shriek.arc, wind: S.shriek.windup }); return;
+      }
+    }
+    // keep his distance: back away when you close in, walk in when you're far, otherwise circle
+    const [lo, hi] = S.keep; let tx = near.x, ty = near.y;
+    if (d < lo) { tx = z.x - Math.cos(a) * 220; ty = z.y - Math.sin(a) * 220; }
+    else if (d < hi) { const side = (m.side ||= Math.random() < .5 ? 1 : -1); tx = z.x + Math.cos(a + side * Math.PI / 2) * 120; ty = z.y + Math.sin(a + side * Math.PI / 2) * 120; if (Math.random() < dt / 4) m.side = -side; }
+    tx = clamp(tx, 60, this.A.width - 60); ty = clamp(ty, 60, this.A.height - 60);
+    const x0 = z.x, y0 = z.y; this.bossMove(z, { x: tx, y: ty }, z.speed * dt * (d < hi && d >= lo ? .55 : 1));
+    if (d < lo && hyp(z.x - x0, z.y - y0) < z.speed * dt * .2) m.side = -(m.side || 1);   // backed into a wall: circle the other way next time
+    this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);
+  }
+  screamerHazards(z, now) {   // echo rings roll outward; resonance marks burst; called runners calm down
+    const S = SCREAMER, F = this.scrFx;
+    if (F.rings.length) F.rings = F.rings.filter(r => {
+      if (r.owner !== z.id) return true;
+      const rad = (now - r.t0) / 1000 * S.rings.speed; if (rad > S.rings.max + S.rings.w) return false;
+      for (const p of this.state.players.values()) {
+        if (!p.alive || r.hit.has(p.sessionId) || this.untouchable(p)) continue;   // a dash through the ring (i-frames) dodges it
+        const d = hyp(p.x - r.x, (p.y + 16 - r.y) / .6);
+        if (Math.abs(d - rad) < S.rings.w / 2 + BODY_R * .7) { r.hit.add(p.sessionId); this.hiveHurt(p, z.damage * S.rings.mult); p.slowed = Math.max(p.slowed || 0, S.rings.slow); }
+      }
+      return true;
+    });
+    if (F.marks.length) F.marks = F.marks.filter(mk => {
+      if (mk.owner !== z.id || now < mk.at) return true;
+      const t = this.state.players.get(mk.id); if (!t) return false;
+      const x = Math.round(t.x), y = Math.round(t.y);
+      for (const p of this.state.players.values()) if (p.alive && !this.untouchable(p) && hyp(p.x - x, (p.y - y) / .75) < S.mark.r + BODY_R) this.hiveHurt(p, z.damage * S.mark.mult);
+      this.broadcast("scream", { k: "burst", id: mk.id, x, y, r: S.mark.r }); return false;
+    });
+    for (const [id, until] of F.frenzy) { if (now < until) continue; const r = this.state.zombies.get(id); if (r) r.speed /= S.horde.frenzy; F.frenzy.delete(id); }
+  }
   // ---------- THE PYRE PRIEST ----------
   pmem(z, now) {
     let m = this.bossMem.get(z.id);
@@ -2788,6 +2940,12 @@ export class SurvivalRoom extends Room {
         const cx = boss.x + Math.cos(boss.aim) * BUTCHER.chop.offset, cy = boss.y + Math.sin(boss.aim) * BUTCHER.chop.offset, zd = ringZone(b.x - cx, b.y - cy);
         if (zd < BUTCHER.chop.rings[2] + 20) { const dd = hyp(b.x - cx, b.y - cy) || 1; mx = (b.x - cx) / dd * 3; my = (b.y - cy) / dd * 3; }
       }
+      if (boss.kind === "screamer" && boss.act === "wail" && !this.wailCover(boss, b)) {   // the wail is coming: hide behind the tower (the far side from him)
+        const cov = this.botCover(b, boss); if (cov) { const dd = hyp(cov.x - b.x, cov.y - b.y) || 1; mx = (cov.x - b.x) / dd * 3; my = (cov.y - b.y) / dd * 3; }
+      }
+      if (boss.kind === "screamer") {   // a resonance mark on me: walk away from my teammates
+        if (this.scrFx.marks.some(mk => mk.id === b.sessionId)) for (const o of s.players.values()) { if (o === b || !o.alive) continue; const od = distance(b, o); if (od < 260) { mx += (b.x - o.x) / (od || 1) * 2; my += (b.y - o.y) / (od || 1) * 2; } }
+      }
     }
     // Keep a little personal space from other survivors so bots don't stack on top of each other.
     for (const o of s.players.values()) {
@@ -2941,6 +3099,11 @@ export class SurvivalRoom extends Room {
       let diff = Math.atan2(p.y - z.y, p.x - z.x) - z.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       if (Math.abs(diff) > Math.PI / 2) dmg *= PYRE.sermon.back;
     }
+    if (z.kind === "screamer" && z.act === "wail" && z.actLen - z.slam < SCREAMER.wail.wind) {   // winding up the wail: his glowing throat is the weak spot
+      const W = SCREAMER.wail; let diff = p && Number.isFinite(p.x) ? Math.atan2(p.y - z.y, p.x - z.x) - (z.aim || 0) : Math.PI; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) < Math.PI / 2) dmg *= W.throat;
+      const m = this.bossMem.get(z.id); if (m) { m.wailTaken = (m.wailTaken || 0) + dmg; if (m.wailTaken >= z.maxHp * W.choke) this.screamerChoke(z, m); }
+    }
     z.hp -= dmg;
     p.damageDealt += dmg;
     if (z.boss) p.bossDamage += dmg;
@@ -2984,6 +3147,8 @@ export class SurvivalRoom extends Room {
   killZombie(z, killer) {
     this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
     if (this.pyreFx.wheel?.owner === z.id) this.pyreFx.wheel = null;   // the Wheel of Flame dies with him
+    if (z.kind === "screamer") { this.scrFx.rings = this.scrFx.rings.filter(r => r.owner !== z.id); this.scrFx.marks = this.scrFx.marks.filter(m => m.owner !== z.id); }   // his rings and marks die with him
+    this.scrFx.frenzy.delete(z.id);
     this.broadcast("zdead", { id: z.id, x: Math.round(z.x), y: Math.round(z.y), k: z.kind });
     if (z.kind === "hivemind") {   // mini boss down: everyone gets paid, gold spills out
       this.hiveMem.delete(z.id);
@@ -3197,6 +3362,7 @@ export class SurvivalRoom extends Room {
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if (z.kind === "pyre") { this.pyreThink(z, dt, now, taunted); continue; }
+      if (z.kind === "screamer") { this.screamerThink(z, dt, now, taunted); continue; }
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const zx = z.x, zy = z.y; let nearestPlayer = null, nd = Infinity;

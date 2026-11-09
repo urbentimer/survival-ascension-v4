@@ -136,8 +136,9 @@ function connected() {
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
   room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
-  room.onMessage("pyre", onPyre);
-  room.onMessage("zdead", m => { if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: performance.now() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); if (pyreWheel?.id === m.id) pyreWheel = null; feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
+  room.onMessage("pyre", onPyre); room.onMessage("scream", onScreamer);
+  room.onMessage("zdead", m => { if (m.k === "screamer") { fx.push({ type: "scream", k: "death", x: m.x, y: m.y, t: performance.now() }); shake(9, 450); scrWail.delete(m.id); playSfx("roar", m.x, m.y, .7); }
+    if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: performance.now() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); if (pyreWheel?.id === m.id) pyreWheel = null; feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
   room.onMessage("frag", m => { const t = performance.now(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
   room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
@@ -201,6 +202,16 @@ const BOSS_INFO = {
       ["☸️", "Wheel of Flame", "4 lines of fire (12, 3, 6, 9 o'clock) spin CLOCKWISE around him for 60s and follow him everywhere. Walk clockwise with them to stay clear.", "#ffc04a"],
       ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the wheel spins faster, the fire lasts longer and the pillars get bigger.", "#ff3737"],
     ] },
+  screamer: { wave: 12, portrait: "assets/portraits/screamer.webp", name: "THE SCREAMER",
+    lore: "The city's old radio voice, now a walking loudspeaker. He hates being close: he backs away and attacks from range.",
+    skills: [
+      ["📢", "Shriek", "His basic attack: a cone of sound in front of him knocks you back. Crowd him with 3+ and it hits all around him. Flank him.", "#3df2ff"],
+      ["〰️", "Echo Rings", "Rings of sound roll out from his feet. Each one hurts and slows you. DASH through a ring to dodge it.", "#7fe7ff"],
+      ["🎯", "Resonance", "Marks 2 survivors. 3s later each mark explodes and hurts everyone near it. Marked? Walk AWAY from your team.", "#b8f6ff"],
+      ["🔊", "Deafening Wail", "His throat swells for 2.5s: TAKE COVER behind a building, the tower, the generator or a barricade. Anyone he can see gets hit and stunned. Or shoot his glowing throat (×2 damage) hard enough and he CHOKES.", "#3df2ff"],
+      ["🏃", "Call of the Horde", "At 66% and 33% health he calls a pack of frenzied runners that hunt you down.", "#ffd36b"],
+      ["💢", "Enraged (below 35%)", "Faster, more rings, everything comes back sooner.", "#ff3737"],
+    ] },
 };
 let introAcked = false;
 function renderBossIntro() {
@@ -231,6 +242,7 @@ $("bossKill").onclick = () => { room?.send("debugBossHp", { kill: true }); close
 $("exploreToggle").onclick = () => room?.send("explore", { on: !state?.explore });
 $("skipButcher").onclick = () => { room?.send("debugBoss", { wave: 4 }); closePanels(); };
 $("skipPyre").onclick = () => { room?.send("debugBoss", { wave: 8 }); closePanels(); };
+$("skipScreamer").onclick = () => { room?.send("debugBoss", { wave: 12 }); closePanels(); };
 $("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
@@ -262,6 +274,7 @@ function renderState() {
   for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
   $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
   $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
+  $("skipScreamer").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
   if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
   txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
@@ -563,8 +576,9 @@ const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; audioContext = new AC();
-    sfxBus = audioContext.createGain(); sfxBus.gain.value = sfxOn ? 1 : 0; sfxBus.connect(audioContext.destination);
-    musicBus = audioContext.createGain(); musicBus.gain.value = musicOn ? 1 : 0; musicBus.connect(audioContext.destination);
+    deafF = audioContext.createBiquadFilter(); deafF.type = "lowpass"; deafF.frequency.value = 22000; deafF.connect(audioContext.destination);   // the Screamer's wail muffles everything (deafen)
+    sfxBus = audioContext.createGain(); sfxBus.gain.value = sfxOn ? 1 : 0; sfxBus.connect(deafF);
+    musicBus = audioContext.createGain(); musicBus.gain.value = musicOn ? 1 : 0; musicBus.connect(deafF);
   }
   if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
   warmAudio(); return audioContext;
@@ -1245,6 +1259,191 @@ function drawPyreFx(f, age) {   // false when finished
     blendCells(im, 0, 0, PY.cw, PY.ch, fr, Math.min(5, fr + 1), u - fr, Math.round(f.x) - PY.ax, Math.round(f.y + 32) - PY.fy); ctx.restore(); return true;
   }
   return false;
+}
+// ===================== THE SCREAMER (wave 12 boss) =====================
+// Art: tools/extract-screamer.py. walk/shriek: 4 cols x 5 rows (D, DR, R, UR, U; the left is mirrored), wail 6 / choke 4 / death 6: one row,
+// front view. Cells 300x240, feet at (150, 215). Effects: 8 frames in a row on black, drawn additive. Timings match SCREAMER on the server.
+const scrImgs = {};
+for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/screamer-walk.webp", shriek: "assets/sprites/zombies/dir8/screamer-shriek.webp",
+  wail: "assets/sprites/zombies/dir8/screamer-wail.webp", choke: "assets/sprites/zombies/dir8/screamer-choke.webp", death: "assets/sprites/zombies/dir8/screamer-death.webp",
+  ring: "assets/sprites/fx/screamer-ring.webp", ring2: "assets/sprites/fx/screamer-ring2.webp", mark: "assets/sprites/fx/screamer-mark.webp",
+  burst: "assets/sprites/fx/screamer-burst.webp", blast: "assets/sprites/fx/screamer-wail.webp" })) { const im = new Image(); im.src = url; scrImgs[k] = im; }
+// per effect: half width of its ring in the art (to scale it to the real hit area) and where its ground line sits (0 top .. 1 bottom)
+const SCR = { cw: 300, ch: 240, ax: 150, fy: 215, step: 26, wind: .45, wail: 2.5, wailLen: 3.6, ringW: 30,
+  fx: { ring: [104, .51], ring2: [118, .59], mark: [103, .6], burst: [105, .79], blast: [120, .72] } };
+const scrMove = new Map(), scrWail = new Map(), scrShriek = new Map(), scrMarks = new Map();   // per boss: walk cycle / wail wind-up / last shriek; per player: resonance mark
+let deafF = null, deafUntil = 0;
+function sFx(key, frame, x, y, scale, alpha = 1) {   // one additive effect frame, (x, y) = its ground point, scale fits its ring to a radius
+  const im = scrImgs[key], F = SCR.fx[key]; if (!im?.naturalWidth || !F) return; const fw = im.naturalWidth / 8, fh = im.naturalHeight, f = Math.max(0, Math.min(7, frame)), f0 = Math.floor(f);
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  blendCells(im, 0, 0, fw, fh, f0, Math.min(7, f0 + 1), f - f0, x - fw * scale / 2, y - fh * scale * F[1], fw * scale, fh * scale);
+  ctx.restore();
+}
+const sFit = (key, r) => r / SCR.fx[key][0];   // scale so the effect's ring = r px (half width)
+function deafen(sec) {   // the wail got you: muffled sound + a ringing tone, fading back over `sec`
+  const now = performance.now(); deafUntil = now + sec * 1000; const ac = audioContext; if (!ac || !deafF || !sfxOn) return;
+  const t = ac.currentTime; deafF.frequency.cancelScheduledValues(t); deafF.frequency.setValueAtTime(350, t); deafF.frequency.exponentialRampToValueAtTime(22000, t + sec);
+  const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = 3900; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.05, t + .05); g.gain.exponentialRampToValueAtTime(.0001, t + sec);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + sec + .1);
+}
+// Can he see you? (the same cover as the server: buildings, tower, generator, barricades, Astra's safehouse) - drives the "SAFE / EXPOSED" hint
+function scrCover(z, p) {
+  const d = Math.hypot(p.x - z.x, p.y - z.y); if (d < 1) return false; const ux = (p.x - z.x) / d, uy = (p.y - z.y) / d, grid = predGrid(), tx = towerX(), ty = towerY();
+  const solid = [{ x: tx, y: ty, hw: 34, hh: 34 }, { x: tx + GEN_OFF.x, y: ty + GEN_OFF.y, hw: 20, hh: 20 }];   // server: GEN_OFF.h = 20
+  for (const st of state.structures.values()) if (st.kind === "safehouse") solid.push({ x: st.x, y: st.y, hw: 40, hh: 40 });
+  for (let k = 12; k < d - 8; k += 14) {
+    const x = z.x + ux * k, y = z.y + uy * k, gx = Math.floor(x / 160), gy = Math.floor(y / 160);
+    for (const b of grid.get(gx + "," + gy) || []) if (Math.abs(x - b.x) < b.hw && Math.abs(y - b.y) < b.hh) return true;
+    for (const b of solid) if (Math.abs(x - b.x) < b.hw && Math.abs(y - b.y) < b.hh) return true;
+  }
+  for (const st of state.structures.values()) {   // barricade lines (segment vs segment)
+    if (st.kind !== "barricade") continue; const kk = ((Math.round(st.aim / (Math.PI / 4)) % 8) + 8) % 8, la = st.aim + Math.PI / 2, L = [38, 40, 46, 40][kk % 4], c = Math.cos(la), sn = Math.sin(la);
+    const ax = st.x - c * L, ay = st.y - sn * L, sx = 2 * c * L, sy = 2 * sn * L, rx = p.x - z.x, ry = p.y - z.y, den = rx * sy - ry * sx; if (Math.abs(den) < 1e-6) continue;
+    const t = ((ax - z.x) * sy - (ay - z.y) * sx) / den, u = ((ax - z.x) * ry - (ay - z.y) * rx) / den; if (t > 0 && t < 1 && u >= -.15 && u <= 1.15) return true;
+  }
+  return false;
+}
+function onScreamer(m) {
+  const t = performance.now(), me = me_(), near = me && Math.hypot(me.x - (m.x ?? me.x), me.y - (m.y ?? me.y)) < 700;
+  const feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
+  if (m.k === "shriek") { scrShriek.set(m.id, { ...m, t }); fx.push({ type: "scream", k: "shriek", id: m.id, a: m.a, r: m.r, arc: m.arc, wind: m.wind, t }); }
+  else if (m.k === "ring") { fx.push({ type: "scream", k: "ring", x: m.x, y: m.y, sp: m.sp, max: m.max, big: m.big, t }); playSfx("zap", m.x, m.y, .35); }
+  else if (m.k === "mark") { for (const id of m.ids || []) scrMarks.set(id, { t, delay: m.delay, r: m.r }); if (m.ids?.includes(myId)) { feedMsg("YOU'RE MARKED: get away from your team!"); playSfx("alarm", undefined, undefined, .6); shake(3, 200); } }
+  else if (m.k === "burst") { scrMarks.delete(m.id); fx.push({ type: "scream", k: "burst", x: m.x, y: m.y, r: m.r, t }); playSfx("boom", m.x, m.y, .5); if (near) shake(5, 220); }
+  else if (m.k === "wailWind") { scrWail.set(m.id, { t, wind: m.wind }); playSfx("roar", undefined, undefined, .5); }
+  else if (m.k === "wail") { scrWail.delete(m.id); fx.push({ type: "scream", k: "wail", x: m.x, y: m.y, t }); shake(12, 650); playSfx("roar", m.x, m.y, 1); playSfx("boom", m.x, m.y, .6);
+    if (m.hit?.includes(myId)) { deafen(2.6); flashUntil = t + 140; feedMsg("DEAFENED: you were in his sight"); } else if (me?.alive) feedMsg("You were in cover: the wail missed you"); }
+  else if (m.k === "choke") { scrWail.delete(m.id); fx.push({ type: "scream", k: "choke", id: m.id, t }); playSfx("zhit", undefined, undefined, 1); feedMsg("THE SCREAMER IS CHOKING: hit him now!"); }
+  else if (m.k === "call") { shake(8, 500); playSfx("roar", undefined, undefined, .8); }
+}
+function drawScreamer(z) {
+  const now = performance.now(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet, en = z.enraged ? 1 : 0;
+  let mv = scrMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; scrMove.set(z.id, mv); }
+  const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 60) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.42)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 48, 13, 0, 0, 7); ctx.fill(); ctx.restore();
+  // telegraphs on the ground
+  if (z.act === "shriek" && t < SCR.wind + .05) {   // the shriek's cone (or a full circle when you crowd him)
+    const sh = scrShriek.get(z.id), k = Math.min(1, t / SCR.wind), R = sh?.r || 300, arc = sh?.arc ?? .52, a = sh?.a ?? z.aim;
+    ctx.save(); ctx.translate(z.x, gy); ctx.scale(1, .62); ctx.fillStyle = `rgba(61,242,255,${.06 + .16 * k})`; ctx.strokeStyle = `rgba(150,250,255,${.4 + .5 * k})`; ctx.lineWidth = 2.5;
+    ctx.beginPath(); if (arc < Math.PI) { ctx.moveTo(0, 0); ctx.arc(0, 0, R, a - arc, a + arc); ctx.closePath(); } else ctx.arc(0, 0, R, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  const ww = scrWail.get(z.id), winding = z.act === "wail" && t < SCR.wail;
+  if (winding) {   // the wail is coming: sound pressure building up round him + his throat is the weak spot
+    const k = Math.min(1, t / SCR.wail), pulse = .5 + .5 * Math.sin(now / (110 - 60 * k));
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i++) { const u = ((now / 900 + i / 3) % 1), R = 90 + u * 520; ctx.strokeStyle = `rgba(61,242,255,${(.35 + .4 * k) * (1 - u)})`; ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * .6, 0, 0, 7); ctx.stroke(); }
+    ctx.restore();
+  }
+  // frame
+  let sheet = "walk", f = 0, f2 = 0, k = 0, face = z.aim || 0, single = false, shakeX = 0;
+  if (z.act === "shriek") { sheet = "shriek"; if (t < .25) { f = 0; f2 = 1; k = t / .25; } else if (t < SCR.wind) { f = 1; f2 = 2; k = (t - .25) / (SCR.wind - .25); } else if (t < .78) f = f2 = 2; else { f = 3; f2 = 0; k = Math.min(1, (t - .78) / .2); } }
+  else if (z.act === "pulse") { sheet = "shriek"; f = f2 = ((t - .25) % .6 + .6) % .6 < .28 ? 2 : 1; }
+  else if (z.act === "mark") { sheet = "shriek"; f = t < .2 ? 0 : t < .5 ? 2 : 3; f2 = f; }
+  else if (z.act === "wail" || z.act === "call") {
+    sheet = "wail"; single = true; const T = z.act === "call" ? 1.6 : SCR.wailLen, W = z.act === "call" ? .35 : SCR.wail;
+    if (t < W * .2) { f = 0; f2 = 1; k = t / (W * .2); } else if (t < W * .55) { f = 1; f2 = 2; k = (t - W * .2) / (W * .35); } else if (t < W) { f = f2 = 2; shakeX = (Math.random() - .5) * 3 * (t / W); }
+    else if (t < T - .35) { f = f2 = Math.floor(now / 85) % 2 ? 4 : 3; shakeX = (Math.random() - .5) * 4; } else { f = 5; f2 = 5; }
+  } else if (z.act === "choke") { sheet = "choke"; single = true; const u = Math.min(3.99, t / 2 * 4); f = Math.floor(u); f2 = Math.min(3, f + 1); k = u - f; }
+  else if (now - mv.at < 160) { const u = mv.dist / SCR.step; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  const [row, flip] = single ? [0, false] : pyRow(face), im = scrImgs[sheet]?.naturalWidth ? scrImgs[sheet] : scrImgs.walk;
+  // his glowing throat (brighter while he winds up the wail), plus a red halo when enraged
+  const beat = .5 + .5 * Math.sin(now / 260), th = winding ? Math.min(1, t / SCR.wail) : 0;
+  bossGlow(z.x + (flip ? -1 : 1) * (row === 2 ? 14 : 0), gy - 118, "61,242,255", 46 + 60 * th + 8 * beat, .35 + .25 * beat + .4 * th);
+  if (en) bossGlow(z.x, gy - 85, "255,40,40", 110, .35 + .15 * Math.sin(now / 90));
+  const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  ctx.translate(Math.round(z.x + shakeX), Math.round(gy)); if (flip) ctx.scale(-1, 1);
+  flashDraw(flashing, () => blendCells(im, 0, row * SCR.ch, SCR.cw, SCR.ch, f, f2, k, -SCR.ax, -SCR.fy));
+  ctx.restore();
+  if (winding) {   // over his head: the throat is the weak spot right now
+    const pulse = .5 + .5 * Math.sin(now / 90), lx = z.x, ly = gy - 205;
+    ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#04161a"; ctx.fillStyle = `rgba(160,250,255,${.7 + .3 * pulse})`;
+    ctx.strokeText("▼ THROAT ×2 ▼", lx, ly); ctx.fillText("▼ THROAT ×2 ▼", lx, ly); ctx.restore();
+  }
+}
+function drawScreamerGround() {   // echo rings rolling outward + the resonance marks under the marked survivors (under everyone)
+  const now = performance.now();
+  for (const f of fx) {
+    if (f.type !== "scream" || f.k !== "ring") continue;
+    const R = (now - f.t) / 1000 * f.sp; if (R > f.max + SCR.ringW) continue; const fade = R > f.max - 80 ? Math.max(0, (f.max + SCR.ringW - R) / (80 + SCR.ringW)) : 1, key = f.big ? "ring2" : "ring";
+    sFx(key, 3 + ((now / 70) % 3), f.x, f.y, sFit(key, Math.max(12, R)), fade);   // a crisp ring frame, shimmering, scaled to the ring's real radius
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(160,250,255,${.25 * fade})`; ctx.lineWidth = SCR.ringW * .6; ctx.beginPath(); ctx.ellipse(f.x, f.y, Math.max(1, R), Math.max(1, R * .6), 0, 0, 7); ctx.stroke(); ctx.restore();
+  }
+  for (const [id, mk] of scrMarks) {
+    const e = (now - mk.t) / 1000; if (e > mk.delay + .3) { scrMarks.delete(id); continue; }
+    const p = state?.players?.get(id); if (!p || !p.alive) continue; const v = V(p) || p, k = Math.min(1, e / mk.delay), mine = id === myId;
+    ctx.save(); ctx.fillStyle = `rgba(61,242,255,${.06 + .12 * k})`; ctx.strokeStyle = `rgba(${mine ? "255,120,90" : "150,250,255"},${.45 + .45 * k})`; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -now / 20;
+    ctx.beginPath(); ctx.ellipse(v.x, v.y + 14, mk.r, mk.r * .75, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();   // = the burst's reach: keep teammates out of it
+    sFx("mark", 7 - k * 6.9, v.x, v.y + 14, sFit("mark", 34 + 10 * k), .6 + .4 * k);   // the rune at his feet (the sheet played backwards: it charges up)
+    ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#04161a"; ctx.fillStyle = mine ? "#ffb08a" : "#bff8ff";
+    const txt_ = Math.max(0, mk.delay - e).toFixed(1) + "s"; ctx.strokeText(txt_, v.x, v.y - 58); ctx.fillText(txt_, v.x, v.y - 58); ctx.restore();
+  }
+}
+function drawScreamerFx(f, age) {   // false when finished
+  const s = age / 1000;
+  if (f.k === "ring") return (s * f.sp) < f.max + SCR.ringW;   // drawn on the ground by drawScreamerGround
+  if (f.k === "shriek") {   // after the wind-up: arcs of sound fly out across the cone
+    const e = s - f.wind; if (e < 0) return true; if (e > .45) return false;
+    const zr = state?.zombies?.get(f.id), z = zr ? (V(zr) || zr) : null; if (!z) return false;
+    const ox = z.x + Math.cos(f.a) * 24, oy = z.y - 60 + Math.sin(f.a) * 12, full = f.arc >= Math.PI;
+    if (!f.hit) { f.hit = true; playSfx("roar", z.x, z.y, .35); }
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(ox, oy + 40); ctx.scale(1, .62); ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) {
+      const u = e / .45 + i * .14; if (u > 1) continue; const R = 30 + u * f.r, a = (1 - u) * (.9 - i * .15);
+      for (const [w, c] of [[14, `rgba(61,242,255,${.25 * a})`], [5, `rgba(170,250,255,${.7 * a})`], [1.6, `rgba(255,255,255,${.9 * a})`]]) {
+        ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); if (full) ctx.arc(0, 0, R, 0, 7); else ctx.arc(0, 0, R, f.a - f.arc, f.a + f.arc); ctx.stroke();
+      }
+    }
+    ctx.restore(); return true;
+  }
+  if (f.k === "burst") { if (s > .8) return false; sFx("burst", s / .8 * 8, f.x, f.y + 14, sFit("burst", f.r)); return true; }
+  if (f.k === "wail") { if (s > 1.2) return false; sFx("blast", s / 1.2 * 8, f.x, f.y + 30, sFit("blast", 260)); return true; }
+  if (f.k === "choke") {   // cyan sparks spitting out of his throat
+    if (s > 1.4) return false; const zr = state?.zombies?.get(f.id), z = zr ? (V(zr) || zr) : null; if (!z) return false;
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 14; i++) { const ph = (s * 1.6 + i * .071) % 1, sd = Math.sin(i * 77.1) * 999, r = sd - Math.floor(sd), x = z.x + (r - .5) * 50 * ph, y = z.y - 70 + ph * 70; ctx.fillStyle = `rgba(150,250,255,${.9 * (1 - ph)})`; ctx.fillRect(x, y, 2.5, 2.5); }
+    ctx.restore(); return true;
+  }
+  if (f.k === "death") {   // the throat bursts, he staggers and collapses, the glow fades out
+    if (s > 4) return false; const im = scrImgs.death; if (!im?.naturalWidth) return true;
+    const u = Math.min(5, s / .3), fr = Math.floor(u), a = s > 2.8 ? 1 - (s - 2.8) / 1.2 : 1;
+    if (s < .4) bossGlow(f.x, f.y - 60, "61,242,255", 140, 1 - s / .4);
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high";
+    blendCells(im, 0, 0, SCR.cw, SCR.ch, fr, Math.min(5, fr + 1), u - fr, Math.round(f.x) - SCR.ax, Math.round(f.y + 29) - SCR.fy); ctx.restore(); return true;
+  }
+  return false;
+}
+function drawScreamerScreen() {   // screen space: TAKE COVER banner + whether YOU are safe; the deafness after a hit
+  const now = performance.now(), me = V(me_());
+  for (const [id, w] of scrWail) {
+    const zr = state?.zombies?.get(id); if (!zr) { scrWail.delete(id); continue; }
+    const left = w.wind - (now - w.t) / 1000; if (left < -.2) { scrWail.delete(id); continue; }
+    const z = V(zr) || zr, safe = me && me.alive ? scrCover(z, me) : true, pulse = .5 + .5 * Math.sin(now / 90);
+    ctx.save(); ctx.textAlign = "center";
+    ctx.font = "bold 30px monospace"; ctx.lineWidth = 6; ctx.strokeStyle = "#021014"; ctx.fillStyle = safe ? "#8dffb0" : `rgba(255,${120 + 80 * pulse},110,1)`;
+    const big = safe ? "SAFE · YOU'RE IN COVER" : "TAKE COVER " + Math.max(0, left).toFixed(1) + "s";
+    ctx.strokeText(big, W / 2, 132); ctx.fillText(big, W / 2, 132);
+    ctx.font = "bold 13px monospace"; ctx.lineWidth = 4; ctx.fillStyle = "#bff8ff";
+    for (const [i, sub] of ["Hide behind a building, the tower, the generator or a barricade", "or shoot his glowing throat (×2) to make him choke"].entries()) { ctx.strokeText(sub, W / 2, 154 + i * 17); ctx.fillText(sub, W / 2, 154 + i * 17); }
+    if (!safe && me?.alive) {   // red edges when he can see you
+      const g = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, W * .7); g.addColorStop(0, "rgba(255,40,40,0)"); g.addColorStop(1, `rgba(255,40,40,${.22 + .12 * pulse})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  }
+  if (now < deafUntil) {   // deafened: a cold ringing haze at the edges, fading out
+    const k = (deafUntil - now) / 2600; const g = ctx.createRadialGradient(W / 2, H / 2, H * .2, W / 2, H / 2, W * .65);
+    g.addColorStop(0, "rgba(190,250,255,0)"); g.addColorStop(1, `rgba(150,240,255,${.45 * k})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+}
+function screamerLights(now) {   // night: his throat glows, and the rings and bursts light the dark
+  if (!state?.zombies) return;
+  for (const z of state.zombies.values()) if (z.kind === "screamer" && inView(z.x, z.y, 200)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 80 - cam.y, 150 + Math.sin(now / 260) * 10, .8); }
+  for (const f of fx) if (f.type === "scream") {
+    const s = (now - f.t) / 1000;
+    if (f.k === "ring") { const R = s * f.sp; if (R < f.max) lightHole(f.x - cam.x, f.y - cam.y, Math.min(260, R + 40), .35); }
+    if (f.k === "burst" && s < .6) lightHole(f.x - cam.x, f.y - 30 - cam.y, 170, .8 * (1 - s / .6));
+    if (f.k === "wail" && s < 1) lightHole(f.x - cam.x, f.y - 60 - cam.y, 320, .9 * (1 - s));
+  }
 }
 function drawPyreBurning() {   // survivors on fire: flames dancing on them
   if (!pyreBurn.size) return; const now = performance.now();
@@ -2194,7 +2393,7 @@ function drawDashBeams() {
   }
 }
 function drawGroundFx() {
-  drawPyreGround();
+  drawPyreGround(); drawScreamerGround();
   drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
   const now = performance.now();
@@ -2386,6 +2585,7 @@ function drawZombieAny(z) {
   if (z.kind === "hivemind") return drawHivemind(z);
   if (z.kind === "butcher" && butcherImgs.walk.naturalWidth) return drawButcher(z);
   if (z.kind === "pyre" && pyImgs.walk.naturalWidth) return drawPyre(z);
+  if (z.kind === "screamer" && scrImgs.walk.naturalWidth) return drawScreamer(z);
   const img = zombieImgs[z.kind], img8 = zdir8[z.kind];
   if (!img || !img.complete || !img.naturalWidth) { drawZombie(z); drawHitFlash(z); return; }   // bosses (no art yet) use the old drawing
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + (z.radius || 14) * 0.8, (z.radius || 14) * 1.05, 4, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -2586,7 +2786,7 @@ const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',s
 function drawShotFx(){
   const now=performance.now();
   drawPyreBurning();
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','scream','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -2596,6 +2796,7 @@ function drawShotFx(){
    if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='pyre'){if(!drawPyreFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='scream'){if(!drawScreamerFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='shotgun'){if(!drawShotgunFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='deadeye'){if(!drawDeadEye(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
@@ -3440,6 +3641,7 @@ function drawNight() {
   if (view && view !== me) lightHole(view.x - cam.x, view.y - 10 - cam.y, NIGHT.playerR, 1);   // spectating: see around the teammate you're watching
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
   pyreLights(now);   // the Pyre Priest and his fires light the night
+  screamerLights(now);
   turretLights(now);
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(darkCv, 0, 0, W, H); ctx.restore();
   // zombies out in the dark: only a faint pair of glowing eyes gives them away
@@ -3468,7 +3670,7 @@ function drawScreen() {
   ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
   drawNight();
   drawRushScreen();   // Marcus Combat Rush: red heartbeat on the screen edges (over the night tint so it shows at night too)
-  drawPyreDread();
+  drawPyreDread(); drawScreamerScreen();
   // street lights glow (warm, stronger at night)
   const sl = mapImgs.streetlight;
   if (decor && sl?.naturalWidth) {

@@ -1277,4 +1277,51 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(deployables === 20 && room.state.structures.size === 21, `20 barricades next to the heavy turret (${deployables} + heavy turret = ${room.state.structures.size})`);
   send(A, "build", { kind: "barricade", x: p.x + 40, y: p.y + 60 }); ok([...room.state.structures.values()].filter(st => st.kind === "barricade").length === 20, "the 21st is refused");
   room._dispose(); }
+// 60. THE SCREAMER (wave 12): keeps his distance, shriek cone, echo rings (dash dodges), resonance, wail vs cover, choke, call of the horde, enrage
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); room.setMapBoxes([]); room.lineClear = () => true;
+  room.spawnClock = 1e9; room.state.zombies.clear(); const ev = []; room._onBroadcast = (t, m) => { if (t === "scream") ev.push(m); };
+  let t = Date.now(); const step = (ms) => { for (let i = 0; i < ms / 50; i++) { t += 50; room.lastTick = t - 50; const real = Date.now; Date.now = () => t; try { room.tick(); } finally { Date.now = real; } } };
+  const fresh = () => { room.state.zombies.clear(); room.bossMem.clear(); room.scrFx = { rings: [], marks: [], frenzy: new Map() }; ev.length = 0;
+    room.spawnZombie(true, "screamer"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1000; z.hp = z.maxHp = 50000; return z; };
+  const far = (pl) => { pl.x = 3400; pl.y = 2400; };
+  const heal = () => { for (const pl of [p, q]) { pl.alive = true; pl.hp = pl.maxHp = 5000; pl.stunned = 0; pl.slowed = 0; } };
+  heal();
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.markReady = m.wailReady = t + 1e9; p.x = 1600; p.y = 1000; far(q);
+    const d0 = Math.hypot(z.x - p.x, z.y - p.y); step(1000); const d1 = Math.hypot(z.x - p.x, z.y - p.y);
+    ok(z.kind === "screamer" && z.role === "hunter" && d1 > d0 + 60, `keeps his distance: backs off when you close in (${Math.round(d0)} -> ${Math.round(d1)}px)`); }
+  { const z = fresh(); const m = room.smem(z, t); m.ringsReady = m.markReady = m.wailReady = t + 1e9; m.shriekReady = 0; p.x = 1700; p.y = 1000; q.x = 1250; q.y = 1000; heal();
+    z.speed = 0; step(1200); const hp = p.hp, hq = q.hp;
+    ok(ev.some(e => e.k === "shriek") && p.maxHp - hp > 0 && q.hp === q.maxHp, `shriek: hits the survivor in front (${Math.round(p.maxHp - hp)} dmg), not the one behind him`); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.markReady = m.wailReady = t + 1e9; m.ringsReady = 0; z.speed = 0; heal();
+    p.x = 1500 + 250; p.y = 1000 - 16; q.x = 1500; q.y = 1000 + 300 * .6 - 16; room.dodgeUntil.set("B", t + 1e9);   // B dashes the whole time
+    step(3000);
+    ok(ev.filter(e => e.k === "ring").length === 3 && p.hp < p.maxHp && p.slowed > 0, `echo rings: 3 rings, each hit hurts + slows (${Math.round(p.maxHp - p.hp)} dmg)`);
+    ok(q.hp === q.maxHp, "dashing through a ring (i-frames) dodges it"); room.dodgeUntil.delete("B"); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.wailReady = t + 1e9; m.markReady = 0; z.speed = 0; heal();
+    p.x = 1800; p.y = 1000; q.x = 1840; q.y = 1000; step(900);
+    const mk = ev.find(e => e.k === "mark"); ok(mk && mk.ids.length === 2, "resonance: marks 2 survivors");
+    step(3200); ok(ev.filter(e => e.k === "burst").length === 2 && p.hp < p.maxHp && q.hp < q.maxHp, `...3s later both marks burst, hurting everyone near them (${Math.round(p.maxHp - p.hp)} / ${Math.round(q.maxHp - q.hp)})`); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.markReady = t + 1e9; m.wailReady = 0; z.speed = 0; heal();
+    room.setMapBoxes([{ x: 1500, y: 1250, hw: 60, hh: 30 }]);   // a building between him and B
+    p.x = 1900; p.y = 1000; q.x = 1500; q.y = 1450; step(400);
+    ok(ev.some(e => e.k === "wailWind") && z.act === "wail", "deafening wail: 2.5s wind-up, everyone warned");
+    step(2600); const w = ev.find(e => e.k === "wail");
+    ok(w && w.hit.includes("A") && !w.hit.includes("B") && p.stunned > 0 && q.hp === q.maxHp, `the wail hits who he can see (A ${Math.round(p.maxHp - p.hp)} dmg + stun); B behind the building is safe`);
+    room.setMapBoxes([]); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.markReady = t + 1e9; m.wailReady = 0; z.speed = 0; heal();
+    p.x = 1900; p.y = 1000; far(q); room.state.structures.clear(); room.state.scrap = 999;
+    send(A, "build", { kind: "barricade", x: 1700, y: 1000, face: 0 }); step(300); const hp = p.hp; step(2800);
+    ok(!ev.find(e => e.k === "wail")?.hit.includes("A") && p.hp === hp, "a barricade between you and him is cover too"); room.state.structures.clear(); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.markReady = t + 1e9; m.wailReady = 0; z.speed = 0; heal();
+    p.x = 1800; p.y = 1000; far(q); step(300); z.aim = 0;
+    const hp0 = z.hp; room.hitZombie(z, p, 1000); const front = hp0 - z.hp;
+    ok(front === 2000, `his throat takes x2 during the wind-up (1000 -> ${front})`);
+    room.hitZombie(z, p, z.maxHp * .04); ok(z.act === "choke" && ev.some(e => e.k === "choke"), "8% of his HP in that window: he CHOKES, the wail is cancelled");
+    const hp = p.hp; step(2500); ok(!ev.some(e => e.k === "wail") && p.hp === hp, "...and no wail comes"); }
+  { const z = fresh(); const m = room.smem(z, t); m.shriekReady = m.ringsReady = m.markReady = m.wailReady = t + 1e9; z.speed = 0; heal(); far(p); far(q);
+    room.state.zombies.forEach(zz => { if (!zz.boss) room.state.zombies.delete(zz.id); }); z.hp = z.maxHp * .6; step(200);
+    const run = [...room.state.zombies.values()].filter(zz => zz.kind === "runner");
+    ok(ev.some(e => e.k === "call") && run.length === 4 + 2 * 2 && run.every(r => r.role === "hunter"), `call of the horde at 66%: ${run.length} runners that hunt survivors (4 + 2 per survivor)`);
+    step(200); z.hp = z.maxHp * .3; step(2000); ok(ev.filter(e => e.k === "call").length === 2 && z.enraged, "second call at 33%, and below 35% he's enraged"); }
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
