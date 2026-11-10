@@ -382,3 +382,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Whiteout Station's burning lab: fires placed BY HAND in the extractor (`pieces['wLabBurnt']['fires']` = [x, y, size, loop]): all four windows, the door, four on the roof. `dynPieceFx` uses drawFire3 for "w" pieces (other maps keep fire-loop.webp).
 - Abomination: flames on every lava puddle (`abFlames`, drawn by `drawAbomFlames` after the ground), the ground burns for ~1.5s where the Flail Slam lands (fx k "scorch"), and fire burns under him while he tears apart. His lava stream / slam disc / ember art is unchanged.
 - Cache: client.js?v=20261110m. Preview 14.7 MB.
+
+## Nov 10 (n): the user's smoke for the fires
+- tools/art/fire3/smoke.gif (8 frames, the cloud builds, not a loop) -> extract-fire3.py -> sprites/fx/smoke3.webp (8 transparent frames, 150x151). Client `drawSmoke3(x, y, scale, phase, t, alpha)`: three puffs a step apart, each plays the 8 frames once while rising, swelling and fading; drawn behind the flames.
+- Used on: the burning lab's roof fires (size >= .7), the Abomination's lava puddles (the medium flame), his slam scorch and under him during the Sundering.
+- The lab's painted smoke cloud ran off the top of the picture with a flat edge: its top 54px now fade out (extract-whiteout.py).
+- Next map agreed: SCORCHED REFINERY (desert oil refinery, bright, NO tint, open layout). Prompts in the project doc claude/desert-refinery-map.md; waiting for the user's art (13 images).
+- Cache: client.js?v=20261110n.

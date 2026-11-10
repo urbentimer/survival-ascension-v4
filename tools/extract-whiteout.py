@@ -82,6 +82,9 @@ for k, (w, nl) in BIG.items(): save('w' + k[0].upper() + k[1:], load('big-' + k 
 # glow and embers at the fire spots found here (same as Fallen Dynasty's burnt shops). Cutting the painted smoke cloud away was tried and
 # dropped: it is the same dark grey as the roof machinery and took pieces of the building with it.
 save('wLabBurnt', load('big-labBurnt.png'), 400, 0, 7)
+# the painted smoke cloud runs off the top of the picture (a flat cut): fade its top edge out so the game's rising smoke takes over
+_p = os.path.join(OUT, 'wLabBurnt.webp'); _a = np.array(Image.open(_p).convert('RGBA')).astype(float); _r = np.clip(np.arange(_a.shape[0]) / 54, 0, 1) ** 1.4
+_dark = (_a[..., 0] < 120) & (np.abs(_a[..., 0] - _a[..., 2]) < 40); _a[..., 3] = np.where(_dark, _a[..., 3] * _r[:, None], _a[..., 3]); Image.fromarray(_a.astype(np.uint8)).save(_p, quality=Q, method=6, alpha_quality=85)
 # fires placed by hand (base of each flame, from the bottom centre): [x, y, size, which loop 0 small / 1 medium / 2 big]: four windows, the door, the roof
 pieces['wLabBurnt']['fires'] = [[-122, -112, .5, 0], [-69, -112, .5, 0], [72, -112, .5, 0], [125, -112, .5, 0], [2, -118, .45, 0], [-98, -214, .8, 1], [116, -232, .75, 1], [12, -236, 1.05, 2], [-30, -190, .7, 1]]
 

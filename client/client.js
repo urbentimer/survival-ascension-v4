@@ -1539,7 +1539,7 @@ function drawAbomSunder(z, t, gy, now, tele) {
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 55 * sm((t - 1.4) / 1.2), 17, 0, 0, 7); ctx.fill(); ctx.restore();
   bossGlow(z.x, gy - 80, ABM.lava, 90 + 70 * heat + 50 * flash - 80 * cool, Math.min(1, .35 + .4 * heat + .3 * flash) * (1 - .65 * cool));
   if (t < 1.5) aFx("fxEmber", t / 1.5 * 8, z.x, gy - 80, 1.2 + .4 * heat, .4 + .5 * heat);   // sparks gathering before the tear
-  if (t < 2.9) { const fa = Math.min(1, t / .5) * (1 - sm((t - 2.2) / .7)), tt = now / 1000; drawFire3(2, z.x, gy + 10, 1.25, 1.3, tt, fa * .9); drawFire3(1, z.x - 78, gy + 4, .8, 4.1, tt, fa * .8); drawFire3(1, z.x + 80, gy + 4, .8, 6.2, tt, fa * .8); }   // the ground burns under him
+  if (t < 2.9) { const fa = Math.min(1, t / .5) * (1 - sm((t - 2.2) / .7)), tt = now / 1000; drawSmoke3(z.x, gy - 30, 1.9, 2.2, tt, fa * .7); drawFire3(2, z.x, gy + 10, 1.25, 1.3, tt, fa * .9); drawFire3(1, z.x - 78, gy + 4, .8, 4.1, tt, fa * .8); drawFire3(1, z.x + 80, gy + 4, .8, 6.2, tt, fa * .8); }   // the ground burns under him
   const keys = [[0, 0], [.55, 1], [1.15, 2], [1.7, 3], [2.25, 4], [2.85, 5], [99, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
   const span = keys[a + 1][0] - keys[a][0], k = sm((t - keys[a][0] - span * .25) / (span * .75)), settled = sm((t - 1.6) / .5);   // each frame holds for a beat, then eases into the next
   const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled), pulse = 1 + .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash;
@@ -1586,11 +1586,11 @@ function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
     ctx.beginPath(); ctx.rect(0, -m.hw, m.len, m.hw * 2); ctx.fill(); ctx.stroke(); ctx.restore();
   }
 }
-function drawAbomFlames() { const t = performance.now() / 1000; for (const [x, y, sc, k, ph, a] of abFlames) if (inView(x, y, 140)) drawFire3(k, x, y, sc, ph, t, a); abFlames.length = 0; }   // after the ground, before the sprites
+function drawAbomFlames() { const t = performance.now() / 1000; for (const [x, y, sc, k, ph, a] of abFlames) if (inView(x, y, 140)) { if (k) drawSmoke3(x, y - 14, sc * .95, ph, t, a * .8); drawFire3(k, x, y, sc, ph, t, a); } abFlames.length = 0; }   // after the ground, before the sprites
 function drawAbomFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "slamfx") { const from = f.from || 0, T = from ? 1.0 : 1.7; if (s > T) return false; aFx("fxSlam", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
-  if (f.k === "scorch") { if (s > 1.6) return false; const a = s < .15 ? s / .15 : Math.max(0, 1 - (s - .5) / 1.1); drawFire3(2, f.x, f.y + 26, 1.25 * (.7 + .3 * a), f.x * .01, performance.now() / 1000, a); return true; }   // the ground burns for a moment where the arm landed
+  if (f.k === "scorch") { if (s > 1.6) return false; const a = s < .15 ? s / .15 : Math.max(0, 1 - (s - .5) / 1.1); drawSmoke3(f.x, f.y, 1.3, f.x * .01, performance.now() / 1000, a * .8); drawFire3(2, f.x, f.y + 26, 1.25 * (.7 + .3 * a), f.x * .01, performance.now() / 1000, a); return true; }   // the ground burns for a moment where the arm landed
   if (f.k === "ember") { const from = f.from || 0, T = 1.5; if (s > T) return false; aFx("fxEmber", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
   if (f.k === "lava") {   // the stream: start set while it reaches out, loop set while he spews, end set as it dies
     const e = s - f.wind; if (e < 0) return true; if (e > f.dur + .45) return false;
@@ -3588,11 +3588,11 @@ function dynPieceFx(d, a) {
     ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
     const g = ctx.createRadialGradient(x, y, 2, x, y, 46 * s); g.addColorStop(0, `rgba(255,150,50,${.4 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 46 * s, y - 46 * s, 92 * s, 92 * s);
     ctx.globalCompositeOperation = "source-over"; if (a.anim) return;   // the art already burns: only the glow
-    if ((i === 0 || (i < 3 && d.kind[0] === "w")) && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire (the three biggest on Whiteout Station's burning lab)
+    if (i === 0 && d.kind[0] !== "w" && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire (Whiteout Station pieces use drawSmoke3 below)
       const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
       ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
     }
-    if (d.kind[0] === "w") drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t);   // Whiteout Station: the user's own fire loops
+    if (d.kind[0] === "w") { if (s >= .7) drawSmoke3(x, y - 20 * s, s * 1.15, i * 1.7 + seed, t); drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t); }   // the user's own fire loops, smoke behind the bigger ones
     else drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
   });
   if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
@@ -3635,6 +3635,18 @@ function bossGlow(x, y, rgb, r, alpha) {
 function flashDraw(flashing, draw) { draw(); if (flashing) { const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = "lighter"; draw(); draw(); ctx.globalCompositeOperation = op; } }
 // The user's three fire loops (tools/extract-fire3.py): 0 small, 1 medium, 2 big; 8 frames each, transparent, base = bottom centre of the cell.
 const FIRE3 = [["assets/sprites/fx/fire3-s.webp", 84, 112], ["assets/sprites/fx/fire3-m.webp", 116, 127], ["assets/sprites/fx/fire3-b.webp", 176, 144]].map(([url, w, h]) => { const im = new Image(); im.src = url; return { im, w, h }; });
+// The user's smoke (smoke3.webp: 8 frames in which the cloud builds). Each puff plays through once while it rises, swells and fades; three
+// puffs a step apart keep a steady column. Drawn BEHIND the flames. (x, y) = the base of the fire.
+const SMOKE3 = { im: new Image(), w: 150, h: 151 }; SMOKE3.im.src = "assets/sprites/fx/smoke3.webp";
+function drawSmoke3(x, y, sc, phase, t, alpha = 1) {
+  const S = SMOKE3; if (!S.im.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = true;
+  for (let j = 0; j < 3; j++) {
+    const u = (t * .16 + j / 3 + phase * .37) % 1, ft = u * 7.99, f = Math.floor(ft), k = (.75 + .7 * u) * sc, w = S.w * k, h = S.h * k, a = Math.min(1, u * 6) * (1 - u) ** 1.3 * alpha;
+    const px_ = x + (u * 26 + Math.sin(u * 5 + j * 2 + phase) * 6) * sc, py_ = y - (10 + u * 95) * sc;   // drifts up and a little downwind
+    ctx.globalAlpha = a * .85; blendCells(S.im, 0, 0, S.w, S.h, f, Math.min(7, f + 1), ft - f, px_ - w / 2, py_ - h, w, h);
+  }
+  ctx.restore();
+}
 function drawFire3(kind, x, y, sc, phase, t, alpha = 1) {   // (x, y) = the base of the flame; cross-faded frame to frame, with a soft additive pass so it glows
   const F = FIRE3[kind] || FIRE3[1]; if (!F.im.naturalWidth) return; const ft = t * 9 + phase, f = Math.floor(ft) % 8, f2 = (f + 1) % 8, w = F.w * sc, h = F.h * sc;
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.globalAlpha = alpha; blendCells(F.im, 0, 0, F.w, F.h, f, f2, ft - Math.floor(ft), x - w / 2, y - h, w, h);

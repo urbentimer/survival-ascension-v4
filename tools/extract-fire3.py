@@ -17,3 +17,15 @@ for name, key, width in [('small', 's', 84), ('medium', 'm', 116), ('big', 'b', 
         fade = np.clip(np.minimum(np.arange(c.shape[1]), np.arange(c.shape[1])[::-1]) / 10, 0, 1)[None, :]; a = a * fade   # no hard cut at the sides
         im = Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8)).resize((cw, ch), Image.LANCZOS); sheet.paste(im, (i * cw, 0))
     p = os.path.join(OUT, f'fire3-{key}.webp'); sheet.save(p, quality=80, alpha_quality=85, method=6); print(name, 'cell', cw, 'x', ch, 'frames', len(fr), os.path.getsize(p) // 1024, 'KB')
+
+# The user's smoke GIF (smoke.gif, 8 frames on black): not a loop, the cloud BUILDS over the 8 frames. Saved as one row of 8 transparent
+# frames (alpha = brightness, colour = dark grey shaded by brightness); the game plays each puff through once while it rises and fades.
+g = Image.open(os.path.join(ART, 'smoke.gif')); fr = []
+for i in range(g.n_frames): g.seek(i); fr.append(np.array(g.convert('L')).astype(float))
+lum = np.max(fr, 0); ys, xs = np.where(lum > 12); x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
+cw = 150; sc = cw / (x1 - x0); ch = round((y1 - y0) * sc); sheet = Image.new('RGBA', (cw * len(fr), ch))
+for i, f in enumerate(fr):
+    c = f[y0:y1, x0:x1]; a = np.clip((c - 6) / 70, 0, 1) ** .8; n = c.shape[1]; a = a * np.clip(np.minimum(np.arange(n), np.arange(n)[::-1]) / 14, 0, 1)[None, :]
+    a = a * np.clip(np.arange(c.shape[0]) / 14, 0, 1)[:, None]; v = np.clip(26 + c * .75, 0, 110)
+    im = Image.fromarray(np.dstack([v, v, v * 1.03, a * 255]).clip(0, 255).astype(np.uint8)).resize((cw, ch), Image.LANCZOS); sheet.paste(im, (i * cw, 0))
+p = os.path.join(OUT, 'smoke3.webp'); sheet.save(p, quality=72, alpha_quality=80, method=6); print('smoke cell', cw, 'x', ch, os.path.getsize(p) // 1024, 'KB')
