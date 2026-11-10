@@ -3583,11 +3583,12 @@ function dynPieceFx(d, a) {
     ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
     const g = ctx.createRadialGradient(x, y, 2, x, y, 46 * s); g.addColorStop(0, `rgba(255,150,50,${.4 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 46 * s, y - 46 * s, 92 * s, 92 * s);
     ctx.globalCompositeOperation = "source-over"; if (a.anim) return;   // the art already burns: only the glow
-    if (i === 0 && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire
+    if ((i === 0 || (i < 3 && d.kind[0] === "w")) && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire (the three biggest on Whiteout Station's burning lab)
       const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
       ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
     }
-    drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
+    if (d.kind[0] === "w") { drawFireSprite(x - 9 * s, y + 12 * s, s * .8, i * 5 + seed + 3, t, .9); drawFireSprite(x + 8 * s, y + 12 * s, s * .9, i * 7 + seed, t, .95); }   // Whiteout Station's lab: a fuller blaze at each spot
+    else drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
   });
   if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
     ctx.globalCompositeOperation = "lighter";

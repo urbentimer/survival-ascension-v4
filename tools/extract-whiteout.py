@@ -1,6 +1,6 @@
 # WHITEOUT STATION (grid map, Nov 10) pieces from the user's ChatGPT art in tools/art/whiteout (all on solid magenta #FF00FF):
 #   big-<name>.png   one big building per image (lab, labBurnt, dome, quarters, hangar, rig, plane, wall, gate)
-#   labBurnt.gif     the burning lab ANIMATED (9 frames, 412px): used for wLabBurnt instead of the still picture
+#   labBurnt.gif     an animated version of the burning lab (not used any more: the game animates its own fire on the still picture)
 #   buildings.png    4x4 sheet with black grid lines: containers, generator, tank, round tank / snowcat, truck, forklift, buggy /
 #                    watchtower, mast, dish, shed / sandbags, barrier, crates, gas rack
 #   props.png        4x4 sheet: rocks, ice spikes, pines, rock arch / floodlight, lamp, windsock, beacon / shelf, pipes, barrels, big crate /
@@ -78,20 +78,10 @@ def load(name): return key(np.array(Image.open(os.path.join(ART, name)).convert(
 BIG = {'lab': (400, 8), 'dome': (380, 5), 'quarters': (390, 10), 'hangar': (430, 10), 'rig': (440, 10), 'plane': (540, 3), 'wall': (520, 5), 'gate': (760, 12)}
 for k, (w, nl) in BIG.items(): save('w' + k[0].upper() + k[1:], load('big-' + k + '.png'), w, nl)
 
-# the burning lab: the user's animated GIF -> one row of frames, all cut with the same box so the building doesn't jump
-g = Image.open(os.path.join(ART, 'labBurnt.gif')); frames = []
-for i in range(g.n_frames): g.seek(i); frames.append(key(np.array(g.convert('RGB'))))
-allm = np.any([f[..., 3] > 0 for f in frames], 0); ys, xs = np.where(allm); y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
-body = np.all([f[..., 3] > 0 for f in frames], 0); bx = np.where(body.any(0))[0]   # the building itself (in every frame): its width sets the scale, like the still lab
-sc = 400 / (bx.max() - bx.min() + 1) * (1254 / 1254); fw, fh = round((x1 - x0) * sc), round((y1 - y0) * sc)
-sheet = Image.new('RGBA', (fw * len(frames), fh))
-for i, f in enumerate(frames):
-    im = Image.fromarray(np.ascontiguousarray(f[y0:y1, x0:x1])).resize((fw, fh), Image.LANCZOS); a = np.array(im); a[..., 3] = np.where(a[..., 3] > 90, 255, 0); sheet.paste(Image.fromarray(a), (i * fw, 0))
-sheet.save(os.path.join(OUT, 'wLabBurnt.webp'), quality=74, method=6, alpha_quality=80)
-a0 = np.array(sheet)[:, :fw]; cxb = (bx.min() + bx.max() + 1) / 2 - x0   # the building's centre inside the frame (smoke hangs off to the right)
-pieces['wLabBurnt'] = {'url': 'assets/map/wo/wLabBurnt.webp', 'w': fw, 'h': fh, 'frames': len(frames), 'ms': g.info.get('duration', 130), 'ax': round(cxb * sc),
-                       'fires': [[round(x - cxb * sc), round(y - fh), round(min(1.4, .45 + (s ** .5) / 30), 2)] for x, y, s in spots(a0, 'fire', 4)], 'anim': 1}
-print(f'wLabBurnt    {fw}x{fh} x {len(frames)} frames, centre x {round(cxb * sc)}, fires {len(pieces["wLabBurnt"]["fires"])}, {os.path.getsize(os.path.join(OUT, "wLabBurnt.webp")) // 1024} KB')
+# the burning lab (Nov 10, user: no GIF, "do your own magic"): the still picture; the game adds its own animated flames, rising smoke,
+# glow and embers at the fire spots found here (same as Fallen Dynasty's burnt shops). Cutting the painted smoke cloud away was tried and
+# dropped: it is the same dark grey as the roof machinery and took pieces of the building with it.
+save('wLabBurnt', load('big-labBurnt.png'), 400, 0, 7)
 
 b = grid_cells(load('buildings.png'), 4)
 BLD = [[('wContainers', 210, 0), ('wGenerator', 150, 0), ('wTank', 190, 0), ('wTankRound', 165, 0)],
@@ -120,9 +110,16 @@ def blend(a):   # organic textures: blend with a half-offset copy (edges come fr
     a = a.astype(float); h, w = a.shape[:2]; s = np.roll(np.roll(a, h // 2, 0), w // 2, 1)
     yy, xx = np.mgrid[0:h, 0:w]; d = np.minimum.reduce([xx, yy, w - 1 - xx, h - 1 - yy]) / (min(h, w) * .25)
     k = np.clip(d, 0, 1)[..., None]; return (a * k + s * (1 - k)).astype(np.uint8)
+def soft_blend(a):   # snow: flatten the big light / dark areas first (they showed as squares when the tile repeats), then make it wrap
+    a = a.astype(float); h, w = a.shape[:2]; a = np.clip(a - ndimage.gaussian_filter(a, (h * .16, w * .16, 0), mode='wrap') + a.mean((0, 1)), 0, 255)
+    # two passes (across, then down): each blends with a copy shifted half a tile along ONE axis, so no seam of the copy is ever left showing
+    for ax, n in ((1, w), (0, h)):
+        k = np.clip((np.abs(np.arange(n) - n / 2) / (n / 2) - .35) / .5, 0, 1); k = k * k * (3 - 2 * k); k = k[None, :, None] if ax == 1 else k[:, None, None]
+        a = a * (1 - k) + np.roll(a, n // 2, ax) * k
+    return a.astype(np.uint8)
 def mirror(a): top = np.concatenate([a, a[:, ::-1]], 1); return np.concatenate([top, top[::-1]], 0)   # built patterns: mirrored 2x2 = seamless with no ghosting
 # (x0, y0, x1, y1) as fractions of each tile, method, brightness
-TILES = {'snow': (.3, .25, .72, .67, blend, 1.0), 'ice': (.30, .22, .66, .58, mirror, .98), 'metal': (.135, .135, .5, .5, mirror, .92), 'concrete': (.2, .2, .5, .5, mirror, .95)}
+TILES = {'snow': (.28, .04, .70, .42, soft_blend, 1.0), 'ice': (.30, .22, .66, .58, mirror, .98), 'metal': (.135, .135, .5, .5, mirror, .92), 'concrete': (.2, .2, .5, .5, mirror, .95)}
 for (name, (fx0, fy0, fx1, fy1, how, dim)), (c0, c1) in zip(TILES.items(), runs):
     w = c1 - c0; h = ty1 - ty0; sq = t[ty0 + round(fy0 * h):ty0 + round(fy1 * h), c0 + round(fx0 * w):c0 + round(fx1 * w)]
     im = Image.fromarray(np.clip(how(sq).astype(float) * dim, 0, 255).astype(np.uint8)).resize((256, 256), Image.LANCZOS)

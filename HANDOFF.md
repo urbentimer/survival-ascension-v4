@@ -371,3 +371,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - "Can't walk between a truck and a tank": annexes used to sit 5px from their host (looked like a gap, was solid). They now stand WO_SQUEEZE = 46px away: a survivor squeezes through, a boss goes round (pocket checks unchanged).
 - Lighter tint for this map only: `SPOOKY_SNOW` (brightness .74 vs .58), applied to images flagged `_snow` (Whiteout pieces + its tiles).
 - Sims on the new default: waves OK, Butcher 91s, Abomination 167s (4 players). Cache: client.js?v=20261110k.
+
+## Nov 10 (l): burning lab without the GIF; snow tile no longer shows squares
+- User: "no need for the GIF fire, do your own magic". wLabBurnt = the STILL picture again (big-labBurnt.png, 7 fire spots detected); the game draws its own animated flames (two overlapping flipbooks per spot on "w" pieces), smoke from the 3 biggest fires, glow, embers, crackle. `drawAnimPiece` / art.frames support stays in the client for future animated pieces; labBurnt.gif is unused. Cutting the painted smoke cloud out of the picture was tried and dropped (same grey as the roof machinery).
+- Snow tile: the repeat showed as light / dark squares. `soft_blend` in the extractor flattens the large-scale shading and wraps the tile in two 1-axis passes (no leftover seam).
+- Cache: client.js?v=20261110l. Preview 14.4 MB.
