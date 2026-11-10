@@ -1333,4 +1333,34 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "repairTower"); ok(room.state.scrap === 95 && room.state.towerHp === room.state.towerMaxHp, `Sofea (Mechanic): a full 250 HP tower repair costs her 5 scrap, not 10 (paid ${100 - room.state.scrap})`);
   r.characterClass = "assault"; room.state.towerHp = room.state.towerMaxHp - 250; send(A, "repairTower"); ok(room.state.scrap === 85, "anyone else pays the normal 10");
   room._dispose(); }
+// 62. THE ABOMINATION (wave 16): slam line, gut roll + daze, lava spew + puddles, the Sundering into THE FIVE
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); room.setMapBoxes([]); room.lineClear = () => true;
+  room.spawnClock = 1e9; room.state.zombies.clear(); const ev = []; room._onBroadcast = (t, m) => { if (t === "abom") ev.push(m); };
+  let t = Date.now(); const step = (ms) => { for (let i = 0; i < ms / 50; i++) { t += 50; room.lastTick = t - 50; const real = Date.now; Date.now = () => t; try { room.tick(); } finally { Date.now = real; } } };
+  const fresh = () => { room.state.zombies.clear(); room.bossMem.clear(); room.abFx = { puddles: [] }; ev.length = 0;
+    room.spawnZombie(true, "abomination"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1500; return z; };
+  const only = (z, k) => { const m = room.abmem(z, t); m.slamReady = m.rollReady = m.spewReady = t + 1e9; m[k] = 0; return m; };
+  const heal = () => { for (const pl of [p, q]) { pl.alive = true; pl.hp = pl.maxHp = 9000; pl.slowed = 0; } }; const far = pl => { pl.x = 3600; pl.y = 2400; };
+  { const z = fresh(); only(z, "slamReady"); z.speed = 0; heal(); p.x = 1700; p.y = 1500; q.x = 1500; q.y = 1740; step(1000);
+    ok(ev.some(e => e.k === "slam") && p.hp < p.maxHp && q.hp === q.maxHp, `flail slam: hits the line in front (${Math.round(p.maxHp - p.hp)} dmg), not beside him`); }
+  { const z = fresh(); only(z, "rollReady"); heal(); p.x = 1900; p.y = 1500; far(q); const x0 = z.x; step(900); const curl = z.x; step(1200);
+    ok(ev.some(e => e.k === "roll") && curl === x0 && z.x > x0 + 300 && p.hp < p.maxHp, `gut roll: 1s curl, then he rolls through you (${Math.round(z.x - x0)}px, ${Math.round(p.maxHp - p.hp)} dmg)`); }
+  { const z = fresh(); only(z, "rollReady"); heal(); p.x = 2100; p.y = 1500; far(q); room.setMapBoxes([{ x: 1800, y: 1500, hw: 30, hh: 200 }]); p.x = 1700; step(2000);
+    ok(z.act === "daze" && ev.some(e => e.k === "daze"), "rolls into a building: DAZED"); const h = z.hp; room.hitZombie(z, p, 100); ok(Math.round(h - z.hp) === 150, "dazed: takes x1.5 damage"); room.setMapBoxes([]); }
+  { const z = fresh(); only(z, "spewReady"); z.speed = 0; heal(); p.x = 1700; p.y = 1500; q.x = 1500; q.y = 1250; step(1500); const d1 = p.maxHp - p.hp;
+    ok(ev.some(e => e.k === "spew") && d1 > 0 && q.hp === q.maxHp && room.abFx.puddles.length === 3, `lava spew: burns the cone (${Math.round(d1)} dmg), leaves 3 puddles`);
+    room.abmem(z, t).spewReady = t + 1e9; step(1500); p.x = z.x + 235; p.y = z.y - 14; const h = p.hp; step(1200); ok(p.hp < h && p.slowed > 0, "standing in a lava puddle burns and slows"); step(8000); ok(room.abFx.puddles.length === 0, "puddles cool after 7s"); }
+  { const z = fresh(); only(z, "none"); z.speed = 0; heal(); p.x = 1900; p.y = 1500; q.x = 1900; q.y = 1700; const max = z.maxHp;
+    room.hitZombie(z, p, max * 5); ok(z.hp > 0 && z.hp <= max * .45, "one huge hit can't kill him: he stops at the split point");
+    step(100); ok(z.act === "sunder" && ev.some(e => e.k === "sunder"), "at 45% HP: THE SUNDERING starts"); const h = z.hp; room.hitZombie(z, p, 500); ok(z.hp === h, "...and he can't be hurt while he tears apart");
+    step(4300); const five = [...room.state.zombies.values()].filter(o => o.kind === "abomSpawn");
+    ok(!room.state.zombies.has(z.id) && five.length === 5 && five.every(o => o.boss && Math.abs(o.maxHp - max * .13) < 1) && !room.state.bossDead, `he's gone: 5 spawn, each with its own ${Math.round(max * .13)} HP`);
+    const tg = new Set(five.map(o => room.bossMem.get(o.id).tgt)); ok(tg.size === 2, "they spread over the survivors");
+    const d0 = Math.hypot(five[0].x - 1900, five[0].y - 1500); step(1000); ok(five.some(o => Math.hypot(o.x - 1500, o.y - 1500) > 150), "the Five are fast");
+    step(3000); ok(ev.some(e => e.k === "lunge") && ev.some(e => e.k === "land") && (p.hp < p.maxHp || q.hp < q.maxHp), "they pounce");
+    const sp0 = five[1].speed; room.hitZombie(five[0], p, 1e6); ok(!room.state.bossDead && five[1].speed > sp0, "one falls: not a boss kill yet, the rest speed up");
+    for (const o of five.slice(1, 4)) room.hitZombie(o, p, 1e6); ok(five[4].enraged && !room.state.bossDead, "the last one is enraged");
+    room.hitZombie(five[4], p, 1e6); ok(room.state.bossDead, "all five down: the boss is dead"); }
+  { const z = fresh(); z.hp = 1; room.killZombie(z, p); ok([...room.state.zombies.values()].filter(o => o.kind === "abomSpawn").length === 5, "killed by something else (turret, fire): he still splits"); }
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

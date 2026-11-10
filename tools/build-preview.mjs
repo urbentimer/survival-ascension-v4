@@ -51,19 +51,19 @@ const extraCss = `.solo-banner{display:flex;flex-wrap:wrap;gap:6px 12px;align-it
 // The live game keeps the original PNGs. Cached in tools/dist/webp/ (delete the folder to re-encode).
 const ASSET_RE = /assets\/[\w\/.-]+\.(webp|png|jpg|mp3)/g;
 const WEBP_DIR = join(here, "dist/webp"); mkdirSync(WEBP_DIR, { recursive: true });
-const webpOf = rel => join(WEBP_DIR, rel.replace(/[\/]/g, "__") + ".q90.webp");
+const webpOf = rel => join(WEBP_DIR, rel.replace(/[\/]/g, "__") + ".q76.webp");
 {
-  const all = new Set([...(js + html).matchAll(ASSET_RE)].map(m => m[0]).filter(r => r.endsWith(".png")));
+  const all = new Set([...(js + html).matchAll(ASSET_RE)].map(m => m[0]).filter(r => r.endsWith(".png") || r.endsWith(".webp")));   // Nov 10: webp sources too, at q76 (preview only: the page limit is 16.7 MB)
   const todo = [...all].filter(r => { const out = webpOf(r); return !existsSync(out) || statSync(out).mtimeMs < statSync(join(root, "client", r)).mtimeMs; });
   if (todo.length) {
-    const py = "import sys\nfrom PIL import Image\nfor a in sys.argv[1:]:\n  src, dst = a.split('|')\n  im = Image.open(src); im = im.convert('RGBA') if im.mode not in ('RGB','RGBA') else im\n  im.save(dst, quality=90, alpha_quality=100, method=6)\n";
+    const py = "import sys\nfrom PIL import Image\nfor a in sys.argv[1:]:\n  src, dst = a.split('|')\n  im = Image.open(src); im = im.convert('RGBA') if im.mode not in ('RGB','RGBA') else im\n  im.save(dst, quality=76, alpha_quality=100, method=6)\n";
     execFileSync("python3", ["-c", py, ...todo.map(r => join(root, "client", r) + "|" + webpOf(r))], { stdio: "inherit" });
   }
 }
 const inlineAssets = (text) => text.replace(ASSET_RE, (rel) => {
   if (rel.includes("audio/music_") || rel.includes("audio/fire_loop")) return "";   // music + the fire crackle stay out of the preview (16 MB limit): the live game has them
   const ext = rel.split(".").pop();
-  if (ext === "png") { const w = readFileSync(webpOf(rel)), p = readFileSync(join(root, "client", rel)); if (w.length < p.length) return "data:image/webp;base64," + w.toString("base64"); }
+  if (ext === "png" || ext === "webp") { const w = readFileSync(webpOf(rel)), p = readFileSync(join(root, "client", rel)); if (w.length < p.length) return "data:image/webp;base64," + w.toString("base64"); }
   const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
   return `data:${mime};base64,` + readFileSync(join(root, "client", rel)).toString("base64");
 });
