@@ -3459,7 +3459,7 @@ for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
-const SPOOKY_CARN = { filter: "brightness(.95) saturate(.98) contrast(1.04)", tint: "rgba(24,18,60,.07)" };   // Midnight Carnival: a light night tint, so the bulbs and colours still pop
+const SPOOKY_CARN = { filter: "brightness(.6) saturate(.78) contrast(1.12)", tint: "rgba(22,14,58,.32)" };   // Midnight Carnival (user, Nov 11): a NIGHT carnival, dark tint like the city maps but keeping more colour so the bulbs and paint still read   // Midnight Carnival: a light night tint, so the bulbs and colours still pop
 const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", tint: "rgba(18,44,70,.18)" };   // Whiteout Station (user: "a little brighter"): its pieces and tiles (img._snow) get a much lighter tint
 const spookyCache = new Map();
 function spooky(img) {

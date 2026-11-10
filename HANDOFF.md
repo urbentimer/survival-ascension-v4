@@ -426,3 +426,6 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 ## Nov 10 (t): turrets kept "firing" after the wave ended
 - The turret loop only runs while phase === "playing", so `st.fire` stayed true when the wave cleared (zombies wiped) and the client kept playing the muzzle flash at the last aim. Server: every tick outside "playing" sets fire = false; client: firing also needs phase "playing" and zombies present. Test 33g. Cache: client.js?v=20261110t.
+
+## Nov 11 (a): Midnight Carnival back to a dark night tint (user)
+- SPOOKY_CARN = brightness .6, saturate .78, contrast 1.12, tint rgba(22,14,58,.32) (dark like the city maps, a bit more colour kept). User also wants NEW ground tiles (finds the current ones boring): prompts given in claude/carnival-map.md ("New ground tiles"). Cache: client.js?v=20261111a.
