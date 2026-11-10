@@ -423,3 +423,6 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `drawStationSigns`: a sign over every station ("TRAIN IN Ns" / "TRAIN HERE · press F", `coastEta`), teal station dots on the minimap, a feed hint when a carnival match starts, feed lines on queue / board.
 - `coasterTall` wrapped in try (a coaster drawing error must never hide the whole world).
 - Test 33f: queue + auto-board. Cache: client.js?v=20261110s.
+
+## Nov 10 (t): turrets kept "firing" after the wave ended
+- The turret loop only runs while phase === "playing", so `st.fire` stayed true when the wave cleared (zombies wiped) and the client kept playing the muzzle flash at the last aim. Server: every tick outside "playing" sets fire = false; client: firing also needs phase "playing" and zombies present. Test 33g. Cache: client.js?v=20261110t.

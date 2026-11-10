@@ -3475,6 +3475,7 @@ export class SurvivalRoom extends Room {
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
     if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
     if (this.coaster && (this.state.phase === "playing" || this.state.phase === "cleared")) this.updateCoaster(dt);
+    if (this.state.phase !== "playing") for (const st of this.state.structures.values()) if (st.fire) st.fire = false;   // the wave is over (zombies wiped): turrets stop shooting at where their last target was
     if (this.state.phase === "cleared") {
       if (!this.inBreak) this.beginBreak();
       if (this.state.countdown > BREAK_GO && [...this.state.players.values()].every(p => p.isBot || p.ready)) this.state.countdown = BREAK_GO;   // everyone's ready
@@ -3549,7 +3550,7 @@ export class SurvivalRoom extends Room {
       if (st.kind === "turret" && powered) {
         let target = null, bd = 260;   // nearest zombie in range it can see
         for (const z of zList) { const d = distance(st, z); if (d < bd && this.lineClear(st, z)) { bd = d; target = z; } }
-        st.fire = !!target; if (target) st.aim = Math.atan2(target.y - st.y, target.x - st.x);   // the client turns it + plays its firing loop
+        if (!!target !== st.fire) st.fire = !!target; if (target) st.aim = Math.atan2(target.y - st.y, target.x - st.x);   // the client turns it + plays its firing loop
         if (target) { target.hp -= 18 * dt; if (target.hp <= 0) this.killZombie(target, credit(st)); }
       } else if (st.kind === "turret") st.fire = false;   // no power
       if (st.kind === "fence" && powered) {

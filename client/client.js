@@ -3253,7 +3253,7 @@ const TURRET_ART = { cw: 105, ch: 85, ax: 52, fy: 80, muzzle: [[29, -37], [23, -
 const turretAtlas = new Image(); turretAtlas.src = "assets/sprites/objects/turret8.png";
 const turretSnd = new Map();   // turret id -> when its shooting sound last started
 function turretFrame(st, now) {   // { k: aim 0..7, row: 0 idle / 1 big flash / 2 small flash, gx, gy: ground point }
-  const k = ((Math.round((st.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8, firing = st.fire && powered();
+  const k = ((Math.round((st.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8, firing = st.fire && powered() && state?.phase === "playing" && state.zombies.size > 0;
   return { k, row: firing ? [1, 2, 0][Math.floor(now / 65 + st.x * .37) % 3] : 0, firing, gx: st.x, gy: st.y + 14 };
 }
 function drawTurret(st) {

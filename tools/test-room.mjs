@@ -788,6 +788,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const g1 = flood(28); ok(!g1.includes(0), `a boss's path body fits everywhere a survivor can go: no lane too narrow for him (${g1.filter(v => v === 0).length} cut off)`);
   const big = lay.filter(r => [44, 46, 47, 52].includes(r[0])), ys = new Set(big.map(r => Math.round(r[2] / 40))); ok(big.length >= 12 && ys.size >= 9, `buildings are scattered, not lined up in rows (${big.length} big buildings on ${ys.size} different lines)`);
   room._dispose(); }
+// 33g. turrets stop shooting when the wave ends (user, Nov 10: they kept firing at where their last zombie was)
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "playing"; room.state.zombies.clear(); room.spawnClock = 1e9; room.state.scrap = 9999; room.state.electronics = 9999;
+  p.x = 1000; p.y = 1000; send(A, "build", { kind: "turret", x: 1060, y: 1000 }); const st = [...room.state.structures.values()].find(o => o.kind === "turret");
+  room.spawnZombie(true ? undefined : 0); const z = [...room.state.zombies.values()][0];
+  if (st && z) { z.x = st.x + 120; z.y = st.y; z.hp = 1e6; z.speed = 0; room.lastTick = Date.now() - 50; room.tick(); }
+  ok(st?.fire === true, `a turret fires at a zombie in range (${!!st}, ${!!z})`);
+  room.state.phase = "cleared"; room.state.zombies.clear(); room.lastTick = Date.now() - 50; room.tick(); ok(st?.fire === false, "the wave ends: the turret stops firing");
+  room._dispose(); }
 // 33f. Midnight Carnival (Nov 10): a bigger map with a rideable coaster; bosses come out of the haunted house
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 6 });
   ok(room.state.mapSite === 6 && room.state.worldW === 5600 && room.state.worldH === 3800 && room.flow && room.coaster && room.bossDoor?.x === 2800, "host picks Midnight Carnival: 5600x3800, coaster and haunted-house doorway set up");
