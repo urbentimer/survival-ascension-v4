@@ -359,3 +359,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `whiteoutGround(WW, WH, layout)` now takes the layout: concrete yard, a foundation pad (concrete / metal) under every big building, frozen ponds where nothing stands. The client passes `decor` (syncDecor first; ground cache keyed on decorSrc).
 - Test 33d: no pockets at radius 16 and 28, buildings on many different lines. Flaky test "the break: you can walk around" fixed (random start next to the tower / generator): fixed start below them.
 - Cache: client.js?v=20261110i.
+
+## Nov 10 (j): Whiteout Station ground patches blend into the snow
+- User: the tiles looked "boxy and harsh" next to each other. Client `softShape` / `softPatch` (whiteout only): every pad / pond is a wobbly rounded shape (ponds: blobs), the snow pattern is stroked back over its edge in 9 soft bands, and snow drifts lie across the border. Shapes are seeded from the patch position (cached on the rect as `_soft`), so all ground chunks agree. No hard road-edge lines on this map.
+- Cache: client.js?v=20261110j.

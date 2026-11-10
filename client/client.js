@@ -3527,7 +3527,8 @@ function drawDynastyWorld() {
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
     const grass = pattern(base); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
-    for (const g of dynGroundCache.g) { const p = pattern(T + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
+    for (const g of dynGroundCache.g) { const p = pattern(T + g.tile); if (wo) { if (p && grass && g.x < vx + vw + 60 && g.x + g.w > vx - 60 && g.y < vy + vh + 60 && g.y + g.h > vy - 60) softPatch(g, p, grass); continue; }
+      if (p) fill(p, g.x, g.y, g.w, g.h);
       if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
     ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
   });
@@ -3538,6 +3539,32 @@ function drawDynastyWorld() {
     if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); dynPieceFx(d, a); } });
   }
   drawWorldObjects(tall);
+}
+// Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
+// rounded shape, then the snow is feathered back over its edge in soft bands, with drifts of snow lying across the border.
+// Everything comes from the patch's own position, so every ground chunk draws the same shape.
+function softShape(g) {
+  if (g._soft) return g._soft;
+  let seed = (Math.round(g.x) * 7919 + Math.round(g.y) * 104729) % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const ice = g.tile === "ice", r = Math.min(ice ? 1e9 : 34, g.w / 2, g.h / 2), x0 = g.x, y0 = g.y, x1 = g.x + g.w, y1 = g.y + g.h, pts = [];
+  const side = (ax, ay, bx, by, nx, ny) => { const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 22)); for (let i = 0; i < n; i++) pts.push([ax + (bx - ax) * i / n, ay + (by - ay) * i / n, nx, ny]); };
+  const arc = (cx, cy, a0) => { const n = Math.max(4, Math.round(r / 12)); for (let i = 0; i < n; i++) { const a = a0 + i / n * Math.PI / 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a), -Math.sin(a)]); } };
+  side(x0 + r, y0, x1 - r, y0, 0, 1); arc(x1 - r, y0 + r, -Math.PI / 2); side(x1, y0 + r, x1, y1 - r, -1, 0); arc(x1 - r, y1 - r, 0); side(x1 - r, y1, x0 + r, y1, 0, -1); arc(x0 + r, y1 - r, Math.PI / 2); side(x0, y1 - r, x0, y0 + r, 1, 0); arc(x0 + r, y0 + r, Math.PI);
+  const N = pts.length, k1 = Math.max(2, Math.round(N / 9)), k2 = Math.max(3, Math.round(N / 3.4)), p1 = rnd() * 7, p2 = rnd() * 7, A = ice ? 16 : 9, B = ice ? 9 : 6;
+  const P = pts.map(([x, y, nx, ny], i) => { const o = A * (.5 + .5 * Math.sin(2 * Math.PI * k1 * i / N + p1)) + B * (.5 + .5 * Math.sin(2 * Math.PI * k2 * i / N + p2)); return [x + nx * o, y + ny * o, nx, ny]; });
+  const path = new Path2D(), mid = i => [(P[i][0] + P[(i + 1) % N][0]) / 2, (P[i][1] + P[(i + 1) % N][1]) / 2]; path.moveTo(...mid(N - 1));
+  for (let i = 0; i < N; i++) { const m = mid(i); path.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]); } path.closePath();
+  const drifts = []; for (let i = 0; i < N; i += 1 + Math.floor(rnd() * 3)) if (rnd() < .5) { const [x, y, nx, ny] = P[i], d = -6 + rnd() * 26; drifts.push([x + nx * d, y + ny * d, 10 + rnd() * 20, 6 + rnd() * 12, rnd() * 3.1]); }
+  return (g._soft = { path, drifts });
+}
+function softPatch(g, tile, snow) {
+  const { path, drifts } = softShape(g);
+  ctx.save(); ctx.fillStyle = tile; ctx.fill(path);
+  ctx.strokeStyle = snow; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  for (let i = 0; i < 9; i++) { ctx.globalAlpha = .13 + i * .012; ctx.lineWidth = 46 - i * 5; ctx.stroke(path); }   // snow creeping in over the edge: thin at its inner reach, solid at the border
+  ctx.globalAlpha = 1; ctx.lineWidth = 5; ctx.stroke(path);
+  ctx.fillStyle = snow; for (const [x, y, rx, ry, a] of drifts) { ctx.globalAlpha = .9; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, a, 0, 7); ctx.fill(); ctx.globalAlpha = .45; ctx.beginPath(); ctx.ellipse(x, y, rx + 7, ry + 6, a, 0, 7); ctx.fill(); }   // drifts lying across it
+  ctx.restore();
 }
 // a piece whose art is animated (the burning lab on Whiteout Station: the user's GIF, frames in one row), cross-faded frame to frame
 function drawAnimPiece(d, a) {
