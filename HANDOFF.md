@@ -416,3 +416,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Depth: track segments sort at their ground line + 14 (anything walking under the track is drawn under it); along a station (`atStation`) the track is part of the floor and the cart sorts at rail height, so people on the deck stand in front of the train.
 - Cache: client.js?v=20261110r.
 - Lobby map picker (Nov 10): the left arrow never worked: the map-name overlay (.ls-mapname, later in the DOM) sat on top of it. Fixed with pointer-events:none on the overlay and z-index on .ls-arrow.
+
+## Nov 10 (s): how to ride the coaster was invisible (user: "I don't know how to interact with the cart")
+- Bug: `drawCoasterPrompt` drew in WORLD coords but is called in screen space (with drawStationPrompt), so "[F] Ride" was never on screen. Now screen space, bigger, boxed.
+- Queueing: F near any station (COASTER_NEAR = 300 from the platform, server + client) when the train isn't there = wait for it (`C.queue`); you're boarded automatically when it stops there (`coasterBoard`). F again cancels.
+- `drawStationSigns`: a sign over every station ("TRAIN IN Ns" / "TRAIN HERE · press F", `coastEta`), teal station dots on the minimap, a feed hint when a carnival match starts, feed lines on queue / board.
+- `coasterTall` wrapped in try (a coaster drawing error must never hide the whole world).
+- Test 33f: queue + auto-board. Cache: client.js?v=20261110s.

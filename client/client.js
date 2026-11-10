@@ -134,7 +134,8 @@ function connected() {
   room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
-  room.onMessage("coaster", m => { if (m.id === myId) playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5); });
+  room.onMessage("coaster", m => { if (m.id !== myId) return; coastQueued = m.k === "queue"; if (m.k === "on" || m.k === "off") playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5);
+    if (m.k === "queue") feed.unshift({ text: "Wait here: you'll hop on when the train stops", t: Date.now() }); if (m.k === "on") feed.unshift({ text: "On the coaster! One lap, shoot from the cart. F at a station to get off.", t: Date.now() }); feed.length = Math.min(feed.length, 5); });
   room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
   room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
   room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
@@ -3559,31 +3560,55 @@ function drawDynastyWorld() {
       if (img) tall.push({ y: d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
     if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (a?.door) pyramidFx(d, a); dynPieceFx(d, a); } });
   }
-  if (coast) coasterTall(tall);
+  if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
+  if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }
 }
 // ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
 let coast = null, coastLast = 0;
 function coastSync() {   // every frame: glide our copy of the train toward where the server says it is
   if (!state || !carnivalMap()) { coast = null; return; }
   const WW = worldW(), WH = worldH(), now = performance.now(), dt = Math.min(.1, (now - coastLast) / 1000); coastLast = now;
-  if (!coast || coast.w !== WW) coast = { w: WW, T: coasterTrack(WW, WH), s: state.coasterS || 0 };
+  if (!coast || coast.w !== WW) { coast = { w: WW, T: coasterTrack(WW, WH), s: state.coasterS || 0 }; coastQueued = false; feed.unshift({ text: "Ride the coaster: walk to a COASTER station (teal dots on the minimap) and press F", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
   const L = coast.T.L; let e = ((state.coasterS || 0) - coast.s) % L; if (e > L / 2) e -= L; if (e < -L / 2) e += L;
   coast.s = Math.abs(e) > 400 ? state.coasterS : ((coast.s + e * Math.min(1, dt * 10)) % L + L) % L;
 }
 const coastStation = () => { if (!coast || !(state.coasterWait > 0)) return null; return coast.T.stations.find(st => Math.abs(st.s - state.coasterS) < 6) || null; };   // the station the train is stopped at
-function coasterUse() {   // F: get on at the station the train is stopped at / get off again
-  const me = me_(); if (!coast || !me?.alive || !room) return false; const st = coastStation();
-  if (me.ride > 0) { if (st) room.send("coaster"); return true; }
-  if (!st || me.rideCd > 0 || Math.hypot(me.x - st.x, me.y - (st.y + 130)) > 240) return false;
+const COASTER_NEAR = 300, coastNear = me => coast?.T.stations.find(q => Math.hypot(me.x - q.x, me.y - (q.y + 40)) < COASTER_NEAR);
+let coastQueued = false;   // you pressed F at a station before the train got there: you'll hop on when it stops
+function coasterUse() {   // F at a coaster station: get on (train here) / wait for it (train coming) / get off (riding, at a station)
+  const me = me_(); if (!coast || !me?.alive || !room) return false;
+  if (me.ride > 0) { if (coastStation()) room.send("coaster"); return true; }
+  if (me.rideCd > 0 || !coastNear(me)) return false;
   room.send("coaster"); return true;
 }
-function drawCoasterPrompt() {
-  const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "";
-  if (me.ride > 0) text = st ? "[F] Get off" : "";
-  else { const near = coast.T.stations.find(q => Math.hypot(me.x - q.x, me.y - (q.y + 130)) < 240); if (!near) return;
-    text = me.rideCd > 0 ? `Ride again in ${Math.ceil(me.rideCd)}s` : st === near ? `[F] Ride the coaster · leaves in ${Math.ceil(state.coasterWait)}s` : "The train is on its way…"; }
-  if (!text) return; ctx.save(); ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#140c08"; ctx.fillStyle = me.rideCd > 0 && !me.ride ? "#ff9d6b" : "#ffe08a"; ctx.strokeText(text, v.x, v.y - 84); ctx.fillText(text, v.x, v.y - 84); ctx.restore();
+function coastEta(st) {   // seconds until the train next stops at this station
+  const T = coast.T, i = T.stations.indexOf(st); let s = coast.s, t = state.coasterWait > 0 ? state.coasterWait : 0;
+  let ahead = ((st.s - s) % T.L + T.L) % T.L; if (ahead < 6 && state.coasterWait > 0) return 0;
+  const stops = T.stations.filter(q => { const d = ((q.s - s) % T.L + T.L) % T.L; return d > 6 && d < ahead - 6; }).length;
+  return Math.max(1, Math.round(t + ahead / COASTER.speed + stops * COASTER.wait + 1));
+}
+function drawCoasterPrompt() {   // screen space, over your head (like the repair prompts)
+  const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "", col = "#ffe08a";
+  if (me.ride > 0) { text = st ? "[F] Get off here" : "Riding the coaster · aim and shoot!"; col = st ? "#ffe08a" : "#9fe3ff"; }
+  else { const near = coastNear(me); if (!near) return;
+    if (me.rideCd > 0) { text = `Coaster: ride again in ${Math.ceil(me.rideCd)}s`; col = "#ff9d6b"; }
+    else if (st === near) text = `[F] GET ON THE COASTER · leaves in ${Math.ceil(state.coasterWait)}s`;
+    else if (coastQueued) { text = `Waiting for the train · ${coastEta(near)}s   ([F] cancel)`; col = "#9fe3ff"; }
+    else text = `[F] Wait for the coaster · arrives in ${coastEta(near)}s`; }
+  const x = v.x - Math.round(cam.x), y = v.y - Math.round(cam.y) - 96;
+  ctx.save(); ctx.font = "bold 15px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(text).width + 22;
+  ctx.fillStyle = "rgba(10,6,4,.72)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 17, w, 25, 7); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = col; ctx.fillText(text, x, y + 1); ctx.restore();
+}
+function drawStationSigns() {   // world space, over each station: "COASTER · train here / arrives in Ns", so you can find them and see when it comes
+  if (!coast) return; const t = performance.now() / 1000, here = coastStation();
+  for (const st of coast.T.stations) { if (!inView(st.x, st.y, 300)) continue;
+    const x = st.x, y = st.y - 150 + Math.sin(t * 3 + st.x) * 4, txt = here === st ? "TRAIN HERE · press F" : `TRAIN IN ${coastEta(st)}s`;
+    ctx.save(); ctx.font = "bold 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(txt).width + 26;
+    ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 16, w, 24, 12); ctx.fill();
+    ctx.fillStyle = here === st ? "#2a1405" : "#ffe08a"; ctx.fillText(txt, x, y + 1);
+    ctx.beginPath(); ctx.moveTo(x - 7, y + 8); ctx.lineTo(x + 7, y + 8); ctx.lineTo(x, y + 16); ctx.closePath(); ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.fill(); ctx.restore(); }
 }
 const atStation = q => coast.T.stations.some(st => Math.abs(q.x - st.x) < 262 && Math.abs(q.y - st.y) < 70);
 const cartKey = c => atStation(c) ? c.y - COASTER.H + 6 : c.y + 15;   // the cart's depth; its riders are drawn straight after it
@@ -4039,7 +4064,7 @@ function drawScreen() {
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
   else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(); m.fillStyle = rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
     for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
-    if (coast) { m.strokeStyle = '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
+    if (coast) { m.strokeStyle = '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); for (const q of coast.T.stations) { m.fillStyle = '#5ad1c9'; m.beginPath(); m.arc(q.x * sx, q.y * sy, 3, 0, 7); m.fill(); } const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);

@@ -381,6 +381,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const hyp = (x, y) => Math.sqrt(x * x + y * y);   // not Math.hypot: 3x slower in V8, and these run tens of thousands of times a second
 const distance = (a, b) => hyp(a.x - b.x, a.y - b.y);
 
+const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export class SurvivalRoom extends Room {
   maxClients = 8;
   patchRate = 50;
@@ -424,7 +425,7 @@ export class SurvivalRoom extends Room {
     const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
     const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - (pyr.kind === "rPyramid" ? 118 : 74) } : null;
     if (this.state.players) for (const q of this.state.players.values()) { q.ride = 0; q.rideCd = 0; }
-    const CT = S.style === "carnival" ? coasterTrack(W, H) : null; this.coaster = CT ? { T: CT, s: CT.stations[0].s, wait: COASTER.wait, next: 0, riders: new Map(), cd: new Map() } : null;   // Midnight Carnival: the train starts at the first station
+    const CT = S.style === "carnival" ? coasterTrack(W, H) : null; this.coaster = CT ? { T: CT, s: CT.stations[0].s, wait: COASTER.wait, next: 0, riders: new Map(), cd: new Map(), queue: new Map() } : null;   // Midnight Carnival: the train starts at the first station
     this.state.coasterS = CT ? this.coaster.s : 0; this.state.coasterWait = CT ? COASTER.wait : 0;   // Scorched Refinery: bosses walk out of the pyramid
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.setMapBoxes(mapBoxes(layout));
@@ -505,10 +506,11 @@ export class SurvivalRoom extends Room {
     this.onMessage("coaster", client => {
       const C = this.coaster, sid = client.sessionId, p = this.state.players.get(sid); if (!C || !p || !p.alive || !["playing", "cleared"].includes(this.state.phase)) return;
       if (p.ride > 0) { if (C.wait > 0) this.coasterOff(sid); return; }
-      if (!(C.wait > 0) || this.state.vehicles.has(sid) || C.cd.has(sid)) return;
-      const st = C.T.stations[C.next]; if (Math.hypot(p.x - st.x, p.y - (st.y + 130)) > 240) return;
-      const used = new Set([...C.riders.values()].map(r => r.seat)); let seat = 0; while (used.has(seat)) seat++; if (seat >= COASTER.seats) return;
-      C.riders.set(sid, { seat, done: 0 }); p.ride = seat + 1; this.broadcast("coaster", { k: "on", id: sid });
+      if (this.state.vehicles.has(sid) || C.cd.has(sid)) return;
+      const si = C.T.stations.findIndex(st => Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR); if (si < 0) return;
+      if (C.wait > 0 && si === C.next) { this.coasterBoard(sid); return; }
+      if (C.queue.get(sid) === si) { C.queue.delete(sid); this.broadcast("coaster", { k: "unqueue", id: sid }); return; }   // F again: stop waiting
+      C.queue.set(sid, si); this.broadcast("coaster", { k: "queue", id: sid });   // the train isn't here: you'll hop on when it stops at this station
     });
 
     this.onMessage("shoot", (client, data) => {
@@ -2878,6 +2880,11 @@ export class SurvivalRoom extends Room {
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
   // ---------- Midnight Carnival: the coaster (track + maths in mapLayout.js) ----------
+  coasterBoard(sid) {
+    const C = this.coaster, p = this.state.players.get(sid); C.queue.delete(sid); if (!p || !p.alive || p.ride > 0) return false;
+    const used = new Set([...C.riders.values()].map(r => r.seat)); let seat = 0; while (used.has(seat)) seat++; if (seat >= COASTER.seats) return false;
+    C.riders.set(sid, { seat, done: 0 }); p.ride = seat + 1; this.broadcast("coaster", { k: "on", id: sid }); return true;
+  }
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
     const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid); C.cd.set(sid, Date.now() + COASTER.cd * 1000);
     if (!p) return; p.ride = 0;
@@ -2889,7 +2896,8 @@ export class SurvivalRoom extends Room {
     if (C.wait > 0) { C.wait -= dt; if (C.wait <= 0) { C.wait = 0; C.next = (C.next + 1) % T.stations.length; } }
     else { const left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L, step = Math.min(COASTER.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
       for (const r of C.riders.values()) r.done += go;
-      if (step >= left) { C.s = T.stations[C.next].s; C.wait = COASTER.wait; for (const [sid, r] of [...C.riders]) if (r.done >= T.L - 40) this.coasterOff(sid); }   // one lap: off you get
+      if (step >= left) { C.s = T.stations[C.next].s; C.wait = COASTER.wait; for (const [sid, r] of [...C.riders]) if (r.done >= T.L - 40) this.coasterOff(sid);
+        const st = T.stations[C.next]; for (const [sid, si] of [...C.queue]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.queue.delete(sid); continue; } if (si === C.next && Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR + 60) this.coasterBoard(sid); } }   // whoever was waiting here gets on   // one lap: off you get
       else C.s = (C.s + step) % T.L; }
     for (const [sid, r] of [...C.riders]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.riders.delete(sid); if (p) p.ride = 0; continue; } const q = coasterSeat(T, C.s, r.seat); p.x = q.x; p.y = q.y; }
     for (const [sid, until] of [...C.cd]) { const p = this.state.players.get(sid), left = Math.ceil((until - now) / 1000); if (!p || left <= 0) { C.cd.delete(sid); if (p) p.rideCd = 0; } else if (p.rideCd !== left) p.rideCd = left; }
