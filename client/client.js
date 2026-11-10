@@ -219,7 +219,7 @@ const BOSS_INFO = {
       ["💥", "Flail Slam", "His giant arm smashes a long line in front of him. Step out of the marked line.", "#ff8a3d"],
       ["🌑", "Gut Roll", "Curls into a ball and rolls down a marked lane, crushing your deployables. He rolls THROUGH buildings, so walls won't save you: step out of the lane. Where he stops he's DAZED for 3s (×1.5 damage): that's your opening.", "#ffb36b"],
       ["🌋", "Lava Spew", "A cone of lava, then burning puddles on the ground that slow you. Don't fight in them.", "#ff5a1f"],
-      ["🩸", "The Sundering", "At 45% health he stops, can't be hurt, and slowly tears into FIVE. Use those seconds to back off and spread out.", "#ffd36b"],
+      ["🩸", "The Sundering", "At 45% health he stops, can't be hurt, and tears into FIVE. You have about 3 seconds to back off and spread out: they run at you the moment they're free.", "#ffd36b"],
       ["🐾", "The Five", "Five fast hunters, each with its own health, each chasing a different survivor and pouncing. Every one you kill makes the rest faster. Kill all five.", "#ff3737"],
     ] },
 };
@@ -1465,7 +1465,7 @@ function screamerLights(now) {   // night: his throat glows, and the rings and b
 }
 // ===================== THE ABOMINATION + THE FIVE (wave 16 boss) =====================
 // Art: tools/extract-abomination.py. Boss cells 340x260, feet (170, 236): slam / spew = 4 cols x 5 rows (D, DR, R, UR, U; left mirrored),
-// roll 6 / dazed 4 = one row, morph = 12 frames of 460x260. Spawn cells 240x210, feet (120, 182): run / lunge 4 x 5, dead 5 frames of 280.
+// roll 6 / dazed 4 = one row, morph = 6 frames of 460x260. Spawn cells 240x210, feet (120, 182): run / lunge 4 x 5, dead 5 frames of 280.
 // Effects: 24 frames in a row on black (3 sets of 8: start / loop / end), drawn additive. Timings match ABOM on the server.
 // Walk sheet (Nov 10): 4 cols (stand, step, step, stand); idle = col 0. The spew sheet's cols: stand, step, spewing, drool (col 1 unused).
 const abImgs = {};
@@ -1524,41 +1524,28 @@ function drawAbomination(z) {
   const label = z.act === "daze" ? "DAZED · ×1.5 DAMAGE" : "";
   if (label) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = z.act === "daze" ? "#ffe08a" : "#ff9d6b"; ctx.strokeText(label, z.x, gy - 205); ctx.fillText(label, z.x, gy - 205); ctx.restore(); }
 }
-// THE SUNDERING (4.2s). The 12 painted frames differ too much from one to the next to simply cross-fade, so the sequence is staged:
-//   0 - 1.5s   the big body swells and trembles while its cracks brighten (frames 0-2, which share a pose)
-//   1.5 - 2.3s it goes white-hot: the tear (frames 2-5) happens inside the flash, with an ember burst at the peak
-//   2.3 - 3.0s the torn group fades into the five REAL spawn sprites, standing exactly where the server will put them
-//   3.0 - 4.2s the lava strands between them thin and snap one by one, each spawn rears up, the glow dies down
-// so the hand-over to the live Five at the end has no jump at all.
-const ABM_FAN = [[-104, 8], [-52, -8], [0, -16], [52, -8], [104, 8]];   // = ABOM.sunder.fan on the server
+// THE SUNDERING (3.4s): the user's 6-frame strip IS the whole animation (Nov 10). Frames 0-2 share a pose (slow cross-fades while he swells
+// and heats up); the tear (2 -> 3) and the final parting (4 -> 5) are bigger pose changes, so each gets a short hot flash to carry the cut.
+// The last 0.3s fades the painted five into the five live sprites standing on the same spots (ABM_FAN = ABOM.sunder.fan), so when the
+// server swaps him for the Five there is no jump and they simply start running.
+const ABM_FAN = [[-100, 21], [-58, 6], [-4, 3], [52, 6], [100, 21]];
 function drawAbomSunder(z, t, gy, now, tele) {
-  const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }, L = z.actLen || 4.2, im = abImgs.morph, run = abImgs.srun;
-  const heat = sm(t / 1.5), flash = t < 1.9 ? sm((t - 1.3) / .6) : 1 - sm((t - 1.9) / .7), split = sm((t - 2.3) / .7), settle = sm((t - 3.0) / 1.0);
-  if (tele && !tele.snap && t >= 1.85) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.9, from: 8, t: now }); shake(12, 450); playSfx("boom", z.x, z.y, .9); }
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 60 * split, 17, 0, 0, 7); ctx.fill(); ctx.restore();
-  bossGlow(z.x, gy - 80, ABM.lava, 90 + 80 * heat + 60 * flash - 70 * settle, Math.min(1, .35 + .45 * heat + .3 * flash) * (1 - .6 * settle));
-  if (t < 1.9) aFx("fxEmber", t / 1.9 * 8, z.x, gy - 80, 1.3 + .5 * heat, .5 + .5 * heat);   // sparks gathering
-  const body = (f, f2, k, alpha, scale, jx) => { if (alpha <= 0 || !im.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = alpha; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(scale, scale);
-    const draw = () => blendCells(im, 0, 0, ABM.mw, ABM.bh, f, f2, k, -ABM.mw / 2, -ABM.bfy); draw();
-    if (flash > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * flash; draw(); draw(); if (flash > .6) draw(); } ctx.restore(); };
-  // the painted frames, on a timeline with long holds on similar poses and the big pose changes hidden in the flash
-  const keys = [[0, 0], [.7, 1], [1.5, 2], [1.8, 3], [2.05, 4], [2.4, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
-  const k = sm((t - keys[a][0]) / (keys[a + 1][0] - keys[a][0])), jx = (Math.random() - .5) * (1 + 5 * heat) * (1 - split), pulse = 1 + .035 * heat * Math.sin(t * (9 + 10 * heat)) + .05 * flash;
-  body(keys[a][1], keys[a + 1][1], k, 1 - split, pulse, jx);
-  if (split > 0 && run.naturalWidth) {   // the five real sprites, back row first
-    const pos = ABM_FAN.map(([ox, oy], i) => { const from = .78, pr = sm((t - 2.3) / 1.1), e = from + (1 - from) * pr; return { x: z.x + ox * e, y: (gy + oy * from) * (1 - pr) + (z.y + oy + 16) * pr, i }; });   // ends on the live spawn's own feet line (y + radius * .8)
-    // lava strands between neighbours: thin out, then snap one after another
-    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
-    for (let i = 0; i < 4; i++) { const snapAt = 3.05 + i * .17, left = 1 - sm((t - (snapAt - .5)) / .5); if (t >= snapAt) { if (tele && !(tele.snaps >> i & 1)) { tele.snaps |= 1 << i; fx.push({ type: "abom", k: "ember", x: (pos[i].x + pos[i + 1].x) / 2, y: (pos[i].y + pos[i + 1].y) / 2 - 58, sc: .55, from: 8, t: now }); playSfx("stomp", z.x, z.y, .35); } continue; }
-      const p0 = pos[i], p1 = pos[i + 1], mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2 - 58 + 16 * left + 3 * Math.sin(now / 90 + i);
-      for (const [w, c] of [[9, "rgba(255,70,20,.35)"], [4, "rgba(255,150,50,.8)"], [1.5, "rgba(255,240,180,.9)"]]) { ctx.strokeStyle = c; ctx.lineWidth = w * (.25 + .75 * left) * split; ctx.beginPath(); ctx.moveTo(p0.x, p0.y - 62); ctx.quadraticCurveTo(mx, my + 14, p1.x, p1.y - 62); ctx.stroke(); } }
-    ctx.restore();
-    for (const q of [...pos].sort((u, v) => u.y - v.y)) { const rear = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (t - 3.15 - q.i * .14) / .45)))), sc = 1 + .1 * rear;   // each one rears up in turn as it comes free
-      ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = split; ctx.translate(Math.round(q.x), Math.round(q.y - 6 * rear)); ctx.scale(sc, sc);
-      const draw = () => ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, -ABM.sax, -ABM.sfy, ABM.sw, ABM.sh); draw();
-      const hot = Math.max(flash, .5 * (1 - settle)); if (hot > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = split * hot; draw(); } ctx.restore(); }
-  }
-  ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - settle; ctx.strokeText("CAN'T BE HURT", z.x, gy - 205); ctx.fillText("CAN'T BE HURT", z.x, gy - 205); ctx.restore();
+  const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }, L = z.actLen || 3.4, im = abImgs.morph, run = abImgs.srun, bump = (c, w) => Math.max(0, 1 - Math.abs(t - c) / w);
+  const heat = sm(t / 1.3), flash = Math.max(sm(bump(1.5, .45)), .55 * sm(bump(2.55, .4))), hand = sm((t - (L - .32)) / .3), cool = sm((t - 2.7) / .7);
+  if (tele && !tele.snap && t >= 1.45) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.25, from: 8, t: now }); shake(11, 420); playSfx("boom", z.x, z.y, .9); }
+  if (tele && !tele.snap2 && t >= 2.5) { tele.snap2 = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 55, sc: 1, from: 8, t: now }); shake(6, 260); playSfx("stomp", z.x, z.y, .6); }
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 55 * sm((t - 1.4) / 1.2), 17, 0, 0, 7); ctx.fill(); ctx.restore();
+  bossGlow(z.x, gy - 80, ABM.lava, 90 + 70 * heat + 50 * flash - 80 * cool, Math.min(1, .35 + .4 * heat + .3 * flash) * (1 - .65 * cool));
+  if (t < 1.5) aFx("fxEmber", t / 1.5 * 8, z.x, gy - 80, 1.2 + .4 * heat, .4 + .5 * heat);   // sparks gathering before the tear
+  const keys = [[0, 0], [.55, 1], [1.15, 2], [1.7, 3], [2.25, 4], [2.85, 5], [99, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
+  const span = keys[a + 1][0] - keys[a][0], k = sm((t - keys[a][0] - span * .25) / (span * .75)), settled = sm((t - 1.6) / .5);   // each frame holds for a beat, then eases into the next
+  const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled), pulse = 1 + .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash;
+  if (im.naturalWidth && hand < 1) { ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = 1 - hand; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(pulse, pulse);
+    const draw = () => blendCells(im, 0, 0, ABM.mw, ABM.bh, keys[a][1], keys[a + 1][1], k, -ABM.mw / 2, -ABM.bfy); draw();
+    if (flash > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = (1 - hand) * flash * .8; draw(); } ctx.restore(); }   // one hot pass: bright, but the figures stay readable
+  if (hand > 0 && run.naturalWidth) for (const [ox, oy] of [...ABM_FAN].sort((u, v) => u[1] - v[1])) {   // the live sprites fade in on their own spots, back row first
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = hand; ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, Math.round(z.x + ox) - ABM.sax, Math.round(z.y + oy + 16) - ABM.sfy, ABM.sw, ABM.sh); ctx.restore(); }
+  ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - hand; ctx.strokeText("CAN'T BE HURT", z.x, gy - 205); ctx.fillText("CAN'T BE HURT", z.x, gy - 205); ctx.restore();
 }
 function drawAbomSpawn(z) {
   const now = performance.now(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 };

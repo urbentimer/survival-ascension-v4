@@ -337,3 +337,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Boss cards: all four (Butcher, Pyre Priest, Screamer, Abomination) verified in the browser via the Skip buttons. The "Spawn <boss>" buttons skipped the card (they dropped the boss into a normal wave): they now start the real fight (`debugBoss` with the boss's wave), card first. `debugMorph` also goes through the card (`skipToBoss(16)` + `morphOnArrival`).
 - Gut Roll (user changed his mind on bouncing): rolls THROUGH buildings / tower, hits survivors and crushes deployables, never stops inside something solid (lane shortened), ALWAYS ends dazed 3s. "bounce" message removed.
 - Sims: 8 players 119s, 4 players 177s. Cache: client.js?v=20261110f.
+
+## Nov 10 (g): the user's 6-frame strip is the whole transformation
+- New tools/art/abomination/morph1.png (6 frames; morph2 dropped). abom-morph.webp = 6 frames of 460x260.
+- `ABOM.sunder.len` 4.2 -> 3.4s. `drawAbomSunder`: frames 0-5 on a timeline (hold, then ease), a hot flash over the two big pose changes (2->3, 4->5), last 0.3s fades into the five live sprites. `ABOM.sunder.fan` / client `ABM_FAN` = where the five stand in the last painted frame, so the live Five appear on the same spots and run straight at the players (first pounce after 1.4s).
+- Note: test "the break: you can walk around" failed once and passed on 3 reruns (flaky, not related).
+- Cache: client.js?v=20261110g.

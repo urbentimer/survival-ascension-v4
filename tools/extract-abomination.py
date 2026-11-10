@@ -6,7 +6,7 @@
 #   portrait.png                  on magenta (his body is black)
 # Writes (python3 tools/extract-abomination.py):
 #   client/assets/sprites/zombies/dir8/abom-<slam|spew|walk>.webp   4 x 5 cells BW x BH, feet (BAX, BFY)
-#   .../abom-<roll|dazed>.webp (one row, same cells), abom-morph.webp (12 frames, cells MW x BH, centred)
+#   .../abom-<roll|dazed>.webp (one row, same cells), abom-morph.webp (6 frames, cells MW x BH, centred)
 #   .../abomspawn-<run|lunge>.webp 4 x 5 cells SW x SH, feet (SAX, SFY); abomspawn-dead.webp one row
 #   client/assets/sprites/fx/abom-<lava|slam|ember>.webp   24 frames in a row (3 sets of 8), black background
 #   client/assets/portraits/abomination.webp
@@ -98,8 +98,8 @@ def save_strip(cells, out):
 grid('slam', 'abom-slam', BW, BH, BAX, BFY, BOSS_H); grid('spew', 'abom-spew', BW, BH, BAX, BFY, BOSS_H); grid('walk', 'abom-walk', BW, BH, BAX, BFY, BOSS_H)
 c, _ = strip('roll', 6, BW, BH, BAX, BFY, target_h=BOSS_H, ref=5); save_strip(c, 'abom-roll')
 c, _ = strip('dazed', 4, BW, BH, BAX, BFY, target_h=BOSS_H * .98, ref=3); save_strip(c, 'abom-dazed')
-m1, sc = strip('morph1', 6, MW, BH, MW // 2, BFY, target_h=BOSS_H * .98, ref=0, centre=True); m2, _ = strip('morph2', 6, MW, BH, MW // 2, BFY, sc=sc, centre=True)
-save_strip(m1 + m2, 'abom-morph')
+m1, sc = strip('morph1', 6, MW, BH, MW // 2, BFY, target_h=BOSS_H * .98, ref=0, centre=True)   # Nov 10: the user's single 6-frame strip is the whole transformation (morph2 dropped)
+save_strip(m1, 'abom-morph')
 ssc = grid('spawn-run', 'abomspawn-run', SW, SH, SAX, SFY, SPAWN_H); grid('spawn-lunge', 'abomspawn-lunge', SW, SH, SAX, SFY, 0, sc0=ssc)   # same sheet size as the run: same scale
 c, _ = strip('spawn-dead', 5, SW + 40, SH, (SW + 40) // 2, SFY, target_h=SPAWN_H, ref=0, centre=True); save_strip(c, 'abomspawn-dead')
 

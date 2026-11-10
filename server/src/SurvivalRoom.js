@@ -98,7 +98,7 @@ const ABOM = {
   slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 300, hw: 60, mult: 1.1, push: 110, cd: 3.2 },
   roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
   spew: { first: 4, cd: 9, trigger: 400, wind: .6, dur: 1.3, total: 2.2, len: 380, arc: .36, every: .2, mult: .3, puddles: [130, 235, 340], pr: 58, life: 7, pmult: .22, pevery: .5 },
-  sunder: { len: 4.2, fan: [[-104, 8], [-52, -8], [0, -16], [52, -8], [104, 8]] },
+  sunder: { len: 3.4, fan: [[-100, 21], [-58, 6], [-4, 3], [52, 6], [100, 21]] },   // fan = where the five stand in the last painted frame (client ABM_FAN), so the live ones appear exactly there
   spawn: { hpFrac: .13, speed: 232, radius: 20, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 58, mult: 1, cd: 2.0 } },
 };
 const PATH_CELL = 40;   // boss path-finding grid
@@ -2466,7 +2466,7 @@ export class SurvivalRoom extends Room {
       this.spawnZombie(true, "abomSpawn"); const sp = [...this.state.zombies.values()].pop(); if (sp?.kind !== "abomSpawn") return;
       sp.maxHp = sp.hp = z.maxHp * S.hpFrac; sp.speed = S.speed; sp.radius = S.radius; sp.damage = z.damage * S.dmgMult; sp.role = "hunter"; sp.boss = true; sp.aim = Math.PI / 2;
       sp.x = clamp(z.x + ox, 30, this.A.width - 30); sp.y = clamp(z.y + oy, 30, this.A.height - 30); this.solveZombie(sp);
-      this.bossMem.set(sp.id, { lungeReady: Date.now() + 900 + i * 250, tgt: targets.length ? targets[i % targets.length].sessionId : "" }); ids.push(sp.id);
+      this.bossMem.set(sp.id, { lungeReady: Date.now() + 1400 + i * 250, tgt: targets.length ? targets[i % targets.length].sessionId : "" }); ids.push(sp.id);
     });
     this.state.explore = was;
     this.state.zombies.delete(z.id); this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
