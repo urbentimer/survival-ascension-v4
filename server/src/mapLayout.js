@@ -310,8 +310,10 @@ const cvBox = (k, wf = .45, hf = .68) => { const [w, h] = CV_SIZE[k]; return { o
 for (const k of Object.keys(CV_SIZE)) if (!MAP_FLAT[k]) MAP_SOLID[k] = cvBox(k);
 Object.assign(MAP_SOLID, {
   cvHaunted: [{ ox: -215, oy: -190, hw: 95, hh: 170 }, { ox: 215, oy: -190, hw: 95, hh: 170 }, { ox: 0, oy: -245, hw: 120, hh: 115 }, { ox: 0, oy: -450, hw: 260, hh: 90 }],   // the steps up to its doorway are open: the bosses walk down them
+  // the station: you walk up its steps onto the platform (open: the stairs in the middle and the deck); solid: the skirts either side of the stairs, the back (where the train runs), the ends, the booth
+  cvStation: [{ ox: -172, oy: -53, hw: 80, hh: 47 }, { ox: 172, oy: -53, hw: 80, hh: 47 }, { ox: 0, oy: -180, hw: 253, hh: 20 }, { ox: -251, oy: -130, hw: 6, hh: 30 }, { ox: 251, oy: -130, hw: 6, hh: 30 }, { ox: -164, oy: -146, hw: 53, hh: 14 }],
   cvGate: [{ ox: -255, oy: -70, hw: 125, hh: 60 }, { ox: 255, oy: -70, hw: 125, hh: 60 }],   // walk through under the arch
-  cvFerris: cvBox("cvFerris", .46, .3), cvSwing: cvBox("cvSwing", .32, .4), cvStation: cvBox("cvStation", .47, .42), cvBigtop: cvBox("cvBigtop", .46, .6), cvCarousel: cvBox("cvCarousel", .46, .55),
+  cvFerris: cvBox("cvFerris", .46, .3), cvSwing: cvBox("cvSwing", .32, .4), cvBigtop: cvBox("cvBigtop", .46, .6), cvCarousel: cvBox("cvCarousel", .46, .55),
   cvLamp: { ox: 0, oy: -10, hw: 14, hh: 8 }, cvSignpost: { ox: 0, oy: -10, hw: 14, hh: 8 }, cvBanner: { ox: 0, oy: -10, hw: 50, hh: 8 }, cvBarrier: { ox: 0, oy: -14, hw: 62, hh: 10 },
   cvArrow: { ox: 0, oy: -14, hw: 44, hh: 10 }, cvPoster: { ox: 0, oy: -14, hw: 40, hh: 10 }, cvLightTower: { ox: 0, oy: -22, hw: 58, hh: 16 }, cvBalloonBox: { ox: 0, oy: -14, hw: 22, hh: 12 } });
 // The coaster. speed px/s, gap between carts, H = how high the rails are drawn above the ground, wait = seconds stopped at a station, cd = seconds before you can ride again.
@@ -333,8 +335,8 @@ export function coasterAt(T, s) {   // where the rails are s px along the loop: 
   return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, a: Math.atan2(b.y - a.y, b.x - a.x) };
 }
 export const coasterCart = (T, s, i) => coasterAt(T, s + COASTER.gap * ((COASTER.carts - 1) / 2 - i));   // cart i (0 = front) when the train's middle is at s
-export function coasterSeat(T, s, n) {   // where rider n (0..7) is DRAWN: two side by side per cart, up at rail height, so their head and shoulders show over the cart, which hides the rest
-  const c = coasterCart(T, s, n >> 1), sd = n & 1 ? 1 : -1; return { x: c.x - Math.sin(c.a) * 9 * sd, y: c.y - COASTER.H - 64 + Math.cos(c.a) * 5 * sd };
+export function coasterSeat(T, s, n) {   // where rider n (0..7) is DRAWN: two side by side per cart, up at rail height, INSIDE the cart: the client draws them over it with their legs cut off at the rim
+  const c = coasterCart(T, s, n >> 1), sd = n & 1 ? 1 : -1; return { x: c.x - Math.sin(c.a) * 9 * sd, y: c.y - COASTER.H - 22 + Math.cos(c.a) * 4 * sd };
 }
 const CV_HOUSE_Y = 760;
 // The ground: grass everywhere, then {x, y, w, h, tile}: dirt patches, the paved plaza and the path from the haunted house, a boardwalk under every big ride.

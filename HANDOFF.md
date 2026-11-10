@@ -409,3 +409,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Trestle legs are NOT solid (you walk under the track freely). Spitters don't target riders (only bosses can hurt them). Bots never ride.
 - Tests 33f (map, no pockets, track clear + anti-clockwise, board / carry / one lap / cooldown / get off / 8 seats, boss from the haunted house). `SA_SITE=6 node tools/sim-waves.mjs 6` OK.
 - Preview: images now re-encoded at q60 (was q76) to fit: 14.9 MB of 16.77. Cache: client.js?v=20261110q.
+
+## Nov 10 (r): coaster polish (user)
+- Riders sit INSIDE the cart: `drawRider` draws the survivor straight after its cart (key cartKey + .5) with the legs clipped off at the rim; `coasterSeat` y = rail height - 22.
+- Stations are walkable: cvStation solids are now the skirts either side of the stairs, the back strip (train side), the ends and the booth; the stairs and deck are open. Client draws the station as FLOOR (whole sprite, under everyone) and only its canopy roof (top 33%) in the depth-sorted list. Getting off puts you on the platform.
+- Depth: track segments sort at their ground line + 14 (anything walking under the track is drawn under it); along a station (`atStation`) the track is part of the floor and the cart sorts at rail height, so people on the deck stand in front of the train.
+- Cache: client.js?v=20261110r.

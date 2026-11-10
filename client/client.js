@@ -3555,6 +3555,8 @@ function drawDynastyWorld() {
   const tall = [];
   for (const d of decor) {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
+    if (d.kind === "cvStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * .33);   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
+      if (img) tall.push({ y: d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
     if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (a?.door) pyramidFx(d, a); dynPieceFx(d, a); } });
   }
   if (coast) coasterTall(tall);
@@ -3583,10 +3585,16 @@ function drawCoasterPrompt() {
     text = me.rideCd > 0 ? `Ride again in ${Math.ceil(me.rideCd)}s` : st === near ? `[F] Ride the coaster · leaves in ${Math.ceil(state.coasterWait)}s` : "The train is on its way…"; }
   if (!text) return; ctx.save(); ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#140c08"; ctx.fillStyle = me.rideCd > 0 && !me.ride ? "#ff9d6b" : "#ffe08a"; ctx.strokeText(text, v.x, v.y - 84); ctx.fillText(text, v.x, v.y - 84); ctx.restore();
 }
+const atStation = q => coast.T.stations.some(st => Math.abs(q.x - st.x) < 262 && Math.abs(q.y - st.y) < 70);
+const cartKey = c => atStation(c) ? c.y - COASTER.H + 6 : c.y + 15;   // the cart's depth; its riders are drawn straight after it
+function drawRider(p) {   // a survivor sitting INSIDE a cart: drawn over the cart, legs cut off at its rim
+  ctx.save(); ctx.beginPath(); ctx.rect(p.x - 60, p.y - 170, 120, 170 - 19); ctx.clip(); drawSurvivor(p); ctx.restore();
+}
 function coasterTall(tall) {   // the track's pieces and the carts go into the depth-sorted list at rail height, so the cart hides its riders' legs and things in front cover it
   const T = coast.T, P = T.pts, n = P.length, H = COASTER.H;
-  for (let i = 0; i < n; i++) { const p = P[i]; if (!inView(p.x, p.y - H / 2, 90)) continue; tall.push({ y: p.y - H, draw: () => drawTrackSeg(p, P[(i + 1) % n], i) }); }
-  for (let i = COASTER.carts - 1; i >= 0; i--) { const c = coasterCart(T, coast.s, i); if (inView(c.x, c.y - H, 140)) tall.push({ y: c.y - H + 1, draw: () => drawCart(c, i) }); }
+  // depth: out in the park the track sorts at its GROUND line (+14), so whoever walks under it is drawn under it; along a station's platform it is part of the floor (people on the deck stand in front of the rails)
+  for (let i = 0; i < n; i++) { const p = P[i]; if (!inView(p.x, p.y - H / 2, 90)) continue; tall.push({ y: atStation(p) ? -1e6 : p.y + 14, draw: () => drawTrackSeg(p, P[(i + 1) % n], i) }); }
+  for (let i = COASTER.carts - 1; i >= 0; i--) { const c = coasterCart(T, coast.s, i); if (inView(c.x, c.y - H, 140)) tall.push({ y: cartKey(c), draw: () => drawCart(c, i) }); }
 }
 function drawTrackSeg(p0, p1, i) {
   const H = COASTER.H, dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len * .6, line = (x0, y0, x1, y1, w, c) => { ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
@@ -3892,7 +3900,7 @@ function drawWorldObjects(extra) {
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
-  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
+  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) items.push({ y: cartKey(coasterCart(coast.T, coast.s, (p0.ride - 1) >> 1)) + .5, draw: () => drawRider(p) }); else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything

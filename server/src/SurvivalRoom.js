@@ -2881,7 +2881,7 @@ export class SurvivalRoom extends Room {
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
     const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid); C.cd.set(sid, Date.now() + COASTER.cd * 1000);
     if (!p) return; p.ride = 0;
-    if (C.wait > 0) { const st = C.T.stations[C.next]; p.x = st.x + rand(-90, 90); p.y = st.y + 150 + rand(0, 40); } else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
+    if (C.wait > 0) { const st = C.T.stations[C.next]; p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); }   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
     this.solveCollisions(p); this.broadcast("coaster", { k: "off", id: sid });
   }
   updateCoaster(dt) {
