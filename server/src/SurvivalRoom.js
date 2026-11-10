@@ -94,9 +94,9 @@ const SCREAMER = {
 //   THE SUNDERING at 45% HP: stops (can't be hurt) and slowly separates into FIVE spawn (4.2s).
 //   THE FIVE     5 fast hunters, each with its own HP, each after a different survivor; they pounce. Every one that falls makes the rest faster.
 const ABOM = {
-  hp: 2900, speed: 62, radius: 46, dmg: 22, splitAt: .45,
+  hp: 3900, speed: 74, radius: 46, dmg: 22, splitAt: .45,
   slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 300, hw: 60, mult: 1.1, push: 110, cd: 3.2 },
-  roll: { first: 8, cd: 13, wind: 1.0, speed: 540, max: 950, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
+  roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, reach: 1500, bounces: 3, leg: 900, lastLeg: 380, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
   spew: { first: 4, cd: 9, trigger: 400, wind: .6, dur: 1.3, total: 2.2, len: 380, arc: .36, every: .2, mult: .3, puddles: [130, 235, 340], pr: 58, life: 7, pmult: .22, pevery: .5 },
   sunder: { len: 4.2, fan: [[-104, 8], [-52, -8], [0, -16], [52, -8], [104, 8]] },
   spawn: { hpFrac: .13, speed: 232, radius: 20, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 58, mult: 1, cd: 2.0 } },
@@ -575,6 +575,12 @@ export class SurvivalRoom extends Room {
       this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
     });
     // Skip the horde and go straight to the Butcher intro. Solo preview, or the host in an online room.
+    this.onMessage("debugMorph", client => {   // test: the Abomination at the moment he tears into the Five (spawns him next to you if he isn't here)
+      const p = this.state.players.get(client.sessionId); if ((!this.solo && client.sessionId !== this.state.hostId) || !p || this.state.phase !== "playing") return;
+      let z = [...this.state.zombies.values()].find(o => o.kind === "abomination");
+      if (!z) { const was = this.state.explore; this.state.explore = false; this.spawnZombie(true, "abomination"); this.state.explore = was; z = [...this.state.zombies.values()].pop(); if (z?.kind !== "abomination") return; z.x = clamp(p.x + 320, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); }
+      z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
+    });
     this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
       const w = Math.round(Number(data?.wave)), want = w >= 4 && w <= 48 && w % 4 === 0 ? w : 0;
@@ -2369,6 +2375,12 @@ export class SurvivalRoom extends Room {
     if (!m) { m = { slamReady: now + 1500, rollReady: now + A.roll.first * 1000, spewReady: now + A.spew.first * 1000, roll: null, spewTick: 0, spewDone: false }; this.bossMem.set(z.id, m); }
     return m;
   }
+  abomWall(z, x, y) {   // would his rolling body be inside something solid here? (map edge, map pieces, tower, generator, safehouses)
+    const pad = z.radius * .55; if (x < 50 || y < 50 || x > this.A.width - 50 || y > this.A.height - 50 || this.blockedByMap(x, y, pad)) return true;
+    if (Math.abs(x - this.A.cx) < TOWER_HALF + pad && Math.abs(y - this.A.cy) < TOWER_HALF + pad) return true;
+    if (Math.abs(x - this.A.cx - GEN_OFF.x) < GEN_OFF.h + pad && Math.abs(y - this.A.cy - GEN_OFF.y) < GEN_OFF.h + pad) return true;
+    return this.safeBoxes.some(b => Math.abs(x - b.x) < b.hw + pad && Math.abs(y - b.y) < b.hh + pad);
+  }
   abomTargets() { return [...this.state.players.values()].filter(p => p.alive && !this.untouchable(p) && !(p.shadow > 0)); }
   abomThink(z, dt, now, taunted) {
     const A = ABOM, m = this.abmem(z, now);
@@ -2389,11 +2401,16 @@ export class SurvivalRoom extends Room {
         this.broadcast("abom", { k: "slamHit", x: Math.round(z.x + c * A.slam.len * .55), y: Math.round(z.y + sn * A.slam.len * .55) });
       }
       if (act === "roll" && m.roll && t1 >= A.roll.wind) {
-        const R = m.roll, step = Math.min(A.roll.speed * dt, R.left), nx = z.x + Math.cos(R.a) * step, ny = z.y + Math.sin(R.a) * step, pad = z.radius * .55;
-        const solid = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF + pad, hh: TOWER_HALF + pad }, { x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h + pad, hh: GEN_OFF.h + pad }, ...this.safeBoxes.map(b => ({ x: b.x, y: b.y, hw: b.hw + pad, hh: b.hh + pad }))];
-        const wall = nx < 50 || ny < 50 || nx > this.A.width - 50 || ny > this.A.height - 50 || this.blockedByMap(nx, ny, pad) || solid.some(b => Math.abs(nx - b.x) < b.hw && Math.abs(ny - b.y) < b.hh);
-        if (wall) {   // rolled into something solid: dazed
-          m.roll = null; this.startAct(z, "daze", A.roll.daze); this.state.message = "THE ABOMINATION IS DAZED: hit it now!"; this.broadcast("abom", { k: "daze", id: z.id, x: Math.round(z.x), y: Math.round(z.y), len: A.roll.daze }); return;
+        const R = m.roll, step = Math.min(A.roll.speed * dt, R.left), nx = z.x + Math.cos(R.a) * step, ny = z.y + Math.sin(R.a) * step;
+        const daze = () => { m.roll = null; this.startAct(z, "daze", A.roll.daze); this.state.message = "THE ABOMINATION IS DAZED: hit it now!"; this.broadcast("abom", { k: "daze", id: z.id, x: Math.round(z.x), y: Math.round(z.y), len: A.roll.daze }); };
+        if (this.abomWall(z, nx, ny)) {   // rolled into something solid: he bounces off it (3 times), and the last leg ends with him dazed
+          if (R.bounces >= A.roll.bounces) return daze();
+          const bx = this.abomWall(z, nx, z.y), by = this.abomWall(z, z.x, ny);
+          R.a = bx && !by ? Math.PI - R.a : by && !bx ? -R.a : R.a + Math.PI; R.a = Math.atan2(Math.sin(R.a), Math.cos(R.a));
+          R.bounces++; R.hit = new Set(); z.aim = R.a; let free = 0; while (free < A.roll.leg && !this.abomWall(z, z.x + Math.cos(R.a) * (free + 20), z.y + Math.sin(R.a) * (free + 20))) free += 20;
+          if (free < 20) return daze();   // wedged in a corner
+          R.left = R.bounces >= A.roll.bounces ? Math.min(free, A.roll.lastLeg) : A.roll.leg;
+          this.broadcast("abom", { k: "bounce", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(R.a * 100) / 100, len: Math.round(Math.min(free, R.left)), n: R.bounces, hw: A.roll.hitR }); return;
         }
         z.x = nx; z.y = ny; R.left -= step;
         for (const p of this.state.players.values()) {
@@ -2402,7 +2419,7 @@ export class SurvivalRoom extends Room {
           this.moveWithCollision(p, -Math.sin(R.a) * side * A.roll.push, Math.cos(R.a) * side * A.roll.push);
         }
         for (const st of this.state.structures.values()) if (["barricade", "fence", "mine", "flameTrap", "turret"].includes(st.kind) && distance(z, st) < A.roll.hitR + 10) { st.hp -= 400; if (st.hp <= 0) this.state.structures.delete(st.id); }   // deployables in his path get crushed
-        if (R.left <= 0) { m.roll = null; this.startAct(z, "unroll", A.roll.end); }
+        if (R.left <= 0) { if (R.bounces > 0) return daze(); m.roll = null; this.startAct(z, "unroll", A.roll.end); }   // bounced: the roll ends with him dazed. Hit nothing: he just gets up
         return;
       }
       if (act === "spew" && t1 >= A.spew.wind && t1 <= A.spew.wind + A.spew.dur) {
@@ -2429,8 +2446,9 @@ export class SurvivalRoom extends Room {
     z.targetId = near.sessionId; z.aim = a;
     if (can.length) {
       if (now >= m.rollReady && d > 180 && d < A.roll.max) {
-        m.rollReady = now + A.roll.cd * 1000; m.roll = { a, left: Math.min(A.roll.max, d + 320), hit: new Set() };
-        this.startAct(z, "roll", A.roll.wind + m.roll.left / A.roll.speed + .2, a); this.broadcast("abom", { k: "roll", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(a * 100) / 100, len: Math.round(m.roll.left), wind: A.roll.wind, hw: A.roll.hitR }); return;
+        m.rollReady = now + A.roll.cd * 1000; let free = 0; while (free < A.roll.reach && !this.abomWall(z, z.x + Math.cos(a) * (free + 20), z.y + Math.sin(a) * (free + 20))) free += 20;
+        m.roll = { a, left: free >= A.roll.reach ? Math.min(A.roll.max, d + 320) : free + 40, hit: new Set(), bounces: 0 };   // something solid ahead: he rolls all the way into it
+        this.startAct(z, "roll", 30, a); this.broadcast("abom", { k: "roll", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(a * 100) / 100, len: Math.round(Math.min(free, m.roll.left)), wind: A.roll.wind, hw: A.roll.hitR }); return;
       }
       if (now >= m.spewReady && d < A.spew.trigger) {
         m.spewReady = now + A.spew.cd * 1000; m.spewDone = false; m.spewTick = 0; this.startAct(z, "spew", A.spew.total, a);
@@ -2482,7 +2500,7 @@ export class SurvivalRoom extends Room {
     this.abFx.puddles = this.abFx.puddles.filter(q => {
       if (now >= q.until) return false;
       for (const p of this.state.players.values()) {
-        if (!p.alive || this.untouchable(p) || hyp(p.x - q.x, (p.y + 14 - q.y) / .7) > q.r) continue;
+        if (!p.alive || this.untouchable(p) || this.state.vehicles.get(p.sessionId)?.kind === "heli" || hyp(p.x - q.x, (p.y + 14 - q.y) / .7) > q.r) continue;
         if (now < (q.hit.get(p.sessionId) || 0)) continue; q.hit.set(p.sessionId, now + S.pevery * 1000); this.hiveHurt(p, q.dmg); p.slowed = Math.max(p.slowed || 0, .6);
       }
       return true;
@@ -2847,7 +2865,7 @@ export class SurvivalRoom extends Room {
   butcher_hookback() {}
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride") || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -3293,7 +3311,7 @@ export class SurvivalRoom extends Room {
     for (const k of this.enraged) if (!this.state.zombies.has(k)) this.enraged.delete(k);
   }
   killZombie(z, killer) {
-    if (z.kind === "abomination") { this.abomSplit(z); return; }   // damage that skipped hitZombie (turrets, fire): he still splits, he never dies as one
+    if (z.kind === "abomination") { z.hp = Math.max(1, Math.min(z.maxHp * ABOM.splitAt * .98, z.hp > 0 ? z.hp : Infinity)); return; }   // damage that skipped hitZombie (traps, blasts): he never dies as one, the Sundering always plays first (abomThink starts it)
     this.state.zombies.delete(z.id);
     const bossKill = z.boss && !(z.kind === "abomSpawn" && [...this.state.zombies.values()].some(o => o.kind === "abomSpawn"));   // the Five: only the last one is the boss kill
     if (z.kind === "abomSpawn" && !bossKill) { const left = [...this.state.zombies.values()].filter(o => o.kind === "abomSpawn"); for (const o of left) o.speed *= 1 + ABOM.spawn.rage; if (left.length === 1) left[0].enraged = true; this.state.message = `${left.length} of the Five left${left.length === 1 ? ": it's ENRAGED" : ": they're getting faster"}!`; } this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
@@ -3504,14 +3522,16 @@ export class SurvivalRoom extends Room {
     const players = [...this.state.players.values()].filter(p => p.alive);
     const machines = [...[...this.state.robots.values()].filter(r => r.kind !== "worker"), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
     const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
+    this.bossUp = false; for (const z of this.state.zombies.values()) if (z.boss) { this.bossUp = true; break; }   // a boss can reach Sofea's helicopter (ordinary zombies can't): see untouchable()
+    const seenBoss = players.filter(p => !(p.shadow > 0) && !this.away.has(p.sessionId));
     const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId) && !this.away.has(p.sessionId));   // invisible Raven / Sofea up in her helicopter / someone reconnecting: zombies can't get them
     const shelter = this.shelterGuard();   // survivors inside a finished safehouse: zombies outside can't touch them
     if (this.abFx.puddles.length) this.abomPuddles(now);
     const barricades = []; for (const st of this.state.structures.values()) if (st.kind === "barricade") barricades.push(st);
-    const seenXY = seen.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
+    const seenXY = seen.map(p => [p.x, p.y, p]), seenBossXY = seenBoss.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
     for (const z of [...this.state.zombies.values()]) {
       const taunted = this.tauntTarget(z, now);
-      if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seen); continue; }
+      if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seenBoss); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
       if (z.kind === "pyre") { this.pyreThink(z, dt, now, taunted); continue; }
       if (z.kind === "screamer") { this.screamerThink(z, dt, now, taunted); continue; }
@@ -3520,7 +3540,7 @@ export class SurvivalRoom extends Room {
       if(z.boss&&!this.enraged.has(z.id)&&z.hp/z.maxHp<.3){this.enraged.add(z.id);z.speed*=1.35;z.damage*=1.25;this.state.message="The boss is ENRAGED!";}
       if (!players.length) break;
       const zx = z.x, zy = z.y; let nearestPlayer = null, nd = Infinity;
-      for (const q of seenXY) { const dx = q[0] - zx, dy = q[1] - zy, d2 = dx * dx + dy * dy; if (d2 < nd) { nd = d2; nearestPlayer = q[2]; } }
+      for (const q of (z.boss ? seenBossXY : seenXY)) { const dx = q[0] - zx, dy = q[1] - zy, d2 = dx * dx + dy * dy; if (d2 < nd) { nd = d2; nearestPlayer = q[2]; } }
       const tower = {x: this.A.cx, y: this.A.cy};
       let target = taunted ? taunted : z.boss ? nearestPlayer   // War Cry: Briggs first; bosses hunt survivors only
         : z.role === "hunter" ? (nearestPlayer || tower) : tower;
@@ -3579,7 +3599,7 @@ export class SurvivalRoom extends Room {
           // mutants only hurt survivors with their charged whip (above)
         } else if (target.sessionId) {
           if (!target.alive) continue;   // went down a moment ago (another zombie got them this tick): pick a new target next tick
-          if (this.untouchable(target)) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered: the bite misses
+          if (this.untouchable(target) || (!z.boss && flying(target.sessionId))) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered / up in the helicopter (only bosses reach it): the bite misses
           const dealt = this.armorHit(target, z.damage, z); target.hp-=dealt; target.damageTaken+=dealt;
           if(target.hp<=0)this.downPlayer(target);
         } else {
@@ -3596,7 +3616,7 @@ export class SurvivalRoom extends Room {
     this.applyVehicleGuard(guard);
     const hiveAlive = [...this.state.zombies.values()].some(z => z.kind === "hivemind");
     if (this.state.elapsed >= 90 && hiveAlive && !this.hiveNag) { this.hiveNag = true; this.state.message = "Kill THE HIVEMIND to end the wave!"; }
-    if (this.state.elapsed >= 90 && !hiveAlive && this.state.waveType === "normal" && this.state.phase === "playing") {
+    if (this.state.elapsed >= 90 && !hiveAlive && !this.bossUp && this.state.waveType === "normal" && this.state.phase === "playing") {   // a test-spawned boss (Esc menu) holds the wave open: the 90s timer used to wipe him mid-fight
       this.state.phase = this.state.stage >= 50 && this.state.waveMode !== "ascension" ? "victory" : "cleared"; if (this.state.phase === "cleared") this.beginBreak();
       this.state.message = `Wave ${this.state.stage} survived! Host can launch the next wave.`;
     }

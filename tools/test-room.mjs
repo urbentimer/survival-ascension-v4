@@ -1345,8 +1345,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     ok(ev.some(e => e.k === "slam") && p.hp < p.maxHp && q.hp === q.maxHp, `flail slam: hits the line in front (${Math.round(p.maxHp - p.hp)} dmg), not beside him`); }
   { const z = fresh(); only(z, "rollReady"); heal(); p.x = 1900; p.y = 1500; far(q); const x0 = z.x; step(900); const curl = z.x; step(1200);
     ok(ev.some(e => e.k === "roll") && curl === x0 && z.x > x0 + 300 && p.hp < p.maxHp, `gut roll: 1s curl, then he rolls through you (${Math.round(z.x - x0)}px, ${Math.round(p.maxHp - p.hp)} dmg)`); }
-  { const z = fresh(); only(z, "rollReady"); heal(); p.x = 2100; p.y = 1500; far(q); room.setMapBoxes([{ x: 1800, y: 1500, hw: 30, hh: 200 }]); p.x = 1700; step(2000);
-    ok(z.act === "daze" && ev.some(e => e.k === "daze"), "rolls into a building: DAZED"); const h = z.hp; room.hitZombie(z, p, 100); ok(Math.round(h - z.hp) === 150, "dazed: takes x1.5 damage"); room.setMapBoxes([]); }
+  { const z = fresh(); only(z, "rollReady"); heal(); p.x = 2100; p.y = 1500; far(q); room.setMapBoxes([{ x: 1800, y: 1500, hw: 30, hh: 200 }, { x: 1200, y: 1500, hw: 30, hh: 200 }]); p.x = 1700; step(1600);
+    ok(z.act === "roll" && ev.filter(e => e.k === "bounce").length >= 1 && !ev.some(e => e.k === "daze"), "rolls into a building: bounces off it, not dazed yet"); step(4000);
+    ok(ev.filter(e => e.k === "bounce").length === 3 && z.act === "daze" && ev.some(e => e.k === "daze"), `3 bounces, then DAZED (${ev.filter(e => e.k === "bounce").length} bounces)`); const h = z.hp; room.hitZombie(z, p, 100); ok(Math.round(h - z.hp) === 150, "dazed: takes x1.5 damage"); room.setMapBoxes([]); }
   { const z = fresh(); only(z, "spewReady"); z.speed = 0; heal(); p.x = 1700; p.y = 1500; q.x = 1500; q.y = 1250; step(1500); const d1 = p.maxHp - p.hp;
     ok(ev.some(e => e.k === "spew") && d1 > 0 && q.hp === q.maxHp && room.abFx.puddles.length === 3, `lava spew: burns the cone (${Math.round(d1)} dmg), leaves 3 puddles`);
     room.abmem(z, t).spewReady = t + 1e9; step(1500); p.x = z.x + 235; p.y = z.y - 14; const h = p.hp; step(1200); ok(p.hp < h && p.slowed > 0, "standing in a lava puddle burns and slows"); step(8000); ok(room.abFx.puddles.length === 0, "puddles cool after 7s"); }
@@ -1361,6 +1362,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     const sp0 = five[1].speed; room.hitZombie(five[0], p, 1e6); ok(!room.state.bossDead && five[1].speed > sp0, "one falls: not a boss kill yet, the rest speed up");
     for (const o of five.slice(1, 4)) room.hitZombie(o, p, 1e6); ok(five[4].enraged && !room.state.bossDead, "the last one is enraged");
     room.hitZombie(five[4], p, 1e6); ok(room.state.bossDead, "all five down: the boss is dead"); }
-  { const z = fresh(); z.hp = 1; room.killZombie(z, p); ok([...room.state.zombies.values()].filter(o => o.kind === "abomSpawn").length === 5, "killed by something else (turret, fire): he still splits"); }
+  room.state.phase = "playing"; room.state.bossDead = false; room.state.waveType = "normal"; room.bossOverAt = 0;
+  { const z = fresh(); room.state.elapsed = 500; step(300); ok(room.state.phase === "playing" && room.state.zombies.has(z.id), "a test-spawned boss holds a normal wave open past 90s (it used to vanish)"); }
+  { const z = fresh(); z.speed = 0; far(p); far(q); z.hp = -50; room.killZombie(z, p); ok(room.state.zombies.has(z.id) && z.hp > 0, "killed by something else (trap, blast): he doesn't vanish"); step(200); step(200); ok(z.act === "sunder", "...the Sundering plays first"); step(4400);
+    ok(!room.state.zombies.has(z.id) && [...room.state.zombies.values()].filter(o => o.kind === "abomSpawn").length === 5, "...then the Five"); }
+  { const z = fresh(); z.speed = 0; heal(); only(z, "slamReady"); p.characterClass = "operator"; p.x = 1650; p.y = 1500; far(q); room.state.vehicles.clear?.(); const ok1 = room.callVehicle(p, "heli"); for (let i = 0; i < 100 && room.state.vehicles.get(p.sessionId)?.phase !== "ride"; i++) step(50);
+    const v = room.state.vehicles.get(p.sessionId); p.x = 1650; p.y = 1500; if (v) { v.x = p.x; v.y = p.y; } p.hp = p.maxHp; ev.length = 0; room.abmem(z, t).slamReady = 0; z.act = ""; z.slam = 0; step(2600);
+    ok(ok1 && v?.phase === "ride" && ev.some(e => e.k === "slam") && p.hp < p.maxHp, `bosses attack Sofea in her helicopter (${Math.round(p.maxHp - p.hp)} dmg)`);
+    room.state.zombies.clear(); room.bossOverAt = 0; room.state.elapsed = 0; step(100); ok(room.untouchable(p), "no boss around: ordinary zombies still can't reach the helicopter"); room.state.vehicles.delete(p.sessionId); }
+  { const z0 = fresh(); room.state.zombies.clear(); room.state.phase = "playing"; room.bossOverAt = 0; room.state.elapsed = 0; room.state.hostId = A.sessionId; send(A, "debugMorph"); step(100); const z = [...room.state.zombies.values()].find(o => o.kind === "abomination"); ok(z?.act === "sunder", "debugMorph: spawns him already tearing apart"); }
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

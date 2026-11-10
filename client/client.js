@@ -217,7 +217,7 @@ const BOSS_INFO = {
     lore: "Five bodies fused into one lump of black rock and lava. Slow and heavy... until it tears itself apart.",
     skills: [
       ["💥", "Flail Slam", "His giant arm smashes a long line in front of him. Step out of the marked line.", "#ff8a3d"],
-      ["🌑", "Gut Roll", "Curls into a ball and rolls down a marked lane, crushing your deployables. Make him roll into a building or the tower and he's DAZED for 3s (×1.5 damage).", "#ffb36b"],
+      ["🌑", "Gut Roll", "Curls into a ball and rolls down a marked lane, crushing your deployables. He bounces off buildings 3 times, then stops DAZED for 3s (×1.5 damage). Watch the lane after every bounce.", "#ffb36b"],
       ["🌋", "Lava Spew", "A cone of lava, then burning puddles on the ground that slow you. Don't fight in them.", "#ff5a1f"],
       ["🩸", "The Sundering", "At 45% health he stops, can't be hurt, and slowly tears into FIVE. Use those seconds to back off and spread out.", "#ffd36b"],
       ["🐾", "The Five", "Five fast hunters, each with its own health, each chasing a different survivor and pouncing. Every one you kill makes the rest faster. Kill all five.", "#ff3737"],
@@ -254,6 +254,7 @@ $("skipButcher").onclick = () => { room?.send("debugBoss", { wave: 4 }); closePa
 $("skipPyre").onclick = () => { room?.send("debugBoss", { wave: 8 }); closePanels(); };
 $("skipScreamer").onclick = () => { room?.send("debugBoss", { wave: 12 }); closePanels(); };
 $("skipAbom").onclick = () => { room?.send("debugBoss", { wave: 16 }); closePanels(); };
+$("skipMorph").onclick = () => { room?.send("debugMorph"); closePanels(); };
 $("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
@@ -287,6 +288,7 @@ function renderState() {
   $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipScreamer").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipAbom").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
+  $("skipMorph").classList.toggle("hidden", !(SOLO_PREVIEW || host) || state.phase !== "playing");
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
   if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
   txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
@@ -1483,6 +1485,7 @@ function onAbom(m) {
   if (m.k === "slam" || m.k === "roll" || m.k === "spew" || m.k === "lunge") abTele.set(m.id, { ...m, t });
   if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
   else if (m.k === "roll") playSfx("roar", m.x, m.y, .5);
+  else if (m.k === "bounce") { abTele.set(m.id, { ...m, k: "roll", wind: .25, t }); fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1, from: 8, t }); shake(8, 300); playSfx("boom", m.x, m.y, .7); if (m.n === 3) feedMsg("Last bounce: he'll be DAZED where he stops!"); }
   else if (m.k === "daze") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1.3, t }); shake(11, 450); playSfx("boom", m.x, m.y, .9); feedMsg("THE ABOMINATION IS DAZED: hit it now (×1.5)!"); }
   else if (m.k === "spew") fx.push({ type: "abom", k: "lava", id: m.id, a: m.a, len: m.len, wind: m.wind, dur: m.dur, t });
   else if (m.k === "puddles") { for (const [x, y] of m.list) abPuddles.push({ x, y, r: m.r, t, life: m.life * 1000 }); }

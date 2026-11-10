@@ -323,3 +323,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User sent walk.png (5x4: stand, step, step, stand), a redone spew.png (back view fixed; cols stand, step, spewing, drool; col 1 unused) and a new portrait. Re-cut with the extractor; `abImgs.walk` is used when he has no act (idle = col 0).
 - The SLAM sheet still has the old back view (only walk + spew were redone).
 - Cache: client.js?v=20261110d.
+
+## Nov 10 (e): Abomination fixes from the user's playtest
+- Speed 62 -> 74 (+20%), base hp 2900 -> 3900.
+- "Dies all of a sudden halfway": a boss spawned from the Esc menu during a NORMAL wave was wiped when the 90s wave timer ended. Now any living boss (`this.bossUp`) holds a normal wave open. Also `killZombie` on the Abomination (raw damage from traps / blasts) no longer splits him instantly: hp is set to the split point and the Sundering plays.
+- Bosses attack Sofea in her helicopter: `untouchable()` ignores the helicopter while a boss is alive (`this.bossUp`, set each tick); bosses target her (`seenBoss`). Ordinary zombies still can't reach her (bite check + `seen`). She takes the usual 80% in the helicopter. Lava puddles don't burn it.
+- Gut Roll: rolls until it hits something solid (`abomWall`), bounces 3 times (`ABOM.roll.bounces`, broadcast "abom" k "bounce" with the new lane), and the leg after the third bounce ends DAZED. Hits nothing at all: he just gets up. Cooldown 13 -> 15s.
+- Esc menu: "Abomination: skip to the split into Five" (`debugMorph`, host / solo): spawns him if needed and sets him to the split point.
+- Sims (8 / 4 / 2 players): 172s / 215s / 363s. Cache: client.js?v=20261110e.
