@@ -272,7 +272,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
-const DEFAULT_SITE = 3;   // new rooms start on Fallen Dynasty (user, Nov 5); the host can still switch in the lobby
+const DEFAULT_SITE = 4;   // new rooms start on Whiteout Station (user, Nov 10; before that Fallen Dynasty = 3); the host can still switch in the lobby
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }];   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)

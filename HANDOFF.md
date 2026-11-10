@@ -363,3 +363,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 10 (j): Whiteout Station ground patches blend into the snow
 - User: the tiles looked "boxy and harsh" next to each other. Client `softShape` / `softPatch` (whiteout only): every pad / pond is a wobbly rounded shape (ponds: blobs), the snow pattern is stroked back over its edge in 9 soft bands, and snow drifts lie across the border. Shapes are seeded from the patch position (cached on the rect as `_soft`), so all ground chunks agree. No hard road-edge lines on this map.
 - Cache: client.js?v=20261110j.
+
+## Nov 10 (k): Whiteout Station polish (user's list)
+- DEFAULT_SITE = 4: new rooms start on Whiteout Station.
+- The tower stands in the open: keep-out around it is now 1000 x ~630 (was 800 x 540) and also counts the roof of a building below it (`offYard` uses the piece's `ov`); yard pad 860 x 560, lamps moved out.
+- Roofs no longer cover the lane behind them: each footprint box carries `ov` (how far the picture rises above the footprint, x0.8); `dist` subtracts it for the piece standing in front, so the visible lane is >= WO_GAP. Annexes never go behind a building.
+- "Can't walk between a truck and a tank": annexes used to sit 5px from their host (looked like a gap, was solid). They now stand WO_SQUEEZE = 46px away: a survivor squeezes through, a boss goes round (pocket checks unchanged).
+- Lighter tint for this map only: `SPOOKY_SNOW` (brightness .74 vs .58), applied to images flagged `_snow` (Whiteout pieces + its tiles).
+- Sims on the new default: waves OK, Butcher 91s, Abomination 167s (4 players). Cache: client.js?v=20261110k.

@@ -150,25 +150,26 @@ Object.assign(MAP_SOLID, {
   wFloodlight: { ox: 0, oy: -18, hw: 42, hh: 13 }, wLamp: { ox: -8, oy: -8, hw: 10, hh: 7 }, wWindsock: { ox: -30, oy: -8, hw: 8, hh: 6 }, wBeacon: { ox: 0, oy: -14, hw: 28, hh: 11 },
   wFence: { ox: 0, oy: -16, hw: 70, hh: 10 }, wSign: { ox: 0, oy: -12, hw: 46, hh: 8 }, wFlag: { ox: -30, oy: -8, hw: 8, hh: 6 }, wSandbags: woBox("wSandbags", .46, .5) });
 // Whiteout Station is laid out ORGANICALLY (Nov 10, user: "more random, not everything along one street"): pieces are dropped at random
-// spots, biggest first, and kept only if they leave a lane of at least WO_GAP to everything else (or sit flush against a building as an
-// annexe), so the lanes twist between buildings of every size instead of running in straight rows.
-const WO_GAP = 104;   // narrowest lane: a boss's path body (radius 28, 40px path grid) always fits
+// spots, biggest first, and kept only if they leave a lane of at least WO_GAP to everything else (or stand close beside a building as an
+// annexe, a squeeze-through gap apart), so the lanes twist between buildings of every size instead of running in straight rows.
+const WO_GAP = 104, WO_SQUEEZE = 46;   // SQUEEZE: the gap left beside an annexe: a survivor fits through (user: "you can't walk between a truck and a tank"), a boss goes round   // narrowest lane: a boss's path body (radius 28, 40px path grid) always fits
 // The ground: snow everywhere, then these rectangles {x, y, w, h, tile}: the tower's yard, a foundation pad under every big building, frozen ponds.
 export function whiteoutGround(WW, WH, layout = []) {
-  const cx = WW / 2, cy = WH / 2, R = [{ x: cx - 350, y: cy - 225, w: 700, h: 450, tile: "concrete", road: 1 }], solid = [];
+  const cx = WW / 2, cy = WH / 2, R = [{ x: cx - 430, y: cy - 270, w: 860, h: 560, tile: "concrete", road: 1 }], solid = [];
   for (const d of layout) for (const s of solidList(d.kind)) { const b = { x0: d.x + (d.flip ? -s.ox : s.ox) - s.hw, x1: d.x + (d.flip ? -s.ox : s.ox) + s.hw, y0: d.y + s.oy - s.hh, y1: d.y + s.oy + s.hh }; solid.push(b);
     if (s.hw >= 150 && !/wWall|wGate|wPlane/.test(d.kind)) R.push({ x: b.x0 - 26, y: b.y0 - 20, w: b.x1 - b.x0 + 52, h: b.y1 - b.y0 + 46, tile: /Hangar|Rig|Dome/.test(d.kind) ? "metal" : "concrete", road: 1 }); }
   let seed = 77; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let i = 0, t = 0; i < 14 && t < 400; t++) { const w = 170 + rnd() * 200, h = 100 + rnd() * 90, x = 60 + rnd() * (WW - w - 120), y = 330 + rnd() * (WH - h - 380);
-    if (Math.abs(x + w / 2 - cx) < 520 && Math.abs(y + h / 2 - cy) < 380) continue;
-    if (solid.some(b => b.x0 < x + w + 30 && b.x1 > x - 30 && b.y0 < y + h + 30 && b.y1 > y - 30)) continue;
+    if (Math.abs(x + w / 2 - cx) < 640 && Math.abs(y + h / 2 - cy) < 440) continue;
+    if (solid.some(b => b.x0 < x + w + 30 && b.x1 > x - 30 && b.y0 < y + h + 30 && b.y1 > y - 30) || R.some(o => o.tile === "ice" && o.x < x + w + 60 && o.x + o.w > x - 60 && o.y < y + h + 60 && o.y + o.h > y - 60)) continue;
     R.push({ x, y, w, h, tile: "ice" }); i++; }
   return R;
 }
 export function buildWhiteoutLayout(WW, WH, start = 2040) {
   let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
   const cx = WW / 2, cy = WH / 2, out = [], boxes = [], G = WO_GAP, WALL_Y = 214;
-  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id }));
+  // ov = how far the picture rises above its footprint (roof, antennas): the piece BEHIND it must stand that much further back, or the roof would cover the lane
+  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id, ov: s.hw > 50 && !Array.isArray(MAP_SOLID[k]) ? Math.max(0, WO_SIZE[k][1] + s.oy - s.hh) * .8 : 0 }));
   // walkability on a 20px grid: can a body of radius R get from the tower yard to every place it fits?
   const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
   const sealed = R => { const g = new Uint8Array(GW * GH);
@@ -178,22 +179,24 @@ export function buildWhiteoutLayout(WW, WH, start = 2040) {
     for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
     return g.includes(0); };
   const walkable = () => !sealed(22) && !sealed(30);   // no pocket a survivor or a boss could be shut in (or shut out of)
-  const dist = (a, b) => Math.hypot(Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), Math.max(a.y0 - b.y1, b.y0 - a.y1, 0));
+  const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1;   // a below b: a's roof pokes up toward b (and the other way round)
+    return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
+  const raw = (a, b) => Math.hypot(Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), Math.max(a.y0 - b.y1, b.y0 - a.y1, 0));
   const inMap = (q, m) => q.x0 >= m && q.x1 <= WW - m && q.y1 <= WH - m * .6 && q.y0 >= WALL_Y + m;
-  const offYard = q => !(q.x0 < cx + 400 && q.x1 > cx - 400 && q.y0 < cy + 270 && q.y1 > cy - 270);
+  const offYard = q => !(q.x0 < cx + 500 && q.x1 > cx - 500 && q.y0 < cy + 300 + (q.ov || 0) && q.y1 > cy - 330);   // the radio tower stands in the open: nothing close beside it, and no roof poking up into its yard from below
   // gap = room to every other piece; host = the piece it may sit flush against
   const place = (k, x, y, flip, gap, host = -1, edge = 96) => {
     x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
-    if (!b.every(q => inMap(q, edge) && offYard(q) && boxes.every(z => z.id === host ? dist(q, z) >= 3 : dist(q, z) >= gap))) return false;
+    if (!b.every(q => inMap(q, edge) && offYard(q) && boxes.every(z => z.id === host ? raw(q, z) >= WO_SQUEEZE - 4 : dist(q, z) >= gap))) return false;
     out.push({ kind: k, x, y, flip }); boxes.push(...b);
     if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
     return true;
   };
   const drop = (k, gap, flip = rnd() < .5) => place(k, 80 + rnd() * (WW - 160), WALL_Y + 90 + rnd() * (WH - WALL_Y - 110), flip, gap);
   const annexe = (k, gap, hosts) => {   // flush against one side of a building (never the plane / wall), sliding along it
-    const s = MAP_SOLID[k]; if (Array.isArray(s) || !hosts.length) return false; const h = pick(hosts), side = Math.floor(rnd() * 4), flip = rnd() < .5, ox = flip ? -s.ox : s.ox;
+    const s = MAP_SOLID[k]; if (Array.isArray(s) || !hosts.length) return false; const h = pick(hosts), side = Math.floor(rnd() * 3),   /* right, left, in front; never tucked behind (the host's roof would hide it) */ flip = rnd() < .5, ox = flip ? -s.ox : s.ox;
     const along = (a0, a1, half) => a1 - a0 > half * 2 ? a0 + half + rnd() * (a1 - a0 - half * 2) : (a0 + a1) / 2;
-    const bxc = side === 0 ? h.x1 + 5 + s.hw : side === 1 ? h.x0 - 5 - s.hw : along(h.x0, h.x1, s.hw), byc = side === 2 ? h.y1 + 5 + s.hh : side === 3 ? h.y0 - 5 - s.hh : along(h.y0, h.y1, s.hh);
+    const bxc = side === 0 ? h.x1 + WO_SQUEEZE + s.hw : side === 1 ? h.x0 - WO_SQUEEZE - s.hw : along(h.x0, h.x1, s.hw), byc = side === 2 ? h.y1 + WO_SQUEEZE + s.hh : along(h.y0, h.y1, s.hh);
     return place(k, bxc - ox, byc - s.oy, flip, gap, h.id);
   };
   // the perimeter wall along the top, the main gate in the middle (pieces without an id never count as hosts)
@@ -207,16 +210,16 @@ export function buildWhiteoutLayout(WW, WH, start = 2040) {
   for (let t = 0; t < 2600; t++) { const k = pick(BIG); drop(k, G + (rnd() < .35 ? rnd() * 90 : rnd() * 14), !NOFLIP[k] && rnd() < .5); }
   // medium things: on their own in the gaps, or as an annexe against a building
   const MED = ["wContainers", "wContainers", "wContainers", "wTank", "wTank", "wTankRound", "wTruck", "wTruck", "wShed", "wShed", "wSnowcat", "wDish", "wWatchtower", "wSandbags"];
-  for (let t = 0; t < 1500; t++) { const k = pick(MED); if (rnd() < .45) annexe(k, G, hostsOf()); else drop(k, G + rnd() * 20); }
+  for (let t = 0; t < 3600; t++) { const k = pick(MED); if (rnd() < .45) annexe(k, G, hostsOf()); else drop(k, G + rnd() * 20); }
   // small things; rocks, ice and pines take over toward the edges of the map
   const SMALL = ["wGenerator", "wCrates", "wCrates", "wGasRack", "wBigCrate", "wShelf", "wPipes", "wBarrels", "wForklift", "wBuggy", "wBarrier", "wFence"], WILD = ["wRocks", "wRocks", "wRocks", "wIce", "wIce", "wIce", "wRockArch", "wRockArch", "wPines", "wPines"];
-  for (let t = 0; t < 5200; t++) {
-    if (rnd() < .5) { annexe(pick(rnd() < .25 ? WILD : SMALL), G, hostsOf()); continue; }
+  for (let t = 0; t < 9000; t++) {
+    if (rnd() < .4) { annexe(pick(rnd() < .25 ? WILD : SMALL), G, hostsOf()); continue; }
     const x = 80 + rnd() * (WW - 160), y = WALL_Y + 90 + rnd() * (WH - WALL_Y - 110), far = Math.max(Math.abs(x - cx) / (WW / 2), Math.abs(y - cy) / (WH / 2));
     place(pick(far > .72 ? WILD : rnd() < .2 ? WILD : SMALL), x, y, rnd() < .5, G + rnd() * 16);
   }
   // lights and markers: lamps round the yard, then lamps / floodlights / beacons / flags tucked against buildings and out in the snow
-  for (const [dx, dy] of [[-330, -205], [330, -205], [-330, 215], [330, 215]]) { const k = dy < 0 ? "wLamp" : "wBeacon", id = out.length; out.push({ kind: k, x: cx + dx, y: cy + dy, flip: dx > 0 }); boxes.push(...bx(k, cx + dx, cy + dy, dx > 0, id)); }
+  for (const [dx, dy] of [[-400, -240], [400, -240], [-400, 262], [400, 262]]) { const k = dy < 0 ? "wLamp" : "wBeacon", id = out.length; out.push({ kind: k, x: cx + dx, y: cy + dy, flip: dx > 0 }); boxes.push(...bx(k, cx + dx, cy + dy, dx > 0, id)); }
   const TINY = ["wLamp", "wLamp", "wLamp", "wFloodlight", "wBeacon", "wMast", "wWindsock", "wFlag", "wSign"];
   for (let t = 0, n = 0; t < 900 && n < 46; t++) if (rnd() < .5 ? annexe(pick(TINY), 92, hostsOf()) : place(pick(TINY), 80 + rnd() * (WW - 160), WALL_Y + 60 + rnd() * (WH - WALL_Y - 90), rnd() < .5, 100, -1, 60)) n++;
   return out;

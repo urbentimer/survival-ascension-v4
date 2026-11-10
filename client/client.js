@@ -3440,18 +3440,19 @@ Object.assign(DYN_ART, WO_ART);   // one table for every piece-built map (kinds 
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
+const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", tint: "rgba(18,44,70,.18)" };   // Whiteout Station (user: "a little brighter"): its pieces and tiles (img._snow) get a much lighter tint
 const spookyCache = new Map();
 function spooky(img) {
   if (!img?.complete || !img.naturalWidth) return null;
   if (spookyCache.has(img)) return spookyCache.get(img);
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  const g = c.getContext("2d"); g.filter = SPOOKY.filter; g.drawImage(img, 0, 0); g.filter = "none";
-  g.globalCompositeOperation = "source-atop"; g.fillStyle = SPOOKY.tint; g.fillRect(0, 0, c.width, c.height);
+  const S = img._snow ? SPOOKY_SNOW : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
+  g.globalCompositeOperation = "source-atop"; g.fillStyle = S.tint; g.fillRect(0, 0, c.width, c.height);
   spookyCache.set(img, c); return c;
 }
 function pattern(k, scale = 1) {
