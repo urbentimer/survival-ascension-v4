@@ -96,7 +96,7 @@ const SCREAMER = {
 const ABOM = {
   hp: 3900, speed: 74, radius: 46, dmg: 22, splitAt: .45,
   slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 300, hw: 60, mult: 1.1, push: 110, cd: 3.2 },
-  roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, reach: 1500, bounces: 3, leg: 900, lastLeg: 380, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
+  roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
   spew: { first: 4, cd: 9, trigger: 400, wind: .6, dur: 1.3, total: 2.2, len: 380, arc: .36, every: .2, mult: .3, puddles: [130, 235, 340], pr: 58, life: 7, pmult: .22, pevery: .5 },
   sunder: { len: 4.2, fan: [[-104, 8], [-52, -8], [0, -16], [52, -8], [104, 8]] },
   spawn: { hpFrac: .13, speed: 232, radius: 20, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 58, mult: 1, cd: 2.0 } },
@@ -575,20 +575,17 @@ export class SurvivalRoom extends Room {
       this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
     });
     // Skip the horde and go straight to the Butcher intro. Solo preview, or the host in an online room.
-    this.onMessage("debugMorph", client => {   // test: the Abomination at the moment he tears into the Five (spawns him next to you if he isn't here)
-      const p = this.state.players.get(client.sessionId); if ((!this.solo && client.sessionId !== this.state.hostId) || !p || this.state.phase !== "playing") return;
+    this.onMessage("debugMorph", client => {   // test: the Abomination at the moment he tears into the Five (starts his boss wave if he isn't here)
+      const p = this.state.players.get(client.sessionId); if ((!this.solo && client.sessionId !== this.state.hostId) || !p || !["playing", "cleared"].includes(this.state.phase)) return;
       let z = [...this.state.zombies.values()].find(o => o.kind === "abomination");
-      if (!z) { const was = this.state.explore; this.state.explore = false; this.spawnZombie(true, "abomination"); this.state.explore = was; z = [...this.state.zombies.values()].pop(); if (z?.kind !== "abomination") return; z.x = clamp(p.x + 320, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); }
-      z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
+      if (!z) { this.morphOnArrival = true; this.skipToBoss(16); return; }   // not here: his boss card first, then he arrives already tearing apart
+      if (z.act === "sunder") return; z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
     });
     this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
-      const w = Math.round(Number(data?.wave)), want = w >= 4 && w <= 48 && w % 4 === 0 ? w : 0;
-      if (this.state.waveType !== "boss" || this.state.phase !== "playing" || (want && this.state.stage !== want)) this.jumpToWave(want || 4);
-      else if (["intro", "fight"].includes(this.state.bossPhase)) return;   // already there
-      if (!this.solo) this.state.message = "Host skipped to the boss fight";
-      this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
+      this.skipToBoss(Math.round(Number(data?.wave)));
     });
+
     // Solo preview only: kill the boss (to watch it die) or knock it to 25% HP (to see it enrage).
     this.onMessage("debugBossHp", (client, data) => {
       const p = this.state.players.get(client.sessionId), z = [...this.state.zombies.values()].find(q => q.boss) || [...this.state.zombies.values()].find(q => q.kind === "hivemind");
@@ -815,6 +812,13 @@ export class SurvivalRoom extends Room {
     if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
     else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
   }
+  skipToBoss(w) {   // straight to a boss wave's intro card (the horde is skipped)
+    const want = w >= 4 && w <= 48 && w % 4 === 0 ? w : 0;
+    if (this.state.waveType !== "boss" || this.state.phase !== "playing" || (want && this.state.stage !== want)) this.jumpToWave(want || 4);
+    else if (["intro", "fight"].includes(this.state.bossPhase)) return;   // already there
+    if (!this.solo) this.state.message = "Host skipped to the boss fight";
+    this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
+  }
   bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
   bossWaveTick(dt, now) {
     const s = this.state;
@@ -845,6 +849,7 @@ export class SurvivalRoom extends Room {
       const cx = alive.reduce((a, p) => a + p.x, 0) / alive.length, cy = alive.reduce((a, p) => a + p.y, 0) / alive.length, ang = Math.random() * Math.PI * 2;
       z.x = clamp(cx + Math.cos(ang) * 650, 60, this.A.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, this.A.height - 60); this.solveZombie(z);
     }
+    if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 330, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
     s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
   }
@@ -2403,15 +2408,6 @@ export class SurvivalRoom extends Room {
       if (act === "roll" && m.roll && t1 >= A.roll.wind) {
         const R = m.roll, step = Math.min(A.roll.speed * dt, R.left), nx = z.x + Math.cos(R.a) * step, ny = z.y + Math.sin(R.a) * step;
         const daze = () => { m.roll = null; this.startAct(z, "daze", A.roll.daze); this.state.message = "THE ABOMINATION IS DAZED: hit it now!"; this.broadcast("abom", { k: "daze", id: z.id, x: Math.round(z.x), y: Math.round(z.y), len: A.roll.daze }); };
-        if (this.abomWall(z, nx, ny)) {   // rolled into something solid: he bounces off it (3 times), and the last leg ends with him dazed
-          if (R.bounces >= A.roll.bounces) return daze();
-          const bx = this.abomWall(z, nx, z.y), by = this.abomWall(z, z.x, ny);
-          R.a = bx && !by ? Math.PI - R.a : by && !bx ? -R.a : R.a + Math.PI; R.a = Math.atan2(Math.sin(R.a), Math.cos(R.a));
-          R.bounces++; R.hit = new Set(); z.aim = R.a; let free = 0; while (free < A.roll.leg && !this.abomWall(z, z.x + Math.cos(R.a) * (free + 20), z.y + Math.sin(R.a) * (free + 20))) free += 20;
-          if (free < 20) return daze();   // wedged in a corner
-          R.left = R.bounces >= A.roll.bounces ? Math.min(free, A.roll.lastLeg) : A.roll.leg;
-          this.broadcast("abom", { k: "bounce", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(R.a * 100) / 100, len: Math.round(Math.min(free, R.left)), n: R.bounces, hw: A.roll.hitR }); return;
-        }
         z.x = nx; z.y = ny; R.left -= step;
         for (const p of this.state.players.values()) {
           if (!p.alive || R.hit.has(p.sessionId) || this.untouchable(p) || distance(z, p) > A.roll.hitR + BODY_R) continue;
@@ -2419,7 +2415,7 @@ export class SurvivalRoom extends Room {
           this.moveWithCollision(p, -Math.sin(R.a) * side * A.roll.push, Math.cos(R.a) * side * A.roll.push);
         }
         for (const st of this.state.structures.values()) if (["barricade", "fence", "mine", "flameTrap", "turret"].includes(st.kind) && distance(z, st) < A.roll.hitR + 10) { st.hp -= 400; if (st.hp <= 0) this.state.structures.delete(st.id); }   // deployables in his path get crushed
-        if (R.left <= 0) { if (R.bounces > 0) return daze(); m.roll = null; this.startAct(z, "unroll", A.roll.end); }   // bounced: the roll ends with him dazed. Hit nothing: he just gets up
+        if (R.left <= 0) { this.solveZombie(z); return daze(); }   // Nov 10 (user): the roll goes through everything but survivors, and always ends with him dazed
         return;
       }
       if (act === "spew" && t1 >= A.spew.wind && t1 <= A.spew.wind + A.spew.dur) {
@@ -2446,9 +2442,10 @@ export class SurvivalRoom extends Room {
     z.targetId = near.sessionId; z.aim = a;
     if (can.length) {
       if (now >= m.rollReady && d > 180 && d < A.roll.max) {
-        m.rollReady = now + A.roll.cd * 1000; let free = 0; while (free < A.roll.reach && !this.abomWall(z, z.x + Math.cos(a) * (free + 20), z.y + Math.sin(a) * (free + 20))) free += 20;
-        m.roll = { a, left: free >= A.roll.reach ? Math.min(A.roll.max, d + 320) : free + 40, hit: new Set(), bounces: 0 };   // something solid ahead: he rolls all the way into it
-        this.startAct(z, "roll", 30, a); this.broadcast("abom", { k: "roll", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(a * 100) / 100, len: Math.round(Math.min(free, m.roll.left)), wind: A.roll.wind, hw: A.roll.hitR }); return;
+        m.rollReady = now + A.roll.cd * 1000; let len = Math.min(A.roll.max, d + 320);
+        while (len > 120 && this.abomWall(z, z.x + Math.cos(a) * len, z.y + Math.sin(a) * len)) len -= 20;   // he rolls THROUGH buildings, but never stops inside one (or off the map)
+        m.roll = { a, left: len, hit: new Set() };
+        this.startAct(z, "roll", 30, a); this.broadcast("abom", { k: "roll", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: Math.round(a * 100) / 100, len: Math.round(m.roll.left), wind: A.roll.wind, hw: A.roll.hitR }); return;
       }
       if (now >= m.spewReady && d < A.spew.trigger) {
         m.spewReady = now + A.spew.cd * 1000; m.spewDone = false; m.spewTick = 0; this.startAct(z, "spew", A.spew.total, a);

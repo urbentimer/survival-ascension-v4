@@ -331,3 +331,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Gut Roll: rolls until it hits something solid (`abomWall`), bounces 3 times (`ABOM.roll.bounces`, broadcast "abom" k "bounce" with the new lane), and the leg after the third bounce ends DAZED. Hits nothing at all: he just gets up. Cooldown 13 -> 15s.
 - Esc menu: "Abomination: skip to the split into Five" (`debugMorph`, host / solo): spawns him if needed and sets him to the split point.
 - Sims (8 / 4 / 2 players): 172s / 215s / 363s. Cache: client.js?v=20261110e.
+
+## Nov 10 (f): smooth Sundering, boss cards from every test button, roll no longer bounces
+- Transformation: new `drawAbomSunder` (client). The 12 painted frames differ too much to cross-fade, so it's staged: swell + tremble (frames 0-2), white-hot flash that hides the tear (frames 2-5) with an ember burst, then a fade into the five REAL spawn sprites at the server's fan positions (`ABM_FAN` = `ABOM.sunder.fan`), lava strands that thin and snap, each spawn rears up. No burst at the hand-over ("split").
+- Boss cards: all four (Butcher, Pyre Priest, Screamer, Abomination) verified in the browser via the Skip buttons. The "Spawn <boss>" buttons skipped the card (they dropped the boss into a normal wave): they now start the real fight (`debugBoss` with the boss's wave), card first. `debugMorph` also goes through the card (`skipToBoss(16)` + `morphOnArrival`).
+- Gut Roll (user changed his mind on bouncing): rolls THROUGH buildings / tower, hits survivors and crushes deployables, never stops inside something solid (lane shortened), ALWAYS ends dazed 3s. "bounce" message removed.
+- Sims: 8 players 119s, 4 players 177s. Cache: client.js?v=20261110f.

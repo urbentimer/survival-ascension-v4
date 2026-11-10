@@ -217,7 +217,7 @@ const BOSS_INFO = {
     lore: "Five bodies fused into one lump of black rock and lava. Slow and heavy... until it tears itself apart.",
     skills: [
       ["💥", "Flail Slam", "His giant arm smashes a long line in front of him. Step out of the marked line.", "#ff8a3d"],
-      ["🌑", "Gut Roll", "Curls into a ball and rolls down a marked lane, crushing your deployables. He bounces off buildings 3 times, then stops DAZED for 3s (×1.5 damage). Watch the lane after every bounce.", "#ffb36b"],
+      ["🌑", "Gut Roll", "Curls into a ball and rolls down a marked lane, crushing your deployables. He rolls THROUGH buildings, so walls won't save you: step out of the lane. Where he stops he's DAZED for 3s (×1.5 damage): that's your opening.", "#ffb36b"],
       ["🌋", "Lava Spew", "A cone of lava, then burning puddles on the ground that slow you. Don't fight in them.", "#ff5a1f"],
       ["🩸", "The Sundering", "At 45% health he stops, can't be hurt, and slowly tears into FIVE. Use those seconds to back off and spread out.", "#ffd36b"],
       ["🐾", "The Five", "Five fast hunters, each with its own health, each chasing a different survivor and pouncing. Every one you kill makes the rest faster. Kill all five.", "#ff3737"],
@@ -258,7 +258,7 @@ $("skipMorph").onclick = () => { room?.send("debugMorph"); closePanels(); };
 $("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
-$("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });
+$("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { const w = { pyre: 8, screamer: 12, abomination: 16 }[b.dataset.spawn]; if (w) room?.send("debugBoss", { wave: w }); else room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });   // bosses: their real fight, boss card first
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
 $("nextStage").onclick = () => room?.send("nextStage");
 // BETWEEN WAVES (Nov 9): the break lasts until everyone's READY (60s max). The shop window can be minimized to a bar so you can move and build.
@@ -288,7 +288,7 @@ function renderState() {
   $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipScreamer").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipAbom").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("skipMorph").classList.toggle("hidden", !(SOLO_PREVIEW || host) || state.phase !== "playing");
+  $("skipMorph").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
   if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
   txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
@@ -1485,12 +1485,11 @@ function onAbom(m) {
   if (m.k === "slam" || m.k === "roll" || m.k === "spew" || m.k === "lunge") abTele.set(m.id, { ...m, t });
   if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
   else if (m.k === "roll") playSfx("roar", m.x, m.y, .5);
-  else if (m.k === "bounce") { abTele.set(m.id, { ...m, k: "roll", wind: .25, t }); fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1, from: 8, t }); shake(8, 300); playSfx("boom", m.x, m.y, .7); if (m.n === 3) feedMsg("Last bounce: he'll be DAZED where he stops!"); }
   else if (m.k === "daze") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1.3, t }); shake(11, 450); playSfx("boom", m.x, m.y, .9); feedMsg("THE ABOMINATION IS DAZED: hit it now (×1.5)!"); }
   else if (m.k === "spew") fx.push({ type: "abom", k: "lava", id: m.id, a: m.a, len: m.len, wind: m.wind, dur: m.dur, t });
   else if (m.k === "puddles") { for (const [x, y] of m.list) abPuddles.push({ x, y, r: m.r, t, life: m.life * 1000 }); }
   else if (m.k === "sunder") { abTele.set(m.id, { ...m, t }); shake(6, 600); playSfx("roar", undefined, undefined, .9); feedMsg("He's tearing apart: back off and spread out!"); }
-  else if (m.k === "split") { fx.push({ type: "abom", k: "ember", x: m.x, y: m.y - 60, sc: 2.2, from: 8, t }); shake(14, 700); playSfx("boom", m.x, m.y, 1); playSfx("roar", m.x, m.y, .8); }
+  else if (m.k === "split") { shake(7, 350); playSfx("roar", m.x, m.y, .9); }   // no burst here: the morph already ends on the five live sprites, so the hand-over is seamless
   else if (m.k === "land") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 10, sc: .6, from: 8, t }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 300) shake(4, 160); playSfx("stomp", m.x, m.y, .5); }
 }
 function drawAbomination(z) {
@@ -1498,6 +1497,7 @@ function drawAbomination(z) {
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, z.act === "roll" ? 52 : 70, 17, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (z.act === "sunder") return drawAbomSunder(z, t, gy, now, tele);
   // telegraphs
   if (z.act === "slam" && tele?.k === "slam" && t < tele.wind) { const k = t / tele.wind;
     ctx.save(); ctx.translate(z.x, z.y); ctx.rotate(tele.a); ctx.fillStyle = `rgba(255,90,31,${.08 + .2 * k})`; ctx.strokeStyle = `rgba(255,170,90,${.45 + .5 * k})`; ctx.lineWidth = 2.5;
@@ -1514,18 +1514,51 @@ function drawAbomination(z) {
     else if (t < .5) { f = 0; f2 = 1; k = t / .5; } else if (t < 1) { f = 1; f2 = 2; k = (t - .5) / .5; }
     else { const u = mv.dist / 46; f = 2 + Math.floor(u) % 3; f2 = 2 + (Math.floor(u) + 1) % 3; k = u - Math.floor(u); lift = Math.abs(Math.sin(mv.dist / 60)) * 7; } }
   else if (z.act === "daze") { sheet = "dazed"; single = true; const L = z.actLen || 3; if (t < .35) f = f2 = 0; else if (t > L - .5) { f = 2; f2 = 3; k = Math.min(1, (t - (L - .5)) / .4); } else { f = f2 = Math.floor(t / .45) % 2 ? 2 : 1; } }
-  else if (z.act === "sunder") { sheet = "morph"; single = true; cw = ABM.mw; ax = ABM.mw / 2; const u = Math.min(11.99, t / (z.actLen || 4.2) * 12); f = Math.floor(u); f2 = Math.min(11, f + 1); k = u - f; sx = f < 7 ? (Math.random() - .5) * (1 + f * .6) : 0;
-    if (tele && !tele.snap && f >= 6) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.6, from: 8, t: now }); shake(10, 400); playSfx("boom", z.x, z.y, .8); } }
   else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / 26; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); } }
   const [row, flip] = single ? [0, false] : pyRow(z.aim || 0), im = abImgs[sheet];
-  const beat = .5 + .5 * Math.sin(now / 300), sund = z.act === "sunder" ? Math.min(1, t / 2) : 0;
+  const beat = .5 + .5 * Math.sin(now / 300), sund = 0;
   bossGlow(z.x, gy - 85, ABM.lava, 80 + 70 * sund + 8 * beat, .3 + .2 * beat + .4 * sund);
-  if (z.act === "sunder" && t < 2.1) aFx("fxEmber", t / 2.1 * 8, z.x, gy - 80, 1.5, .9);   // energy gathering before the snap
-  const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90 && z.act !== "sunder";
+  const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x + sx), Math.round(gy - lift)); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * ABM.bh, cw, ABM.bh, f, f2, k, -ax, -ABM.bfy)); ctx.restore();
-  const label = z.act === "daze" ? "DAZED · ×1.5 DAMAGE" : z.act === "sunder" ? "CAN'T BE HURT" : "";
+  const label = z.act === "daze" ? "DAZED · ×1.5 DAMAGE" : "";
   if (label) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = z.act === "daze" ? "#ffe08a" : "#ff9d6b"; ctx.strokeText(label, z.x, gy - 205); ctx.fillText(label, z.x, gy - 205); ctx.restore(); }
+}
+// THE SUNDERING (4.2s). The 12 painted frames differ too much from one to the next to simply cross-fade, so the sequence is staged:
+//   0 - 1.5s   the big body swells and trembles while its cracks brighten (frames 0-2, which share a pose)
+//   1.5 - 2.3s it goes white-hot: the tear (frames 2-5) happens inside the flash, with an ember burst at the peak
+//   2.3 - 3.0s the torn group fades into the five REAL spawn sprites, standing exactly where the server will put them
+//   3.0 - 4.2s the lava strands between them thin and snap one by one, each spawn rears up, the glow dies down
+// so the hand-over to the live Five at the end has no jump at all.
+const ABM_FAN = [[-104, 8], [-52, -8], [0, -16], [52, -8], [104, 8]];   // = ABOM.sunder.fan on the server
+function drawAbomSunder(z, t, gy, now, tele) {
+  const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }, L = z.actLen || 4.2, im = abImgs.morph, run = abImgs.srun;
+  const heat = sm(t / 1.5), flash = t < 1.9 ? sm((t - 1.3) / .6) : 1 - sm((t - 1.9) / .7), split = sm((t - 2.3) / .7), settle = sm((t - 3.0) / 1.0);
+  if (tele && !tele.snap && t >= 1.85) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.9, from: 8, t: now }); shake(12, 450); playSfx("boom", z.x, z.y, .9); }
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 60 * split, 17, 0, 0, 7); ctx.fill(); ctx.restore();
+  bossGlow(z.x, gy - 80, ABM.lava, 90 + 80 * heat + 60 * flash - 70 * settle, Math.min(1, .35 + .45 * heat + .3 * flash) * (1 - .6 * settle));
+  if (t < 1.9) aFx("fxEmber", t / 1.9 * 8, z.x, gy - 80, 1.3 + .5 * heat, .5 + .5 * heat);   // sparks gathering
+  const body = (f, f2, k, alpha, scale, jx) => { if (alpha <= 0 || !im.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = alpha; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(scale, scale);
+    const draw = () => blendCells(im, 0, 0, ABM.mw, ABM.bh, f, f2, k, -ABM.mw / 2, -ABM.bfy); draw();
+    if (flash > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * flash; draw(); draw(); if (flash > .6) draw(); } ctx.restore(); };
+  // the painted frames, on a timeline with long holds on similar poses and the big pose changes hidden in the flash
+  const keys = [[0, 0], [.7, 1], [1.5, 2], [1.8, 3], [2.05, 4], [2.4, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
+  const k = sm((t - keys[a][0]) / (keys[a + 1][0] - keys[a][0])), jx = (Math.random() - .5) * (1 + 5 * heat) * (1 - split), pulse = 1 + .035 * heat * Math.sin(t * (9 + 10 * heat)) + .05 * flash;
+  body(keys[a][1], keys[a + 1][1], k, 1 - split, pulse, jx);
+  if (split > 0 && run.naturalWidth) {   // the five real sprites, back row first
+    const pos = ABM_FAN.map(([ox, oy], i) => { const from = .78, pr = sm((t - 2.3) / 1.1), e = from + (1 - from) * pr; return { x: z.x + ox * e, y: (gy + oy * from) * (1 - pr) + (z.y + oy + 16) * pr, i }; });   // ends on the live spawn's own feet line (y + radius * .8)
+    // lava strands between neighbours: thin out, then snap one after another
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) { const snapAt = 3.05 + i * .17, left = 1 - sm((t - (snapAt - .5)) / .5); if (t >= snapAt) { if (tele && !(tele.snaps >> i & 1)) { tele.snaps |= 1 << i; fx.push({ type: "abom", k: "ember", x: (pos[i].x + pos[i + 1].x) / 2, y: (pos[i].y + pos[i + 1].y) / 2 - 58, sc: .55, from: 8, t: now }); playSfx("stomp", z.x, z.y, .35); } continue; }
+      const p0 = pos[i], p1 = pos[i + 1], mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2 - 58 + 16 * left + 3 * Math.sin(now / 90 + i);
+      for (const [w, c] of [[9, "rgba(255,70,20,.35)"], [4, "rgba(255,150,50,.8)"], [1.5, "rgba(255,240,180,.9)"]]) { ctx.strokeStyle = c; ctx.lineWidth = w * (.25 + .75 * left) * split; ctx.beginPath(); ctx.moveTo(p0.x, p0.y - 62); ctx.quadraticCurveTo(mx, my + 14, p1.x, p1.y - 62); ctx.stroke(); } }
+    ctx.restore();
+    for (const q of [...pos].sort((u, v) => u.y - v.y)) { const rear = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (t - 3.15 - q.i * .14) / .45)))), sc = 1 + .1 * rear;   // each one rears up in turn as it comes free
+      ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = split; ctx.translate(Math.round(q.x), Math.round(q.y - 6 * rear)); ctx.scale(sc, sc);
+      const draw = () => ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, -ABM.sax, -ABM.sfy, ABM.sw, ABM.sh); draw();
+      const hot = Math.max(flash, .5 * (1 - settle)); if (hot > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = split * hot; draw(); } ctx.restore(); }
+  }
+  ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - settle; ctx.strokeText("CAN'T BE HURT", z.x, gy - 205); ctx.fillText("CAN'T BE HURT", z.x, gy - 205); ctx.restore();
 }
 function drawAbomSpawn(z) {
   const now = performance.now(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 };
