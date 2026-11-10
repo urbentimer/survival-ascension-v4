@@ -429,3 +429,6 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 ## Nov 11 (a): Midnight Carnival back to a dark night tint (user)
 - SPOOKY_CARN = brightness .6, saturate .78, contrast 1.12, tint rgba(22,14,58,.32) (dark like the city maps, a bit more colour kept). User also wants NEW ground tiles (finds the current ones boring): prompts given in claude/carnival-map.md ("New ground tiles"). Cache: client.js?v=20261111a.
+
+## Nov 11 (b): Midnight Carnival ground v2 (user's new tiles, prompt in claude/carnival-ground-v2.md)
+- tools/art/carnival/tiles2.png (4 tall panels: sawdust midway, candy-stripe canvas, red/cream checkerboard with gold stars, painted planks). extract-carnival.py measures each regular pattern's repeat by autocorrelation and cuts on it: checker = one exact 2x2-cell period from a grout line, planks = full plank length x two 4-colour periods (plank ends meet as a joint), stripes = ~2 periods + half-tile blend, sawdust = whole panel flattened + wrapped. Slot names unchanged (grass = base sawdust, dirt = stripe-canvas patches, paving = checker plaza / paths / pads, wood = station + bumper floors). The old tiles.png is no longer used. Cache: client.js?v=20261111b.
