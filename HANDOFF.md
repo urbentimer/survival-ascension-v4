@@ -415,3 +415,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Stations are walkable: cvStation solids are now the skirts either side of the stairs, the back strip (train side), the ends and the booth; the stairs and deck are open. Client draws the station as FLOOR (whole sprite, under everyone) and only its canopy roof (top 33%) in the depth-sorted list. Getting off puts you on the platform.
 - Depth: track segments sort at their ground line + 14 (anything walking under the track is drawn under it); along a station (`atStation`) the track is part of the floor and the cart sorts at rail height, so people on the deck stand in front of the train.
 - Cache: client.js?v=20261110r.
+- Lobby map picker (Nov 10): the left arrow never worked: the map-name overlay (.ls-mapname, later in the DOM) sat on top of it. Fixed with pointer-events:none on the overlay and z-index on .ls-arrow.
