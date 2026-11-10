@@ -376,3 +376,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User: "no need for the GIF fire, do your own magic". wLabBurnt = the STILL picture again (big-labBurnt.png, 7 fire spots detected); the game draws its own animated flames (two overlapping flipbooks per spot on "w" pieces), smoke from the 3 biggest fires, glow, embers, crackle. `drawAnimPiece` / art.frames support stays in the client for future animated pieces; labBurnt.gif is unused. Cutting the painted smoke cloud out of the picture was tried and dropped (same grey as the roof machinery).
 - Snow tile: the repeat showed as light / dark squares. `soft_blend` in the extractor flattens the large-scale shading and wraps the tile in two 1-axis passes (no leftover seam).
 - Cache: client.js?v=20261110l. Preview 14.4 MB.
+
+## Nov 10 (m): the user's three fire loops (small / medium / big GIFs from ChatGPT)
+- tools/art/fire3/fire-<small|medium|big>.gif -> `python3 tools/extract-fire3.py` -> sprites/fx/fire3-<s|m|b>.webp (8 frames in a row, black turned into transparency, base = bottom centre). Client `FIRE3` + `drawFire3(kind 0/1/2, x, y, scale, phase, t, alpha)`.
+- Whiteout Station's burning lab: fires placed BY HAND in the extractor (`pieces['wLabBurnt']['fires']` = [x, y, size, loop]): all four windows, the door, four on the roof. `dynPieceFx` uses drawFire3 for "w" pieces (other maps keep fire-loop.webp).
+- Abomination: flames on every lava puddle (`abFlames`, drawn by `drawAbomFlames` after the ground), the ground burns for ~1.5s where the Flail Slam lands (fx k "scorch"), and fire burns under him while he tears apart. His lava stream / slam disc / ember art is unchanged.
+- Cache: client.js?v=20261110m. Preview 14.7 MB.

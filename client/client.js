@@ -1475,6 +1475,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/abom-
   slunge: "assets/sprites/zombies/dir8/abomspawn-lunge.webp", sdead: "assets/sprites/zombies/dir8/abomspawn-dead.webp",
   fxLava: "assets/sprites/fx/abom-lava.webp", fxSlam: "assets/sprites/fx/abom-slam.webp", fxEmber: "assets/sprites/fx/abom-ember.webp" })) { const im = new Image(); im.src = url; abImgs[k] = im; }
 const ABM = { bw: 340, bh: 260, bax: 170, bfy: 236, mw: 460, sw: 240, sh: 210, sax: 120, sfy: 182, lava: "255,90,31" };
+const abFlames = [];   // this frame's ground fires [x, y, scale, loop, phase, alpha] (lava puddles, slam scorch lines): drawn by drawAbomFlames
 const abMove = new Map(), abTele = new Map(), abPuddles = [];   // walk cycles; latest telegraph per boss / spawn; lava puddles
 function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // one additive frame of a 24-frame strip; (x, y) = its centre (or its left-middle with `left`)
   const im = abImgs[key]; if (!im?.naturalWidth) return; const fw = im.naturalWidth / 24, fh = im.naturalHeight, f = Math.max(0, Math.min(23, frame)), f0 = Math.floor(f);
@@ -1484,7 +1485,7 @@ function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // o
 function onAbom(m) {
   const t = performance.now(), feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
   if (m.k === "slam" || m.k === "roll" || m.k === "spew" || m.k === "lunge") abTele.set(m.id, { ...m, t });
-  if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
+  if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); fx.push({ type: "abom", k: "scorch", x: m.x, y: m.y, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
   else if (m.k === "roll") playSfx("roar", m.x, m.y, .5);
   else if (m.k === "daze") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1.3, t }); shake(11, 450); playSfx("boom", m.x, m.y, .9); feedMsg("THE ABOMINATION IS DAZED: hit it now (×1.5)!"); }
   else if (m.k === "spew") fx.push({ type: "abom", k: "lava", id: m.id, a: m.a, len: m.len, wind: m.wind, dur: m.dur, t });
@@ -1538,6 +1539,7 @@ function drawAbomSunder(z, t, gy, now, tele) {
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 55 * sm((t - 1.4) / 1.2), 17, 0, 0, 7); ctx.fill(); ctx.restore();
   bossGlow(z.x, gy - 80, ABM.lava, 90 + 70 * heat + 50 * flash - 80 * cool, Math.min(1, .35 + .4 * heat + .3 * flash) * (1 - .65 * cool));
   if (t < 1.5) aFx("fxEmber", t / 1.5 * 8, z.x, gy - 80, 1.2 + .4 * heat, .4 + .5 * heat);   // sparks gathering before the tear
+  if (t < 2.9) { const fa = Math.min(1, t / .5) * (1 - sm((t - 2.2) / .7)), tt = now / 1000; drawFire3(2, z.x, gy + 10, 1.25, 1.3, tt, fa * .9); drawFire3(1, z.x - 78, gy + 4, .8, 4.1, tt, fa * .8); drawFire3(1, z.x + 80, gy + 4, .8, 6.2, tt, fa * .8); }   // the ground burns under him
   const keys = [[0, 0], [.55, 1], [1.15, 2], [1.7, 3], [2.25, 4], [2.85, 5], [99, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
   const span = keys[a + 1][0] - keys[a][0], k = sm((t - keys[a][0] - span * .25) / (span * .75)), settled = sm((t - 1.6) / .5);   // each frame holds for a beat, then eases into the next
   const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled), pulse = 1 + .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash;
@@ -1574,6 +1576,7 @@ function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
     const a = e < 300 ? e / 300 : e > q.life - 900 ? (q.life - e) / 900 : 1, pulse = .5 + .5 * Math.sin(now / 240 + q.x);
     ctx.save(); ctx.globalAlpha = .55 * a; ctx.fillStyle = "#1c0d08"; ctx.beginPath(); ctx.ellipse(q.x, q.y, q.r, q.r * .7, 0, 0, 7); ctx.fill(); ctx.restore();
     aFx("fxSlam", 6 + pulse, q.x, q.y - 4, q.r / 88, .85 * a);   // the cracked-lava disc from the slam art, glowing
+    abFlames.push([q.x, q.y + 8, .6 * a, 1, q.x * .01, a], [q.x - q.r * .5, q.y - 2, .55 * a, 0, q.y * .013, a], [q.x + q.r * .5, q.y + 2, .55 * a, 0, q.x * .017 + 2, a]);   // it burns (drawn with the sprites, so you walk behind / in front of the flames)
     ctx.save(); ctx.strokeStyle = `rgba(255,150,70,${.5 * a})`; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.ellipse(q.x, q.y, q.r, q.r * .7, 0, 0, 7); ctx.stroke(); ctx.restore();
   }
   for (const [id, m] of abTele) {
@@ -1583,9 +1586,11 @@ function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
     ctx.beginPath(); ctx.rect(0, -m.hw, m.len, m.hw * 2); ctx.fill(); ctx.stroke(); ctx.restore();
   }
 }
+function drawAbomFlames() { const t = performance.now() / 1000; for (const [x, y, sc, k, ph, a] of abFlames) if (inView(x, y, 140)) drawFire3(k, x, y, sc, ph, t, a); abFlames.length = 0; }   // after the ground, before the sprites
 function drawAbomFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "slamfx") { const from = f.from || 0, T = from ? 1.0 : 1.7; if (s > T) return false; aFx("fxSlam", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
+  if (f.k === "scorch") { if (s > 1.6) return false; const a = s < .15 ? s / .15 : Math.max(0, 1 - (s - .5) / 1.1); drawFire3(2, f.x, f.y + 26, 1.25 * (.7 + .3 * a), f.x * .01, performance.now() / 1000, a); return true; }   // the ground burns for a moment where the arm landed
   if (f.k === "ember") { const from = f.from || 0, T = 1.5; if (s > T) return false; aFx("fxEmber", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
   if (f.k === "lava") {   // the stream: start set while it reaches out, loop set while he spews, end set as it dies
     const e = s - f.wind; if (e < 0) return true; if (e > f.dur + .45) return false;
@@ -2556,7 +2561,7 @@ function drawDashBeams() {
   }
 }
 function drawGroundFx() {
-  drawPyreGround(); drawScreamerGround(); drawAbomGround();
+  drawPyreGround(); drawScreamerGround(); drawAbomGround(); drawAbomFlames();
   drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
   const now = performance.now();
@@ -3587,7 +3592,7 @@ function dynPieceFx(d, a) {
       const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
       ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
     }
-    if (d.kind[0] === "w") { drawFireSprite(x - 9 * s, y + 12 * s, s * .8, i * 5 + seed + 3, t, .9); drawFireSprite(x + 8 * s, y + 12 * s, s * .9, i * 7 + seed, t, .95); }   // Whiteout Station's lab: a fuller blaze at each spot
+    if (d.kind[0] === "w") drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t);   // Whiteout Station: the user's own fire loops
     else drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
   });
   if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
@@ -3628,6 +3633,13 @@ function bossGlow(x, y, rgb, r, alpha) {
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha; ctx.drawImage(c, x - r, y - r * .8, r * 2, r * 1.6); ctx.restore();
 }
 function flashDraw(flashing, draw) { draw(); if (flashing) { const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = "lighter"; draw(); draw(); ctx.globalCompositeOperation = op; } }
+// The user's three fire loops (tools/extract-fire3.py): 0 small, 1 medium, 2 big; 8 frames each, transparent, base = bottom centre of the cell.
+const FIRE3 = [["assets/sprites/fx/fire3-s.webp", 84, 112], ["assets/sprites/fx/fire3-m.webp", 116, 127], ["assets/sprites/fx/fire3-b.webp", 176, 144]].map(([url, w, h]) => { const im = new Image(); im.src = url; return { im, w, h }; });
+function drawFire3(kind, x, y, sc, phase, t, alpha = 1) {   // (x, y) = the base of the flame; cross-faded frame to frame, with a soft additive pass so it glows
+  const F = FIRE3[kind] || FIRE3[1]; if (!F.im.naturalWidth) return; const ft = t * 9 + phase, f = Math.floor(ft) % 8, f2 = (f + 1) % 8, w = F.w * sc, h = F.h * sc;
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.globalAlpha = alpha; blendCells(F.im, 0, 0, F.w, F.h, f, f2, ft - Math.floor(ft), x - w / 2, y - h, w, h);
+  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * .45; ctx.drawImage(F.im, f * F.w, 0, F.w, F.h, x - w / 2, y - h, w, h); ctx.restore();
+}
 function drawFireSprite(x, y, sc, phase, t, alpha = 1) {   // one burning fire: the flipbook, cross-faded frame to frame, with a bright additive pass
   if (!mapFireImg.naturalWidth) return;
   const ft = t * MFIRE.fps + phase, f = Math.floor(ft) % MFIRE.n, f2 = (f + 1) % MFIRE.n, w = MFIRE.w * sc, h = MFIRE.h * sc;

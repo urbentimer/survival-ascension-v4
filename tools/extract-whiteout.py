@@ -82,6 +82,8 @@ for k, (w, nl) in BIG.items(): save('w' + k[0].upper() + k[1:], load('big-' + k 
 # glow and embers at the fire spots found here (same as Fallen Dynasty's burnt shops). Cutting the painted smoke cloud away was tried and
 # dropped: it is the same dark grey as the roof machinery and took pieces of the building with it.
 save('wLabBurnt', load('big-labBurnt.png'), 400, 0, 7)
+# fires placed by hand (base of each flame, from the bottom centre): [x, y, size, which loop 0 small / 1 medium / 2 big]: four windows, the door, the roof
+pieces['wLabBurnt']['fires'] = [[-122, -112, .5, 0], [-69, -112, .5, 0], [72, -112, .5, 0], [125, -112, .5, 0], [2, -118, .45, 0], [-98, -214, .8, 1], [116, -232, .75, 1], [12, -236, 1.05, 2], [-30, -190, .7, 1]]
 
 b = grid_cells(load('buildings.png'), 4)
 BLD = [[('wContainers', 210, 0), ('wGenerator', 150, 0), ('wTank', 190, 0), ('wTankRound', 165, 0)],
