@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -273,7 +273,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
 const DEFAULT_SITE = 3;   // new rooms start on Fallen Dynasty (user, Nov 5); the host can still switch in the lobby
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }];   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }];   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -419,9 +419,9 @@ export class SurvivalRoom extends Room {
     const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
     const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height;
     this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: W, height: H, cx: W / 2, cy: H / 2, sx: W / 2, sy: H / 2, sh: 100 };   // sx, sy, sh: where survivors appear
-    this.flow = !!P || S.style === "dynasty";   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
+    this.flow = !!P || S.style === "dynasty" || S.style === "whiteout";   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
-    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.setMapBoxes(mapBoxes(layout));
     if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
@@ -3297,8 +3297,13 @@ export class SurvivalRoom extends Room {
       for (const c of sp) { r -= c[2]; if (r <= 0) { q = c; break; } }
       return { x: clamp(q[0] + rand(-24, 24), 20, this.A.width - 20), y: clamp(q[1] + rand(-24, 24), 20, this.A.height - 20) };
     }
-    const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
-    return { x: clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20), y: clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20) };
+    let q = null;
+    for (let i = 0; i < 24; i++) {   // on maps packed with big buildings (Whiteout Station) most of the ring is solid: take a spot in a lane, not inside a building
+      const ang = Math.random() * Math.PI * 2, dist = rand(SPAWN_RING[0], SPAWN_RING[1]);
+      q = { x: clamp(this.A.cx + Math.cos(ang) * dist, 20, this.A.width - 20), y: clamp(this.A.cy + Math.sin(ang) * dist, 20, this.A.height - 20) };
+      if (!this.flow || !this.blockedByMap(q.x, q.y, 26)) break;
+    }
+    return q;
   }
   forgetZombie(id) {   // per-zombie bookkeeping that would otherwise pile up for the life of the room (7,000+ kills a match)
     this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);

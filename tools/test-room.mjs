@@ -773,6 +773,21 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.vmemory.get("A").mechaReady = 0; send(A, "skill2"); tick(21); const v2 = room.state.vehicles.get("A"); v2.left = 0.05; tick(2);
   ok(!room.state.vehicles.has("A") && p.chargeCd > 99, "after 30s the ride ends and the 100s cooldown starts");
   room._dispose(); }
+// 33d. Whiteout Station (Nov 10): a tight maze of Antarctic lab buildings, same piece system as Fallen Dynasty
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
+  send(A, "settings", { map: 4 });
+  ok(room.state.mapSite === 4 && room.state.worldW === 4400 && room.state.worldH === 2800 && room.flow, "host picks Whiteout Station: 4400x2800, flow-field zombies");
+  const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)), kinds = new Set(lay.map(r => r[0]));
+  ok(lay.length > 100 && kinds.size > 25 && lay.every(r => r[0] >= 44), `built from its own pieces (${lay.length} pieces, ${kinds.size} kinds)`);
+  ok(!room.blockedByMap(p.x, p.y, 0) && Math.hypot(p.x - 2200, p.y - 1400) < 260, "everyone starts in the open yard by the tower");
+  ok(room.blockedByMap(2200, 120) && room.blockedByMap(600, 60) && !room.blockedByMap(2200, 300), "the perimeter wall and gate are solid right up to the map's top edge");
+  // every open spot is reachable from the tower (no sealed pockets), and a boss-sized body can reach every lane
+  const C = 20, GW = 220, GH = 140, flood = R => { const g = new Uint8Array(GW * GH); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (room.blockedByMap(i * C + 10, j * C + 10, R)) g[j * GW + i] = 1;
+    const q = [Math.floor(1510 / C) * GW + 110]; g[q[0]] = 2; for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) if (a >= 0 && b >= 0 && a < GW && b < GH && !g[b * GW + a]) { g[b * GW + a] = 2; q.push(b * GW + a); } } return g; };
+  const g0 = flood(16); ok(!g0.includes(0), `no sealed pockets: every open spot connects to the tower (${g0.filter(v => v === 0).length} cut off)`);
+  const g1 = flood(46), lanes = [285, 705, 1125, 1675, 2095, 2515]; let cut = 0, n = 0; for (const y of lanes) for (let x = 60; x < 4400; x += 200) { const c = g1[Math.floor(y / C) * GW + Math.floor(x / C)]; if (c !== 1) { n++; if (c === 0) cut++; } }
+  ok(n > 60 && cut === 0, `a boss-sized body can reach every lane (${n} lane spots checked, ${cut} cut off)`);
+  room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
   send(A, "settings", { map: 3 });

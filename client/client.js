@@ -1,7 +1,8 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout, dynastyGround } from "./mapLayout.js";
+import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout, dynastyGround, whiteoutGround } from "./mapLayout.js";
+import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
 import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
 
 const $ = id => document.getElementById(id);
@@ -3435,7 +3436,9 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
+Object.assign(DYN_ART, WO_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
+for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
 for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img.src = url; mapImgs[k] = img; }
 for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img.src = url; tileImgs[k] = img; }
@@ -3466,8 +3469,9 @@ function drawMapObj(d) {
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
 const MAP_FLAT = { blood: 1, manhole: 1, dBlood: 1, dManhole: 1, dPuddle: 1, dPetals: 1 };
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty"];   // lobby sites (server SITES)
-const dynastyMap = () => SITE_STYLE[state?.mapSite || 0] === "dynasty";
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout"];   // lobby sites (server SITES)
+const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
+const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
   dynFires = []; dynLights = [];
@@ -3516,12 +3520,13 @@ function drawWorld(){
 let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
-  if (!dynGroundCache || dynGroundCache.w !== WW) dynGroundCache = { w: WW, g: dynastyGround(WW, WH) };
-  const ready = ["dgrass", ...new Set(dynGroundCache.g.map(g => "d" + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
-  drawGroundCached("dyn" + WW + "x" + WH + ":" + ready, (vx, vy, vw, vh) => {
+  const wo = whiteoutMap(), T = wo ? "w" : "d", base = wo ? "wsnow" : "dgrass";
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== wo) dynGroundCache = { w: WW, wo, g: (wo ? whiteoutGround : dynastyGround)(WW, WH) };
+  const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
+  drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
-    const grass = pattern("dgrass"); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
-    for (const g of dynGroundCache.g) { const p = pattern("d" + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
+    const grass = pattern(base); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
+    for (const g of dynGroundCache.g) { const p = pattern(T + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
       if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
     ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
   });
@@ -3529,9 +3534,15 @@ function drawDynastyWorld() {
   const tall = [];
   for (const d of decor) {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => { drawMapObj(d); dynPieceFx(d, a); } });
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); dynPieceFx(d, a); } });
   }
   drawWorldObjects(tall);
+}
+// a piece whose art is animated (the burning lab on Whiteout Station: the user's GIF, frames in one row), cross-faded frame to frame
+function drawAnimPiece(d, a) {
+  const img = spooky(mapImgs[d.kind]); if (!img) return; const ft = performance.now() / a.ms + (d.x * 3 + d.y) % a.frames, f = Math.floor(ft) % a.frames, f2 = (f + 1) % a.frames, k = ft - Math.floor(ft);
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(d.x), Math.round(d.y)); if (d.flip) ctx.scale(-1, 1);
+  ctx.drawImage(img, f * a.w, 0, a.w, a.h, -Math.round(a.w / 2), -a.h, a.w, a.h); ctx.globalAlpha = k; ctx.drawImage(img, f2 * a.w, 0, a.w, a.h, -Math.round(a.w / 2), -a.h, a.w, a.h); ctx.restore();
 }
 // a piece's fires (animated flames + smoke, drawn on the burning building) and lit lanterns / windows (a warm flickering glow)
 function dynPieceFx(d, a) {
@@ -3542,7 +3553,7 @@ function dynPieceFx(d, a) {
     const x = d.x + fx * f, y = d.y + fy, k = .8 + .2 * Math.sin(t * 7 + i * 1.9 + seed);
     ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
     const g = ctx.createRadialGradient(x, y, 2, x, y, 46 * s); g.addColorStop(0, `rgba(255,150,50,${.4 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 46 * s, y - 46 * s, 92 * s, 92 * s);
-    ctx.globalCompositeOperation = "source-over";
+    ctx.globalCompositeOperation = "source-over"; if (a.anim) return;   // the art already burns: only the glow
     if (i === 0 && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire
       const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
       ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
@@ -3641,6 +3652,13 @@ function drawPaintedGround(pm) {
 function drawPaintedOverlay(fires) {
   const t = performance.now() / 1000;
   ctx.save();
+  if (whiteoutMap()) {   // Whiteout Station: snow blowing across, a few long gust streaks
+    for (let i = 0; i < 150; i++) { const sp = 30 + (i % 7) * 14, sz = 1 + (i % 3), x = cam.x + ((i * 173.3 + t * (sp + 40) + Math.sin(t * .7 + i) * 22) % (W + 40)) - 20, y = cam.y + ((i * 97.1 + t * sp * 1.6) % (H + 40)) - 20;
+      ctx.globalAlpha = .35 + (i % 5) * .11; ctx.fillStyle = "#eef4ff"; ctx.fillRect(x, y, sz, sz); }
+    ctx.globalAlpha = 1; ctx.strokeStyle = "rgba(225,235,255,.10)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 0; i < 16; i++) { const x = cam.x + ((i * 311.7 + t * 520) % (W + 200)) - 100, y = cam.y + ((i * 211.3 + t * 150) % (H + 60)) - 30; ctx.moveTo(x, y); ctx.lineTo(x + 46, y + 13); }
+    ctx.stroke();
+  } else {
   ctx.strokeStyle = "rgba(170,190,230,.16)"; ctx.lineWidth = 1; ctx.beginPath();
   for (let i = 0; i < 90; i++) {   // rain streaks (screen-wide, slanted)
     const x = cam.x + ((i * 137.7 + t * 90) % (W + 60)) - 30, y = cam.y + ((i * 91.3 + t * 620 + (i % 7) * 40) % (H + 40)) - 20;
@@ -3651,6 +3669,8 @@ function drawPaintedOverlay(fires) {
     const x = cam.x + ((i * 211.3 + t * (18 + i % 5 * 4)) % (W + 40)) - 20, y = cam.y + ((i * 127.9 + t * (10 + i % 3 * 5) + Math.sin(t * .8 + i) * 18) % (H + 40)) - 20;
     ctx.save(); ctx.translate(x, y); ctx.rotate(t * (1 + i % 3) + i); ctx.globalAlpha = .7; ctx.fillStyle = i % 3 ? "#f2a6c8" : "#ffd0e4"; ctx.fillRect(-2.5, -1.5, 5, 3); ctx.restore();
   }
+  }
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "lighter";
   fires.forEach(([x, y, sc], i) => {   // embers
     if (!inView(x, y - 60, 120)) return;
@@ -3871,8 +3891,8 @@ function drawScreen() {
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
-  else if (dynastyMap() && dynGroundCache) { m.fillStyle = '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
-    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
+  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(); m.fillStyle = wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
@@ -3955,7 +3975,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -4063,14 +4083,14 @@ function drawMapThumb() {   // a little satellite view of the chosen map (from t
     g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
     return;
   }
-  if (SITE_STYLE[state?.mapSite || 0] === "dynasty" && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
+  if (["dynasty", "whiteout"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
     const MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = 20;
-    g.fillStyle = "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
+    g.fillStyle = SITE_STYLE[state?.mapSite || 0] === "whiteout" ? "#5d6a80" : "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
     const items = src.split(";").map(r => { const [ki, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[ki], x, y, f }; })
       .filter(d => d.kind && d.y < y0 + H / k + 260 && Math.abs(d.x - MW / 2) < 1200).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
     let waiting = false;
     for (const d of items) { const im = mapImgs[d.kind]; if (!im?.naturalWidth) { if (im && !waiting) { waiting = true; im.addEventListener("load", drawMapThumb, { once: true }); } continue; }
-      g.save(); g.translate((d.x - x0) * k, (d.y - y0) * k); if (d.f === 1) g.scale(-1, 1); g.drawImage(im, -im.width * k / 2, -im.height * k, im.width * k, im.height * k); g.restore(); }
+      g.save(); g.translate((d.x - x0) * k, (d.y - y0) * k); if (d.f === 1) g.scale(-1, 1); const fw = DYN_ART[d.kind]?.frames ? DYN_ART[d.kind].w : im.width; g.drawImage(im, 0, 0, fw, im.height, -fw * k / 2, -im.height * k, fw * k, im.height * k); g.restore(); }
     const v = g.createLinearGradient(0, 0, 0, H); v.addColorStop(0, "rgba(10,12,30,.25)"); v.addColorStop(1, "rgba(10,12,30,.55)"); g.fillStyle = v; g.fillRect(0, 0, W, H);
     return;
   }
