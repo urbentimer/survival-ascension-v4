@@ -318,3 +318,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Test 62 covers him. `node tools/sim-bosses.mjs 16`: 8 players 84s / 2-3 downs, 4 players 129s, 2 players 282s.
 - Preview build now re-encodes every image (png and webp) at q76 for the single file: 13.4 MB (limit 16.7). Live assets untouched.
 - Cache: client.js?v=20261110c.
+
+## Nov 10 (d): Abomination walk sheet, new spew sheet, new portrait
+- User sent walk.png (5x4: stand, step, step, stand), a redone spew.png (back view fixed; cols stand, step, spewing, drool; col 1 unused) and a new portrait. Re-cut with the extractor; `abImgs.walk` is used when he has no act (idle = col 0).
+- The SLAM sheet still has the old back view (only walk + spew were redone).
+- Cache: client.js?v=20261110d.

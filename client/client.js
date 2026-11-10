@@ -1465,9 +1465,9 @@ function screamerLights(now) {   // night: his throat glows, and the rings and b
 // Art: tools/extract-abomination.py. Boss cells 340x260, feet (170, 236): slam / spew = 4 cols x 5 rows (D, DR, R, UR, U; left mirrored),
 // roll 6 / dazed 4 = one row, morph = 12 frames of 460x260. Spawn cells 240x210, feet (120, 182): run / lunge 4 x 5, dead 5 frames of 280.
 // Effects: 24 frames in a row on black (3 sets of 8: start / loop / end), drawn additive. Timings match ABOM on the server.
-// No walk sheet yet (the user's didn't arrive): he walks with his standing frame and a heavy bob. When abom-walk.webp exists, load it as abImgs.walk.
+// Walk sheet (Nov 10): 4 cols (stand, step, step, stand); idle = col 0. The spew sheet's cols: stand, step, spewing, drool (col 1 unused).
 const abImgs = {};
-for (const [k, url] of Object.entries({ slam: "assets/sprites/zombies/dir8/abom-slam.webp", spew: "assets/sprites/zombies/dir8/abom-spew.webp", roll: "assets/sprites/zombies/dir8/abom-roll.webp",
+for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/abom-walk.webp", slam: "assets/sprites/zombies/dir8/abom-slam.webp", spew: "assets/sprites/zombies/dir8/abom-spew.webp", roll: "assets/sprites/zombies/dir8/abom-roll.webp",
   dazed: "assets/sprites/zombies/dir8/abom-dazed.webp", morph: "assets/sprites/zombies/dir8/abom-morph.webp", srun: "assets/sprites/zombies/dir8/abomspawn-run.webp",
   slunge: "assets/sprites/zombies/dir8/abomspawn-lunge.webp", sdead: "assets/sprites/zombies/dir8/abomspawn-dead.webp",
   fxLava: "assets/sprites/fx/abom-lava.webp", fxSlam: "assets/sprites/fx/abom-slam.webp", fxEmber: "assets/sprites/fx/abom-ember.webp" })) { const im = new Image(); im.src = url; abImgs[k] = im; }
@@ -1505,7 +1505,7 @@ function drawAbomination(z) {
   // frame
   let sheet = "slam", f = 0, f2 = 0, k = 0, single = false, cw = ABM.bw, ax = ABM.bax, lift = 0, sx = 0, n = 4;
   if (z.act === "slam") { if (t < .35) { f = 0; f2 = 1; k = t / .35; } else if (t < .68) f = f2 = 1; else if (t < 1.15) { f = f2 = 2; } else { f = 3; f2 = 0; k = Math.min(1, (t - 1.15) / .3); } }
-  else if (z.act === "spew") { sheet = "spew"; const W = tele?.wind || .6, D = tele?.dur || 1.3; if (t < W) { f = 0; f2 = 1; k = t / W; } else if (t < W + D) { f = f2 = 2; sx = (Math.random() - .5) * 2; } else f = f2 = 3; }
+  else if (z.act === "spew") { sheet = "spew"; const W = tele?.wind || .6, D = tele?.dur || 1.3; if (t < W) { f = f2 = 0; sx = (Math.random() - .5) * 3 * t / W; } else if (t < W + D) { f = f2 = 2; sx = (Math.random() - .5) * 2; } else f = f2 = 3; }
   else if (z.act === "roll" || z.act === "unroll") { sheet = "roll"; single = true; n = 6;
     if (z.act === "unroll") { f = 4; f2 = 5; k = Math.min(1, t / .35); }
     else if (t < .5) { f = 0; f2 = 1; k = t / .5; } else if (t < 1) { f = 1; f2 = 2; k = (t - .5) / .5; }
@@ -1513,7 +1513,7 @@ function drawAbomination(z) {
   else if (z.act === "daze") { sheet = "dazed"; single = true; const L = z.actLen || 3; if (t < .35) f = f2 = 0; else if (t > L - .5) { f = 2; f2 = 3; k = Math.min(1, (t - (L - .5)) / .4); } else { f = f2 = Math.floor(t / .45) % 2 ? 2 : 1; } }
   else if (z.act === "sunder") { sheet = "morph"; single = true; cw = ABM.mw; ax = ABM.mw / 2; const u = Math.min(11.99, t / (z.actLen || 4.2) * 12); f = Math.floor(u); f2 = Math.min(11, f + 1); k = u - f; sx = f < 7 ? (Math.random() - .5) * (1 + f * .6) : 0;
     if (tele && !tele.snap && f >= 6) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.6, from: 8, t: now }); shake(10, 400); playSfx("boom", z.x, z.y, .8); } }
-  else if (now - mv.at < 200) lift = Math.abs(Math.sin(mv.dist / 20)) * 5;   // walking: a heavy bob on the standing frame
+  else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / 26; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); } }
   const [row, flip] = single ? [0, false] : pyRow(z.aim || 0), im = abImgs[sheet];
   const beat = .5 + .5 * Math.sin(now / 300), sund = z.act === "sunder" ? Math.min(1, t / 2) : 0;
   bossGlow(z.x, gy - 85, ABM.lava, 80 + 70 * sund + 8 * beat, .3 + .2 * beat + .4 * sund);
