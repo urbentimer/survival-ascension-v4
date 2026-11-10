@@ -389,3 +389,14 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - The lab's painted smoke cloud ran off the top of the picture with a flat edge: its top 54px now fade out (extract-whiteout.py).
 - Next map agreed: SCORCHED REFINERY (desert oil refinery, bright, NO tint, open layout). Prompts in the project doc claude/desert-refinery-map.md; waiting for the user's art (13 images).
 - Cache: client.js?v=20261110n.
+- Refinery map addition (user, Nov 10): a BIG PYRAMID the boss comes out of. Art = prompt 14 in claude/desert-refinery-map.md (one image, open dark doorway at the bottom centre). Plan: pyramid on the north edge; on boss waves the boss spawns inside the doorway (rumble, dust, glow) and walks out; the doorway is not enterable.
+
+## Nov 10 (o): SCORCHED REFINERY, a new map (lobby site 6, server SITES[5] { style: "refinery", seed 7070, 4400x2800 })
+- User: desert oil refinery, BRIGHT (no tint), random placement, soft ground edges, a big pyramid at the top that the bosses come out of.
+- Art: 13 ChatGPT images on magenta in tools/art/refinery -> `python3 tools/extract-refinery.py` -> client/assets/map/rf/<kind>.webp (kinds "r...") + tile-sand/cracked/concrete/asphalt (clean crops made to wrap; non-square tiles are fine) + client/refineryArt.js (GENERATED: sizes, lights, hand-placed fires, the pyramid `door` [x, top y, w, h]). No separate flare-stack image arrived: the derrick from the buildings sheet is the flare (rFlare, fire on top). 12 flat ground marks (the soft ones that blended with magenta are skipped; pink fringes neutralised).
+- mapLayout.js (both copies): RF_SIZE, `rfBox`, MAP_FLAT gets the r-flats, `refineryGround(WW, WH, layout)` (cracked-earth blobs, asphalt road pyramid -> yard, pad under every big structure, yard), `buildRefineryLayout` (same organic placement as Whiteout with G = 150 and piece caps: OPEN map; pyramid fixed at top centre RF_PYR_Y = 860 with a 200px open notch up its steps; landmarks per corner; flats scattered).
+- Server: flow map; `this.bossDoor` (the pyramid's steps) set in loadSite; `spawnBoss` puts the boss there and broadcasts "pyramid" {x, y} (added to Unity Net.cs Broadcasts).
+- Client: `img._raw` -> `spooky()` returns the art untouched (no tint); `refineryMap()`, `softGround()` (softPatch for both maps; `g.blob` = blob shape), `fire3Piece()` (user fire loops + smoke on "w" and "r" pieces), `pyramidFx` (doorway glows with eyes on boss waves; burst + dust + shake on "pyramid"), the pyramid depth-sorts at its doorway so whoever stands on the steps is drawn in front, sand blowing overlay, minimap colours, thumbnail, SITE_NAMES. client MAP_FLAT now imported from mapLayout.js.
+- Tests 33e. `SA_SITE=5 node tools/sim-waves.mjs 8`: OK. Default map is still Whiteout Station.
+- Preview 15.74 MB of 16.77: little room left for more art in the single-file preview (next: lower q in build-preview or drop unused files like labBurnt frames).
+- Cache: client.js?v=20261110o.

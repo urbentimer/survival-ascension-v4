@@ -30,7 +30,8 @@ export const MAP_KINDS = ["car", "burntCar", "bus", "police", "building", "ruin"
   "dCrates", "dBarrels", "dRubble", "dCart", "dBlood", "dManhole", "dPuddle", "dPetals",
   "wLab", "wDome", "wQuarters", "wHangar", "wRig", "wPlane", "wWall", "wGate", "wLabBurnt", "wContainers", "wGenerator", "wTank", "wTankRound", "wSnowcat", "wTruck", "wForklift",
   "wBuggy", "wWatchtower", "wMast", "wDish", "wShed", "wSandbags", "wBarrier", "wCrates", "wGasRack", "wRocks", "wIce", "wPines", "wRockArch", "wFloodlight", "wLamp", "wWindsock",
-  "wBeacon", "wShelf", "wPipes", "wBarrels", "wBigCrate", "wFence", "wSign", "wFlag"];
+  "wBeacon", "wShelf", "wPipes", "wBarrels", "wBigCrate", "wFence", "wSign", "wFlag",
+  "rTowers", "rTank", "rTankBurnt", "rControl", "rPumpjack", "rTanker", "rPipeRack", "rLoading", "rPyramid", "rFlare", "rHTank", "rGenerator", "rCooler", "rSphere", "rTruck", "rDozer", "rPickup", "rContainers", "rBarrels", "rCrates", "rIbc", "rPipeBend", "rTransformer", "rLight", "rBarrier", "rPipes", "rValve", "rFence", "rSign", "rStairs", "rSpool", "rBlocks", "rSandbags", "rRubble", "rOil1", "rOil2", "rCrack", "rTracks1", "rTracks2", "rStripes", "rArrow", "rHeli", "rHazard", "rFlameMark", "rDebris", "rBlood"];
 
 // ---------- FALLEN DYNASTY (grid map, Nov 5): the same kind of map as the city, built from pieces (art: tools/extract-dynasty.py) ----------
 // Sprite sizes (game px) and solid footprints {ox, oy, hw, hh} from the bottom centre (a list = several boxes, e.g. the gate's two walls).
@@ -223,6 +224,80 @@ export function buildWhiteoutLayout(WW, WH, start = 2040) {
   const TINY = ["wLamp", "wLamp", "wLamp", "wFloodlight", "wBeacon", "wMast", "wWindsock", "wFlag", "wSign"];
   for (let t = 0, n = 0; t < 900 && n < 46; t++) if (rnd() < .5 ? annexe(pick(TINY), 92, hostsOf()) : place(pick(TINY), 80 + rnd() * (WW - 160), WALL_Y + 60 + rnd() * (WH - WALL_Y - 90), rnd() < .5, 100, -1, 60)) n++;
   return out;
+}
+
+// ---------- SCORCHED REFINERY (grid map, Nov 10): a desert oil refinery, bright and OPEN, with a pyramid the bosses come out of ----------
+// (art: tools/extract-refinery.py). Same organic placement as Whiteout Station, with wider gaps and fewer pieces.
+export const RF_SIZE = { rTowers: [430, 429], rTank: [400, 390], rTankBurnt: [400, 393], rControl: [410, 394], rPumpjack: [390, 382], rTanker: [520, 336], rPipeRack: [560, 274], rLoading: [430, 364], rPyramid: [840, 800], rFlare: [210, 262], rHTank: [215, 205], rGenerator: [200, 197], rCooler: [210, 185], rSphere: [200, 206], rTruck: [215, 169], rDozer: [195, 149], rPickup: [185, 124], rContainers: [205, 196], rBarrels: [110, 107], rCrates: [135, 118], rIbc: [120, 119], rPipeBend: [130, 111], rTransformer: [140, 148], rLight: [100, 156], rBarrier: [150, 122], rPipes: [140, 105], rValve: [130, 130], rFence: [150, 147], rSign: [105, 101], rStairs: [130, 127], rSpool: [110, 96], rBlocks: [130, 103], rSandbags: [130, 95], rRubble: [130, 102], rOil1: [150, 140], rOil2: [150, 138], rCrack: [140, 129], rTracks1: [150, 158], rTracks2: [150, 176], rStripes: [140, 83], rArrow: [150, 94], rHeli: [230, 228], rHazard: [170, 167], rFlameMark: [150, 152], rDebris: [140, 135], rBlood: [120, 109] };
+export const RF_KINDS = Object.keys(RF_SIZE);
+const RF_FLATS = ["rOil1", "rOil2", "rCrack", "rTracks1", "rTracks2", "rStripes", "rArrow", "rHeli", "rHazard", "rFlameMark", "rDebris", "rBlood"];   // ground marks: walked over
+for (const k of RF_FLATS) MAP_FLAT[k] = 1;
+const rfBox = (k, wf = .45, hf = .7) => { const [w, h] = RF_SIZE[k]; return { ox: 0, oy: -Math.round((h * hf + 6) / 2), hw: Math.round(w * wf), hh: Math.round((h * hf - 6) / 2) }; };
+for (const k of RF_KINDS) if (!MAP_FLAT[k]) MAP_SOLID[k] = rfBox(k);
+Object.assign(MAP_SOLID, {
+  rPyramid: [{ ox: -247, oy: -255, hw: 148, hh: 195 }, { ox: 247, oy: -255, hw: 148, hh: 195 }, { ox: 0, oy: -300, hw: 100, hh: 150 }, { ox: 0, oy: -545, hw: 285, hh: 95 }, { ox: 0, oy: -710, hw: 160, hh: 70 }],   // the steps up to the doorway are open (a 200px notch): the boss walks down them
+  rTowers: rfBox("rTowers", .45, .62), rPumpjack: rfBox("rPumpjack", .45, .6), rTanker: rfBox("rTanker", .46, .62), rPipeRack: rfBox("rPipeRack", .48, .6), rFlare: rfBox("rFlare", .4, .42),
+  rLight: { ox: 0, oy: -16, hw: 30, hh: 11 }, rFence: { ox: 0, oy: -18, hw: 68, hh: 11 }, rSign: { ox: 0, oy: -14, hw: 40, hh: 9 }, rStairs: rfBox("rStairs", .42, .5) });
+const RF_PYR_Y = 860;   // the pyramid's bottom edge; it stands in the middle of the map's top edge
+// The ground: sand everywhere, then {x, y, w, h, tile}: cracked-earth patches, an asphalt road from the pyramid to the tower's yard, a concrete pad under every big structure.
+export function refineryGround(WW, WH, layout = []) {
+  const cx = WW / 2, cy = WH / 2, R = []; let seed = 911; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 22; i++) { const w = 260 + rnd() * 380, h = 170 + rnd() * 240; R.push({ x: 40 + rnd() * (WW - w - 80), y: 120 + rnd() * (WH - h - 160), w, h, tile: "cracked", blob: 1 }); }
+  R.push({ x: cx - 150, y: RF_PYR_Y - 40, w: 300, h: cy - 250 - RF_PYR_Y + 110, tile: "asphalt", road: 1 });
+  for (const d of layout) for (const s of solidList(d.kind)) if (s.hw >= 150 && d.kind !== "rPyramid") { const x0 = d.x + (d.flip ? -s.ox : s.ox) - s.hw, y0 = d.y + s.oy - s.hh;
+    R.push({ x: x0 - 30, y: y0 - 16, w: s.hw * 2 + 60, h: s.hh * 2 + 52, tile: /Tanker|Loading/.test(d.kind) ? "asphalt" : "concrete", road: 1 }); }
+  R.push({ x: cx - 430, y: cy - 270, w: 860, h: 560, tile: "concrete", road: 1 });
+  return R;
+}
+export function buildRefineryLayout(WW, WH, start = 7070) {
+  let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
+  const cx = WW / 2, cy = WH / 2, out = [], boxes = [], G = 150, SQ = 46;   // G: open lanes; SQ: the squeeze gap beside an annexe
+  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id, ov: s.hw > 50 && !Array.isArray(MAP_SOLID[k]) ? Math.max(0, RF_SIZE[k][1] + s.oy - s.hh) * .8 : 0 }));
+  const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
+  const sealed = R => { const g = new Uint8Array(GW * GH);
+    for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.x0 - R) / C)), i1 = Math.min(GW - 1, Math.floor((b.x1 + R) / C)), j0 = Math.max(0, Math.floor((b.y0 - R) / C)), j1 = Math.min(GH - 1, Math.floor((b.y1 + R) / C));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const px = i * C + C / 2, py = j * C + C / 2; if (px > b.x0 - R && px < b.x1 + R && py > b.y0 - R && py < b.y1 + R) g[j * GW + i] = 1; } }
+    const q = [Math.floor((cy + 110) / C) * GW + Math.floor(cx / C)]; g[q[0]] = 2;
+    for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
+    return g.includes(0); };
+  const walkable = () => !sealed(22) && !sealed(30);
+  const raw = (a, b) => Math.hypot(Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), Math.max(a.y0 - b.y1, b.y0 - a.y1, 0));
+  const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1; return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
+  const inMap = (q, m) => q.x0 >= m && q.x1 <= WW - m && q.y1 <= WH - m * .6 && q.y0 >= 70 + m * .4;
+  const offYard = q => !(q.x0 < cx + 500 && q.x1 > cx - 500 && q.y0 < cy + 300 + (q.ov || 0) && q.y1 > cy - 330) && !(q.x0 < cx + 230 && q.x1 > cx - 230 && q.y0 < cy && q.y1 > RF_PYR_Y - 80);   // the tower's yard, and the road the bosses walk down from the pyramid
+  const place = (k, x, y, flip, gap, host = -1, edge = 90) => {
+    x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
+    if (!b.every(q => inMap(q, edge) && offYard(q) && boxes.every(z => z.id === host ? raw(q, z) >= SQ - 4 : dist(q, z) >= gap))) return false;
+    out.push({ kind: k, x, y, flip }); boxes.push(...b);
+    if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
+    return true;
+  };
+  const drop = (k, gap, flip = rnd() < .5) => place(k, 80 + rnd() * (WW - 160), 160 + rnd() * (WH - 190), flip, gap);
+  const annexe = (k, gap, hosts) => { const s = MAP_SOLID[k]; if (Array.isArray(s) || !hosts.length) return false; const h = pick(hosts), side = Math.floor(rnd() * 3), flip = rnd() < .5, ox = flip ? -s.ox : s.ox;
+    const along = (a0, a1, half) => a1 - a0 > half * 2 ? a0 + half + rnd() * (a1 - a0 - half * 2) : (a0 + a1) / 2;
+    const bxc = side === 0 ? h.x1 + SQ + s.hw : side === 1 ? h.x0 - SQ - s.hw : along(h.x0, h.x1, s.hw), byc = side === 2 ? h.y1 + SQ + s.hh : along(h.y0, h.y1, s.hh);
+    return place(k, bxc - ox, byc - s.oy, flip, gap, h.id); };
+  // the pyramid, top centre: the bosses come out of its doorway
+  out.push({ kind: "rPyramid", x: cx, y: RF_PYR_Y, flip: false }); boxes.push(...bx("rPyramid", cx, RF_PYR_Y, false, -2));
+  // landmarks, each somewhere in its own corner: distillation towers, flare stack, crashed tanker, loading station
+  const corner = (k, sx, sy) => { for (let t = 0; t < 80; t++) if (place(k, cx + sx * (950 + rnd() * 900), cy + sy * (380 + rnd() * 560) + 150, false, G + 30)) return; };
+  corner("rTowers", -1, -1); corner("rFlare", 1, -1); corner("rTanker", -1, 1); corner("rLoading", 1, 1);
+  const hostsOf = () => boxes.filter(b => b.id >= 0 && !Array.isArray(MAP_SOLID[out[b.id].kind]) && b.x1 - b.x0 > 150);
+  const NOFLIP = { rControl: 1, rLoading: 1, rTank: 1, rTankBurnt: 1 };   // (lettering)
+  const BIG = ["rTank", "rTank", "rTankBurnt", "rControl", "rPumpjack", "rPumpjack", "rPipeRack", "rTowers", "rFlare"];
+  for (let t = 0, n = 0; t < 1400 && n < 15; t++) { const k = pick(BIG); if (drop(k, G + 40 + rnd() * 160, !NOFLIP[k] && rnd() < .5)) n++; }
+  const MED = ["rHTank", "rGenerator", "rCooler", "rSphere", "rSphere", "rTruck", "rDozer", "rPickup", "rContainers", "rContainers"];
+  for (let t = 0, n = 0; t < 1600 && n < 30; t++) { const k = pick(MED); if (rnd() < .35 ? annexe(k, G, hostsOf()) : drop(k, G + rnd() * 120, k !== "rTruck" && rnd() < .5)) n++; }
+  const SMALL = ["rBarrels", "rBarrels", "rCrates", "rIbc", "rPipeBend", "rTransformer", "rBarrier", "rBarrier", "rPipes", "rValve", "rFence", "rSign", "rStairs", "rSpool", "rBlocks", "rSandbags", "rRubble", "rRubble"];
+  for (let t = 0, n = 0; t < 3000 && n < 70; t++) { const k = pick(SMALL); if (rnd() < .4 ? annexe(k, G - 30, hostsOf()) : place(k, 80 + rnd() * (WW - 160), 150 + rnd() * (WH - 180), k !== "rSign" && rnd() < .5, G - 30 + rnd() * 60)) n++; }
+  for (const [dx, dy] of [[-400, -240], [400, -240], [-400, 262], [400, 262]]) { const id = out.length; out.push({ kind: "rLight", x: cx + dx, y: cy + dy, flip: dx > 0 }); boxes.push(...bx("rLight", cx + dx, cy + dy, dx > 0, id)); }
+  for (let t = 0, n = 0; t < 500 && n < 16; t++) if (place("rLight", 80 + rnd() * (WW - 160), 150 + rnd() * (WH - 180), rnd() < .5, 110, -1, 60)) n++;
+  // flat ground marks (under everything): painted ones in the yard and on the pyramid road, stains and tracks anywhere
+  const flat = (k, x, y, flip = false) => out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip });
+  flat("rHeli", cx - 255, cy + 250); flat("rFlameMark", cx + 270, cy - 80); flat("rHazard", cx + 290, cy + 240); flat("rStripes", cx - 300, cy - 150);
+  flat("rHazard", cx, RF_PYR_Y + 190);
+  for (let i = 0; i < 80; i++) flat(pick(["rOil1", "rOil1", "rOil2", "rOil2", "rCrack", "rCrack", "rTracks1", "rTracks2", "rTracks1", "rTracks2", "rDebris", "rDebris", "rBlood"]), 60 + rnd() * (WW - 120), 160 + rnd() * (WH - 200), rnd() < .5);
+  return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0));   // flats first (the minimap / thumbnail draw in order)
 }
 
 // Two main avenues through the tower, plus side streets (the client draws the same roads).

@@ -788,6 +788,17 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const g1 = flood(28); ok(!g1.includes(0), `a boss's path body fits everywhere a survivor can go: no lane too narrow for him (${g1.filter(v => v === 0).length} cut off)`);
   const big = lay.filter(r => [44, 46, 47, 52].includes(r[0])), ys = new Set(big.map(r => Math.round(r[2] / 40))); ok(big.length >= 12 && ys.size >= 9, `buildings are scattered, not lined up in rows (${big.length} big buildings on ${ys.size} different lines)`);
   room._dispose(); }
+// 33e. Scorched Refinery (Nov 10): open desert map, bosses walk out of the pyramid
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 5 });
+  ok(room.state.mapSite === 5 && room.state.worldW === 4400 && room.flow && room.bossDoor?.x === 2200, "host picks Scorched Refinery: 4400x2800, the pyramid's doorway is known");
+  const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)); ok(lay.length > 120 && lay.every(r => r[0] >= 84), `built from its own pieces (${lay.length})`);
+  ok(room.blockedByMap(2200, 500) && !room.blockedByMap(2200, 840) && !room.blockedByMap(2200, 1000) && !room.blockedByMap(p.x, p.y, 0), "the pyramid is solid; its steps, the road down from it and the yard are open");
+  const C = 20, GW = 220, GH = 140, flood = R => { const g = new Uint8Array(GW * GH); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (room.blockedByMap(i * C + 10, j * C + 10, R)) g[j * GW + i] = 1;
+    const q = [Math.floor(1510 / C) * GW + 110]; g[q[0]] = 2; for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) if (a >= 0 && b >= 0 && a < GW && b < GH && !g[b * GW + a]) { g[b * GW + a] = 2; q.push(b * GW + a); } } return g; };
+  ok(!flood(16).includes(0) && !flood(28).includes(0), "no sealed pockets, and a boss fits wherever a survivor does");
+  room.state.phase = "playing"; room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
+  ok(z && Math.abs(z.x - 2200) < 60 && z.y > 700 && z.y < 820 && !room.blockedByMap(z.x, z.y, 0), `the boss walks out of the pyramid (${Math.round(z?.x)},${Math.round(z?.y)})`);
+  room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
   send(A, "settings", { map: 3 });

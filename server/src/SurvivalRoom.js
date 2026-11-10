@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -273,7 +273,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
 const DEFAULT_SITE = 4;   // new rooms start on Whiteout Station (user, Nov 10; before that Fallen Dynasty = 3); the host can still switch in the lobby
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }];   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }];   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -419,9 +419,10 @@ export class SurvivalRoom extends Room {
     const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
     const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height;
     this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: W, height: H, cx: W / 2, cy: H / 2, sx: W / 2, sy: H / 2, sh: 100 };   // sx, sy, sh: where survivors appear
-    this.flow = !!P || S.style === "dynasty" || S.style === "whiteout";   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
+    this.flow = !!P || ["dynasty", "whiteout", "refinery"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
-    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    const pyr = !P && layout.find(d => d.kind === "rPyramid"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - 118 } : null;   // Scorched Refinery: bosses walk out of the pyramid
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.setMapBoxes(mapBoxes(layout));
     if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
@@ -850,6 +851,7 @@ export class SurvivalRoom extends Room {
       z.x = clamp(cx + Math.cos(ang) * 650, 60, this.A.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, this.A.height - 60); this.solveZombie(z);
     }
     if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 330, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
+    if (z && this.bossDoor) { z.x = this.bossDoor.x; z.y = this.bossDoor.y; z.aim = Math.PI / 2; this.solveZombie(z); this.broadcast("pyramid", { x: Math.round(z.x), y: Math.round(z.y) }); }
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
     s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
   }

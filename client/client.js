@@ -1,7 +1,8 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, PAINTED, paintedLayout, dynastyGround, whiteoutGround } from "./mapLayout.js";
+import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround } from "./mapLayout.js";
+import { RF_ART, RF_TILES } from "./refineryArt.js";   // Scorched Refinery pieces (tools/extract-refinery.py)
 import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
 import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
 
@@ -132,6 +133,7 @@ function connected() {
   room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
+  room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
   room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
   room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
@@ -3441,12 +3443,13 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
-Object.assign(DYN_ART, WO_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
+Object.assign(DYN_ART, WO_ART, RF_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
+for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = k[0] === "r" && !!RF_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
@@ -3454,6 +3457,7 @@ const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", ti
 const spookyCache = new Map();
 function spooky(img) {
   if (!img?.complete || !img.naturalWidth) return null;
+  if (img._raw) return img;   // Scorched Refinery (user: bright, no tint): its art is drawn as it is
   if (spookyCache.has(img)) return spookyCache.get(img);
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
   const S = img._snow ? SPOOKY_SNOW : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
@@ -3473,11 +3477,13 @@ function drawMapObj(d) {
 }
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
-const MAP_FLAT = { blood: 1, manhole: 1, dBlood: 1, dManhole: 1, dPuddle: 1, dPetals: 1 };
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout"];   // lobby sites (server SITES)
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery"];   // lobby sites (server SITES)
 const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
-const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
+const refineryMap = () => SITE_STYLE[state?.mapSite || 0] === "refinery";
+const softGround = () => whiteoutMap() || refineryMap();   // ground patches with soft irregular edges
+const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]);   // pieces that burn with the user's fire loops + smoke
+const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
   dynFires = []; dynLights = [];
@@ -3526,9 +3532,9 @@ function drawWorld(){
 let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
-  const wo = whiteoutMap(), T = wo ? "w" : "d", base = wo ? "wsnow" : "dgrass";
+  const rf = refineryMap(), wo = softGround(), T = rf ? "r" : wo ? "w" : "d", base = rf ? "rsand" : wo ? "wsnow" : "dgrass";
   syncDecor();   // Whiteout Station's ground (foundation pads, ponds) is worked out from where the pieces stand
-  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== wo || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo, src: decorSrc, g: wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
   const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
@@ -3542,7 +3548,7 @@ function drawDynastyWorld() {
   const tall = [];
   for (const d of decor) {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); dynPieceFx(d, a); } });
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (a?.door) pyramidFx(d, a); dynPieceFx(d, a); } });
   }
   drawWorldObjects(tall);
 }
@@ -3552,7 +3558,7 @@ function drawDynastyWorld() {
 function softShape(g) {
   if (g._soft) return g._soft;
   let seed = (Math.round(g.x) * 7919 + Math.round(g.y) * 104729) % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const ice = g.tile === "ice", r = Math.min(ice ? 1e9 : 34, g.w / 2, g.h / 2), x0 = g.x, y0 = g.y, x1 = g.x + g.w, y1 = g.y + g.h, pts = [];
+  const ice = g.tile === "ice" || !!g.blob, r = Math.min(ice ? 1e9 : 34, g.w / 2, g.h / 2), x0 = g.x, y0 = g.y, x1 = g.x + g.w, y1 = g.y + g.h, pts = [];
   const side = (ax, ay, bx, by, nx, ny) => { const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 22)); for (let i = 0; i < n; i++) pts.push([ax + (bx - ax) * i / n, ay + (by - ay) * i / n, nx, ny]); };
   const arc = (cx, cy, a0) => { const n = Math.max(4, Math.round(r / 12)); for (let i = 0; i < n; i++) { const a = a0 + i / n * Math.PI / 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a), -Math.sin(a)]); } };
   side(x0 + r, y0, x1 - r, y0, 0, 1); arc(x1 - r, y0 + r, -Math.PI / 2); side(x1, y0 + r, x1, y1 - r, -1, 0); arc(x1 - r, y1 - r, 0); side(x1 - r, y1, x0 + r, y1, 0, -1); arc(x0 + r, y1 - r, Math.PI / 2); side(x0, y1 - r, x0, y0 + r, 1, 0); arc(x0 + r, y0 + r, Math.PI);
@@ -3572,6 +3578,17 @@ function softPatch(g, tile, snow) {
   ctx.fillStyle = snow; for (const [x, y, rx, ry, a] of drifts) { ctx.globalAlpha = .9; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, a, 0, 7); ctx.fill(); ctx.globalAlpha = .45; ctx.beginPath(); ctx.ellipse(x, y, rx + 7, ry + 6, a, 0, 7); ctx.fill(); }   // drifts lying across it
   ctx.restore();
 }
+// Scorched Refinery: the pyramid's doorway glows on boss waves, and bursts with light, smoke and a shake when the boss walks out ("pyramid" message)
+let pyrBurst = -1e9;
+function pyramidFx(d, a) {
+  const [dx, dy, w, h] = a.door, x = d.x + dx, y = d.y + dy, now = performance.now(), since = (now - pyrBurst) / 1000, boss = state?.waveType === "boss" && !state.bossDead && state.phase === "playing";
+  const k = since < 3.5 ? 1 - since / 5 : boss ? (state.bossPhase === "intro" ? .8 : state.bossPhase === "horde" ? .4 : .22) : 0; if (k <= 0) return;
+  const pulse = .7 + .3 * Math.sin(now / (since < 3.5 ? 55 : 320)); ctx.save(); ctx.beginPath(); ctx.rect(x - w / 2, y, w, h); ctx.clip(); ctx.globalCompositeOperation = "lighter";
+  const g = ctx.createRadialGradient(x, y + h * .62, 4, x, y + h * .62, h * .95); g.addColorStop(0, `rgba(255,110,40,${.9 * k * pulse})`); g.addColorStop(.55, `rgba(210,30,10,${.55 * k * pulse})`); g.addColorStop(1, "rgba(90,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(x - w / 2, y, w, h);
+  if (boss || since < 3.5) for (const sx of [-1, 1]) { ctx.fillStyle = `rgba(255,230,120,${k * pulse})`; ctx.beginPath(); ctx.ellipse(x + sx * w * .17, y + h * .34, 9, 5, sx * .35, 0, 7); ctx.fill(); }   // eyes in the dark
+  ctx.restore();
+  if (since < 3.5) drawSmoke3(x, y + h + 30, 2.1, 1.4, now / 1000, Math.min(1, since * 3) * (1 - since / 3.5));   // dust rolling out as it comes
+}
 // a piece whose art is animated (the burning lab on Whiteout Station: the user's GIF, frames in one row), cross-faded frame to frame
 function drawAnimPiece(d, a) {
   const img = spooky(mapImgs[d.kind]); if (!img) return; const ft = performance.now() / a.ms + (d.x * 3 + d.y) % a.frames, f = Math.floor(ft) % a.frames, f2 = (f + 1) % a.frames, k = ft - Math.floor(ft);
@@ -3588,11 +3605,11 @@ function dynPieceFx(d, a) {
     ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
     const g = ctx.createRadialGradient(x, y, 2, x, y, 46 * s); g.addColorStop(0, `rgba(255,150,50,${.4 * k})`); g.addColorStop(1, "rgba(255,90,20,0)"); ctx.fillStyle = g; ctx.fillRect(x - 46 * s, y - 46 * s, 92 * s, 92 * s);
     ctx.globalCompositeOperation = "source-over"; if (a.anim) return;   // the art already burns: only the glow
-    if (i === 0 && d.kind[0] !== "w" && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire (Whiteout Station pieces use drawSmoke3 below)
+    if (i === 0 && !fire3Piece(d.kind) && mapFireImg.naturalWidth) for (let j = 0; j < 4; j++) {   // smoke from the biggest fire (Whiteout Station pieces use drawSmoke3 below)
       const u = (t * .08 + j / 4 + seed * .01) % 1, r = (18 + u * 50) * s;
       ctx.globalAlpha = .55 * Math.sin(u * Math.PI); ctx.drawImage(mapFireImg, 0, MFIRE.h, MFIRE.puff, MFIRE.puff, x + u * 24 * s - r / 2, y - 20 * s - u * 130 * s - r / 2, r, r);
     }
-    if (d.kind[0] === "w") { if (s >= .7) drawSmoke3(x, y - 20 * s, s * 1.15, i * 1.7 + seed, t); drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t); }   // the user's own fire loops, smoke behind the bigger ones
+    if (fire3Piece(d.kind)) { if (s >= .7) drawSmoke3(x, y - 20 * s, s * 1.15, i * 1.7 + seed, t); drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t); }   // the user's own fire loops, smoke behind the bigger ones
     else drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
   });
   if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
@@ -3706,7 +3723,11 @@ function drawPaintedGround(pm) {
 function drawPaintedOverlay(fires) {
   const t = performance.now() / 1000;
   ctx.save();
-  if (whiteoutMap()) {   // Whiteout Station: snow blowing across, a few long gust streaks
+  if (refineryMap()) {   // Scorched Refinery: sand blowing across in the wind
+    for (let i = 0; i < 90; i++) { const sp = 150 + (i % 7) * 40, x = cam.x + ((i * 173.3 + t * sp) % (W + 80)) - 40, y = cam.y + ((i * 97.1 + t * 22 + Math.sin(t * 1.3 + i) * 14) % (H + 40)) - 20;
+      ctx.globalAlpha = .25 + (i % 5) * .08; ctx.fillStyle = i % 3 ? "#f3d9a0" : "#fff1cf"; ctx.fillRect(x, y, 3 + (i % 4) * 3, 1 + (i % 2)); }
+    ctx.globalAlpha = 1;
+  } else if (whiteoutMap()) {   // Whiteout Station: snow blowing across, a few long gust streaks
     for (let i = 0; i < 150; i++) { const sp = 30 + (i % 7) * 14, sz = 1 + (i % 3), x = cam.x + ((i * 173.3 + t * (sp + 40) + Math.sin(t * .7 + i) * 22) % (W + 40)) - 20, y = cam.y + ((i * 97.1 + t * sp * 1.6) % (H + 40)) - 20;
       ctx.globalAlpha = .35 + (i % 5) * .11; ctx.fillStyle = "#eef4ff"; ctx.fillRect(x, y, sz, sz); }
     ctx.globalAlpha = 1; ctx.strokeStyle = "rgba(225,235,255,.10)"; ctx.lineWidth = 1; ctx.beginPath();
@@ -3945,8 +3966,8 @@ function drawScreen() {
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
-  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(); m.fillStyle = wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
-    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
+  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(); m.fillStyle = rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
@@ -4029,7 +4050,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -4137,15 +4158,15 @@ function drawMapThumb() {   // a little satellite view of the chosen map (from t
     g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
     return;
   }
-  if (["dynasty", "whiteout"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
-    const MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = 20;
-    g.fillStyle = SITE_STYLE[state?.mapSite || 0] === "whiteout" ? "#5d6a80" : "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
+  if (["dynasty", "whiteout", "refinery"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
+    const rfT = SITE_STYLE[state?.mapSite || 0] === "refinery", MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = rfT ? 330 : 20;
+    g.fillStyle = { whiteout: "#5d6a80", refinery: "#c99a55" }[SITE_STYLE[state?.mapSite || 0]] || "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
     const items = src.split(";").map(r => { const [ki, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[ki], x, y, f }; })
       .filter(d => d.kind && d.y < y0 + H / k + 260 && Math.abs(d.x - MW / 2) < 1200).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
     let waiting = false;
     for (const d of items) { const im = mapImgs[d.kind]; if (!im?.naturalWidth) { if (im && !waiting) { waiting = true; im.addEventListener("load", drawMapThumb, { once: true }); } continue; }
       g.save(); g.translate((d.x - x0) * k, (d.y - y0) * k); if (d.f === 1) g.scale(-1, 1); const fw = DYN_ART[d.kind]?.frames ? DYN_ART[d.kind].w : im.width; g.drawImage(im, 0, 0, fw, im.height, -fw * k / 2, -im.height * k, fw * k, im.height * k); g.restore(); }
-    const v = g.createLinearGradient(0, 0, 0, H); v.addColorStop(0, "rgba(10,12,30,.25)"); v.addColorStop(1, "rgba(10,12,30,.55)"); g.fillStyle = v; g.fillRect(0, 0, W, H);
+    const v = g.createLinearGradient(0, 0, 0, H); v.addColorStop(0, "rgba(10,12,30,.25)"); v.addColorStop(1, "rgba(10,12,30,.55)"); g.fillStyle = v; if (!rfT) g.fillRect(0, 0, W, H);
     return;
   }
   g.fillStyle = "#1b1f1a"; g.fillRect(0, 0, W, H);
