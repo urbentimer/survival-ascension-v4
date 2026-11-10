@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -273,7 +273,7 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
 const DEFAULT_SITE = 4;   // new rooms start on Whiteout Station (user, Nov 10; before that Fallen Dynasty = 3); the host can still switch in the lobby
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }];   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }, { style: "carnival", seed: 5150, w: 5600, h: 3800 }];   // carnival: Midnight Carnival, a bigger map with a rideable coaster;   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -419,10 +419,13 @@ export class SurvivalRoom extends Room {
     const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
     const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height;
     this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: W, height: H, cx: W / 2, cy: H / 2, sx: W / 2, sy: H / 2, sh: 100 };   // sx, sy, sh: where survivors appear
-    this.flow = !!P || ["dynasty", "whiteout", "refinery"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
+    this.flow = !!P || ["dynasty", "whiteout", "refinery", "carnival"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
-    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
-    const pyr = !P && layout.find(d => d.kind === "rPyramid"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - 118 } : null;   // Scorched Refinery: bosses walk out of the pyramid
+    const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - (pyr.kind === "rPyramid" ? 118 : 74) } : null;
+    if (this.state.players) for (const q of this.state.players.values()) { q.ride = 0; q.rideCd = 0; }
+    const CT = S.style === "carnival" ? coasterTrack(W, H) : null; this.coaster = CT ? { T: CT, s: CT.stations[0].s, wait: COASTER.wait, next: 0, riders: new Map(), cd: new Map() } : null;   // Midnight Carnival: the train starts at the first station
+    this.state.coasterS = CT ? this.coaster.s : 0; this.state.coasterWait = CT ? COASTER.wait : 0;   // Scorched Refinery: bosses walk out of the pyramid
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
     this.setMapBoxes(mapBoxes(layout));
     if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
@@ -478,6 +481,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("input", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p) return;
+      if (p.ride > 0) { const seq = Number(data?.s); if (Number.isFinite(seq) && seq > (p.ack || 0)) p.ack = seq; const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) p.aim = a; return; }   // on the coaster: you only aim
       const veh = this.state.vehicles.get(client.sessionId);
       if (veh) {   // Sofea in her tank / helicopter: WASD drives it, the mouse aims the gun (not predicted: applied at once)
         const seq = Number(data?.s); if (Number.isFinite(seq) && seq > (p.ack || 0)) p.ack = seq;
@@ -494,8 +498,17 @@ export class SurvivalRoom extends Room {
 
     // Dash: a short 50px hop in the movement direction, once every 5 seconds (queued in order with the movement inputs).
     this.onMessage("dash", (client, data) => {
-      const p = this.state.players.get(client.sessionId); if (!p) return;
+      const p = this.state.players.get(client.sessionId); if (!p || p.ride > 0) return;
       if (!this.queueInput(client.sessionId, data, true)) this.applyDash(client.sessionId, p, data);
+    });
+    // Midnight Carnival: F at a station while the train is stopped = get on (or off). One lap per ride, then COASTER.cd seconds before the next.
+    this.onMessage("coaster", client => {
+      const C = this.coaster, sid = client.sessionId, p = this.state.players.get(sid); if (!C || !p || !p.alive || !["playing", "cleared"].includes(this.state.phase)) return;
+      if (p.ride > 0) { if (C.wait > 0) this.coasterOff(sid); return; }
+      if (!(C.wait > 0) || this.state.vehicles.has(sid) || C.cd.has(sid)) return;
+      const st = C.T.stations[C.next]; if (Math.hypot(p.x - st.x, p.y - (st.y + 130)) > 240) return;
+      const used = new Set([...C.riders.values()].map(r => r.seat)); let seat = 0; while (used.has(seat)) seat++; if (seat >= COASTER.seats) return;
+      C.riders.set(sid, { seat, done: 0 }); p.ride = seat + 1; this.broadcast("coaster", { k: "on", id: sid });
     });
 
     this.onMessage("shoot", (client, data) => {
@@ -2864,7 +2877,25 @@ export class SurvivalRoom extends Room {
   butcher_hookback() {}
   butcher_stagger() {}
   hookSpd() { return this.state.hookSpeed || BUTCHER.hook.speed; }
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
+  // ---------- Midnight Carnival: the coaster (track + maths in mapLayout.js) ----------
+  coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
+    const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid); C.cd.set(sid, Date.now() + COASTER.cd * 1000);
+    if (!p) return; p.ride = 0;
+    if (C.wait > 0) { const st = C.T.stations[C.next]; p.x = st.x + rand(-90, 90); p.y = st.y + 150 + rand(0, 40); } else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
+    this.solveCollisions(p); this.broadcast("coaster", { k: "off", id: sid });
+  }
+  updateCoaster(dt) {
+    const C = this.coaster, T = C.T, now = Date.now();
+    if (C.wait > 0) { C.wait -= dt; if (C.wait <= 0) { C.wait = 0; C.next = (C.next + 1) % T.stations.length; } }
+    else { const left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L, step = Math.min(COASTER.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
+      for (const r of C.riders.values()) r.done += go;
+      if (step >= left) { C.s = T.stations[C.next].s; C.wait = COASTER.wait; for (const [sid, r] of [...C.riders]) if (r.done >= T.L - 40) this.coasterOff(sid); }   // one lap: off you get
+      else C.s = (C.s + step) % T.L; }
+    for (const [sid, r] of [...C.riders]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.riders.delete(sid); if (p) p.ride = 0; continue; } const q = coasterSeat(T, C.s, r.seat); p.x = q.x; p.y = q.y; }
+    for (const [sid, until] of [...C.cd]) { const p = this.state.players.get(sid), left = Math.ceil((until - now) / 1000); if (!p || left <= 0) { C.cd.delete(sid); if (p) p.rideCd = 0; } else if (p.rideCd !== left) p.rideCd = left; }
+    this.state.coasterS = Math.round(C.s * 10) / 10; const w = C.wait > 0 ? Math.ceil(C.wait * 4) / 4 : 0; if (this.state.coasterWait !== w) this.state.coasterWait = w;
+  }
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -3236,7 +3267,8 @@ export class SurvivalRoom extends Room {
 
   // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
   downPlayer(target) {
-    if (!target.alive) { target.hp = 0; return; }   // already down (several zombies bit them in the same tick): one down, not five shorter bleed-outs
+    if (!target.alive) { target.hp = 0; return; }
+    if (target.ride > 0) this.coasterOff(target.sessionId);   // knocked off the coaster   // already down (several zombies bit them in the same tick): one down, not five shorter bleed-outs
     this.log("info", "player", `${target.name} went down (wave ${this.state.stage})`, target.sessionId);
     this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
     const downs = (this.downs.get(target.sessionId) || 0) + 1;
@@ -3434,6 +3466,7 @@ export class SurvivalRoom extends Room {
     for (const p of this.state.players.values()) if (p.charging && (!p.alive || p.activeSlot !== 1 || p.melee !== "axe" || this.state.phase !== "playing")) p.charging = false;
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
     if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
+    if (this.coaster && (this.state.phase === "playing" || this.state.phase === "cleared")) this.updateCoaster(dt);
     if (this.state.phase === "cleared") {
       if (!this.inBreak) this.beginBreak();
       if (this.state.countdown > BREAK_GO && [...this.state.players.values()].every(p => p.isBot || p.ready)) this.state.countdown = BREAK_GO;   // everyone's ready
@@ -3525,7 +3558,7 @@ export class SurvivalRoom extends Room {
 
     const players = [...this.state.players.values()].filter(p => p.alive);
     const machines = [...[...this.state.robots.values()].filter(r => r.kind !== "worker"), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
-    const flying = id => this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride";
+    const flying = id => (this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride") || this.state.players.get(id)?.ride > 0;   // up in the helicopter / on the coaster
     this.bossUp = false; for (const z of this.state.zombies.values()) if (z.boss) { this.bossUp = true; break; }   // a boss can reach Sofea's helicopter (ordinary zombies can't): see untouchable()
     const seenBoss = players.filter(p => !(p.shadow > 0) && !this.away.has(p.sessionId));
     const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId) && !this.away.has(p.sessionId));   // invisible Raven / Sofea up in her helicopter / someone reconnecting: zombies can't get them

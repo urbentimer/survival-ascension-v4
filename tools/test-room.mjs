@@ -788,6 +788,27 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const g1 = flood(28); ok(!g1.includes(0), `a boss's path body fits everywhere a survivor can go: no lane too narrow for him (${g1.filter(v => v === 0).length} cut off)`);
   const big = lay.filter(r => [44, 46, 47, 52].includes(r[0])), ys = new Set(big.map(r => Math.round(r[2] / 40))); ok(big.length >= 12 && ys.size >= 9, `buildings are scattered, not lined up in rows (${big.length} big buildings on ${ys.size} different lines)`);
   room._dispose(); }
+// 33f. Midnight Carnival (Nov 10): a bigger map with a rideable coaster; bosses come out of the haunted house
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 6 });
+  ok(room.state.mapSite === 6 && room.state.worldW === 5600 && room.state.worldH === 3800 && room.flow && room.coaster && room.bossDoor?.x === 2800, "host picks Midnight Carnival: 5600x3800, coaster and haunted-house doorway set up");
+  const C = room.coaster, T = C.T, C20 = 20, GW = 280, GH = 190, flood = R => { const g = new Uint8Array(GW * GH); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (room.blockedByMap(i * C20 + 10, j * C20 + 10, R)) g[j * GW + i] = 1;
+    const q = [Math.floor(2010 / C20) * GW + 140]; g[q[0]] = 2; for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) if (a >= 0 && b >= 0 && a < GW && b < GH && !g[b * GW + a]) { g[b * GW + a] = 2; q.push(b * GW + a); } } return g; };
+  ok(!flood(16).includes(0) && !flood(28).includes(0), "no sealed pockets, and a boss fits wherever a survivor does");
+  ok(T.L > 9000 && T.stations.length === 4 && T.pts.every(q => !room.blockedByMap(q.x, q.y + 30, 0) || T.stations.some(st => Math.hypot(st.x - q.x, st.y - q.y) < 320)), `the track is a ${Math.round(T.L)}px loop with 4 stations and nothing built under it`);
+  let acw = 0; for (let i = 0; i < T.pts.length; i++) { const a = T.pts[i], b = T.pts[(i + 1) % T.pts.length]; acw += (b.x - a.x) * (b.y + a.y); } ok(acw > 0, "the train runs anti-clockwise on screen");
+  room.state.phase = "playing"; room.spawnClock = 1e9; room.state.zombies.clear(); p.hp = p.maxHp = 9e5; const B_ = P([...room.state.players.keys()].find(k => k !== p.sessionId) ? { sessionId: [...room.state.players.keys()].find(k => k !== p.sessionId) } : A); B_.hp = B_.maxHp = 9e5;
+  let t = Date.now(); const step = ms => { for (let i = 0; i < ms / 50; i++) { t += 50; room.lastTick = t - 50; const real = Date.now; Date.now = () => t; try { room.tick(); } finally { Date.now = real; } room.spawnClock = 1e9; room.state.elapsed = 5; p.alive = true; } };
+  const st0 = T.stations[0]; p.x = st0.x + 600; p.y = st0.y + 150; send(A, "coaster"); ok(!p.ride, "too far from the station: can't board");
+  p.x = st0.x; p.y = st0.y + 150; send(A, "coaster"); ok(p.ride === 1 && C.riders.size === 1, "F at the station while the train is stopped: you take a seat");
+  step(1000); const sx = p.x, sy = p.y; ok(Math.hypot(sx - st0.x, sy - (st0.y - 134)) < 200, "you sit in the train up on the rails"); send(A, "input", { dx: 1, dy: 0, s: 99, a: 1.5 }); step(100); ok(Math.abs(p.x - sx) < 1 && p.aim === 1.5, "riding: you can't walk off, you can aim");
+  step(6500); ok(!(C.wait > 0) && Math.hypot(p.x - sx, p.y - sy) > 250 && room.untouchable(p), `the train leaves after ${6}s and carries you; ordinary zombies can't reach you`);
+  step(22000); const mid = p.ride; step(60000); ok(mid === 1 && !p.ride && p.rideCd > 0 && Math.hypot(p.x - st0.x, p.y - (st0.y + 170)) < 170 && !room.blockedByMap(p.x, p.y, 0), `one lap and you're put off at your station, cooldown ${p.rideCd}s`);
+  C.s = st0.s; C.wait = 5; C.next = 0; p.x = st0.x; p.y = st0.y + 150; send(A, "coaster"); ok(!p.ride, "cooldown: can't ride again yet");
+  C.cd.clear(); send(A, "coaster"); const on = p.ride; send(A, "coaster"); ok(on === 1 && !p.ride && C.cd.has(p.sessionId), "you can get off again while it's still at the station");
+  C.cd.clear(); for (const pl of room.state.players.values()) { pl.x = st0.x; pl.y = st0.y + 150; send({ sessionId: pl.sessionId }, "coaster"); } const seats = [...room.state.players.values()].map(pl => pl.ride).sort(); ok(seats.every((v, i) => v === i + 1), `everyone gets their own seat (${seats.join(",")})`);
+  room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
+  ok(z && Math.abs(z.x - 2800) < 60 && z.y > 600 && z.y < 760 && !room.blockedByMap(z.x, z.y, 0), `the boss walks out of the haunted house (${Math.round(z?.x)},${Math.round(z?.y)})`);
+  room._dispose(); }
 // 33e. Scorched Refinery (Nov 10): open desert map, bosses walk out of the pyramid
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 5 });
   ok(room.state.mapSite === 5 && room.state.worldW === 4400 && room.flow && room.bossDoor?.x === 2200, "host picks Scorched Refinery: 4400x2800, the pyramid's doorway is known");

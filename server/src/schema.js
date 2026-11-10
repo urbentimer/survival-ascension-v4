@@ -12,6 +12,7 @@ defineTypes(PlayerState, {
   aim: "number", facing: "number", bledOut: "boolean", owned: "string", armor: "number", isBot: "boolean",
   primary: "string", secondary: "string", activeSlot: "number", mag: "number", reloadLeft: "number", medkits: "number",
   isHost: "boolean", color: "string", charging: "boolean", stunned: "number", slowed: "number", ultKills: "number", ultCd: "number", ultReady: "boolean", ultActive: "number", shadow: "number", fire: "number", storm: "number", katanaKills: "number", robotCharges: "number", chargeCd: "number", skillT: "number",
+  ride: "number", rideCd: "number",   // Midnight Carnival coaster: seat number + 1 while riding; seconds until they can ride again
   ack: "number",   // last movement input the server applied (client-side prediction replays the ones after it)
   cdr: "number",   // skill cooldown reduction from level-up upgrades (0 .. 0.6)
   hands: "number",   // Fast Hands picks (0..5): +15% reload speed, +20% magazine each
@@ -59,5 +60,6 @@ defineTypes(GameState, {
   generatorHp: "number", generatorMaxHp: "number", generatorFuel: "number",
   waveType: "string", countdown: "number", worldW: "number", worldH: "number", towerX: "number", towerY: "number", explore: "boolean", mapLayout: "string",
   bossPhase: "string", bossIntro: "string", introNeed: "number", introReady: "number", hookSpeed: "number", noCd: "boolean",
+  coasterS: "number", coasterWait: "number",   // the coaster train: how far round the loop its middle is; seconds left at a station (0 = moving)
   mapSite: "number", difficulty: "string", waveMode: "string", friendlyFire: "boolean", extraLoot: "boolean"   // lobby mission settings (host)
 });

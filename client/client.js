@@ -1,7 +1,8 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround } from "./mapLayout.js";
+import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
+import { CV_ART, CV_TILES, CV_CART } from "./carnivalArt.js";   // Midnight Carnival pieces + the coaster cart (tools/extract-carnival.py)
 import { RF_ART, RF_TILES } from "./refineryArt.js";   // Scorched Refinery pieces (tools/extract-refinery.py)
 import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
 import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
@@ -133,6 +134,7 @@ function connected() {
   room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
+  room.onMessage("coaster", m => { if (m.id === myId) playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5); });
   room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
   room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
   room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
@@ -801,7 +803,7 @@ window.addEventListener("keydown", e => {
   else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
-  else if (k === "f" && !e.repeat) { if (!tryRevive()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
+  else if (k === "f" && !e.repeat) { if (!tryRevive() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
   else if (k === "v" && SOLO_PREVIEW) { const i = (VISION_STEPS.indexOf(NIGHT.playerR / W) + 1) % VISION_STEPS.length; NIGHT.playerR = Math.round(VISION_STEPS[i] * W); feed.unshift({ text: `Test: night vision ${Math.round(VISION_STEPS[i] * 100)}% (${NIGHT.playerR}px) · V to switch`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
@@ -919,7 +921,7 @@ function drawBuildWheel() {
   const meS = me_(), me = V(meS);
   if (placing && (!meS?.alive || state.vehicles?.get(myId) || state.phase !== "playing" && state.phase !== "cleared")) placing = null;   // died / got in a vehicle / match over
   if (placing && me && !wheel) drawPlacement(me);
-  drawStationPrompt();
+  drawStationPrompt(); drawCoasterPrompt();
   if (!wheel || !me) return;
   const R = WHEEL_R, step = Math.PI * 2 / BUILD_WHEEL.length;
   ctx.save();
@@ -3335,7 +3337,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
 // not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
 // the server's smooth updates instead, and prediction picks up again right after
 const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || performance.now() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
-const predicting = me => !!(me && me.alive && (state?.phase === "playing" || state?.phase === "cleared") && !state.vehicles?.get(myId) && !(me.stunned > 0) && !serverDriven(me));
+const predicting = me => !!(me && me.alive && (state?.phase === "playing" || state?.phase === "cleared") && !state.vehicles?.get(myId) && !(me.stunned > 0) && !(me.ride > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
   if (!PRED.ok) { PRED.x = me.x; PRED.y = me.y; PRED.ok = true; PRED.ex = PRED.ey = 0; }
@@ -3402,6 +3404,7 @@ function updateSmooth() {
     sm.x = p0.x + (p1.x - p0.x) * f; sm.y = p0.y + (p1.y - p0.y) * f;
   }
   const mine = smooth.get("p" + myId), pd = predDraw(now); if (mine && pd) { mine.x = pd.x; mine.y = pd.y; }   // you: the predicted position, no delay
+  coastSync(); if (coast) for (const p of state.players.values()) if (p.ride > 0) { const sm = smooth.get("p" + p.sessionId), q = coasterSeat(coast.T, coast.s, p.ride - 1); if (sm) { sm.x = q.x; sm.y = q.y; } }   // coaster riders sit in OUR copy of the train (no jitter against it)
 }
 // V(entity) = the same entity, but with its smoothed on-screen position.
 function V(e) { if (!e) return e; return smooth.get(e.sessionId !== undefined ? "p" + e.sessionId : "z" + e.id)?.proxy || e; }
@@ -3443,16 +3446,19 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
-Object.assign(DYN_ART, WO_ART, RF_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
+Object.assign(DYN_ART, WO_ART, RF_ART, CV_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
+for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
+const cartImg = new Image(); cartImg.src = CV_CART.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k]; img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = k[0] === "r" && !!RF_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k]; img._carn = !!CV_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = k[0] === "r" && !!RF_TILES[k.slice(1)]; img._carn = k[0] === "c" && !!CV_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
+const SPOOKY_CARN = { filter: "brightness(.95) saturate(.98) contrast(1.04)", tint: "rgba(24,18,60,.07)" };   // Midnight Carnival: a light night tint, so the bulbs and colours still pop
 const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", tint: "rgba(18,44,70,.18)" };   // Whiteout Station (user: "a little brighter"): its pieces and tiles (img._snow) get a much lighter tint
 const spookyCache = new Map();
 function spooky(img) {
@@ -3460,7 +3466,7 @@ function spooky(img) {
   if (img._raw) return img;   // Scorched Refinery (user: bright, no tint): its art is drawn as it is
   if (spookyCache.has(img)) return spookyCache.get(img);
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  const S = img._snow ? SPOOKY_SNOW : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
+  const S = img._snow ? SPOOKY_SNOW : img._carn ? SPOOKY_CARN : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
   g.globalCompositeOperation = "source-atop"; g.fillStyle = S.tint; g.fillRect(0, 0, c.width, c.height);
   spookyCache.set(img, c); return c;
 }
@@ -3478,12 +3484,13 @@ function drawMapObj(d) {
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery"];   // lobby sites (server SITES)
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery", "carnival"];
+const carnivalMap = () => SITE_STYLE[state?.mapSite || 0] === "carnival";   // lobby sites (server SITES)
 const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
 const refineryMap = () => SITE_STYLE[state?.mapSite || 0] === "refinery";
-const softGround = () => whiteoutMap() || refineryMap();   // ground patches with soft irregular edges
-const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]);   // pieces that burn with the user's fire loops + smoke
-const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
+const softGround = () => whiteoutMap() || refineryMap() || carnivalMap();   // ground patches with soft irregular edges
+const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]) || !!CV_ART[k];   // pieces that burn with the user's fire loops + smoke
+const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery" || st === "carnival"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
   dynFires = []; dynLights = [];
@@ -3532,9 +3539,9 @@ function drawWorld(){
 let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
-  const rf = refineryMap(), wo = softGround(), T = rf ? "r" : wo ? "w" : "d", base = rf ? "rsand" : wo ? "wsnow" : "dgrass";
+  const rf = refineryMap(), cv = carnivalMap(), wo = softGround(), T = cv ? "c" : rf ? "r" : wo ? "w" : "d", base = cv ? "cgrass" : rf ? "rsand" : wo ? "wsnow" : "dgrass";
   syncDecor();   // Whiteout Station's ground (foundation pads, ponds) is worked out from where the pieces stand
-  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: cv ? carnivalGround(WW, WH, decor) : rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
   const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
@@ -3550,7 +3557,57 @@ function drawDynastyWorld() {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
     if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (a?.door) pyramidFx(d, a); dynPieceFx(d, a); } });
   }
+  if (coast) coasterTall(tall);
   drawWorldObjects(tall);
+}
+// ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
+let coast = null, coastLast = 0;
+function coastSync() {   // every frame: glide our copy of the train toward where the server says it is
+  if (!state || !carnivalMap()) { coast = null; return; }
+  const WW = worldW(), WH = worldH(), now = performance.now(), dt = Math.min(.1, (now - coastLast) / 1000); coastLast = now;
+  if (!coast || coast.w !== WW) coast = { w: WW, T: coasterTrack(WW, WH), s: state.coasterS || 0 };
+  const L = coast.T.L; let e = ((state.coasterS || 0) - coast.s) % L; if (e > L / 2) e -= L; if (e < -L / 2) e += L;
+  coast.s = Math.abs(e) > 400 ? state.coasterS : ((coast.s + e * Math.min(1, dt * 10)) % L + L) % L;
+}
+const coastStation = () => { if (!coast || !(state.coasterWait > 0)) return null; return coast.T.stations.find(st => Math.abs(st.s - state.coasterS) < 6) || null; };   // the station the train is stopped at
+function coasterUse() {   // F: get on at the station the train is stopped at / get off again
+  const me = me_(); if (!coast || !me?.alive || !room) return false; const st = coastStation();
+  if (me.ride > 0) { if (st) room.send("coaster"); return true; }
+  if (!st || me.rideCd > 0 || Math.hypot(me.x - st.x, me.y - (st.y + 130)) > 240) return false;
+  room.send("coaster"); return true;
+}
+function drawCoasterPrompt() {
+  const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "";
+  if (me.ride > 0) text = st ? "[F] Get off" : "";
+  else { const near = coast.T.stations.find(q => Math.hypot(me.x - q.x, me.y - (q.y + 130)) < 240); if (!near) return;
+    text = me.rideCd > 0 ? `Ride again in ${Math.ceil(me.rideCd)}s` : st === near ? `[F] Ride the coaster · leaves in ${Math.ceil(state.coasterWait)}s` : "The train is on its way…"; }
+  if (!text) return; ctx.save(); ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#140c08"; ctx.fillStyle = me.rideCd > 0 && !me.ride ? "#ff9d6b" : "#ffe08a"; ctx.strokeText(text, v.x, v.y - 84); ctx.fillText(text, v.x, v.y - 84); ctx.restore();
+}
+function coasterTall(tall) {   // the track's pieces and the carts go into the depth-sorted list at rail height, so the cart hides its riders' legs and things in front cover it
+  const T = coast.T, P = T.pts, n = P.length, H = COASTER.H;
+  for (let i = 0; i < n; i++) { const p = P[i]; if (!inView(p.x, p.y - H / 2, 90)) continue; tall.push({ y: p.y - H, draw: () => drawTrackSeg(p, P[(i + 1) % n], i) }); }
+  for (let i = COASTER.carts - 1; i >= 0; i--) { const c = coasterCart(T, coast.s, i); if (inView(c.x, c.y - H, 140)) tall.push({ y: c.y - H + 1, draw: () => drawCart(c, i) }); }
+}
+function drawTrackSeg(p0, p1, i) {
+  const H = COASTER.H, dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len * .6, line = (x0, y0, x1, y1, w, c) => { ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+  ctx.save(); ctx.lineCap = "round";
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse((p0.x + p1.x) / 2, (p0.y + p1.y) / 2 + 3, len * .75, 8, Math.atan2(dy, dx), 0, 7); ctx.fill();   // its shadow on the ground
+  if (i % 4 === 0) {   // a trestle bent: two white legs and a brace
+    const ax = p0.x + nx * 18, ay = p0.y + ny * 18, bx = p0.x - nx * 18, by = p0.y - ny * 18;
+    for (const [x, y] of [[ax, ay], [bx, by]]) { line(x, y, x, y - H, 7, "#241b16"); line(x, y, x, y - H, 4, "#e6dfcd"); }
+    line(ax, ay - 6, bx, by - H + 8, 3, "#241b16"); line(ax, ay - 6, bx, by - H + 8, 1.5, "#cfc6b0"); line(bx, by - 6, ax, ay - H + 8, 3, "#241b16"); line(bx, by - 6, ax, ay - H + 8, 1.5, "#cfc6b0");
+  }
+  line(p0.x, p0.y - H + 7, p1.x, p1.y - H + 7, 17, "#241b16"); line(p0.x, p0.y - H + 7, p1.x, p1.y - H + 7, 13, i % 2 ? "#d9d0ba" : "#cdc3ab");   // the deck beam
+  ctx.lineCap = "butt"; line(p0.x + nx * 22, p0.y - H + ny * 22, p0.x - nx * 22, p0.y - H - ny * 22, 5, "#5a3d27"); line((p0.x + p1.x) / 2 + nx * 22, (p0.y + p1.y) / 2 - H + ny * 22, (p0.x + p1.x) / 2 - nx * 22, (p0.y + p1.y) / 2 - H - ny * 22, 5, "#6b4a2e");   // sleepers
+  ctx.lineCap = "round"; for (const sg of [-1, 1]) { line(p0.x + nx * 15 * sg, p0.y - H + ny * 15 * sg, p1.x + nx * 15 * sg, p1.y - H + ny * 15 * sg, 4, "#23272d"); line(p0.x + nx * 15 * sg, p0.y - H + ny * 15 * sg - .5, p1.x + nx * 15 * sg, p1.y - H + ny * 15 * sg - .5, 1.6, "#c3ccd6"); }   // rails
+  if (i % 3 === 0) { const on = (i * 7 + Math.floor(performance.now() / 400)) % 11 !== 0, bx = p0.x, by = p0.y - H + 15; ctx.fillStyle = on ? "#ffd98a" : "#6a5a3a"; ctx.beginPath(); ctx.arc(bx, by, 2.4, 0, 7); ctx.fill();   // a string of bulbs under the deck (one in eleven is dark, and it moves along)
+    if (on) { ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(bx, by, 0, bx, by, 11); g.addColorStop(0, "rgba(255,190,90,.5)"); g.addColorStop(1, "rgba(255,150,40,0)"); ctx.fillStyle = g; ctx.fillRect(bx - 11, by - 11, 22, 22); } }
+  ctx.restore();
+}
+function drawCart(c, i) {   // views in the strip: driving down, down-right, right, up-right, up (left ones mirrored)
+  if (!cartImg.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(performance.now() / 38 + i * 2) * .8 : 0;
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(Math.round(c.x), Math.round(c.y - COASTER.H + 8 + jit)); if (ax < 0) ctx.scale(-1, 1);
+  ctx.drawImage(cartImg, v * CV_CART.w, 0, CV_CART.w, CV_CART.h, -CV_CART.w / 2 * .82, -CV_CART.h * .82, CV_CART.w * .82, CV_CART.h * .82); ctx.restore();
 }
 // Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
 // rounded shape, then the snow is feathered back over its edge in soft bands, with drifts of snow lying across the border.
@@ -3723,7 +3780,12 @@ function drawPaintedGround(pm) {
 function drawPaintedOverlay(fires) {
   const t = performance.now() / 1000;
   ctx.save();
-  if (refineryMap()) {   // Scorched Refinery: sand blowing across in the wind
+  if (carnivalMap()) {   // Midnight Carnival: confetti and litter tumbling past
+    const COL = ["#ff5d6c", "#ffd24a", "#5ad1c9", "#b98cff", "#ff9a3d", "#f4efe0"];
+    for (let i = 0; i < 70; i++) { const x = cam.x + ((i * 191.7 + t * (26 + i % 6 * 9) + Math.sin(t * .9 + i) * 26) % (W + 40)) - 20, y = cam.y + ((i * 113.3 + t * (34 + i % 4 * 12)) % (H + 40)) - 20;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * (1.5 + i % 4) + i); ctx.globalAlpha = .75; ctx.fillStyle = COL[i % 6]; ctx.fillRect(-2.5, -1.5, 5, 3); ctx.restore(); }
+    ctx.globalAlpha = 1;
+  } else if (refineryMap()) {   // Scorched Refinery: sand blowing across in the wind
     for (let i = 0; i < 90; i++) { const sp = 150 + (i % 7) * 40, x = cam.x + ((i * 173.3 + t * sp) % (W + 80)) - 40, y = cam.y + ((i * 97.1 + t * 22 + Math.sin(t * 1.3 + i) * 14) % (H + 40)) - 20;
       ctx.globalAlpha = .25 + (i % 5) * .08; ctx.fillStyle = i % 3 ? "#f3d9a0" : "#fff1cf"; ctx.fillRect(x, y, 3 + (i % 4) * 3, 1 + (i % 2)); }
     ctx.globalAlpha = 1;
@@ -3886,6 +3948,7 @@ function drawNight() {
     if (d.kind !== "streetlight" || !inView(d.x, d.y, NIGHT.lightR)) continue;
     lightHole(d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, d.y - 24 - cam.y, NIGHT.lightR, NIGHT.lightAlpha);
   }
+  if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - COASTER.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - COASTER.H - cam.y, 120, .75); }   // the bulbs along the track, the train
   if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
     for (const [x, y] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, 110, .8);
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
@@ -3967,7 +4030,8 @@ function drawScreen() {
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
   else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(); m.fillStyle = rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
-    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } } }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
+    if (coast) { m.strokeStyle = '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
@@ -4050,7 +4114,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["MIDNIGHT CARNIVAL", "Fairground · Ride the Coaster"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -4158,9 +4222,9 @@ function drawMapThumb() {   // a little satellite view of the chosen map (from t
     g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
     return;
   }
-  if (["dynasty", "whiteout", "refinery"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
-    const rfT = SITE_STYLE[state?.mapSite || 0] === "refinery", MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = rfT ? 330 : 20;
-    g.fillStyle = { whiteout: "#5d6a80", refinery: "#c99a55" }[SITE_STYLE[state?.mapSite || 0]] || "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
+  if (["dynasty", "whiteout", "refinery", "carnival"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
+    const rfT = SITE_STYLE[state?.mapSite || 0] === "refinery", MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = rfT ? 330 : SITE_STYLE[state?.mapSite || 0] === "carnival" ? 240 : 20;
+    g.fillStyle = { whiteout: "#5d6a80", refinery: "#c99a55", carnival: "#3a4632" }[SITE_STYLE[state?.mapSite || 0]] || "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
     const items = src.split(";").map(r => { const [ki, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[ki], x, y, f }; })
       .filter(d => d.kind && d.y < y0 + H / k + 260 && Math.abs(d.x - MW / 2) < 1200).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
     let waiting = false;
