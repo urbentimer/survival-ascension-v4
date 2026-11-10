@@ -3454,8 +3454,8 @@ for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
 const cartImg = new Image(); cartImg.src = CV_CART.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k]; img._carn = !!CV_ART[k]; img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = k[0] === "r" && !!RF_TILES[k.slice(1)]; img._carn = k[0] === "c" && !!CV_TILES[k.slice(1)]; img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
@@ -3612,8 +3612,9 @@ function drawStationSigns() {   // world space, over each station: "COASTER · t
 }
 const atStation = q => coast.T.stations.some(st => Math.abs(q.x - st.x) < 262 && Math.abs(q.y - st.y) < 70);
 const cartKey = c => atStation(c) ? c.y - COASTER.H + 6 : c.y + 15;   // the cart's depth; its riders are drawn straight after it
-function drawRider(p) {   // a survivor sitting INSIDE a cart: drawn over the cart, legs cut off at its rim
-  ctx.save(); ctx.beginPath(); ctx.rect(p.x - 60, p.y - 170, 120, 170 - 19); ctx.clip(); drawSurvivor(p); ctx.restore();
+const CART_RIM = [.52, .5, .46, .5, .52];   // per view (D, DR, R, UR, U): how far up the cart (from its bottom, as a share of its height) the tub's rim is
+function drawRider(p, rimY) {   // a survivor sitting INSIDE a cart: drawn over the cart, everything below the tub's rim cut off (head, shoulders and arms show)
+  ctx.save(); ctx.beginPath(); ctx.rect(p.x - 80, rimY - 260, 160, 260); ctx.clip(); drawSurvivor(p); ctx.restore();
 }
 function coasterTall(tall) {   // the track's pieces and the carts go into the depth-sorted list at rail height, so the cart hides its riders' legs and things in front cover it
   const T = coast.T, P = T.pts, n = P.length, H = COASTER.H;
@@ -3641,6 +3642,10 @@ function drawCart(c, i) {   // views in the strip: driving down, down-right, rig
   if (!cartImg.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(performance.now() / 38 + i * 2) * .8 : 0;
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(Math.round(c.x), Math.round(c.y - COASTER.H + 8 + jit)); if (ax < 0) ctx.scale(-1, 1);
   ctx.drawImage(cartImg, v * CV_CART.w, 0, CV_CART.w, CV_CART.h, -CV_CART.w / 2 * .82, -CV_CART.h * .82, CV_CART.w * .82, CV_CART.h * .82); ctx.restore();
+  // its riders, drawn straight after it (so nothing can come between), the back seat first
+  const rim = Math.round(c.y - COASTER.H + 8 + jit) - CV_CART.h * .82 * CART_RIM[v], riders = [];
+  for (const p0 of state.players.values()) if (p0.ride > 0 && (p0.ride - 1) >> 1 === i) { const p = V(p0); if (p) riders.push(p); }
+  riders.sort((a, b) => a.y - b.y); for (const p of riders) drawRider(p, rim);
 }
 // Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
 // rounded shape, then the snow is feathered back over its edge in soft bands, with drifts of snow lying across the border.
@@ -3925,7 +3930,7 @@ function drawWorldObjects(extra) {
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
-  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) items.push({ y: cartKey(coasterCart(coast.T, coast.s, (p0.ride - 1) >> 1)) + .5, draw: () => drawRider(p) }); else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
+  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything

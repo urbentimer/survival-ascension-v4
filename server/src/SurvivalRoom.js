@@ -2893,8 +2893,9 @@ export class SurvivalRoom extends Room {
   }
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
-    if (C.wait > 0) { C.wait -= dt; if (C.wait <= 0) { C.wait = 0; C.next = (C.next + 1) % T.stations.length; } }
-    else { const left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L, step = Math.min(COASTER.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
+    if (C.wait > 0) { C.wait -= dt; if (C.wait <= 0) { C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
+    else { let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
+      const step = Math.min(COASTER.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
       for (const r of C.riders.values()) r.done += go;
       if (step >= left) { C.s = T.stations[C.next].s; C.wait = COASTER.wait; for (const [sid, r] of [...C.riders]) if (r.done >= T.L - 40) this.coasterOff(sid);
         const st = T.stations[C.next]; for (const [sid, si] of [...C.queue]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.queue.delete(sid); continue; } if (si === C.next && Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR + 60) this.coasterBoard(sid); } }   // whoever was waiting here gets on   // one lap: off you get
