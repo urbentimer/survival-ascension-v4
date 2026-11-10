@@ -353,3 +353,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Tests 33d (site loads, own pieces, wall solid, no pockets, boss reaches every lane). `SA_SITE=4 node tools/sim-waves.mjs 12`: OK, nothing inside solids.
 - Not done: Unity client doesn't know the new kinds. Ideas not built (ask first): blizzard gusts that cut vision, sliding on ice.
 - Preview 14.8 MB (limit 16.7). Cache: client.js?v=20261110h.
+
+## Nov 10 (i): Whiteout Station laid out organically (user: "more random, it mostly sits in one whole street")
+- `buildWhiteoutLayout` rewritten (bands / lanes / plugs / `woRows` removed): pieces are dropped at random spots, biggest first (4 landmarks each somewhere in its corner, then big buildings, medium, small, lights), kept only if they leave >= WO_GAP (104px) to every other piece, or sit flush against a building as an annexe (`annexe`), and `walkable()` still holds (no sealed pocket for radius 22 or 30 on a 20px grid). Rocks / ice / pines take over toward the map edges. ~200 pieces.
+- `whiteoutGround(WW, WH, layout)` now takes the layout: concrete yard, a foundation pad (concrete / metal) under every big building, frozen ponds where nothing stands. The client passes `decor` (syncDecor first; ground cache keyed on decorSrc).
+- Test 33d: no pockets at radius 16 and 28, buildings on many different lines. Flaky test "the break: you can walk around" fixed (random start next to the tower / generator): fixed start below them.
+- Cache: client.js?v=20261110i.

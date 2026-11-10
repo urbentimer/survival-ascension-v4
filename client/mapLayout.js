@@ -149,76 +149,76 @@ Object.assign(MAP_SOLID, {
   wWatchtower: woBox("wWatchtower", .4, .45), wDish: woBox("wDish", .42, .5), wMast: { ox: 0, oy: -18, hw: 34, hh: 14 }, wPines: { ox: -10, oy: -14, hw: 24, hh: 11 },
   wFloodlight: { ox: 0, oy: -18, hw: 42, hh: 13 }, wLamp: { ox: -8, oy: -8, hw: 10, hh: 7 }, wWindsock: { ox: -30, oy: -8, hw: 8, hh: 6 }, wBeacon: { ox: 0, oy: -14, hw: 28, hh: 11 },
   wFence: { ox: 0, oy: -16, hw: 70, hh: 10 }, wSign: { ox: 0, oy: -12, hw: 46, hh: 8 }, wFlag: { ox: -30, oy: -8, hw: 8, hh: 6 }, wSandbags: woBox("wSandbags", .46, .5) });
-// The maze is made of BANDS of buildings (290 tall) separated by east-west LANES (130 tall); gaps between buildings are the north-south passages.
-const WO = { lane: 130, band: 290, yardW: 680, edge: 70 };
-const woRows = (WW, WH) => { const cy = WH / 2, bands = [], lanes = [];   // bands: [top, bottom]; lanes: [top, bottom]
-  for (const s of [-1, 1]) { let y = WO.band / 2; for (let i = 0; i < 2; i++) { lanes.push(s < 0 ? [cy - y - WO.lane, cy - y] : [cy + y, cy + y + WO.lane]); y += WO.lane; bands.push(s < 0 ? [cy - y - WO.band, cy - y] : [cy + y, cy + y + WO.band]); y += WO.band; }
-    lanes.push(s < 0 ? [cy - y - WO.lane, cy - y] : [cy + y, cy + y + WO.lane]); }
-  return { centre: [cy - WO.band / 2, cy + WO.band / 2], bands: bands.sort((a, b) => a[0] - b[0]), lanes: lanes.sort((a, b) => a[0] - b[0]) }; };
-// The ground: snow everywhere, then these rectangles {x, y, w, h, tile} (tiles: concrete, metal, ice).
-export function whiteoutGround(WW, WH) {
-  const cx = WW / 2, R = [], { centre, lanes } = woRows(WW, WH);
-  R.push({ x: cx - WO.yardW / 2 - 10, y: centre[0] - 6, w: WO.yardW + 20, h: centre[1] - centre[0] + 12, tile: "concrete" });   // the radio tower's yard
-  lanes.forEach(([y0, y1], i) => { if (i === 2 || i === 3) R.push({ x: 0, y: y0, w: WW, h: y1 - y0, tile: "metal", road: 1 }); else if (i === 1 || i === 4) R.push({ x: 0, y: y0, w: WW, h: y1 - y0, tile: "concrete", road: 1 }); });
+// Whiteout Station is laid out ORGANICALLY (Nov 10, user: "more random, not everything along one street"): pieces are dropped at random
+// spots, biggest first, and kept only if they leave a lane of at least WO_GAP to everything else (or sit flush against a building as an
+// annexe), so the lanes twist between buildings of every size instead of running in straight rows.
+const WO_GAP = 104;   // narrowest lane: a boss's path body (radius 28, 40px path grid) always fits
+// The ground: snow everywhere, then these rectangles {x, y, w, h, tile}: the tower's yard, a foundation pad under every big building, frozen ponds.
+export function whiteoutGround(WW, WH, layout = []) {
+  const cx = WW / 2, cy = WH / 2, R = [{ x: cx - 350, y: cy - 225, w: 700, h: 450, tile: "concrete", road: 1 }], solid = [];
+  for (const d of layout) for (const s of solidList(d.kind)) { const b = { x0: d.x + (d.flip ? -s.ox : s.ox) - s.hw, x1: d.x + (d.flip ? -s.ox : s.ox) + s.hw, y0: d.y + s.oy - s.hh, y1: d.y + s.oy + s.hh }; solid.push(b);
+    if (s.hw >= 150 && !/wWall|wGate|wPlane/.test(d.kind)) R.push({ x: b.x0 - 26, y: b.y0 - 20, w: b.x1 - b.x0 + 52, h: b.y1 - b.y0 + 46, tile: /Hangar|Rig|Dome/.test(d.kind) ? "metal" : "concrete", road: 1 }); }
   let seed = 77; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 7; i++) R.push({ x: 100 + rnd() * (WW - 500), y: WH - 215 + rnd() * 40, w: 220 + rnd() * 200, h: 110 + rnd() * 50, tile: "ice" });   // frozen ponds on the southern snowfield
+  for (let i = 0, t = 0; i < 14 && t < 400; t++) { const w = 170 + rnd() * 200, h = 100 + rnd() * 90, x = 60 + rnd() * (WW - w - 120), y = 330 + rnd() * (WH - h - 380);
+    if (Math.abs(x + w / 2 - cx) < 520 && Math.abs(y + h / 2 - cy) < 380) continue;
+    if (solid.some(b => b.x0 < x + w + 30 && b.x1 > x - 30 && b.y0 < y + h + 30 && b.y1 > y - 30)) continue;
+    R.push({ x, y, w, h, tile: "ice" }); i++; }
   return R;
 }
 export function buildWhiteoutLayout(WW, WH, start = 2040) {
   let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
-  const cx = WW / 2, cy = WH / 2, out = [], boxes = [], { centre, bands, lanes } = woRows(WW, WH);
-  const bx = (k, x, y, flip) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh }));
+  const cx = WW / 2, cy = WH / 2, out = [], boxes = [], G = WO_GAP, WALL_Y = 214;
+  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id }));
   // walkability on a 20px grid: can a body of radius R get from the tower yard to every place it fits?
-  const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C), cellOf = (x, y) => Math.floor(y / C) * GW + Math.floor(x / C);
-  const flood = R => { const g = new Uint8Array(GW * GH);
+  const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
+  const sealed = R => { const g = new Uint8Array(GW * GH);
     for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.x0 - R) / C)), i1 = Math.min(GW - 1, Math.floor((b.x1 + R) / C)), j0 = Math.max(0, Math.floor((b.y0 - R) / C)), j1 = Math.min(GH - 1, Math.floor((b.y1 + R) / C));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const px = i * C + C / 2, py = j * C + C / 2; if (px > b.x0 - R && px < b.x1 + R && py > b.y0 - R && py < b.y1 + R) g[j * GW + i] = 1; } }
-    const q = [cellOf(cx, cy + 110)]; g[q[0]] = 2;
+    const q = [Math.floor((cy + 110) / C) * GW + Math.floor(cx / C)]; g[q[0]] = 2;
     for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
-    return g; };
-  const probes = []; for (const [y0, y1] of lanes) for (let x = 40; x < WW; x += 160) probes.push(cellOf(x, (y0 + y1) / 2));   // a boss must reach every stretch of lane that's wide enough for him
-  const walkable = () => { const a = flood(22); for (let i = 0; i < a.length; i++) if (!a[i]) return false;   // no sealed pockets
-    const b = flood(50); return probes.every(c => b[c] !== 0); };
-  const add = (k, x, y, o = {}) => {
-    x = Math.round(x); y = Math.round(y); const flip = !!o.flip, b = bx(k, x, y, flip), m = o.apart ?? 2;
-    if (o.check && b.some(q => boxes.some(z => q.x0 < z.x1 + m && q.x1 > z.x0 - m && q.y0 < z.y1 + m && q.y1 > z.y0 - m))) return false;   // never on top of another piece
+    return g.includes(0); };
+  const walkable = () => !sealed(22) && !sealed(30);   // no pocket a survivor or a boss could be shut in (or shut out of)
+  const dist = (a, b) => Math.hypot(Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), Math.max(a.y0 - b.y1, b.y0 - a.y1, 0));
+  const inMap = (q, m) => q.x0 >= m && q.x1 <= WW - m && q.y1 <= WH - m * .6 && q.y0 >= WALL_Y + m;
+  const offYard = q => !(q.x0 < cx + 400 && q.x1 > cx - 400 && q.y0 < cy + 270 && q.y1 > cy - 270);
+  // gap = room to every other piece; host = the piece it may sit flush against
+  const place = (k, x, y, flip, gap, host = -1, edge = 96) => {
+    x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
+    if (!b.every(q => inMap(q, edge) && offYard(q) && boxes.every(z => z.id === host ? dist(q, z) >= 3 : dist(q, z) >= gap))) return false;
     out.push({ kind: k, x, y, flip }); boxes.push(...b);
-    if (o.check && !walkable()) { out.pop(); boxes.length -= b.length; return false; }
+    if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
     return true;
   };
-  const fw = k => { const l = solidList(k); return Math.max(...l.map(s => s.ox + s.hw)) - Math.min(...l.map(s => s.ox - s.hw)); };   // footprint width
-  const top = (k, y) => Math.min(...solidList(k).map(s => y + s.oy - s.hh));
-  // the perimeter wall along the top, the main gate in the middle
-  add("wGate", cx, 214); for (let x = cx - 380 - 260; x > -260; x -= 520) add("wWall", x, 214); for (let x = cx + 380 + 260; x < WW + 260; x += 520) add("wWall", x, 214);
-  // one band of buildings: big ones, or a column of two small ones, with a passage (or no gap) after each
-  const BIG = ["wLab", "wLab", "wLab", "wQuarters", "wQuarters", "wLabBurnt", "wLabBurnt", "wHangar"], NOFLIP = { wQuarters: 1, wHangar: 1, wPlane: 1, wLabBurnt: 1 };
-  const COLS = [["wContainers", "wGenerator"], ["wTank", "wBarrels"], ["wShed", "wCrates"], ["wTruck", "wGasRack"], ["wDish", "wBigCrate"], ["wTankRound", "wPipes"], ["wSnowcat", "wShelf"], ["wContainers", "wBuggy"], ["wCrates", "wForklift"]];
-  const column = (pair, xc, yb) => { const [a, b] = pair; if (!add(a, xc, yb, { flip: rnd() < .5, check: true })) return false; const y2 = top(a, yb) - 8; if (top(b, y2) > yb - WO.band + 4) add(b, xc, y2, { flip: rnd() < .5, check: true }); return true; };
-  const fill = (x0, x1, yb, first, last) => {
-    let x = x0; const lastW = last ? fw(last) : 0, end = x1 - (last ? lastW + WO.lane : 0);
-    if (first) { add(first, x + fw(first) / 2 - (first === "wPlane" ? 5 : 0), yb, { check: true }); x += fw(first) + WO.lane; }
-    for (let guard = 0; x < end - 140 && guard < 40; guard++) {
-      const big = rnd() < .58, k = big ? pick(BIG) : null, pair = big ? null : pick(COLS), w = big ? fw(k) : Math.max(fw(pair[0]), fw(pair[1]));
-      if (x + w > end) { if (big) continue; break; }
-      const okd = big ? add(k, x + w / 2, yb, { flip: !NOFLIP[k] && rnd() < .5, check: true }) : column(pair, x + w / 2, yb);
-      x += (okd ? w : 60) + (rnd() < .5 ? WO.lane + rnd() * 16 : 6);
-    }
-    if (last) add(last, x1 - lastW / 2, yb, { check: true });
+  const drop = (k, gap, flip = rnd() < .5) => place(k, 80 + rnd() * (WW - 160), WALL_Y + 90 + rnd() * (WH - WALL_Y - 110), flip, gap);
+  const annexe = (k, gap, hosts) => {   // flush against one side of a building (never the plane / wall), sliding along it
+    const s = MAP_SOLID[k]; if (Array.isArray(s) || !hosts.length) return false; const h = pick(hosts), side = Math.floor(rnd() * 4), flip = rnd() < .5, ox = flip ? -s.ox : s.ox;
+    const along = (a0, a1, half) => a1 - a0 > half * 2 ? a0 + half + rnd() * (a1 - a0 - half * 2) : (a0 + a1) / 2;
+    const bxc = side === 0 ? h.x1 + 5 + s.hw : side === 1 ? h.x0 - 5 - s.hw : along(h.x0, h.x1, s.hw), byc = side === 2 ? h.y1 + 5 + s.hh : side === 3 ? h.y0 - 5 - s.hh : along(h.y0, h.y1, s.hh);
+    return place(k, bxc - ox, byc - s.oy, flip, gap, h.id);
   };
-  const E = WO.edge, yb = b => b[1] - 8;
-  fill(E, WW - E, yb(bands[0]), "wDome", "wRig"); fill(E, WW - E, yb(bands[1]));
-  fill(E, cx - WO.yardW / 2, yb(centre)); fill(cx + WO.yardW / 2, WW - E, yb(centre));          // the tower's yard stays open between them
-  fill(E, WW - E, yb(bands[2])); fill(E, WW - E, yb(bands[3]), "wPlane", "wHangar");
-  // plugs: things parked across a lane so you have to go round through the buildings (only where everything stays reachable)
-  for (const [y0, y1] of lanes.slice(1, 5)) for (let x = 260 + rnd() * 300; x < WW - 260; x += 400 + rnd() * 330) {
-    if (Math.abs(x - cx) < WO.yardW / 2 + 140) continue;
-    add(pick(["wContainers", "wTank", "wTankRound", "wTruck"]), x, y1 - 1, { flip: rnd() < .5, check: true });
+  // the perimeter wall along the top, the main gate in the middle (pieces without an id never count as hosts)
+  for (const [k, x] of [["wGate", cx], ...[-1, 1].flatMap(sg => [0, 1, 2, 3, 4].map(i => ["wWall", cx + sg * (640 + i * 520)]))]) { out.push({ kind: k, x, y: WALL_Y, flip: false }); boxes.push(...bx(k, x, WALL_Y, false, -2)); }
+  // landmarks, one per corner, each somewhere different inside its corner
+  const corner = (k, sx, sy) => { for (let t = 0; t < 60; t++) if (place(k, cx + sx * (1050 + rnd() * 750), cy + sy * (420 + rnd() * 520) + 160, false, G + 20)) return; };
+  corner("wDome", -1, -1); corner("wRig", 1, -1); corner("wPlane", -1, 1); corner("wHangar", 1, 1);
+  const hostsOf = () => boxes.filter(b => b.id >= 0 && out[b.id].kind !== "wPlane" && b.x1 - b.x0 > 150);
+  // big buildings anywhere they fit, some hugging the minimum gap and some standing further apart
+  const BIG = ["wLab", "wLab", "wLab", "wQuarters", "wQuarters", "wLabBurnt", "wHangar"], NOFLIP = { wQuarters: 1, wHangar: 1, wLabBurnt: 1 };
+  for (let t = 0; t < 2600; t++) { const k = pick(BIG); drop(k, G + (rnd() < .35 ? rnd() * 90 : rnd() * 14), !NOFLIP[k] && rnd() < .5); }
+  // medium things: on their own in the gaps, or as an annexe against a building
+  const MED = ["wContainers", "wContainers", "wContainers", "wTank", "wTank", "wTankRound", "wTruck", "wTruck", "wShed", "wShed", "wSnowcat", "wDish", "wWatchtower", "wSandbags"];
+  for (let t = 0; t < 1500; t++) { const k = pick(MED); if (rnd() < .45) annexe(k, G, hostsOf()); else drop(k, G + rnd() * 20); }
+  // small things; rocks, ice and pines take over toward the edges of the map
+  const SMALL = ["wGenerator", "wCrates", "wCrates", "wGasRack", "wBigCrate", "wShelf", "wPipes", "wBarrels", "wForklift", "wBuggy", "wBarrier", "wFence"], WILD = ["wRocks", "wRocks", "wRocks", "wIce", "wIce", "wIce", "wRockArch", "wRockArch", "wPines", "wPines"];
+  for (let t = 0; t < 5200; t++) {
+    if (rnd() < .5) { annexe(pick(rnd() < .25 ? WILD : SMALL), G, hostsOf()); continue; }
+    const x = 80 + rnd() * (WW - 160), y = WALL_Y + 90 + rnd() * (WH - WALL_Y - 110), far = Math.max(Math.abs(x - cx) / (WW / 2), Math.abs(y - cy) / (WH / 2));
+    place(pick(far > .72 ? WILD : rnd() < .2 ? WILD : SMALL), x, y, rnd() < .5, G + rnd() * 16);
   }
-  // the yard: lamps and a beacon at its corners; flags and signs under the wall; the southern snowfield: rocks, ice, pines
-  for (const [dx, dy] of [[-310, -120], [310, -120], [-310, 138], [310, 138]]) add(dy < 0 ? "wLamp" : "wBeacon", cx + dx, cy + dy, { flip: dx > 0, check: true });
-  for (let x = 240; x < WW - 200; x += 610) add(pick(["wFlag", "wSign", "wWindsock", "wLamp"]), x + rnd() * 80, 236, { check: true });
-  for (let i = 0, t = 0; i < 26 && t < 200; t++) { const k = pick(["wRocks", "wRocks", "wIce", "wIce", "wPines", "wPines", "wRockArch", "wFloodlight", "wFence"]);
-    if (add(k, 90 + rnd() * (WW - 180), WH - 150 + rnd() * 130, { flip: rnd() < .5, check: true, apart: 46 })) i++; }
+  // lights and markers: lamps round the yard, then lamps / floodlights / beacons / flags tucked against buildings and out in the snow
+  for (const [dx, dy] of [[-330, -205], [330, -205], [-330, 215], [330, 215]]) { const k = dy < 0 ? "wLamp" : "wBeacon", id = out.length; out.push({ kind: k, x: cx + dx, y: cy + dy, flip: dx > 0 }); boxes.push(...bx(k, cx + dx, cy + dy, dx > 0, id)); }
+  const TINY = ["wLamp", "wLamp", "wLamp", "wFloodlight", "wBeacon", "wMast", "wWindsock", "wFlag", "wSign"];
+  for (let t = 0, n = 0; t < 900 && n < 46; t++) if (rnd() < .5 ? annexe(pick(TINY), 92, hostsOf()) : place(pick(TINY), 80 + rnd() * (WW - 160), WALL_Y + 60 + rnd() * (WH - WALL_Y - 90), rnd() < .5, 100, -1, 60)) n++;
   return out;
 }
 

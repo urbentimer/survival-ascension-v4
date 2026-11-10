@@ -96,7 +96,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 // 4. countdown between waves
 { const { room, A, send, P } = makeRoom(); for (let i = 0; i < 4; i++) room.spawnZombie(false, "walker"); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();
   ok(room.state.phase === "cleared" && room.state.zombies.size === 0, "wave ends after 90s: every zombie left dies");
-  { const p = P(A), x0 = p.x; room.mapBoxesNear = () => []; for (let i = 0; i < 6; i++) { send(A, "input", { dx: 1, dy: 0 }); room.lastInputs.set("A", Date.now() - 50); }
+  { const p = P(A); p.x = room.A.cx - 60; p.y = room.A.cy + 230; const x0 = p.x; room.mapBoxesNear = () => [];   /* below the tower + generator: a random start beside them made this flaky */ for (let i = 0; i < 6; i++) { send(A, "input", { dx: 1, dy: 0 }); room.lastInputs.set("A", Date.now() - 50); }
     ok(p.x > x0 + 20, `the break: you can walk around (moved ${Math.round(p.x - x0)}px)`); }
   room.lastTick = Date.now() - 50; room.tick(); ok(room.state.countdown > 59 && room.state.countdown <= 60, "break: up to 60s (shop open)");
   for (let i = 0; i < 20; i++) { room.lastTick = Date.now() - 100; room.tick(); } ok(room.state.phase === "cleared", "nobody ready: still on break after 2s");
@@ -785,8 +785,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const C = 20, GW = 220, GH = 140, flood = R => { const g = new Uint8Array(GW * GH); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (room.blockedByMap(i * C + 10, j * C + 10, R)) g[j * GW + i] = 1;
     const q = [Math.floor(1510 / C) * GW + 110]; g[q[0]] = 2; for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) if (a >= 0 && b >= 0 && a < GW && b < GH && !g[b * GW + a]) { g[b * GW + a] = 2; q.push(b * GW + a); } } return g; };
   const g0 = flood(16); ok(!g0.includes(0), `no sealed pockets: every open spot connects to the tower (${g0.filter(v => v === 0).length} cut off)`);
-  const g1 = flood(46), lanes = [285, 705, 1125, 1675, 2095, 2515]; let cut = 0, n = 0; for (const y of lanes) for (let x = 60; x < 4400; x += 200) { const c = g1[Math.floor(y / C) * GW + Math.floor(x / C)]; if (c !== 1) { n++; if (c === 0) cut++; } }
-  ok(n > 60 && cut === 0, `a boss-sized body can reach every lane (${n} lane spots checked, ${cut} cut off)`);
+  const g1 = flood(28); ok(!g1.includes(0), `a boss's path body fits everywhere a survivor can go: no lane too narrow for him (${g1.filter(v => v === 0).length} cut off)`);
+  const big = lay.filter(r => [44, 46, 47, 52].includes(r[0])), ys = new Set(big.map(r => Math.round(r[2] / 40))); ok(big.length >= 12 && ys.size >= 9, `buildings are scattered, not lined up in rows (${big.length} big buildings on ${ys.size} different lines)`);
   room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";

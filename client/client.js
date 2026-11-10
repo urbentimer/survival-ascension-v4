@@ -3521,9 +3521,10 @@ let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
   const wo = whiteoutMap(), T = wo ? "w" : "d", base = wo ? "wsnow" : "dgrass";
-  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== wo) dynGroundCache = { w: WW, wo, g: (wo ? whiteoutGround : dynastyGround)(WW, WH) };
+  syncDecor();   // Whiteout Station's ground (foundation pads, ponds) is worked out from where the pieces stand
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== wo || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo, src: decorSrc, g: wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
   const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
-  drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready, (vx, vy, vw, vh) => {
+  drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
     const grass = pattern(base); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
     for (const g of dynGroundCache.g) { const p = pattern(T + g.tile); if (p) fill(p, g.x, g.y, g.w, g.h);
