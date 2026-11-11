@@ -534,11 +534,11 @@ export function buildMineLayout(WW, WH, start = 6060) {
   for (let n = 0, t = 0; n < 26 && t < 200; t++) { const x = 3200 * sx + rnd() * (WW - 3300 * sx), y = 200 + rnd() * (WH - 300); if (place(rnd() < .75 ? "mCrystalSmall" : "mCrystalCrate", x, y, 90, rnd() < .5)) n++; }   // crystals glinting out in the caves
   for (const [x, y] of [[tx - 450, ty - 330], [tx + 450, ty - 330], [tx - 450, ty + 310], [tx + 450, ty + 310]]) place("mFloodlight", x, y, 30);
   // flat ground marks (under everything): puddles round the flooded pit, hazard paint by the station and the crusher, rubble and shards everywhere
-  const flat = (k, x, y, flip = false) => { if (!TP.some(p => Math.abs(p.x - x) < 110 && Math.abs(p.y - y + 50) < 90)) out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); };   // (never lying across the rails)
+  const flat = (k, x, y, flip = false) => { if (!TP.some(p => Math.abs(p.x - x) < 110 && Math.abs(p.y - y + 50) < 90) && (k === "mChains" ? Math.hypot(x - stx, (y - sty) * 1.6) > 330 : !(x > dx0 - 90 && y > dy0 - 40))) out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); };   // (never lying across the rails; the dungeon floor stays clean: only chains on it, user Nov 11)
   const [ppx, ppy] = S(MN_SPOT.pit); for (let i = 0; i < 9; i++) flat("mPuddles", ppx + (rnd() - .5) * 560, ppy + 40 + (rnd() - .5) * 300, rnd() < .5);
   flat("mStripes", st0.x - 150, st0.y + 300); flat("mChevron", st0.x + 160, st0.y + 300); flat("mHatch", tx - 260, ty + 200); flat("mGrate", tx + 270, ty - 160);
   for (let i = 0; i < 150; i++) flat(pick(["mStones", "mStones", "mDirt", "mDirt", "mRocksM", "mRocksM", "mPlanks", "mRopeM", "mGoldVein", "mBlueCrack", "mBlueCrack", "mShards", "mCrystalRocks", "mStain", "mRopeCoil"]), 60 + rnd() * (WW - 120), 120 + rnd() * (WH - 160), rnd() < .5);
-  for (let i = 0; i < 10; i++) flat(pick(["mChains", "mChains", "mBlueCrack", "mShards"]), dx0 + 100 + rnd() * (dx1 - dx0 - 200), dy0 + 250 + rnd() * (dy1 - dy0 - 320), rnd() < .5);
+  for (let i = 0; i < 6; i++) flat("mChains", dx0 + 100 + rnd() * (dx1 - dx0 - 200), dy0 + 250 + rnd() * (dy1 - dy0 - 320), rnd() < .5);
   return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "mRuneCircle") - (a.kind === "mRuneCircle"));   // flats first (the rune circle first of all: marks lie on top)
 }
 
