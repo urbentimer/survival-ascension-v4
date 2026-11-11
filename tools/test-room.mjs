@@ -842,6 +842,36 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
   ok(z && Math.abs(z.x - 2450) < 60 && Math.abs(z.y - 952) < 40 && !room.blockedByMap(z.x, z.y, 0), `the boss climbs out of the DANGER shaft (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }
+// 33i. WAVE 20: the Deep Mine mission (Nov 11): runes -> fuel -> ride -> statue, four times; then the Beast chases the carts for a lap; then the portal
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); p.hp = p.maxHp; q.hp = q.maxHp; } };
+  room.state.phase = "lobby"; send(A, "settings", { map: 4 }); room.state.phase = "playing"; room.state.scrap = 9999; p.x = 2200; p.y = 1700; send(A, "build", { kind: "barricade", x: 2260, y: 1700 }); const nSt = room.state.structures.size;
+  room.jumpToWave(20); const m = room.mine, C = room.coaster, T = C?.T;
+  ok(m && room.state.mapSite === 6 && room.state.waveType === "mission" && room.state.mission.startsWith("runes|0|0|") && room.state.structures.size === 0 && Math.hypot(p.x - 1450, p.y - 1330) < 300, `wave 20 takes the team to the Deep Mine: mission on, 4 runes at their shrines (${room.state.mission.slice(0, 40)}...)`);
+  tick(200); ok(room.state.phase === "playing" && C.wait > 0 && C.next === 0, "the wave doesn't end on a timer, and the carts wait at the station");
+  const ride = () => { for (let i = 0; i < 4000 && !(C.wait > 0 && C.next === 1); i++) tick(1); }, home = () => { for (let i = 0; i < 4000 && !(C.wait > 0 && C.next === 0 && !(p.ride > 0)); i++) tick(1); };
+  for (let n = 1; n <= 4; n++) {
+    const r = m.runes.find(o => o.st === 0); p.x = r.x; p.y = r.y + 40; send(A, "deep"); const got = r.st === 1 && r.by === "A";
+    p.x = 850; p.y = 470; room.coaster.cd.clear(); send(A, "coaster"); const s0 = C.s; tick(200); const stayed = C.s === s0 && p.ride > 0;
+    m.fuel = 5; tick(140); const left = C.s !== s0; ride(); send(A, "coaster"); const off = p.ride === 0 && room.inCordon(p);
+    if (n === 1) { ok(got, "F at a shrine: you take its rune"); ok(stayed, "a rune aboard but no fuel: the carts don't leave"); ok(left && m.fuel === 0, "5 shards of fuel: they leave (and the fuel is used)"); ok(off, "hop off at the boss stop, inside the dungeon");
+      send(A, "deep"); ok(m.placed === 0, "F far from the statue does nothing"); }
+    const ST = room.minePieces.statue; p.x = ST.x; p.y = ST.y + 40; send(A, "deep");
+    if (n === 1) { ok(m.placed === 1 && r.st === 3 && m.inserted, "F at the statue's plinth: the rune goes in (1/4)"); const b0 = C.s; tick(100); ok(C.s === b0, "the carts wait while you're off"); }
+    if (n < 4) { p.x = T.stations[1].x; p.y = T.stations[1].y - 150; send(A, "coaster"); home(); if (n === 1) ok(p.ride === 0 && Math.abs(p.x - 850) < 260 && !room.inCordon(p), `they take you back to the station (${Math.round(p.x)},${Math.round(p.y)})`); }
+  }
+  ok(m.placed === 4 && m.step === "awake", "the fourth rune wakes the Mine Beast"); tick(Math.ceil(7 / .05) + 5);
+  const z = [...room.state.zombies.values()].find(o => o.kind === "minebeast"); ok(m.step === "chase" && p.ride > 0 && z, "after the awakening you're put in the carts and it comes after them");
+  tick(100); const g0 = m.gap; ok(g0 < 500 && C.wait === 0, `it closes in on the carts (${Math.round(g0)}px behind)`);
+  room.hitZombie(z, p, 2000); tick(1); ok(m.gap > g0 + 100 && z.hp === z.maxHp, `shooting it shoves it back (${Math.round(g0)} -> ${Math.round(m.gap)}px) and can't kill it`);
+  m.gap = 141; tick(2); ok(m.cartHp === 4 && m.gap > 380, "if it reaches the carts it smashes them (4 hits left) and falls back");
+  for (let i = 0; i < 3000 && m.step === "chase"; i++) { tick(1); m.gap = Math.max(m.gap, 300); } ok(m.step === "escaped", "one lap later the carts roll back into the dungeon: through the portal");
+  tick(80); ok(room.state.phase === "cleared" && !room.mine && room.state.mapSite === 4 && room.state.mission === "" && room.state.structures.size === nSt && p.ride === 0, `wave cleared: back on your own map, what you built is back (${room.state.structures.size} structure)`);
+  send(A, "ready"); send(B, "ready"); room.startNextWave(); ok(room.state.stage === 21 && room.state.waveType === "normal" && room.state.mapSite === 4, "wave 21 carries on as normal");
+  // the carts smashed = defeat; a dropped rune can be picked up again
+  room.jumpToWave(20); const m2 = room.mine, r2 = m2.runes[0]; p.x = r2.x; p.y = r2.y + 40; send(A, "deep"); p.x = 1500; p.y = 1700; tick(2); p.alive = false; tick(2); ok(r2.st === 2 && Math.hypot(r2.x - 1500, r2.y - 1700) < 60, "the carrier goes down: the rune lies where they fell");
+  p.alive = true; q.x = r2.x; q.y = r2.y; send(B, "deep"); ok(r2.st === 1 && r2.by === "B", "a teammate picks it up");
+  m2.step = "chase"; m2.cartHp = 1; m2.gap = 100; room.mineChase(); m2.gap = 100; m2.cartHp = 1; tick(2); ok(room.state.phase === "defeat" || !room.coaster.riders.size, "the last hit on the carts ends the run");
+  room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
   send(A, "settings", { map: 3 });

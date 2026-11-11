@@ -2,7 +2,7 @@ import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
 import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
-import { MN_ART, MN_TILES, MN_CART, MN_FX } from "./mineArt.js";   // The Deep Mine pieces, the mine cart, the portal swirl + crystal shatter (tools/extract-mine.py)
+import { MN_ART, MN_TILES, MN_CART, MN_FX, MN_BEAST } from "./mineArt.js";   // The Deep Mine pieces, the mine cart, the portal swirl + crystal shatter (tools/extract-mine.py)
 import { CV_ART, CV_TILES, CV_CART } from "./carnivalArt.js";   // Midnight Carnival pieces + the coaster cart (tools/extract-carnival.py)
 import { RF_ART, RF_TILES } from "./refineryArt.js";   // Scorched Refinery pieces (tools/extract-refinery.py)
 import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
@@ -135,6 +135,7 @@ function connected() {
   room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
+  room.onMessage("deep", m => { try { onDeep(m); } catch (e) { reportError(e, "deep"); } });
   room.onMessage("coaster", m => { if (m.id !== myId) return; coastQueued = m.k === "queue"; if (m.k === "on" || m.k === "off") playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5);
     if (m.k === "queue") feed.unshift({ text: mineMap() ? "Wait here: you'll hop in when the carts stop" : "Wait here: you'll hop on when the train stops", t: Date.now() }); if (m.k === "on") feed.unshift({ text: mineMap() ? "In the mine cart! One lap of the mine: shoot from the cart." : "On the coaster! One lap, shoot from the cart. F at a station to get off.", t: Date.now() }); feed.length = Math.min(feed.length, 5); });
   room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
@@ -262,6 +263,7 @@ $("skipPyre").onclick = () => { room?.send("debugBoss", { wave: 8 }); closePanel
 $("skipScreamer").onclick = () => { room?.send("debugBoss", { wave: 12 }); closePanels(); };
 $("skipAbom").onclick = () => { room?.send("debugBoss", { wave: 16 }); closePanels(); };
 $("skipMorph").onclick = () => { room?.send("debugMorph"); closePanels(); };
+$("skipMine").onclick = () => { room?.send("debugMine"); closePanels(); }; $("mineFuel").onclick = () => { room?.send("debugMine", { k: "fuel" }); closePanels(); }; $("mineRune").onclick = () => { room?.send("debugMine", { k: "rune" }); closePanels(); };
 $("noCdToggle").onclick = () => room?.send("testNoCd");
 function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
 $("waveJumpGo").onclick = jumpToWave;
@@ -296,6 +298,7 @@ function renderState() {
   $("skipScreamer").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipAbom").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
   $("skipMorph").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
+  $("skipMine").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase) || !!state.mission); for (const id of ["mineFuel", "mineRune"]) $(id).classList.toggle("hidden", !(SOLO_PREVIEW || host) || state.phase !== "playing" || !state.mission);
   $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
   if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
   txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
@@ -345,7 +348,7 @@ function renderHud(me, players) {
   // top left: wave, timer, zombies, day/night
   txt("hudWave", state.stage);
   const hiveUp = [...state.zombies.values()].some(z => z.kind === "hivemind");
-  txt("hudTimer", state.explore ? "EXPLORE MODE" : state.waveType !== "boss" ? ((state.elapsed || 0) >= 90 && hiveUp ? "KILL THE HIVEMIND" : fmtTime(90 - (state.elapsed || 0)))
+  txt("hudTimer", state.explore ? "EXPLORE MODE" : state.waveType === "mission" ? "MISSION" : state.waveType !== "boss" ? ((state.elapsed || 0) >= 90 && hiveUp ? "KILL THE HIVEMIND" : fmtTime(90 - (state.elapsed || 0)))
     : state.bossPhase === "horde" ? (state.elapsed < 45 ? "BOSS WAVE · horde " + fmtTime(45 - (state.elapsed || 0)) : "BOSS WAVE · clear the horde")
     : state.bossPhase === "intro" ? "THE BOSS IS COMING" : "BOSS FIGHT");
   renderBossIntro();
@@ -805,7 +808,7 @@ window.addEventListener("keydown", e => {
   else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
-  else if (k === "f" && !e.repeat) { if (!tryRevive() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
+  else if (k === "f" && !e.repeat) { if (!tryRevive() && !deepUse() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
   else if (k === "t") togglePanel("equip");
   else if (k === "u") togglePanel("levelUp");
   else if (k === "v" && SOLO_PREVIEW) { const i = (VISION_STEPS.indexOf(NIGHT.playerR / W) + 1) % VISION_STEPS.length; NIGHT.playerR = Math.round(VISION_STEPS[i] * W); feed.unshift({ text: `Test: night vision ${Math.round(VISION_STEPS[i] * 100)}% (${NIGHT.playerR}px) · V to switch`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
@@ -923,7 +926,7 @@ function drawBuildWheel() {
   const meS = me_(), me = V(meS);
   if (placing && (!meS?.alive || state.vehicles?.get(myId) || state.phase !== "playing" && state.phase !== "cleared")) placing = null;   // died / got in a vehicle / match over
   if (placing && me && !wheel) drawPlacement(me);
-  drawStationPrompt(); drawCoasterPrompt();
+  drawStationPrompt(); if (!drawDeepPrompt()) drawCoasterPrompt();
   if (!wheel || !me) return;
   const R = WHEEL_R, step = Math.PI * 2 / BUILD_WHEEL.length;
   ctx.save();
@@ -2756,6 +2759,7 @@ function drawZombieDir8(z, img8, side) {
   return { feet, h: info.h };
 }
 function drawZombieAny(z) {
+  if (z.kind === "minebeast") return drawMineBeast(z);
   if (z.kind === "hivemind") return drawHivemind(z);
   if (z.kind === "butcher" && butcherImgs.walk.naturalWidth) return drawButcher(z);
   if (z.kind === "pyre" && pyImgs.walk.naturalWidth) return drawPyre(z);
@@ -3231,6 +3235,10 @@ function drawGenerator(x, y) {
 }
 const LOOT_ART = { scrap: "crate", medkit: "medkit", ammo: "ammo", weapon: "weaponCase" };
 function drawLoot(item) {
+  if (item.kind === "shard") { const t = performance.now() / 1000, x = item.x, y = item.y + Math.sin(t * 3 + item.x) * 3, k = .7 + .3 * Math.sin(t * 5 + item.y);   // the mine mission: a crystal shard (cart fuel)
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y, 2, x, y, 30); g.addColorStop(0, `rgba(110,205,255,${.55 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60); ctx.restore();
+    ctx.save(); ctx.translate(x, y); ctx.fillStyle = "#0b2740"; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(9, -2); ctx.lineTo(3, 12); ctx.lineTo(-6, 9); ctx.lineTo(-9, -3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#58c4ff"; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, -2); ctx.lineTo(2, 9); ctx.lineTo(-4, 7); ctx.lineTo(-6, -2); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#d6f3ff"; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(-6, -2); ctx.lineTo(-1, -1); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
   const bob = Math.sin(performance.now() / 300 + item.x) * 2;
   if (item.kind === "weapon") { const c = item.rarity === "Legendary" ? "255,170,40" : item.rarity === "Epic" ? "190,110,255" : item.rarity === "Rare" ? "90,170,255" : "220,220,220"; const g = ctx.createRadialGradient(item.x, item.y, 2, item.x, item.y, 24); g.addColorStop(0, `rgba(${c},.45)`); g.addColorStop(1, `rgba(${c},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(item.x, item.y, 24, 0, 7); ctx.fill(); }
   // soft pulsing light on the ground so drops stand out
@@ -3424,7 +3432,9 @@ function updateCamera(t) {
   if (!state) { cam.ready = false; return; }
   updateSmooth();
   const me = V(viewTarget());
-  const fx_ = me ? me.x : towerX(), fy_ = me ? me.y : towerY();
+  let fx_ = me ? me.x : towerX(), fy_ = me ? me.y : towerY();
+  if (state.mission && me && me.ride > 0) { const D = deepState(); if (D?.step === "chase") for (const z of state.zombies.values()) if (z.kind === "minebeast") { const k = .45, tx = Math.max(-300, Math.min(300, (z.x - me.x) * k)), ty = Math.max(-190, Math.min(190, (z.y - me.y) * k)); deepCam.x += (tx - deepCam.x) * .06; deepCam.y += (ty - deepCam.y) * .06; } } else { deepCam.x *= .92; deepCam.y *= .92; }
+  fx_ += deepCam.x; fy_ += deepCam.y;   // the mine chase: the camera leans back toward the Beast so you can see it coming
   cam.x = Math.max(0, Math.min(worldW() - W, fx_ - W / 2));
   cam.y = Math.max(0, Math.min(worldH() - H, fy_ - H / 2));
   cam.ready = true;
@@ -3455,7 +3465,7 @@ for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
 for (const [k, url] of Object.entries(MN_TILES)) TILE_URLS["m" + k] = url;
 const cartImg = new Image(); if (CV_CART.url) cartImg.src = CV_CART.url;
-const mineCartImg = new Image(); mineCartImg.src = MN_CART.url; const portalFxImg = new Image(); portalFxImg.src = MN_FX.portal.url; const shatterFxImg = new Image(); shatterFxImg.src = MN_FX.shatter.url;
+const mineCartImg = new Image(); mineCartImg.src = MN_CART.url; const portalFxImg = new Image(); portalFxImg.src = MN_FX.portal.url; const shatterFxImg = new Image(); shatterFxImg.src = MN_FX.shatter.url; const beastImg = new Image(); beastImg.src = MN_BEAST.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
 for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img._mine = !!MN_ART[k]; img.src = url; mapImgs[k] = img; }
 for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); img._mine = k[0] === "m" && !!MN_TILES[k.slice(1)]; /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
@@ -3568,15 +3578,17 @@ function drawDynastyWorld() {
     if (/^mChasm/.test(d.kind)) continue;   // (drawn into the ground)
     if (d.kind === "mRuneCircle") { drawRuneCircle(d); continue; }
     if (d.kind === "mStop") { drawBossStop(d); continue; }
+    if (d.kind === "mStatue") { tall.push({ y: d.y - 6, draw: () => { drawDeepStatue(d, a); if (!deepState()) statueFx(d, a); } }); continue; }
+    if (/^mSeal/.test(d.kind) && deepState() && Number(d.kind.slice(5)) <= deepState().placed) { const im = mapImgs[d.kind]; if (im?.naturalWidth) tall.push({ y: d.y - 6, draw: () => ctx.drawImage(darkCopy(im), Math.round(d.x - im.width / 2), d.y - im.height) }); continue; }   // a seal whose rune is in: shattered, dark
     if (d.kind === "mShrine") { tall.push({ y: d.y - 6, draw: () => { drawMapObj(d); shrineFx(d); dynPieceFx(d, a); } }); continue; }
     if (d.kind === "mWardGate") { tall.push({ y: d.flip ? d.y + 130 : d.y + 40, draw: () => drawWard(d) }); continue; }
     if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .25 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
       if (img) tall.push({ y: d.kind === "mStation" ? d.y - 104 : d.y - 6, /* the mine station: its roof goes over the carts parked under it (their riders sit below the eave), but not over people on the deck */ draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); if (d.kind === "mStatue") statueFx(d, a); dynPieceFx(d, a); } });
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); dynPieceFx(d, a); } });
   }
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
-  if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }
+  if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); drawDeepWorld(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }
 }
 // ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
 let coast = null, coastLast = 0, CO = COASTER;   // CO: the ride's numbers (the coaster, or the mine train: T.cfg)
@@ -3606,10 +3618,12 @@ function drawCoasterPrompt() {   // screen space, over your head (like the repai
   const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "", col = "#ffe08a";
   const RW = coast.mn ? "MINE CART" : "COASTER", rw = coast.mn ? "mine cart" : "coaster";
   const hold = state.coasterWait >= 1000 ? state.coasterWait - 1000 : 0;
+  if (me.ride > 0 && !st && state.mission) return;   // (the mine mission: the objective pop-up says what to do)
   if (me.ride > 0) { text = st ? (st.boss ? "[F] Hop off here · the carts wait until you're back on" : "[F] Get off here") : hold ? `Waiting for ${hold} to get back on…` : `Riding the ${rw} · aim and shoot!`; col = st ? "#ffe08a" : "#9fe3ff"; }
   else { const near = coastNear(me); if (!near) return;
     if (me.rideCd > 0) { text = `${coast.mn ? "Mine cart" : "Coaster"}: ride again in ${Math.ceil(me.rideCd)}s`; col = "#ff9d6b"; }
-    else if (st === near) text = hold ? `[F] GET BACK IN THE ${RW} · waiting for ${hold}` : `[F] GET IN THE ${RW} · leaves in ${Math.ceil(state.coasterWait)}s`;
+    else if (st === near) { const D = deepState(), go = D && D.step === "runes" && !st.boss ? (D.runes.some(r => r.st === 1 && state.players.get(r.by)?.ride > 0) ? (D.fuel >= DEEP_UI.fuelCost ? "" : ` · needs fuel ${D.fuel}/${DEEP_UI.fuelCost}`) : " · leaves with a rune aboard") : null;
+      text = hold ? `[F] GET BACK IN THE ${RW} · waiting for ${hold}` : go ? `[F] GET IN THE ${RW}${go}` : D && st.boss ? `[F] GET BACK IN THE ${RW}` : `[F] GET IN THE ${RW} · leaves in ${Math.ceil(state.coasterWait)}s`; }
     else if (coastQueued) { text = `Waiting for the ${coast.mn ? "carts" : "train"} · ${coastEta(near)}s   ([F] cancel)`; col = "#9fe3ff"; }
     else text = `[F] Wait for the ${rw} · arrives in ${coastEta(near)}s`; }
   const x = v.x - Math.round(cam.x), y = v.y - Math.round(cam.y) - 96;
@@ -3780,7 +3794,6 @@ function drawWard(d) {   // the rune-ward sealing a way into the boss dungeon: a
 }
 function statueFx(d, a) {   // the sleeping Mine Beast: its plinth's runes glow faintly (later: one lights up bright per rune put in), a thin mist round its feet
   const t = performance.now() / 1000; ctx.save(); ctx.globalCompositeOperation = "lighter";
-  (a.runes || []).forEach(([rx, ry], i) => { const x = d.x + rx, y = d.y + ry, k = .55 + .2 * Math.sin(t * 1.7 + i * 1.3), r = 30; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(110,210,255,${.5 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
   for (let i = 0; i < 5; i++) { const u = (t * .05 + i / 5) % 1, x = d.x - 260 + ((i * 137 + t * 9) % 520), y = d.y - 12 - Math.sin(u * Math.PI) * 10; ctx.globalAlpha = .12 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(x, y, 2, x, y, 70); g.addColorStop(0, "rgba(160,190,230,1)"); g.addColorStop(1, "rgba(160,190,230,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70, y - 40, 140, 80); }
   ctx.restore();
 }
@@ -3793,8 +3806,8 @@ function drawBossStop(d) {   // the carts' stop in the boss dungeon: a low stone
   ctx.globalCompositeOperation = "lighter"; for (let i = 0; i < 9; i++) { const rx = x + 18 + i * (w - 36) / 8, k = .5 + .5 * Math.sin(t * 3 - i * .7); ctx.fillStyle = `rgba(110,200,255,${.35 + .45 * k})`; ctx.fillRect(rx - 4, y + h - 8, 8, 3); }
   ctx.restore();
 }
-function shrineFx(d) {   // a rune shrine: its rune floats and turns over the pedestal, glowing (the mission takes it away when someone picks it up)
-  const i = Math.max(0, decor.filter(q => q.kind === "mShrine").indexOf(d)) % 4, img = mapImgs["mRune" + (i + 1)], t = performance.now() / 1000; if (!img?.naturalWidth) return;
+function shrineFx(d) {   // a rune shrine: its rune floats and turns over the pedestal, glowing (in the mission: only until someone takes it)
+  const i = Math.max(0, decor.filter(q => q.kind === "mShrine").indexOf(d)) % 4, D = deepState(); if (D && D.runes[i] && D.runes[i].st !== 0) return; const img = mapImgs["mRune" + (i + 1)], t = performance.now() / 1000; if (!img?.naturalWidth) return;
   const x = d.x, y = d.y - 128 + Math.sin(t * 1.8 + i) * 7, sq = .75 + .25 * Math.cos(t * 1.2 + i);
   ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y - 40, 4, x, y - 40, 90); g.addColorStop(0, "rgba(100,200,255,.45)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 90, y - 130, 180, 180); ctx.restore();
   ctx.save(); ctx.translate(x, y); ctx.scale(sq, 1); ctx.drawImage(img, -img.width / 2, -img.height); ctx.restore();
@@ -3818,6 +3831,163 @@ function sealFx(d, a) {   // a seal crystal: breathing blue halo, a ring of rune
   const g = ctx.createRadialGradient(x, y, 4, x, y, 96); g.addColorStop(0, `rgba(120,210,255,${.42 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 96, y - 96, 192, 192);
   ctx.strokeStyle = `rgba(120,205,255,${.6 * k})`; ctx.lineWidth = 2; ctx.setLineDash([7, 9]); ctx.lineDashOffset = -t * 24; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 70, 22, 0, 0, 7); ctx.stroke(); ctx.lineDashOffset = t * 16; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 54, 16, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   for (let i = 0; i < 6; i++) { const u = (t * .45 + i / 6 + sd * .1) % 1; ctx.globalAlpha = Math.sin(u * Math.PI); ctx.fillStyle = i % 2 ? "#bfe9ff" : "#7fd0ff"; ctx.fillRect(x + Math.sin(i * 2.3 + t) * 34 - 1.5, y + 40 - u * 140, 3, 3); }
+  ctx.restore();
+}
+// ---------- WAVE 20: the Deep Mine mission (server: DEEP / mineTick). state.mission = step|fuel|placed|cartHp|gap|inserted|runes ----------
+const DEEP_UI = { fuelCost: 5, takeR: 130, insertR: 210 };
+let deepSrc = null, deepCache = null;
+function deepState() {   // the mission, unpacked (null = no mission running)
+  const src = state?.mission || ""; if (src === deepSrc) return deepCache; deepSrc = src; if (!src) return (deepCache = null);
+  const [step, fuel, placed, cartHp, gap, ins, runes] = src.split("|");
+  return (deepCache = { step, fuel: +fuel, placed: +placed, cartHp: +cartHp, gap: +gap, inserted: ins === "1", runes: (runes || "").split(",").map(r => { const [st, x, y, by] = r.split("."); return { st: +st, x: +x, y: +y, by: by || "" }; }) });
+}
+const deepFx = { start: -1e9, rune: -1e9, runeN: 0, awake: -1e9, awakeLen: 7, chase: -1e9, smash: -1e9, escaped: -1e9, shatter: [] };
+function onDeep(m) {
+  const now = performance.now();
+  if (m.k === "start") { deepFx.start = now; deepFx.awake = deepFx.chase = deepFx.escaped = -1e9; deepFx.shatter = []; deepObj.id = ""; }
+  else if (m.k === "take") playSfx("pickup", undefined, undefined, .8);
+  else if (m.k === "rune") { deepFx.rune = now; deepFx.runeN = m.n; deepFx.shatter.push({ i: m.n - 1, t: now }); shake(6, 500); playSfx("zap", undefined, undefined, 1); }
+  else if (m.k === "awake") { deepFx.awake = now; deepFx.awakeLen = m.len || 7; shake(5, 1200); }
+  else if (m.k === "chase") { deepFx.chase = now; shake(14, 900); }
+  else if (m.k === "stagger") { deepFx.stagger = now; playSfx("zap", undefined, undefined, .5); }
+  else if (m.k === "smash") { deepFx.smash = now; shake(18, 700); playSfx("stomp", undefined, undefined, 1); }
+  else if (m.k === "escaped") deepFx.escaped = now;
+}
+const deepPieces = () => { const sh = [], o = { shrines: sh, statue: null, seals: [], portal: null }; for (const d of decor || []) { if (d.kind === "mShrine") sh.push(d); else if (d.kind === "mStatue") o.statue = d; else if (/^mSeal/.test(d.kind)) o.seals.push(d); else if (d.kind === "mPortal") o.portal = d; } return o; };
+const deepInDungeon = e => { const WW = worldW(), WH = worldH(); return e.x > (MN_SPOT.dungeon[0] + 85) * WW / 6000 && e.y > (MN_SPOT.dungeon[1] + 120) * WH / 4000; };
+// What YOU should do right now: { id (changes = a new pop-up), title, sub, at: where the arrow points }
+function deepObjective() {
+  const D = deepState(), me = me_(); if (!D || !me || !coast) return null; const now = performance.now();
+  if (now - deepFx.start < 5000) return { id: "intro", title: "WAVE 20 · THE DEEP MINE", sub: "Put 4 runes in the statue. Then outrun what wakes up." };
+  const st0 = coast.T.stations[0], bs = coast.T.stations[1], P = deepPieces(), mine = D.runes.find(r => r.st === 1 && r.by === myId), other = D.runes.find(r => r.st === 1 && r.by !== myId), inD = deepInDungeon(me), n = D.placed + 1;
+  const station = { x: st0.x, y: st0.y + 60, label: "CARTS" }, stop = { x: bs.x, y: bs.y - 60, label: "CARTS" };
+  if (D.step === "escaped") return { id: "esc", title: "YOU ESCAPED!", sub: "Through the portal…" };
+  if (D.step === "awake") return me.ride > 0 ? { id: "aw1", title: "IT'S WAKING UP!", sub: "Stay in the cart. Get ready to shoot." } : inD ? { id: "aw2", title: "IT'S WAKING UP!", sub: "Back in the carts: press F.", at: stop } : { id: "aw3", title: "THE BEAST IS WAKING UP", sub: "Your team is in the dungeon. Hold on." };
+  if (D.step === "chase") return me.ride > 0 ? { id: "ch1", title: "SHOOT THE BEAST!", sub: "Every hit pushes it back. Don't let it reach the carts." } : { id: "ch2", title: "THE BEAST IS LOOSE", sub: "It's chasing the carts. Stay alive." };
+  if (me.ride > 0) {
+    if (state.coasterWait > 0 && coastStation() === st0) return mine ? (D.fuel < DEEP_UI.fuelCost ? { id: "s-fuel", title: `THE CARTS NEED FUEL · ${D.fuel}/${DEEP_UI.fuelCost}`, sub: "Someone must pick up blue shards. Zombies drop them." } : { id: "s-go", title: "HOLD ON", sub: "The carts are leaving for the boss dungeon." })
+      : { id: "s-norune", title: "NO RUNE ABOARD", sub: "The carts only leave with a rune. Find one first.", at: null };
+    if (coastStation() === bs) return mine && !D.inserted ? { id: "b-off", title: "HOP OFF: PRESS F", sub: "Then carry the rune to the statue." } : D.inserted ? { id: "b-wait", title: "RUNE IS IN", sub: "Leaving when everyone is back on." } : { id: "b-wait2", title: "AT THE BOSS STOP", sub: "The rune carrier hops off (F) and goes to the statue." };
+    return D.inserted ? { id: "r-back", title: "HEADING BACK", sub: n <= 4 ? `Next: find rune ${n} of 4.` : "" } : { id: "r-out", title: "RIDING TO THE BOSS DUNGEON", sub: "Shoot from the cart." };
+  }
+  if (inD) return mine && !D.inserted ? { id: "d-put", title: "PUT THE RUNE IN THE STATUE", sub: "Walk to the statue. Press F.", at: P.statue ? { x: P.statue.x, y: P.statue.y + 30, label: "STATUE" } : null }
+    : { id: "d-back", title: "GET BACK IN THE CARTS", sub: "Press F at the carts.", at: stop };
+  if (mine) return D.fuel < DEEP_UI.fuelCost ? { id: "c-fuel", title: `GET FUEL FOR THE CARTS · ${D.fuel}/${DEEP_UI.fuelCost}`, sub: "Walk over blue shards. Zombies drop them.", at: deepNearestShard(me) || station }
+    : { id: "c-go", title: "TAKE THE RUNE TO THE CARTS", sub: "Get in (F). They leave with you aboard.", at: station };
+  if (other) { const who = state.players.get(other.by)?.name || "A teammate";
+    return D.fuel < DEEP_UI.fuelCost ? { id: "o-fuel", title: `COLLECT FUEL · ${D.fuel}/${DEEP_UI.fuelCost}`, sub: `${who} has the rune. Walk over blue shards.`, at: deepNearestShard(me) } : { id: "o-go", title: "GET IN THE CARTS", sub: `${who} has the rune. Ride with them.`, at: station }; }
+  const free = D.runes.filter(r => r.st === 0 || r.st === 2).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+  return free ? { id: "find" + n + (free.st === 2 ? "d" : ""), title: free.st === 2 ? "PICK UP THE DROPPED RUNE" : `FIND RUNE ${n} OF 4`, sub: free.st === 2 ? "Follow the arrow. Press F." : "Follow the blue arrow to a shrine. Press F to take it.", at: { x: free.x, y: free.y - 20, label: "RUNE" } } : null;
+}
+function deepNearestShard(me) { let best = null, bd = 1e9; for (const l of state.loot.values()) if (l.kind === "shard") { const d = Math.hypot(l.x - me.x, l.y - me.y); if (d < bd) { bd = d; best = l; } } return best ? { x: best.x, y: best.y, label: "FUEL" } : null; }
+// F in the mission: take a rune / put it in the statue. Returns the prompt text (or "" when there's nothing to do here).
+function deepPrompt() {
+  const D = deepState(), me = me_(); if (!D || D.step !== "runes" || !me?.alive || me.ride > 0) return "";
+  const mine = D.runes.find(r => r.st === 1 && r.by === myId), P = deepPieces();
+  if (mine) return !D.inserted && P.statue && deepInDungeon(me) && Math.hypot(me.x - P.statue.x, me.y - (P.statue.y + 20)) < DEEP_UI.insertR ? "[F] PUT THE RUNE IN" : "";
+  return D.runes.some(r => (r.st === 0 || r.st === 2) && Math.hypot(me.x - r.x, me.y - r.y) < DEEP_UI.takeR) ? "[F] TAKE THE RUNE" : "";
+}
+function deepUse() { if (!deepPrompt() || !room) return false; room.send("deep"); return true; }
+function drawDeepPrompt() {   // screen space, over your head
+  const text = deepPrompt(); if (!text) return false; const v = V(me_()), x = v.x - Math.round(cam.x), y = v.y - Math.round(cam.y) - 96;
+  ctx.save(); ctx.font = "bold 15px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(text).width + 22;
+  ctx.fillStyle = "rgba(6,10,18,.78)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 17, w, 25, 7); ctx.fill(); ctx.strokeStyle = "#7fd4ff"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.fillStyle = "#bfe9ff"; ctx.fillText(text, x, y + 1); ctx.restore(); return true;
+}
+// The objective pop-up (user, Nov 11: "clear pop up instructions for every part, to the point"): a new objective drops in big for a few
+// seconds with a chime, then shrinks to a small tracker under the top bars that stays until the next one.
+const deepObj = { id: "", t: -1e9, title: "", sub: "" }, deepCam = { x: 0, y: 0 };
+function drawDeepHud() {
+  const D = deepState(); if (!D || state.phase !== "playing") { deepObj.id = ""; return; }
+  const o = deepObjective(), now = performance.now(); if (o && o.id !== deepObj.id) { deepObj.id = o.id; deepObj.t = now; playSfx("pickup", undefined, undefined, .6); } if (o) { deepObj.title = o.title; deepObj.sub = o.sub || ""; }
+  if (!deepObj.id) return;
+  const age = (now - deepObj.t) / 1000, big = age < 3.6, k = big ? Math.min(1, age / .22) : Math.max(0, 1 - (age - 3.6) / .35), e = 1 - (1 - k) * (1 - k), cx = W / 2;
+  ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  if (age < 3.95) {   // the big pop-up
+    const y = 232 - (big ? (1 - e) * 26 : (1 - e) * 100), sc = big ? .86 + .14 * e : .6 + .4 * e; ctx.globalAlpha = e; ctx.translate(cx, y); ctx.scale(sc, sc);
+    ctx.font = "800 30px Inter, system-ui, sans-serif"; const tw = ctx.measureText(deepObj.title).width; ctx.font = "600 16px Inter, system-ui, sans-serif"; const sw = ctx.measureText(deepObj.sub).width, w = Math.max(tw, sw) + 64, h = deepObj.sub ? 84 : 58;
+    ctx.fillStyle = "rgba(5,9,16,.86)"; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 10); ctx.fill(); ctx.strokeStyle = "#5cc8ff"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#5cc8ff"; ctx.fillRect(-w / 2, -h / 2, 6, h);
+    ctx.font = "800 30px Inter, system-ui, sans-serif"; ctx.fillStyle = "#eaf7ff"; ctx.fillText(deepObj.title, 0, deepObj.sub ? -14 : 1);
+    if (deepObj.sub) { ctx.font = "600 16px Inter, system-ui, sans-serif"; ctx.fillStyle = "#a9d7f2"; ctx.fillText(deepObj.sub, 0, 20); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (age >= 3.6) {   // the small tracker
+    const a = Math.min(1, (age - 3.6) / .35), y = 104; ctx.globalAlpha = a;
+    ctx.font = "800 15px Inter, system-ui, sans-serif"; const tw = ctx.measureText(deepObj.title).width; ctx.font = "500 13px Inter, system-ui, sans-serif"; const sw = deepObj.sub ? ctx.measureText(deepObj.sub).width + 14 : 0, w = tw + sw + 46;
+    ctx.fillStyle = "rgba(5,9,16,.74)"; ctx.beginPath(); ctx.roundRect(cx - w / 2, y - 15, w, 30, 8); ctx.fill(); ctx.strokeStyle = "rgba(92,200,255,.7)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = "#5cc8ff"; ctx.beginPath(); ctx.moveTo(cx - w / 2 + 12, y - 6); ctx.lineTo(cx - w / 2 + 21, y); ctx.lineTo(cx - w / 2 + 12, y + 6); ctx.closePath(); ctx.fill();
+    ctx.textAlign = "left"; ctx.font = "800 15px Inter, system-ui, sans-serif"; ctx.fillStyle = "#eaf7ff"; ctx.fillText(deepObj.title, cx - w / 2 + 30, y + 1);
+    if (deepObj.sub) { ctx.font = "500 13px Inter, system-ui, sans-serif"; ctx.fillStyle = "#a9d7f2"; ctx.fillText(deepObj.sub, cx - w / 2 + 30 + tw + 14, y + 1); }
+  }
+  // progress row: the four runes, the fuel, and in the chase the carts' hits left + how close the Beast is
+  ctx.globalAlpha = 1; ctx.textAlign = "left"; ctx.textBaseline = "middle"; const y = 146, RW = 352; let x = cx - RW / 2 + 14;
+  ctx.fillStyle = "rgba(5,9,16,.78)"; ctx.beginPath(); ctx.roundRect(cx - RW / 2, y - 21, RW, 42, 9); ctx.fill(); ctx.strokeStyle = "rgba(92,200,255,.35)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.font = "700 12px Inter, system-ui, sans-serif"; ctx.fillStyle = "#a9d7f2"; ctx.fillText("RUNES", x, y + 1); x += 48;
+  const carried = D.runes.filter(q => q.st === 1).length;
+  for (let i = 0; i < 4; i++) { const img = mapImgs["mRune" + (i + 1)], st = i < D.placed ? 3 : i < D.placed + carried ? 1 : 0;
+    ctx.globalAlpha = st === 3 ? 1 : st === 1 ? .65 + .35 * Math.sin(now / 160) : .3; if (img?.naturalWidth) ctx.drawImage(img, x, y - 16, 24, 32); if (st === 3) { ctx.globalAlpha = 1; ctx.fillStyle = "#7dffa0"; ctx.fillRect(x + 7, y + 17, 10, 2); } x += 29; }
+  ctx.globalAlpha = 1; ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(x + 4, y - 13, 1, 26); x += 16; ctx.fillStyle = "#a9d7f2";
+  if (D.step === "chase" || D.step === "escaped") { ctx.fillText("CARTS", x, y + 1); x += 46; for (let i = 0; i < 5; i++) { ctx.fillStyle = i < D.cartHp ? "#ff6b5c" : "rgba(255,255,255,.2)"; ctx.fillRect(x + i * 13, y - 7, 10, 14); } x += 72;
+    const near = Math.max(0, Math.min(1, 1 - (D.gap - 150) / 800)); ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(x, y - 4, 44, 8); ctx.fillStyle = near > .7 ? "#ff4a3a" : "#5cc8ff"; ctx.fillRect(x, y - 4, 44 * near, 8); }
+  else { ctx.fillText("FUEL", x, y + 1); x += 38; for (let i = 0; i < DEEP_UI.fuelCost; i++) { const on = i < D.fuel, px0 = x + i * 17; ctx.fillStyle = on ? "#5cc8ff" : "rgba(255,255,255,.2)"; ctx.beginPath(); ctx.moveTo(px0 + 6, y - 10); ctx.lineTo(px0 + 12, y); ctx.lineTo(px0 + 6, y + 10); ctx.lineTo(px0, y); ctx.closePath(); ctx.fill(); }
+    if (D.fuel > DEEP_UI.fuelCost) { ctx.fillStyle = "#5cc8ff"; ctx.fillText("+" + (D.fuel - DEEP_UI.fuelCost), x + DEEP_UI.fuelCost * 17 + 3, y + 1); } }
+  // the way to your objective: a pulsing arrow circling you, with how far it is
+  const me0 = me_(), mv = me0 && V(me0); if (o?.at && mv && me0.alive) { const dx = o.at.x - mv.x, dy = o.at.y - mv.y, dist = Math.hypot(dx, dy); if (dist > 240) { const an = Math.atan2(dy, dx), R = 118 + Math.sin(now / 180) * 7, ax = mv.x - cam.x + Math.cos(an) * R, ay = mv.y - cam.y - 20 + Math.sin(an) * R * .8;
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(an); ctx.fillStyle = "#5cc8ff"; ctx.strokeStyle = "#04121c"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-10, -14); ctx.lineTo(-3, 0); ctx.lineTo(-10, 14); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
+    const lab = `${o.at.label || "GO"} ${Math.round(dist / 10)}m`; ctx.font = "800 12px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(lab, ax - Math.cos(an) * 30, ay - Math.sin(an) * 26 + 1); ctx.fillStyle = "#bfe9ff"; ctx.fillText(lab, ax - Math.cos(an) * 30, ay - Math.sin(an) * 26 + 1); } }
+  ctx.restore();
+  if (now - deepFx.smash < 500) { ctx.fillStyle = `rgba(255,60,40,${.35 * (1 - (now - deepFx.smash) / 500)})`; ctx.fillRect(0, 0, W, H); }
+  if (D.step === "escaped") { const u = Math.min(1, (now - deepFx.escaped) / 1400); ctx.fillStyle = `rgba(190,232,255,${u})`; ctx.fillRect(0, 0, W, H); }
+}
+// World-space mission things: the runes (at shrines / on the ground / over their carrier), the statue's lit runes, shattered seals, the awakening
+function drawDeepWorld() {
+  const D = deepState(); if (!D) return; const now = performance.now(), t = now / 1000;
+  D.runes.forEach((r, i) => { if (r.st === 3 || r.st === 0) return; const img = mapImgs["mRune" + (i + 1)]; if (!img?.naturalWidth) return;
+    const c = r.st === 1 ? state.players.get(r.by) : null, v = c ? V(c) : r, x = v.x, y = (c ? v.y - 92 : r.y - 12) + Math.sin(t * 2.2 + i) * 5; if (!inView(x, y, 120)) return;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y - 20, 3, x, y - 20, 62); g.addColorStop(0, "rgba(110,205,255,.5)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 62, y - 82, 124, 124); ctx.restore();
+    const s = c ? .62 : .9; ctx.drawImage(img, x - img.width * s / 2, y - img.height * s, img.width * s, img.height * s); });
+  for (const sh of deepFx.shatter) { const P = deepPieces(), d = P.seals[sh.i], F = MN_FX.shatter, f = Math.floor((now - sh.t) / F.ms); if (!d || f >= F.n || !shatterFxImg.naturalWidth) continue;   // a seal crystal bursting
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.drawImage(shatterFxImg, f * F.s, 0, F.s, F.s, d.x - 150, d.y - 270, 300, 300); ctx.restore(); }
+}
+const darkCopies = new Map();
+function darkCopy(img) { let c = darkCopies.get(img); if (c) return c; c = document.createElement("canvas"); c.width = img.width; c.height = img.height; const g = c.getContext("2d"); g.filter = "brightness(.32) saturate(.35)"; g.drawImage(img, 0, 0); g.filter = "none"; g.globalCompositeOperation = "source-atop"; g.fillStyle = "rgba(8,10,20,.45)"; g.fillRect(0, 0, c.width, c.height); darkCopies.set(img, c); return c; }
+// The Mine Beast, standing: view 0 front, 1 side (faces right), 2 back. Placeholder poses from the design sheet until the walk / run sheets arrive.
+function drawBeastView(x, y, view, flip, o = {}) {
+  if (!beastImg.naturalWidth) return; const B = MN_BEAST, t = performance.now() / 1000, bob = o.still ? 0 : Math.abs(Math.sin(t * 7)) * 9, sc = o.scale || 1;
+  ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(x, y - 4, 110 * sc, 30 * sc, 0, 0, 7); ctx.fill();
+  ctx.translate(Math.round(x + (o.shake ? (Math.random() - .5) * o.shake : 0)), Math.round(y - bob)); if (flip) ctx.scale(-1, 1); ctx.scale(sc, sc); if (!o.still) ctx.rotate(Math.sin(t * 7) * .03);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(beastImg, view * B.w, 0, B.w, B.h, -B.w / 2, -B.h, B.w, B.h);
+  ctx.globalCompositeOperation = "lighter"; const k = .6 + .4 * Math.sin(t * 5), g = ctx.createRadialGradient(0, -B.h * .62, 4, 0, -B.h * .62, 120); g.addColorStop(0, `rgba(110,200,255,${.4 * k})`); g.addColorStop(1, "rgba(40,110,255,0)"); ctx.fillStyle = g; ctx.fillRect(-120, -B.h * .62 - 120, 240, 240);   // the crystal heart
+  ctx.restore();
+}
+function drawMineBeast(z) {   // in the chase: running along the track after the carts
+  const v = V(z) || z, a = z.aim || 0, ax = Math.cos(a), ay = Math.sin(a), view = Math.abs(ax) > .55 ? 1 : ay > 0 ? 0 : 2, now = performance.now();
+  const stg = now - (deepFx.stagger || -1e9); drawBeastView(v.x, v.y, view, view === 1 && ax < 0, { shake: now - deepFx.smash < 400 || stg < 350 ? 10 : 0 });
+  if (stg < 350) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(190,235,255,${.55 * (1 - stg / 350)})`; ctx.beginPath(); ctx.ellipse(v.x, v.y - MN_BEAST.h * .5, 150, 190, 0, 0, 7); ctx.fill(); ctx.restore(); }   // staggered: a flash of blue
+  const D = deepState(); if (D && D.step === "chase") { ctx.save(); ctx.font = "800 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#ffb3a8"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3; ctx.strokeText("THE MINE BEAST", v.x, v.y - MN_BEAST.h - 14); ctx.fillText("THE MINE BEAST", v.x, v.y - MN_BEAST.h - 14); ctx.restore(); }
+}
+// The statue during the mission: its plinth runes light up as runes go in; the awakening: cracks of light, shaking, the stone bursts off, the Beast roars and steps down
+function drawDeepStatue(d, a) {
+  const D = deepState(), img = spooky(mapImgs.mStatue), now = performance.now(), t = now / 1000; if (!img) return;
+  const aw = D && (D.step === "awake" || D.step === "chase" || D.step === "escaped") ? (now - deepFx.awake) / 1000 : -1, L = deepFx.awakeLen, burst = L * .58;
+  const plinthTop = Math.round(a.h * .76);
+  if (aw < 0 || aw < burst) {   // still stone (shaking harder and harder once it starts)
+    const k = aw < 0 ? 0 : aw / burst, sx = (Math.random() - .5) * 8 * k, sy = (Math.random() - .5) * 4 * k;
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(d.x - a.w / 2 + sx), Math.round(d.y - a.h + sy));
+    if (k > 0) { ctx.globalCompositeOperation = "lighter"; const cx = d.x, cy = d.y - a.h * .56;   // the heart lights, cracks of light spread from it, the eyes open
+      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, 60 + 220 * k); g.addColorStop(0, `rgba(170,225,255,${.85 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(cx - 300, cy - 300, 600, 600);
+      ctx.strokeStyle = `rgba(160,225,255,${.9 * k})`; ctx.lineWidth = 3; ctx.shadowColor = "#6cc8ff"; ctx.shadowBlur = 12;
+      for (let i = 0; i < 9; i++) { const an = i * .7 + .3, len = (40 + (i * 37 % 90)) * 2.2 * k; ctx.beginPath(); ctx.moveTo(cx, cy); let px = cx, py = cy; for (let j = 1; j <= 4; j++) { px = cx + Math.cos(an + Math.sin(i * 3 + j) * .5) * len * j / 4; py = cy + Math.sin(an + Math.sin(i * 3 + j) * .5) * len * j / 4 * .8; ctx.lineTo(px, py); } ctx.stroke(); }
+      if (k > .45) for (const sgn of [-1, 1]) { ctx.fillStyle = `rgba(190,235,255,${(k - .45) * 1.8})`; ctx.beginPath(); ctx.ellipse(d.x + sgn * 26, d.y - a.h * .705, 9, 5, 0, 0, 7); ctx.fill(); } }
+    ctx.restore();
+  } else {   // the shell is gone: the bare plinth stays; the Beast stands on it roaring, then steps down (the chase takes over from the server's zombie)
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, plinthTop, a.w, a.h - plinthTop, Math.round(d.x - a.w / 2), d.y - a.h + plinthTop, a.w, a.h - plinthTop); ctx.restore();
+    if (D.step === "awake") { const u = (aw - burst) / (L - burst), down = Math.max(0, (u - .7) / .3); drawBeastView(d.x, d.y - (a.h - plinthTop) * .55 * (1 - down) + 40 * down, 0, false, { still: true, shake: u < .7 ? 7 : 0, scale: u < .7 ? 1.04 + .03 * Math.sin(t * 30) : 1 });
+      const f = (aw - burst) / .9; if (f < 1) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(215,240,255,${1 - f})`; ctx.beginPath(); ctx.arc(d.x, d.y - a.h * .5, 120 + 520 * f, 0, 7); ctx.fill(); ctx.restore();   // the burst: a flash and flying stone
+        ctx.fillStyle = "#6f7480"; for (let i = 0; i < 26; i++) { const an = i * 2.4, r = 60 + f * (240 + (i * 53 % 200)); ctx.fillRect(d.x + Math.cos(an) * r - 5, d.y - a.h * .5 + Math.sin(an) * r * .7 + f * f * 160 - 5, 8 + i % 5, 8 + i % 4); } } }
+  }
+  ctx.save(); ctx.globalCompositeOperation = "lighter";   // the plinth's runes: faint, or bright once that rune is in
+  (a.runes || []).forEach(([rx, ry], i) => { const on = D && i < D.placed, x = d.x + rx, y = d.y + ry, k = on ? .9 + .1 * Math.sin(t * 4 + i) : .35 + .15 * Math.sin(t * 1.7 + i * 1.3), r = on ? 46 : 28; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${on ? "190,235,255" : "110,210,255"},${(on ? .95 : .5) * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
   ctx.restore();
 }
 // Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
@@ -4175,6 +4345,7 @@ function drawNight() {
   else if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - CO.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - CO.H - cam.y, 120, .75); }   // the bulbs along the track, the train
   if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
     for (const [x, y, b] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, b ? 95 : 110, b ? .7 : .8);
+    if (mineMap()) for (const z of state.zombies.values()) if (z.kind === "minebeast" && inView(z.x, z.y, 400)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 150 - cam.y, 300, .9); }   // the Mine Beast glows: you always see it coming
     if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); else if ((d.kind === "mShrine" || d.kind === "mStop") && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - (d.kind === "mStop" ? 40 : 150) - cam.y, 150, .8); }
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
   }
@@ -4237,6 +4408,7 @@ function drawScreen() {
   const targets = [{ x: towerX(), y: towerY(), label: 'TOWER', color: '#f2a15b' }];
   for (const p of state.players.values()) if (!p.alive && !p.bledOut && p.sessionId !== myId) targets.push({ x: p.x, y: p.y, label: 'REVIVE ' + p.name.toUpperCase(), color: '#ff7568' });
   for (const z of state.zombies.values()) if (z.boss || z.kind === "hivemind") targets.push({ x: z.x, y: z.y, label: z.boss ? 'BOSS' : 'HIVEMIND', color: '#ff3737' });
+  if (state.mission) targets.shift();   // the mine mission: no tower arrow (drawDeepHud points you at your objective)
   for (const tg of targets) {
     const sx = tg.x - cam.x, sy = tg.y - cam.y;
     if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
@@ -4249,6 +4421,7 @@ function drawScreen() {
     ctx.save(); ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = tg.color; ctx.strokeStyle = '#000a'; ctx.lineWidth = 3;
     const lx = ax - Math.cos(ang) * 26, ly = ay - Math.sin(ang) * 22 + 3; ctx.strokeText(tg.label + ' ' + d + 'm', lx, ly); ctx.fillText(tg.label + ' ' + d + 'm', lx, ly); ctx.restore();
   }
+  try { drawDeepHud(); } catch (e) { reportError(e, "deep"); }
   // minimap: whole world, your view as a box
   const mini = $('minimap'), m = mini.getContext('2d'), MW = 360, MH = 228, sx = MW / worldW(), sy = MH / worldH(), R = roads();
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
@@ -4263,6 +4436,7 @@ function drawScreen() {
   for (const st of state.structures.values()) { m.fillStyle = '#c19a5c'; m.fillRect(st.x * sx - 2, st.y * sy - 2, 4, 4); }
   for (const z of state.zombies.values()) { if (!z.boss && !litAt(z.x, z.y)) continue; m.fillStyle = z.boss ? '#ff3737' : '#a9bd78'; const r = z.boss ? 4 : 2; m.fillRect(z.x * sx - r / 2, z.y * sy - r / 2, r, r); }
   for (const pl of state.players.values()) { m.fillStyle = pl.alive ? pl.color : '#ff7568'; m.fillRect(pl.x * sx - 3, pl.y * sy - 3, 6, 6); }
+  { const D = deepState(); if (D) { for (const r of D.runes) if (r.st !== 3) { m.fillStyle = '#7fd4ff'; m.beginPath(); m.arc(r.x * sx, r.y * sy, 3.2, 0, 7); m.fill(); m.strokeStyle = '#06202f'; m.lineWidth = 1; m.stroke(); } const o = deepObjective(); if (o?.at) { m.strokeStyle = '#ffe08a'; m.lineWidth = 1.5; m.beginPath(); m.arc(o.at.x * sx, o.at.y * sy, 5 + Math.sin(performance.now() / 200) * 1.5, 0, 7); m.stroke(); } for (const z of state.zombies.values()) if (z.kind === 'minebeast') { m.fillStyle = '#ff3737'; m.fillRect(z.x * sx - 3, z.y * sy - 3, 6, 6); } } }
   m.strokeStyle = '#ffffffaa'; m.lineWidth = 1; m.strokeRect(cam.x * sx + .5, cam.y * sy + .5, W * sx, H * sy);
 }
 

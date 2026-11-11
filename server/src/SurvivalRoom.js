@@ -381,6 +381,12 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const hyp = (x, y) => Math.sqrt(x * x + y * y);   // not Math.hypot: 3x slower in V8, and these run tens of thousands of times a second
 const distance = (a, b) => hyp(a.x - b.x, a.y - b.y);
 
+// WAVE 20: THE DEEP MINE mission (Nov 11). Four runes wait at shrines out in the mine. Carry one to the cart station, fuel the carts with crystal
+// shards, ride into the cordoned boss dungeon, hop off at the boss stop and put the rune in the statue's plinth; ride back; repeat. The fourth rune
+// wakes the Mine Beast: it chases the carts for one lap (every hit pushes it back; if it reaches them it smashes them), then the carts roll back
+// into the dungeon and everyone is pulled through the portal: wave cleared.
+const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5, chaseSpeed: 1.12, awake: 7, gap0: 520, gapMax: 640, catchGap: 140, bounce: 420, gain: 45, stagger: 110, cartHp: 5,
+  shardEvery: 4, shardCap: 16, drop: .4, takeR: 130, insertR: 210, zEvery: 1.3, zCap: [10, 5], flash: 3.2 };   // gain: px/s the Beast closes in; zCap: [base, per player] zombies alive at once
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export class SurvivalRoom extends Room {
   maxClients = 8;
@@ -424,6 +430,7 @@ export class SurvivalRoom extends Room {
     this.flow = !!P || ["dynasty", "whiteout", "refinery", "carnival", "mine"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
     const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : S.style === "mine" ? buildMineLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    this.minePieces = S.style === "mine" ? { shrines: layout.filter(d => d.kind === "mShrine"), statue: layout.find(d => d.kind === "mStatue"), crystals: layout.filter(d => /^mCrystal/.test(d.kind)) } : null; if (S.style !== "mine") { this.mine = null; this.state.mission = ""; }
     this.cordon = S.style === "mine" ? mineCordon(W, H) : null;   // The Deep Mine: nobody gets into the boss dungeon except by cart (cordonCheck)
     const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted" || d.kind === "mShaft"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - ({ rPyramid: 118, mShaft: 128 }[pyr.kind] || 74) } : null;   // the Deep Mine: bosses climb out of the DANGER shaft
     if (this.state.players) for (const q of this.state.players.values()) { q.ride = 0; q.rideCd = 0; }
@@ -598,6 +605,12 @@ export class SurvivalRoom extends Room {
       let z = [...this.state.zombies.values()].find(o => o.kind === "abomination");
       if (!z) { this.morphOnArrival = true; this.skipToBoss(16); return; }   // not here: his boss card first, then he arrives already tearing apart
       if (z.act === "sunder") return; z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
+    });
+    this.onMessage("deep", client => { const p = this.state.players.get(client.sessionId); if (this.mine && p?.alive && this.state.phase === "playing" && !(p.ride > 0)) this.mineUse(p); });   // F in the mine mission: take a rune / put it in the statue
+    this.onMessage("debugMine", (client, data) => {   // test menu: start the mine mission (wave 20); {k: "rune"} = a rune goes straight in, {k: "fuel"} = full fuel
+      if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
+      if (!this.mine) { this.jumpToWave(DEEP.wave); if (!this.solo) this.state.message = "Host skipped to the mine mission"; return; }
+      if (data?.k === "fuel") this.mine.fuel = DEEP.fuelMax; else if (data?.k === "rune" && this.mine.step === "runes") { const r = this.mine.runes.find(q => q.st !== 3); if (r) this.mineInsert(r); }
     });
     this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
@@ -809,6 +822,7 @@ export class SurvivalRoom extends Room {
       p.alive = true; p.bledOut = false; p.lastShot = 0; p.facing = 1; p.aim = 0;
       applyClassBase(p);
     }
+    if (this.mine || this.mineBack) this.endMine(false);
     s.phase = "lobby";
     s.message = "New match! Pick your survivors, then the host starts.";
   }
@@ -826,6 +840,8 @@ export class SurvivalRoom extends Room {
     this.state.elapsed = 0; this.spawnClock = 0.2; this.state.bossSpawned = false; this.state.bossDead = false; this.hiveSpawned = false; this.hiveNag = false;
     this.state.waveType = this.state.stage % 4 === 0 || this.state.stage === 50 ? "boss" : "normal";
     this.state.bossPhase = ""; this.state.bossIntro = "";
+    if (this.mine || this.mineBack) this.endMine(false);   // (a test jump out of the mission)
+    if (this.state.stage === DEEP.wave) { this.startMine(); return; }
     // Boss waves: first a horde (walkers on wave 4); once it's cleared, the boss intro card; when everyone is ready, the boss.
     if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
     else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
@@ -2890,7 +2906,7 @@ export class SurvivalRoom extends Room {
   }
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
     const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid);
-    const atBoss = C.wait > 0 && C.T.stations[C.next]?.boss; if (atBoss) (C.held ||= new Set()).add(sid); else C.cd.set(sid, Date.now() + C.K.cd * 1000);   // the boss stop (the mine): no cooldown, and the carts wait there until you're back on
+    const atBoss = C.wait > 0 && C.T.stations[C.next]?.boss; if (atBoss) (C.held ||= new Set()).add(sid); else if (!this.mine) C.cd.set(sid, Date.now() + C.K.cd * 1000);   // the boss stop (the mine): no cooldown, and the carts wait there until you're back on
     if (!p) return; p.ride = 0;
     const [dx0, dy0] = MN_SPOT.dungeon, cord = c => C.K.along && c.x > dx0 * this.A.width / 6000 - 40 && c.y > dy0 * this.A.height / 4000 - 40;   // (the mine: knocked off inside the cordoned dungeon = back on the station deck)
     if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = (st.off || 1) < 0 ? st.y - 160 + rand(0, 14) : st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
@@ -2899,22 +2915,114 @@ export class SurvivalRoom extends Room {
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
     const holding = () => { if (!C.held?.size || !T.stations[C.next]?.boss) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0 || (this.cordon && !(q.x > this.cordon.x && q.y > this.cordon.y))) C.held.delete(sid); else n++; } return n; };   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
-    if (C.wait > 0) { C.hold = holding(); C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
+    if (C.wait > 0) { C.hold = holding(); const gate = this.mine ? this.mineGate(C) : 0; if (gate === 1) C.wait = Math.max(C.wait, DEEP.leave + dt); else if (gate === 2) C.wait = Math.min(C.wait, 2);   // the mine mission: 1 = the carts stay put, 2 = nothing to wait for
+      C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { if (this.mine) this.mineDepart(C); C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; if (this.mine?.step === "chase") C.next = T.stations.findIndex(q => q.boss); } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
     else { C.hold = 0; let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
-      const step = Math.min(C.K.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
+      const step = Math.min(C.K.speed * (this.mine ? (this.mine.step === "chase" ? DEEP.chaseSpeed : DEEP.speed) : 1), Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
       for (const r of C.riders.values()) r.done += go;
-      if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; for (const [sid, r] of [...C.riders]) if (!T.stations[C.next].boss && (r.done >= T.L - 40 || T.stations[r.from]?.boss)) this.coasterOff(sid);
+      if (step >= left && this.mine?.step === "chase") { C.s = T.stations[C.next].s; C.wait = 99; this.mineEscape(); }   // the chase lap is done: back in the dungeon, through the portal
+      else if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; for (const [sid, r] of [...C.riders]) if (!T.stations[C.next].boss && (r.done >= T.L - 40 || T.stations[r.from]?.boss)) this.coasterOff(sid);
         const st = T.stations[C.next]; for (const [sid, si] of [...C.queue]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.queue.delete(sid); continue; } if (si === C.next && Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR + 60) this.coasterBoard(sid); } }   // whoever was waiting here gets on   // one lap: off you get
       else C.s = (C.s + step) % T.L; }
     for (const [sid, r] of [...C.riders]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.riders.delete(sid); if (p) p.ride = 0; continue; } const q = coasterSeat(T, C.s, r.seat); p.x = q.x; p.y = q.y; }
     for (const [sid, until] of [...C.cd]) { const p = this.state.players.get(sid), left = Math.ceil((until - now) / 1000); if (!p || left <= 0) { C.cd.delete(sid); if (p) p.rideCd = 0; } else if (p.rideCd !== left) p.rideCd = left; }
     this.state.coasterS = Math.round(C.s * 10) / 10; const w = C.hold && C.wait <= .26 ? 1000 + C.hold : C.wait > 0 ? Math.ceil(C.wait * 4) / 4 : 0; if (this.state.coasterWait !== w) this.state.coasterWait = w;   // 1000 + n: the carts are holding at the boss stop for n survivors (no new schema field)
   }
+  // ---------- WAVE 20: the Deep Mine mission (see DEEP) ----------
+  startMine() {
+    const s = this.state; this.dismountAll();
+    if (SITES[s.mapSite].style !== "mine") {   // onto the mine map for this wave; what the team built is put away and comes back afterwards
+      this.mineBack = { site: s.mapSite, structures: [...s.structures.values()].filter(st => !(st.life > 0)).map(st => ({ id: st.id, kind: st.kind, x: st.x, y: st.y, hp: st.hp, maxHp: st.maxHp, ownerId: st.ownerId, aim: st.aim || 0, deploy: st.deploy || 0 })) };
+      s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = [];
+      this.loadSite(DEEP.site);
+    } else this.loadSite(s.mapSite);   // already on the mine: everyone back to camp, the carts back at the station
+    const P = this.minePieces, hpRef = 38 * (1 + (s.stage - 1) * .08) * (DIFFICULTY[s.difficulty] || DIFFICULTY.normal).hp;
+    this.mine = { step: "runes", t: 0, fuel: 0, placed: 0, inserted: false, cartHp: DEEP.cartHp, gap: DEEP.gap0, runes: P.shrines.slice(0, 4).map(d => ({ st: 0, x: d.x, y: d.y + 34, by: "" })), shardClock: 0, zClock: 4, towerHp: s.towerHp, hpRef, beast: "" };
+    s.waveType = "mission"; s.bossPhase = ""; s.bossIntro = ""; this.spawnClock = 1e9;
+    for (let i = 0; i < 8; i++) this.mineShard();
+    s.message = "WAVE 20: THE DEEP MINE. Put four runes in the statue."; this.mineSync(); this.broadcast("deep", { k: "start" });
+  }
+  endMine(won) {   // the mission is over (won, a test jump, or a new match): back to the map the team came from, their structures back in place
+    const s = this.state, back = this.mineBack; this.mine = null; this.mineBack = null; s.mission = "";
+    for (const z of [...s.zombies.values()]) if (z.kind === "minebeast") s.zombies.delete(z.id);
+    for (const item of [...s.loot.values()]) if (item.kind === "shard") s.loot.delete(item.id);
+    if (this.coaster) { for (const sid of this.coaster.riders.keys()) { const p = s.players.get(sid); if (p) p.ride = 0; } this.coaster.riders.clear(); this.coaster.held?.clear(); }
+    if (back) { this.loadSite(back.site); for (const o of back.structures) { const st = new StructureState(); Object.assign(st, o); st.fire = false; s.structures.set(st.id, st); } }
+    else if (SITES[s.mapSite].style === "mine") this.loadSite(s.mapSite);
+    if (s.waveType === "mission") s.waveType = "normal";
+  }
+  mineSync() { const m = this.mine, str = !m ? "" : [m.step, m.fuel, m.placed, m.cartHp, Math.round(m.gap / 10) * 10, m.inserted ? 1 : 0, m.runes.map(r => `${r.st}.${Math.round(r.x)}.${Math.round(r.y)}.${r.by}`).join(",")].join("|"); if (this.state.mission !== str) this.state.mission = str; }
+  mineShard(x, y) {   // a crystal shard (cart fuel): where a zombie fell, or lying near one of the mine's crystals
+    const s = this.state; if ([...s.loot.values()].filter(q => q.kind === "shard").length >= DEEP.shardCap) return;
+    if (x === undefined) { const cr = this.minePieces.crystals; for (let t = 0; t < 12; t++) { const c = cr[Math.floor(Math.random() * cr.length)], a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 90; x = c.x + Math.cos(a) * d; y = c.y - 20 + Math.sin(a) * d * .7; if (!this.blockedByMap(x, y, 16) && !this.inCordon({ x, y })) break; x = undefined; } if (x === undefined) return; }
+    if (this.inCordon({ x, y })) return;
+    const item = new LootState(); item.id = `l${++this.lootSequence}`; item.kind = "shard"; item.amount = 1; item.rarity = "Rare"; item.x = x + rand(-14, 14); item.y = y + rand(-10, 10); s.loot.set(item.id, item);
+  }
+  mineUse(p) {   // F: put the rune you carry into the statue (inside the dungeon, at its plinth), or take a rune from a shrine / off the ground
+    const m = this.mine; if (m.step !== "runes") return; const mine = m.runes.find(r => r.st === 1 && r.by === p.sessionId), ST = this.minePieces.statue;
+    if (mine) { if (!m.inserted && this.inCordon(p) && hyp(p.x - ST.x, p.y - (ST.y + 20)) < DEEP.insertR) this.mineInsert(mine); return; }
+    let best = null, bd = DEEP.takeR; for (const r of m.runes) if (r.st === 0 || r.st === 2) { const d = hyp(p.x - r.x, p.y - r.y); if (d < bd) { bd = d; best = r; } }
+    if (best) { best.st = 1; best.by = p.sessionId; this.broadcast("deep", { k: "take", id: p.sessionId }); this.state.message = `${p.name} has a rune! Get it to the cart station.`; this.mineSync(); }
+  }
+  mineInsert(r) {
+    const m = this.mine, s = this.state; r.st = 3; r.by = ""; m.placed++; m.inserted = true; this.broadcast("deep", { k: "rune", n: m.placed });
+    if (m.placed >= 4) { m.step = "awake"; m.t = DEEP.awake; for (const z of [...s.zombies.values()]) s.zombies.delete(z.id); this.sweepZombieMemory(); s.message = "THE MINE BEAST IS WAKING UP: BACK TO THE CARTS!"; this.broadcast("deep", { k: "awake", len: DEEP.awake }); }
+    else s.message = `Rune ${m.placed}/4 is in. Ride back and find the next one.`;
+    this.mineSync();
+  }
+  mineGate(C) {   // what the carts do while stopped: 1 = stay, 2 = nothing to wait for (leave soon), 0 = their normal wait
+    const m = this.mine, boss = !!C.T.stations[C.next]?.boss, carried = [...C.riders.keys()].some(sid => m.runes.some(r => r.st === 1 && r.by === sid));
+    if (m.step === "awake" || m.step === "escaped") return 1;
+    if (m.step === "chase") return 2;
+    if (!boss) return carried && m.fuel >= DEEP.fuelCost ? 0 : 1;   // the station: they leave once a rune is aboard and they're fuelled
+    return carried && !m.inserted ? 1 : C.riders.size ? 2 : 1;   // the boss stop: wait for the rune to go in (and for whoever hopped off: C.hold), then go
+  }
+  mineDepart(C) { const m = this.mine; if (m.step === "runes" && !C.T.stations[C.next]?.boss) { m.fuel = Math.max(0, m.fuel - DEEP.fuelCost); m.inserted = false; this.state.message = "The carts are rolling: next stop, the boss dungeon."; } }
+  mineChase() {   // the statue has come alive: everyone in the dungeon is in the carts, and it comes after them
+    const m = this.mine, s = this.state, C = this.coaster, ST = this.minePieces.statue;
+    for (const p of s.players.values()) if (p.alive && !(p.ride > 0) && (this.inCordon(p) || C.held?.has(p.sessionId))) this.coasterBoard(p.sessionId);
+    if (!C.riders.size) { this.mineEscape(); return; }   // (nobody left in there: nothing to chase)
+    const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 40; z.maxHp = 1e8; z.hp = 1e8; z.speed = 0; z.damage = 0; z.radius = 70; z.attackCooldown = 0; z.targetId = ""; z.boss = false; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
+    s.zombies.set(z.id, z); m.beast = z.id; m.step = "chase"; m.gap = DEEP.gap0; m.t = 0; C.wait = Math.min(C.wait, .1); C.held?.clear();
+    s.message = "THE MINE BEAST IS AWAKE: SHOOT IT TO HOLD IT BACK!"; this.broadcast("deep", { k: "chase" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
+  }
+  mineEscape() { const m = this.mine; if (m.step === "escaped") return; m.step = "escaped"; m.t = DEEP.flash; this.state.message = "THROUGH THE PORTAL!"; this.broadcast("deep", { k: "escaped" }); this.mineSync(); }
+  mineTick(dt, now) {
+    const m = this.mine, s = this.state, C = this.coaster; s.towerHp = Math.max(s.towerHp, m.towerHp);   // (the radio tower isn't a target on this mission)
+    const humans = [...s.players.values()].filter(p => !p.isBot);
+    if (!humans.length && s.elapsed > 3 && m.step !== "escaped") this.mineEscape();   // a team of bots can't ride: they're waved through (the sims)
+    for (const r of m.runes) if (r.st === 1) {   // a carried rune goes with its carrier; if they go down or leave it lies where they were
+      const c = s.players.get(r.by); if (c && c.alive) { r.x = c.x; r.y = c.y; continue; }
+      r.st = 2; r.by = ""; if (this.inCordon(r) || this.blockedByMap(r.x, r.y, 10)) { const st = C.T.stations[0]; r.x = st.x; r.y = st.y + 60; }
+      s.message = "The rune was dropped! Pick it up (F)."; this.broadcast("deep", { k: "drop" });
+    }
+    if (m.step === "runes") {
+      m.shardClock -= dt; if (m.shardClock <= 0) { m.shardClock = DEEP.shardEvery; this.mineShard(); }
+      m.zClock -= dt; const prey = [...s.players.values()].filter(p => p.alive && !(p.ride > 0) && !this.inCordon(p));
+      if (m.zClock <= 0 && prey.length && s.zombies.size < DEEP.zCap[0] + DEEP.zCap[1] * s.players.size) {   // the horde comes out of the dark around whoever is on foot
+        m.zClock = DEEP.zEvery / this.spawnScale(); const before = this.zombieSequence; this.spawnZombie(); const z = this.zombieSequence !== before ? s.zombies.get(`z${this.zombieSequence}`) : null;
+        if (z) { const p = prey[Math.floor(Math.random() * prey.length)]; z.role = "hunter"; let ok = false;
+          for (let t = 0; t < 14 && !ok; t++) { const a = Math.random() * Math.PI * 2, d = 640 + Math.random() * 220, x = clamp(p.x + Math.cos(a) * d, 30, this.A.width - 30), y = clamp(p.y + Math.sin(a) * d, 30, this.A.height - 30); if (!this.blockedByMap(x, y, 24) && !this.inCordon({ x: x + 40, y: y + 40 })) { z.x = x; z.y = y; ok = true; } }
+          if (!ok) s.zombies.delete(z.id); }
+      } else if (m.zClock <= 0) m.zClock = .5;
+    } else if (m.step === "awake") { m.t -= dt; if (m.t <= 0) this.mineChase(); }
+    else if (m.step === "chase") {
+      const z = s.zombies.get(m.beast); if (!z) { this.mineEscape(); return; }
+      const dmg = z.maxHp - z.hp; z.hp = z.maxHp; m.t += dt;
+      m.acc = (m.acc || 0) + dmg; m.need ||= m.hpRef * 4 * Math.max(1, C.riders.size) ** .8;   // enough damage staggers it back; each stagger takes 25% more than the last (a strong team isn't safe, a weak one still gets its staggers)
+      while (m.acc >= m.need) { m.acc -= m.need; m.need *= 1.25; m.gap = Math.min(DEEP.gapMax, m.gap + DEEP.stagger); this.broadcast("deep", { k: "stagger" }); }
+      if (C.wait <= 0) m.gap -= DEEP.gain * dt;
+      if (m.gap <= DEEP.catchGap) { m.cartHp--; m.gap = DEEP.bounce; this.broadcast("deep", { k: "smash", hp: m.cartHp }); s.message = m.cartHp > 0 ? `THE BEAST HIT THE CARTS! ${m.cartHp} hit${m.cartHp === 1 ? "" : "s"} left.` : "THE MINE BEAST SMASHED THE CARTS: TEAM DEFEATED.";
+        if (m.cartHp <= 0) { s.phase = "defeat"; this.mineSync(); return; } }
+      const q = coasterAt(C.T, C.s - 170 - m.gap); z.x = q.x; z.y = q.y; z.aim = q.a;
+    } else if (m.step === "escaped") { m.t -= dt; if (m.t <= 0) { this.endMine(true); s.phase = "cleared"; this.beginBreak(); s.message = `Wave ${s.stage} survived: you escaped the Deep Mine! Host can launch the next wave.`; return; } }
+    this.mineSync();
+  }
   cordonCheck() {   // The Deep Mine: anyone in the boss dungeon who didn't come by cart (a dash through the wall, a knockback, a boss's leap) is put back outside
     const K = this.cordon, inside = e => this.inCordon(e), held = this.coaster?.held;
     const out = e => { const toN = e.y - (K.y - 40), toW = e.x - (K.x - 25); if (toN < toW) e.y = K.y - 40 - 34; else e.x = K.x - 25 - 34; };
     for (const p of this.state.players.values()) if (!(p.ride > 0) && !held?.has(p.sessionId) && !this.state.vehicles.has(p.sessionId) && inside(p)) { out(p); this.shadowDash?.delete(p.sessionId); this.solveCollisions(p); }
-    for (const z of this.state.zombies.values()) if (inside(z)) { out(z); this.solveZombie(z); }
+    for (const z of this.state.zombies.values()) if (z.kind !== "minebeast" && inside(z)) { out(z); this.solveZombie(z); }
   }
   inCordon(e) { const K = this.cordon; return !!K && e.x > K.x + 25 && e.y > K.y + 10; }   // inside the mine's boss dungeon: nothing outside can reach you (and you can't be chased in)
   untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return this.inCordon(p) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
@@ -3397,6 +3505,7 @@ export class SurvivalRoom extends Room {
       killer.hp = Math.min(killer.maxHp, killer.hp + (z.boss ? 25 : 1));
     }
     this.state.totalKills++;
+    if (this.mine?.step === "runes" && Math.random() < DEEP.drop) this.mineShard(z.x, z.y);   // the mine mission: zombies drop crystal shards (cart fuel)
     if(Math.random()<(bossKill?1:this.state.extraLoot?.45:.28)){const item=new LootState();item.id=`l${++this.lootSequence}`;const roll=Math.random();item.kind=bossKill||roll>.92?"weapon":roll<.25?"ammo":roll<.48?"medkit":roll<.72?"scrap":"gold";item.x=z.x;item.y=z.y;item.amount=item.kind==="medkit"?35:item.kind==="ammo"?60:item.kind==="gold"?15:item.kind==="scrap"?8:0;item.rarity=bossKill?"Legendary":roll>.97?"Epic":roll>.9?"Rare":"Common";this.state.loot.set(item.id,item);}
     this.state.scrap += bossKill ? 35 : 2; if (Math.random()<0.12) this.state.electronics += 1; if (Math.random()<0.08) this.state.fuel += 1;
     if (bossKill) {
@@ -3538,7 +3647,7 @@ export class SurvivalRoom extends Room {
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);
         p.ammo+=30; this.unlockWeapon(p,found); const slotN=slot==="primary"?2:3; if(!had&&p.activeSlot!==slotN) p[slot]=found;
@@ -3549,7 +3658,8 @@ export class SurvivalRoom extends Room {
     this.state.isNight = this.state.dayTime >= 120;
     this.spawnClock -= dt;
     if (this.state.waveType === "normal" && isHiveWave(this.state.stage) && !this.hiveSpawned && !this.state.explore && this.state.elapsed >= HIVE.arriveAt) this.spawnHivemind();
-    if (this.state.waveType === "boss") this.bossWaveTick(dt, now);
+    if (this.state.waveType === "mission") { if (this.mine) this.mineTick(dt, now); }
+    else if (this.state.waveType === "boss") this.bossWaveTick(dt, now);
     else if (this.spawnClock <= 0 && this.state.elapsed < 90) {
       this.spawnZombie();
       // Waves 1-6 are a warm-up that ramps up smoothly; wave 7+ uses the normal formula. Small squads get fewer (spawnScale).
@@ -3591,6 +3701,7 @@ export class SurvivalRoom extends Room {
     const barricades = []; for (const st of this.state.structures.values()) if (st.kind === "barricade") barricades.push(st);
     const seenXY = seen.map(p => [p.x, p.y, p]), seenBossXY = seenBoss.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
     for (const z of [...this.state.zombies.values()]) {
+      if (z.kind === "minebeast") continue;   // the Mine Beast is driven by the mission (mineTick)
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seenBoss); continue; }
       if (z.kind === "hivemind") { this.hiveThink(z, dt, now, taunted ? [taunted] : seen); continue; }
