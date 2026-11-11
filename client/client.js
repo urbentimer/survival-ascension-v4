@@ -3452,7 +3452,7 @@ for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
-const cartImg = new Image(); cartImg.src = CV_CART.url;
+const cartImg = new Image(); if (CV_CART.url) cartImg.src = CV_CART.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
 for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img.src = url; mapImgs[k] = img; }
 for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
@@ -3485,7 +3485,7 @@ function drawMapObj(d) {
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery", "carnival"];
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery"];   // (Nov 11: Midnight Carnival removed)
 const carnivalMap = () => SITE_STYLE[state?.mapSite || 0] === "carnival";   // lobby sites (server SITES)
 const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
 const refineryMap = () => SITE_STYLE[state?.mapSite || 0] === "refinery";
@@ -4152,7 +4152,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["MIDNIGHT CARNIVAL", "Fairground · Ride the Coaster"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
