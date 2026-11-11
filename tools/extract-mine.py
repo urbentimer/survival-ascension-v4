@@ -90,6 +90,13 @@ runs.append((s0, cols[-1])); assert len(runs) == 4, runs
 sc = 150 / max(b - a + 1 for a, b in runs)
 for i, (x0, x1) in enumerate(runs): save(f'mSeal{i + 1}', s[:, x0:x1 + 1], scale=sc, blue=3)
 # sheets (one scale per sheet, so the pieces keep their sizes relative to each other)
+# the four rune stones (the plinth's symbols) + the rune shrine, one row of five
+s = load('runes.png'); cols = np.where((s[..., 3] > 0).sum(0) > 2)[0]; runs = []; s0 = cols[0]
+for i in range(1, len(cols)):
+    if cols[i] - cols[i - 1] > 12: runs.append((s0, cols[i - 1])); s0 = cols[i]
+runs.append((s0, cols[-1])); runs = [q for q in runs if q[1] - q[0] > 60]; assert len(runs) == 5, runs
+for i, (x0, x1) in enumerate(runs[:4]): save(f'mRune{i + 1}', s[:, x0:x1 + 1], 74)
+save('mShrine', s[:, runs[4][0]:runs[4][1] + 1], 190, lights=4)
 R = cells(load('rocks.png'), 4, 4)
 for r in range(4):
     for c in range(4): save(f'mRock{r * 4 + c + 1}', R[r][c], scale=.74, lights=2, blue=3)

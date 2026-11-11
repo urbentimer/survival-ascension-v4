@@ -824,6 +824,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.x = 850; p.y = 650; room.coaster.wait = 5; send(A, "coaster"); ok(p.ride === 1, "F at the station while the carts are in: you get in");
   tick(140); const c0 = { x: p.x, y: p.y }; tick(40); ok(Math.hypot(p.x - c0.x, p.y - c0.y) > 400 && p.ride === 1, `the carts roll off along the track with you in them (${Math.round(Math.hypot(p.x - c0.x, p.y - c0.y))}px in 2s)`);
   p.hp = 1e6; tick(Math.ceil(T.L / T.cfg.speed * 20) + 200); ok(p.ride === 0 && !room.blockedByMap(p.x, p.y, 0) && Math.abs(p.x - 850) < 260 && p.y > 400 && p.y < 520, `one lap later you get out onto the station's deck (${Math.round(p.x)},${Math.round(p.y)})`);
+  // the boss stop (user, Nov 11): hop off in the dungeon, the carts wait until you're back on, then take you back to the station
+  room.coaster.cd.clear(); p.rideCd = 0; p.x = 850; p.y = 650; for (let i = 0; i < 2000 && !(room.coaster.wait > 0 && room.coaster.next === 0); i++) tick(1); send(A, "coaster");
+  for (let i = 0; i < 3000 && !(room.coaster.wait > 0 && room.coaster.next === 1); i++) tick(1); const bs = T.stations[1];
+  ok(p.ride > 0 && T.stations.length === 2 && bs.boss && Math.hypot(p.x - bs.x, p.y - bs.y) < 260, `the carts stop at the boss stop inside the dungeon (${bs.x},${bs.y})`);
+  send(A, "coaster"); ok(p.ride === 0 && p.x > 3880 && p.y > 2700 && !room.blockedByMap(p.x, p.y, 0) && !(p.rideCd > 0), `hop off there: you're on the platform in the dungeon, no cooldown (${Math.round(p.x)},${Math.round(p.y)})`);
+  const sHold = room.coaster.s; tick(600); ok(room.coaster.s === sHold && room.coaster.wait > 0 && room.state.coasterWait === 1001, "30s later the carts are still waiting for you (\"waiting for 1\")");
+  send(A, "coaster"); tick(200); ok(p.ride > 0 && room.coaster.s !== sHold, "hop back on: the carts leave");
+  for (let i = 0; i < 3000 && p.ride > 0; i++) tick(1); ok(p.ride === 0 && Math.abs(p.x - 850) < 260 && p.y > 400 && p.y < 520, `they take you back to the station (${Math.round(p.x)},${Math.round(p.y)})`);
   room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
   ok(z && Math.abs(z.x - 2450) < 60 && Math.abs(z.y - 952) < 40 && !room.blockedByMap(z.x, z.y, 0), `the boss climbs out of the DANGER shaft (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }

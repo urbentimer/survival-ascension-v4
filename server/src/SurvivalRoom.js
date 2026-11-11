@@ -2884,27 +2884,29 @@ export class SurvivalRoom extends Room {
   coasterBoard(sid) {
     const C = this.coaster, p = this.state.players.get(sid); C.queue.delete(sid); if (!p || !p.alive || p.ride > 0) return false;
     const used = new Set([...C.riders.values()].map(r => r.seat)); let seat = 0; while (used.has(seat)) seat++; if (seat >= C.K.seats) return false;
-    C.riders.set(sid, { seat, done: 0 }); p.ride = seat + 1; this.broadcast("coaster", { k: "on", id: sid }); return true;
+    C.riders.set(sid, { seat, done: 0, from: C.next }); C.held?.delete(sid); p.ride = seat + 1; this.broadcast("coaster", { k: "on", id: sid }); return true;
   }
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
-    const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid); C.cd.set(sid, Date.now() + C.K.cd * 1000);
+    const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid);
+    const atBoss = C.wait > 0 && C.T.stations[C.next]?.boss; if (atBoss) (C.held ||= new Set()).add(sid); else C.cd.set(sid, Date.now() + C.K.cd * 1000);   // the boss stop (the mine): no cooldown, and the carts wait there until you're back on
     if (!p) return; p.ride = 0;
     const [dx0, dy0] = MN_SPOT.dungeon, cord = c => C.K.along && c.x > dx0 * this.A.width / 6000 - 40 && c.y > dy0 * this.A.height / 4000 - 40;   // (the mine: knocked off inside the cordoned dungeon = back on the station deck)
-    if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
+    if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = (st.off || 1) < 0 ? st.y - 160 + rand(0, 14) : st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
     this.solveCollisions(p); this.broadcast("coaster", { k: "off", id: sid });
   }
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
-    if (C.wait > 0) { C.wait -= dt; if (C.wait <= 0) { C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
-    else { let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
+    const holding = () => { if (!C.held?.size || !T.stations[C.next]?.boss) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0) C.held.delete(sid); else n++; } return n; };   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
+    if (C.wait > 0) { C.hold = holding(); C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
+    else { C.hold = 0; let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
       const step = Math.min(C.K.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
       for (const r of C.riders.values()) r.done += go;
-      if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; for (const [sid, r] of [...C.riders]) if (r.done >= T.L - 40) this.coasterOff(sid);
+      if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; for (const [sid, r] of [...C.riders]) if (!T.stations[C.next].boss && (r.done >= T.L - 40 || T.stations[r.from]?.boss)) this.coasterOff(sid);
         const st = T.stations[C.next]; for (const [sid, si] of [...C.queue]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.queue.delete(sid); continue; } if (si === C.next && Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR + 60) this.coasterBoard(sid); } }   // whoever was waiting here gets on   // one lap: off you get
       else C.s = (C.s + step) % T.L; }
     for (const [sid, r] of [...C.riders]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.riders.delete(sid); if (p) p.ride = 0; continue; } const q = coasterSeat(T, C.s, r.seat); p.x = q.x; p.y = q.y; }
     for (const [sid, until] of [...C.cd]) { const p = this.state.players.get(sid), left = Math.ceil((until - now) / 1000); if (!p || left <= 0) { C.cd.delete(sid); if (p) p.rideCd = 0; } else if (p.rideCd !== left) p.rideCd = left; }
-    this.state.coasterS = Math.round(C.s * 10) / 10; const w = C.wait > 0 ? Math.ceil(C.wait * 4) / 4 : 0; if (this.state.coasterWait !== w) this.state.coasterWait = w;
+    this.state.coasterS = Math.round(C.s * 10) / 10; const w = C.hold && C.wait <= .26 ? 1000 + C.hold : C.wait > 0 ? Math.ceil(C.wait * 4) / 4 : 0; if (this.state.coasterWait !== w) this.state.coasterWait = w;   // 1000 + n: the carts are holding at the boss stop for n survivors (no new schema field)
   }
   untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range

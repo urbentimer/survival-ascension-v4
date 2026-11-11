@@ -27,6 +27,7 @@ export class Client {
       sessionId: me.sessionId,
       roomId: server.roomId,
       get state() { return server.state; },
+      get server() { return server; },   // (automated preview tests poke the server through this)
       send(type, data) {
         try { server._handlers[type]?.(me, data); } catch (e) { fail(e); }
       },

@@ -3567,6 +3567,8 @@ function drawDynastyWorld() {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
     if (/^mChasm/.test(d.kind)) continue;   // (drawn into the ground)
     if (d.kind === "mRuneCircle") { drawRuneCircle(d); continue; }
+    if (d.kind === "mStop") { drawBossStop(d); continue; }
+    if (d.kind === "mShrine") { tall.push({ y: d.y - 6, draw: () => { drawMapObj(d); shrineFx(d); dynPieceFx(d, a); } }); continue; }
     if (d.kind === "mWardGate") { tall.push({ y: d.flip ? d.y + 130 : d.y + 40, draw: () => drawWard(d) }); continue; }
     if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .3 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
       if (img) tall.push({ y: d.kind === "mStation" ? d.y - 185 : d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
@@ -3595,7 +3597,7 @@ function coasterUse() {   // F at a coaster station: get on (train here) / wait 
   room.send("coaster"); return true;
 }
 function coastEta(st) {   // seconds until the train next stops at this station
-  const T = coast.T, i = T.stations.indexOf(st); let s = coast.s, t = state.coasterWait > 0 ? state.coasterWait : 0;
+  const T = coast.T, i = T.stations.indexOf(st); let s = coast.s, t = state.coasterWait >= 1000 ? 8 : state.coasterWait > 0 ? state.coasterWait : 0;   // (1000 + n = holding at the boss stop: unknown, guess 8s)
   let ahead = ((st.s - s) % T.L + T.L) % T.L; if (ahead < 6 && state.coasterWait > 0) return 0;
   const stops = T.stations.filter(q => { const d = ((q.s - s) % T.L + T.L) % T.L; return d > 6 && d < ahead - 6; }).length;
   return Math.max(1, Math.round(t + ahead / CO.speed + stops * CO.wait + 1));
@@ -3603,10 +3605,11 @@ function coastEta(st) {   // seconds until the train next stops at this station
 function drawCoasterPrompt() {   // screen space, over your head (like the repair prompts)
   const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "", col = "#ffe08a";
   const RW = coast.mn ? "MINE CART" : "COASTER", rw = coast.mn ? "mine cart" : "coaster";
-  if (me.ride > 0) { text = st ? "[F] Get off here" : `Riding the ${rw} · aim and shoot!`; col = st ? "#ffe08a" : "#9fe3ff"; }
+  const hold = state.coasterWait >= 1000 ? state.coasterWait - 1000 : 0;
+  if (me.ride > 0) { text = st ? (st.boss ? "[F] Hop off here · the carts wait until you're back on" : "[F] Get off here") : hold ? `Waiting for ${hold} to get back on…` : `Riding the ${rw} · aim and shoot!`; col = st ? "#ffe08a" : "#9fe3ff"; }
   else { const near = coastNear(me); if (!near) return;
     if (me.rideCd > 0) { text = `${coast.mn ? "Mine cart" : "Coaster"}: ride again in ${Math.ceil(me.rideCd)}s`; col = "#ff9d6b"; }
-    else if (st === near) text = `[F] GET IN THE ${RW} · leaves in ${Math.ceil(state.coasterWait)}s`;
+    else if (st === near) text = hold ? `[F] GET BACK IN THE ${RW} · waiting for ${hold}` : `[F] GET IN THE ${RW} · leaves in ${Math.ceil(state.coasterWait)}s`;
     else if (coastQueued) { text = `Waiting for the ${coast.mn ? "carts" : "train"} · ${coastEta(near)}s   ([F] cancel)`; col = "#9fe3ff"; }
     else text = `[F] Wait for the ${rw} · arrives in ${coastEta(near)}s`; }
   const x = v.x - Math.round(cam.x), y = v.y - Math.round(cam.y) - 96;
@@ -3617,7 +3620,7 @@ function drawCoasterPrompt() {   // screen space, over your head (like the repai
 function drawStationSigns() {   // world space, over each station: "COASTER · train here / arrives in Ns", so you can find them and see when it comes
   if (!coast) return; const t = performance.now() / 1000, here = coastStation();
   for (const st of coast.T.stations) { if (!inView(st.x, st.y, 300)) continue;
-    const x = st.x, y = st.y - (coast.mn ? 172 : 150) + Math.sin(t * 3 + st.x) * 4, txt = here === st ? (coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`;
+    const x = st.x, y = st.y - (st.boss ? 300 : coast.mn ? 172 : 150) + Math.sin(t * 3 + st.x) * 4, txt = (st.boss ? "BOSS STOP · " : "") + (here === st ? (state.coasterWait >= 1000 ? `WAITING FOR ${state.coasterWait - 1000}` : coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`);
     ctx.save(); ctx.font = "bold 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(txt).width + 26;
     ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 16, w, 24, 12); ctx.fill();
     ctx.fillStyle = here === st ? "#2a1405" : "#ffe08a"; ctx.fillText(txt, x, y + 1);
@@ -3780,6 +3783,21 @@ function statueFx(d, a) {   // the sleeping Mine Beast: its plinth's runes glow 
   (a.runes || []).forEach(([rx, ry], i) => { const x = d.x + rx, y = d.y + ry, k = .55 + .2 * Math.sin(t * 1.7 + i * 1.3), r = 30; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(110,210,255,${.5 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
   for (let i = 0; i < 5; i++) { const u = (t * .05 + i / 5) % 1, x = d.x - 260 + ((i * 137 + t * 9) % 520), y = d.y - 12 - Math.sin(u * Math.PI) * 10; ctx.globalAlpha = .12 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(x, y, 2, x, y, 70); g.addColorStop(0, "rgba(160,190,230,1)"); g.addColorStop(1, "rgba(160,190,230,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70, y - 40, 140, 80); }
   ctx.restore();
+}
+function drawBossStop(d) {   // the carts' stop in the boss dungeon: a low stone platform behind the rails, its edge lit by a line of runes
+  if (!inView(d.x, d.y, 260)) return; const w = 300, h = 74, x = d.x - w / 2, y = d.y - h, t = performance.now() / 1000;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(x - 6, y + 8, w + 12, h + 4);
+  ctx.fillStyle = pattern("mstone") || "#3b3742"; ctx.fillRect(x, y, w, h); ctx.fillStyle = "rgba(170,175,210,.16)"; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#0a0b12"; ctx.lineWidth = 3; for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 5, y); ctx.lineTo(x + i * w / 5, y + h); ctx.stroke(); } ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = "#24222e"; ctx.fillRect(x, y + h - 14, w, 14); ctx.fillStyle = "rgba(200,200,235,.35)"; ctx.fillRect(x, y, w, 3); ctx.strokeStyle = "#08080d"; ctx.lineWidth = 4; ctx.strokeRect(x, y, w, h);   // its front edge, the lit top edge
+  ctx.globalCompositeOperation = "lighter"; for (let i = 0; i < 9; i++) { const rx = x + 18 + i * (w - 36) / 8, k = .5 + .5 * Math.sin(t * 3 - i * .7); ctx.fillStyle = `rgba(110,200,255,${.35 + .45 * k})`; ctx.fillRect(rx - 4, y + h - 8, 8, 3); }
+  ctx.restore();
+}
+function shrineFx(d) {   // a rune shrine: its rune floats and turns over the pedestal, glowing (the mission takes it away when someone picks it up)
+  const i = Math.max(0, decor.filter(q => q.kind === "mShrine").indexOf(d)) % 4, img = mapImgs["mRune" + (i + 1)], t = performance.now() / 1000; if (!img?.naturalWidth) return;
+  const x = d.x, y = d.y - 128 + Math.sin(t * 1.8 + i) * 7, sq = .75 + .25 * Math.cos(t * 1.2 + i);
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y - 40, 4, x, y - 40, 90); g.addColorStop(0, "rgba(100,200,255,.45)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 90, y - 130, 180, 180); ctx.restore();
+  ctx.save(); ctx.translate(x, y); ctx.scale(sq, 1); ctx.drawImage(img, -img.width / 2, -img.height); ctx.restore();
 }
 function portalFx(d, a) {   // the portal: the user's swirl turning inside the black arch, light spilling down the steps
   const [dx, dy, w, h] = a.door, f0 = d.flip ? -1 : 1, x = d.x + dx * f0, y = d.y + dy, cx = x, cy = y + h * .5, t = performance.now() / 1000;
@@ -4156,7 +4174,7 @@ function drawNight() {
   else if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - CO.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - CO.H - cam.y, 120, .75); }   // the bulbs along the track, the train
   if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
     for (const [x, y, b] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, b ? 95 : 110, b ? .7 : .8);
-    if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); }
+    if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); else if ((d.kind === "mShrine" || d.kind === "mStop") && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - (d.kind === "mStop" ? 40 : 150) - cam.y, 150, .8); }
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
   }
   const pmN = paintedMap();

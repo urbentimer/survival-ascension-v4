@@ -411,10 +411,11 @@ export function buildCarnivalLayout(WW, WH, start = 5150) {
 // Designed on a 6000 x 4000 map; every position below is in those units and scales with the map.
 export const MN_SIZE = {mShaft: [520, 520], mLift: [470, 471], mStation: [600, 296], mCrusher: [450, 439], mShack: [400, 388], mCrystal: [380, 374], mCollapsed: [420, 409], mWrecks: [400, 258], mArch: [420, 273], mPortal: [560, 546], mSeal1: [149, 229], mSeal2: [148, 228], mSeal3: [150, 228], mSeal4: [149, 228], mRock1: [221, 181], mRock2: [221, 180], mRock3: [223, 180], mRock4: [215, 204], mRock5: [219, 215], mRock6: [218, 210], mRock7: [222, 201], mRock8: [159, 209], mRock9: [215, 217], mRock10: [218, 207], mRock11: [221, 189], mRock12: [221, 203], mRock13: [219, 191], mRock14: [218, 194], mRock15: [224, 197], mRock16: [226, 198], mLanternPost: [124, 143], mLanternPost2: [128, 142], mSkullSign: [132, 148], mSignpost: [132, 144], mCrystalCrate: [134, 141], mOreCart: [137, 139], mBarrel: [134, 134], mTnt: [137, 138], mToolRack: [144, 127], mWinch: [144, 128], mRopeCoil: [130, 112], mTimber: [145, 119], mOrePile: [148, 112], mCrystalSmall: [141, 137], mFloodlight: [130, 142], mBanner: [148, 137], mDrill: [223, 205], mExcavator: [221, 215], mCrystalCart: [207, 187], mLoco: [232, 209], mConveyor: [219, 216], mGenerator: [221, 207], mFan: [216, 200], mPump: [215, 192], mScaffold: [221, 217], mWinchFrame: [218, 216], mFurnace: [223, 220], mCrane: [229, 212], mTrommel: [221, 200], mSilos: [215, 213], mFuelTank: [214, 164], mCrawler: [221, 197], mPillar: [94, 180], mPillarBroken: [138, 166], mBrazier: [126, 118], mCandles: [101, 186], mGate: [177, 169], mChains: [167, 132], mCage: [161, 175], mAltar: [184, 111], mMiner: [139, 181], mMinerBroken: [153, 148], mTotem: [115, 184], mCoffin: [174, 151], mBones: [167, 115], mRuneStone: [166, 144], mOffering: [171, 133], mClawWall: [181, 156], mStones: [158, 140], mPuddles: [157, 135], mDirt: [156, 144], mShards: [156, 142], mGoldVein: [156, 136], mBlueCrack: [155, 130], mStain: [157, 135], mPlanks: [155, 151], mRopeM: [144, 138], mRocksM: [152, 136], mCrystalRocks: [157, 144], mHatch: [158, 138], mChevron: [156, 139], mGrate: [156, 141], mStripes: [156, 138],
   mChasm: [660, 250], mChasmV: [250, 620], mRuneCircle: [560, 360],   // (drawn in code: chasms, the rune circle under the statue)
-  mStatue: [600, 605], mWardH: [2140, 50], mWardV: [50, 1320], mWardGate: [160, 140] };   // the Mine Beast asleep in stone; the cordon round the dungeon (invisible walls) and the rune-ward the carts pass through (drawn in code)
+  mStatue: [600, 605], mWardH: [2140, 50], mWardV: [50, 1320], mWardGate: [160, 140],
+  mRune1: [74, 97], mRune2: [74, 100], mRune3: [74, 98], mRune4: [74, 101], mShrine: [190, 249], mStop: [300, 90] };   // the four rune stones (carried, drawn floating), their shrines; the boss stop's platform (drawn in code)   // the Mine Beast asleep in stone; the cordon round the dungeon (invisible walls) and the rune-ward the carts pass through (drawn in code)
 export const MN_KINDS = Object.keys(MN_SIZE);
 MAP_KINDS.push(...MN_KINDS);   // (appended after every older kind: their indexes never change)
-const MN_FLATS = ["mStones", "mPuddles", "mDirt", "mShards", "mGoldVein", "mBlueCrack", "mStain", "mPlanks", "mRopeM", "mRocksM", "mCrystalRocks", "mHatch", "mChevron", "mGrate", "mStripes", "mRopeCoil", "mChains", "mRuneCircle", "mWardGate"];
+const MN_FLATS = ["mStones", "mPuddles", "mDirt", "mShards", "mGoldVein", "mBlueCrack", "mStain", "mPlanks", "mRopeM", "mRocksM", "mCrystalRocks", "mHatch", "mChevron", "mGrate", "mStripes", "mRopeCoil", "mChains", "mRuneCircle", "mWardGate", "mStop"];
 for (const k of MN_FLATS) MAP_FLAT[k] = 1;
 const mnBox = (k, wf = .44, hf = .55) => { const [w, h] = MN_SIZE[k]; return { ox: 0, oy: -Math.round((h * hf + 6) / 2), hw: Math.round(w * wf), hh: Math.round((h * hf - 6) / 2) }; };
 for (const k of MN_KINDS) if (!MAP_FLAT[k]) MAP_SOLID[k] = mnBox(k);
@@ -431,12 +432,14 @@ Object.assign(MAP_SOLID, {
   mLanternPost: { ox: -10, oy: -12, hw: 16, hh: 9 }, mLanternPost2: { ox: 0, oy: -12, hw: 18, hh: 9 }, mSkullSign: { ox: 0, oy: -12, hw: 48, hh: 9 }, mSignpost: { ox: 0, oy: -12, hw: 18, hh: 9 }, mFloodlight: { ox: 0, oy: -14, hw: 34, hh: 12 }, mBanner: { ox: 0, oy: -12, hw: 58, hh: 9 },
   mPillar: { ox: 0, oy: -22, hw: 34, hh: 18 }, mCandles: { ox: 0, oy: -10, hw: 20, hh: 8 }, mTotem: { ox: 0, oy: -12, hw: 18, hh: 9 }, mBones: mnBox("mBones", .38, .45),
   mStatue: { ox: 0, oy: -150, hw: 282, hh: 140 },   // its plinth and body
+  mShrine: { ox: 0, oy: -34, hw: 70, hh: 30 }, mRune1: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune2: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune3: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune4: { ox: 0, oy: -6, hw: 4, hh: 4 },
   mWardH: { ox: 0, oy: -25, hw: 1075, hh: 25 }, mWardV: { ox: 0, oy: 0, hw: 25, hh: 660 },   // the cordon: nobody walks into the boss dungeon; only the carts go in
   mChasm: [{ ox: 0, oy: 0, hw: 300, hh: 62 }, { ox: 0, oy: 0, hw: 220, hh: 100 }], mChasmV: [{ ox: 0, oy: 0, hw: 62, hh: 285 }, { ox: 0, oy: 0, hw: 100, hh: 205 }] });   // a chasm: centre-placed, the track crosses it on a bridge
 export const MINECART = { speed: 340, gap: 112, H: 0, wait: 8, cd: 45, seats: 8, carts: 4, along: 1 };   // the mine train: rails on the ground, riders sit one behind the other
 export const MN_WAY = [[850, 400], [1300, 400], [1900, 360], [2600, 320], [3300, 400], [4000, 330], [4800, 420], [5500, 380], [5820, 820], [5550, 1280], [4800, 1330], [4100, 1080], [3450, 1300], [3350, 1900], [3900, 2280], [4700, 2000], [5350, 2150], [5800, 2650], [5840, 3350], [5600, 3720], [4800, 3740], [4000, 3720], [3400, 3350], [2800, 3720], [2250, 3200], [1650, 3650], [1050, 3080], [550, 3600], [220, 3250], [200, 2400], [330, 1650], [190, 950], [300, 520], [430, 400]];   // clockwise from the station: east along the top, snaking down the right, through the dungeon, back west along the bottom, up the left
 export const MN_SPOT = { tower: [1450, 1330], station: [850, 565], shaft: [2450, 1080], lift: [620, 1650], collapsed: [1950, 820], crusher: [2560, 2060], shack: [820, 2220], wrecks: [1380, 830], pit: [1720, 2080],
-  dungeon: [3880, 2700, 5990, 3990], portal: [5180, 3230], statue: [4520, 3170], seals: [[4060, 3010], [5600, 2960], [4080, 3480], [5560, 3480]] };
+  dungeon: [3880, 2700, 5990, 3990], portal: [5180, 3230], statue: [4520, 3170], seals: [[4060, 3010], [5600, 2960], [4080, 3480], [5560, 3480]],
+  stop: [5000, 3740], shrines: [[4350, 1750], [5350, 900], [1750, 3250], [2700, 2850]] };   // stop: the carts' stop inside the boss dungeon (user, Nov 11); shrines: where the four runes wait
 export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x, y (the rails, on the ground), s}; ONE station (the cart station, top left)
   const sx = WW / 6000, sy = WH / 4000, P = MN_WAY.map(([x, y]) => [x * sx, y * sy]), n = P.length, raw = [];
   for (let i = 0; i < n; i++) { const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
@@ -450,7 +453,8 @@ export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x,
     while (acc + (dd - from) >= step) { from += step - acc; acc = 0; total += step; const k = from / dd; pts.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, s: total }); }
     acc += dd - from; }
   if (Math.hypot(pts[pts.length - 1].x - pts[0].x, pts[pts.length - 1].y - pts[0].y) < step * .5) pts.pop();
-  return { pts, L: pts.length * step, step, stations: [{ s: 0, x: Math.round(P[0][0]), y: Math.round(P[0][1]) }], cfg: MINECART };
+  const [bx, by] = [MN_SPOT.stop[0] * sx, MN_SPOT.stop[1] * sy], bp = pts.reduce((b, p) => Math.hypot(p.x - bx, p.y - by) < Math.hypot(b.x - bx, b.y - by) ? p : b);
+  return { pts, L: pts.length * step, step, cfg: MINECART, stations: [{ s: 0, x: Math.round(P[0][0]), y: Math.round(P[0][1]), off: 1 }, { s: bp.s, x: Math.round(bp.x), y: Math.round(bp.y), off: -1, boss: 1 }] };   // off: which side you step off (1 = in front, -1 = behind the rails); boss: the stop in the dungeon (the carts wait there for whoever got off)
 }
 // The ground: gravel everywhere, then {x, y, w, h, tile}: slate and mud patches (soft edges), the flooded pit, plank decks under the station /
 // shack / crusher / lift, and the boss dungeon's carved floor ("dungeon": drawn in code).
@@ -471,8 +475,7 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const sealed = R => { const g = new Uint8Array(GW * GH);
     for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.x0 - R) / C)), i1 = Math.min(GW - 1, Math.floor((b.x1 + R) / C)), j0 = Math.max(0, Math.floor((b.y0 - R) / C)), j1 = Math.min(GH - 1, Math.floor((b.y1 + R) / C));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const px = i * C + C / 2, py = j * C + C / 2; if (px > b.x0 - R && px < b.x1 + R && py > b.y0 - R && py < b.y1 + R) g[j * GW + i] = 1; } }
-    for (let j = Math.floor(dy0 / C); j < GH; j++) for (let i = Math.floor(dx0 / C); i < GW; i++) if (!g[j * GW + i]) g[j * GW + i] = 3;   // the cordoned dungeon: only the carts go in, so it needn't connect
-    const q = [Math.floor((ty + 120) / C) * GW + Math.floor(tx / C)]; g[q[0]] = 2;
+    const q = [Math.floor((ty + 120) / C) * GW + Math.floor(tx / C), Math.floor((T.stations[1].y - 150) / C) * GW + Math.floor(T.stations[1].x / C)]; for (const c of q) g[c] = 2;   // flood from the tower AND from the boss stop (the cordoned dungeon is reached by cart): every spot must connect to one of them
     for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
     return g.includes(0); };
   const walkable = () => !sealed(22) && !sealed(30);
@@ -517,6 +520,7 @@ export function buildMineLayout(WW, WH, start = 6060) {
   for (let y = wy + 140, j = 0; y < WH + 60; y += 132, j++) { if (gW && Math.abs(y - gW.y) < 150) continue; fixed(j % 2 ? "mClawWall" : rnd() < .25 ? "mPillarBroken" : "mPillar", wx, y); }   // the west wall
   if (gN) { fixed("mArch", gN.x, wy + 34); out.push({ kind: "mWardGate", x: Math.round(gN.x), y: wy + 6, flip: false }); }
   if (gW) { fixed("mPillar", wx, gW.y - 92); fixed("mPillar", wx, gW.y + 118); fixed("mTotem", wx - 70, gW.y - 150); fixed("mTotem", wx - 70, gW.y + 190); out.push({ kind: "mWardGate", x: wx, y: Math.round(gW.y), flip: true }); }
+  const bs = T.stations[1]; out.push({ kind: "mStop", x: bs.x, y: bs.y - 112, flip: false }); fixed("mLanternPost2", bs.x - 175, bs.y - 46); fixed("mLanternPost2", bs.x + 175, bs.y - 46, true);   // the boss stop: a stone platform behind the rails, lanterns either side
   fixed("mWardH", (dx0 + WW) / 2 - 10, wy + 10); fixed("mWardV", wx, (wy + WH) / 2 + 10);   // the invisible walls (the pieces above are just how they look)
   const DUN = ["mCoffin", "mBones", "mBones", "mOffering", "mOffering", "mCage", "mRuneStone", "mRuneStone", "mAltar", "mGate"];
   for (const area of [[dx0 + 150, dy1 - 520, stx - 330, dy1 - 140], [ptx + 300, dy1 - 520, dx1 - 60, dy1 - 140], [dx0 + 200, dy0 + 330, stx - 380, dy0 + 700]])
@@ -524,6 +528,8 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const ROCK = Array.from({ length: 16 }, (_, i) => "mRock" + (i + 1));
   const ridge = (x0, y0, x1, y1, gaps) => { const n = Math.round(Math.hypot(x1 - x0, y1 - y0) / 235); for (let i = 0; i <= n; i++) { const f = i / n; if (gaps.some(g => Math.abs(f - g) < .05)) continue; place(pick(ROCK), x0 + (x1 - x0) * f + (rnd() - .5) * 40, y0 + (y1 - y0) * f + (rnd() - .5) * 50, 6, rnd() < .5); } };
   ridge(3080 * sx, 700 * sy, 3080 * sx, 2380 * sy, [.2, .55, .85]); ridge(450 * sx, 2470 * sy, 3000 * sx, 2470 * sy, [.15, .45, .75]);   // the scavenge zone's cave walls, with ways through
+  // the four rune shrines, out in the caves (each rune floats over its shrine until someone takes it)
+  for (const q of MN_SPOT.shrines) { const [x, y] = S(q); for (let t = 0; t < 60; t++) { const a = t * 2.4, r = t * 9; if (place("mShrine", x + Math.cos(a) * r, y + Math.sin(a) * r, 120)) break; } }
   // big crystal clusters in the open caves, machines and wrecks out along the track, a few in the scavenge zone
   const zone = [80, 80, 3050 * sx, 2350 * sy], wild = [80, 80, WW - 80, WH - 60];
   drop("mCrystal", 170, S([3900, 1500]).concat(S([5300, 1900]))); drop("mCrystal", 170, S([3500, 2500]).concat(S([4300, 3100]))); drop("mCrystal", 170, S([700, 2600]).concat(S([2600, 3100])));
