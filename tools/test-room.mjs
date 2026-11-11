@@ -1515,4 +1515,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const bad = [...st.players].flatMap(([id, p]) => names.filter(n => typeof p[n] !== "object" && p[n] !== undefined && !same(dec.state.players.get(id)?.[n], p[n])).map(n => id + "." + n));
   ok(!bad.length, `every player field reaches the browser intact after a change (${bad.slice(0, 6).join(", ") || "all " + names.length + " fields ok"})`);
 }
+{ /* Nov 12: Astra's officers scale with his Heavy Weapon picks, +15% per pick (captures the damage each officer bullet is fired with) */
+  const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room._onBroadcast = () => {}; room.state.noCd = false; room.onJoin({ sessionId: "A" }, { name: "Astra" }); room._handlers.chooseClass({ sessionId: "A" }, { id: "dispatcher" });
+  room._handlers.start({ sessionId: "A" }, {}); room.spawnClock = 9999; room.state.zombies.clear(); const p = room.state.players.get("A");
+  const shots = []; const orig = room.machineShot.bind(room); room.machineShot = (x, y, a, r, dmg, pc, o) => { shots.push(dmg); return orig(x, y, a, r, dmg, pc, o); };
+  const fire = bonus => { p.bonusDamage = bonus; shots.length = 0; room.state.zombies.clear(); for (const r of [...room.state.robots.values()]) room.removeUnit(r); room.amemOf(p).polReady = 0; room.amemOf(p).polOut = false;
+    room.amemOf(p).cast = null; room.astraCast(p, "Q"); const mc = room.amemOf(p); if (mc.cast) mc.cast.at = 0; room.lastTick = Date.now() - 50; room.tick();
+    for (const r of room.unitsOf("A", "police")) room.unitMem.get(r.id).nextBurst = 0;
+    placeZombie(room, p.x + 160, p.y, 1e6); for (let i = 0; i < 80 && !shots.length; i++) { room.lastTick = Date.now() - 50; room.tick(); } return shots[0] || 0; };
+  const d0 = fire(0), d2 = fire(40);
+  ok(d0 > 0 && Math.abs(d2 / d0 - 1.3) < .01, `2 Heavy Weapon picks: Astra's officers hit 30% harder (${d0.toFixed(2)} -> ${d2.toFixed(2)} per bullet)`); room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

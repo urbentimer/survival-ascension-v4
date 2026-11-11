@@ -4647,7 +4647,7 @@ const ROSTER = [
     trait: { n: "Marksman", t: "Every shot counts: +43% damage with every weapon, but she fires slower (×0.65). Her sniper also does +50% to bosses and brutes." }, gear: ["sniper", "pistol", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic arrives: everyone within 300px of you heals 30% of their max HP at once. For 20s he revives downed teammates first (2.5s each), then heals the injured (5 HP/s)." },
-             { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s." },
+             { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s. Each Heavy Weapon pick: +15% officer damage." },
              { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s." }],
     trait: { n: "Field Commander", t: "Trained for emergencies: she revives downed teammates twice as fast (2.5s instead of 5s)." }, gear: ["rifle", "pistol", "knife"] },
 ];

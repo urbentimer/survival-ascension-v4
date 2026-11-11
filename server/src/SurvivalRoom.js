@@ -282,12 +282,13 @@ const ASTRA = {
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6,   // session: longest single treatment (s)
            burst: .30, burstR: 300,          // on arrival: everyone alive within 300px of Astra (him too) heals 30% of their max HP, once (Nov 6)
            revive: 2.5, reviveR: 60, reviveHp: .35 },   // TOP priority: walks to the nearest downed teammate and revives them in 2.5s (up with 35% HP)
-  police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 5, burst: 5, gap: .08, every: 2, range: 440, leash: 600, threat: 250, astra: 2 },   // Nov 6: 5-round bursts every 2s, 5 dmg; Astra gets 2 officers, every teammate 1
+  police: { life: 30, cd: 60, hp: 110, speed: 150, dmg: 5, perHeavy: .15, burst: 5, gap: .08, every: 2, range: 440, leash: 600, threat: 250, astra: 2 },   // Nov 6: 5-round bursts every 2s, 5 dmg; Astra gets 2 officers, every teammate 1
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
   // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
   safe: { cd: 90, build: 5, hits: 6, perArmor: 1, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
+const policeDmgMult = p => 1 + ASTRA.police.perHeavy * ((p?.bonusDamage || 0) / 20);   // Nov 12: each Heavy Weapon pick Astra takes = +15% officer damage (his own guns get +20%)
 const safeBuildTime = p => Math.round(ASTRA.safe.build * (1 - (p.cdr || 0)) * 100) / 100;   // Nov 11: skill-cooldown upgrades shorten the build too (5s -> 2s at the 60% cap)
 const safeHits = p => ASTRA.safe.hits + ASTRA.safe.perArmor * Math.round((p.armorPct || 0) / armorStep(p));   // +1 wall hit per Body Armour pick (6 -> 14 at 8 picks; Nov 12, was +2)
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
@@ -2092,7 +2093,7 @@ export class SurvivalRoom extends Room {
       if (now >= mem.nextBurst) { mem.burstLeft = P.burst; mem.nextShot = now; mem.nextBurst = now + P.every * 1000; }
       if (mem.burstLeft > 0 && now >= mem.nextShot) {
         mem.burstLeft--; mem.nextShot = now + P.gap * 1000; mem.shotAt = now; r.act = "shoot";
-        const a = r.aim + rand(-.04, .04), len = this.machineShot(r.x, r.y - 12, a, P.range, P.dmg * this.summonScale(), 1, owner);
+        const a = r.aim + rand(-.04, .04), len = this.machineShot(r.x, r.y - 12, a, P.range, P.dmg * this.summonScale() * policeDmgMult(owner), 1, owner);
         this.broadcast("shot", { id: r.id, x: Math.round(r.x + Math.cos(a) * 16), y: Math.round(r.y - 14), a: [a], len: [Math.round(len)], w: "rifle" });
       }
     } else mem.burstLeft = 0;
