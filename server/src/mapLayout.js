@@ -425,13 +425,13 @@ Object.assign(MAP_SOLID, {
   mStation: [{ ox: -194, oy: -48, hw: 98, hh: 48 }, { ox: 194, oy: -48, hw: 98, hh: 48 }, { ox: 0, oy: -136, hw: 292, hh: 8 }, { ox: -287, oy: -122, hw: 7, hh: 24 }, { ox: 287, oy: -122, hw: 7, hh: 24 }, { ox: -206, oy: -130, hw: 50, hh: 12 }, { ox: 210, oy: -128, hw: 40, hh: 10 }],
   // the boss shaft: the slope down from its black mouth is open (the boss walks out); the portal: its steps up to the doorway are open
   mShaft: [{ ox: -190, oy: -190, hw: 74, hh: 175 }, { ox: 190, oy: -190, hw: 74, hh: 175 }, { ox: 0, oy: -300, hw: 120, hh: 58 }],
-  mPortal: [{ ox: -205, oy: -175, hw: 72, hh: 150 }, { ox: 205, oy: -175, hw: 72, hh: 150 }, { ox: 0, oy: -245, hw: 135, hh: 70 }],
+  mPortal: [{ ox: -205, oy: -175, hw: 72, hh: 150 }, { ox: 205, oy: -175, hw: 72, hh: 150 }, { ox: 0, oy: -245, hw: 135, hh: 70 }, { ox: 0, oy: -365, hw: 277, hh: 46 }],   // (the last: the strip behind it up to the wall)
   mArch: [{ ox: -152, oy: -30, hw: 56, hh: 26 }, { ox: 152, oy: -30, hw: 56, hh: 26 }],   // the track runs through the middle
   mLift: mnBox("mLift", .44, .42), mCrusher: mnBox("mCrusher", .45, .5), mShack: mnBox("mShack", .45, .52), mCrystal: mnBox("mCrystal", .42, .45), mCollapsed: mnBox("mCollapsed", .45, .5), mWrecks: mnBox("mWrecks", .44, .5),
   mSeal1: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal2: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal3: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal4: { ox: 0, oy: -30, hw: 50, hh: 26 },
   mLanternPost: { ox: -10, oy: -12, hw: 16, hh: 9 }, mLanternPost2: { ox: 0, oy: -12, hw: 18, hh: 9 }, mSkullSign: { ox: 0, oy: -12, hw: 48, hh: 9 }, mSignpost: { ox: 0, oy: -12, hw: 18, hh: 9 }, mFloodlight: { ox: 0, oy: -14, hw: 34, hh: 12 }, mBanner: { ox: 0, oy: -12, hw: 58, hh: 9 },
   mPillar: { ox: 0, oy: -22, hw: 34, hh: 18 }, mCandles: { ox: 0, oy: -10, hw: 20, hh: 8 }, mTotem: { ox: 0, oy: -12, hw: 18, hh: 9 }, mBones: mnBox("mBones", .38, .45),
-  mStatue: { ox: 0, oy: -95, hw: 178, hh: 88 },   // its plinth and body
+  mStatue: [{ ox: 0, oy: -95, hw: 178, hh: 88 }, { ox: 0, oy: -302, hw: 178, hh: 119 }],   // its plinth and body; and the strip behind it up to the dungeon wall (nobody gets stuck out of sight behind it)
   mShrine: { ox: 0, oy: -34, hw: 70, hh: 30 }, mRune1: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune2: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune3: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune4: { ox: 0, oy: -6, hw: 4, hh: 4 },
   mWardH: { ox: 0, oy: -25, hw: 1075, hh: 25 }, mWardV: { ox: 0, oy: 0, hw: 25, hh: 660 },   // the cordon: nobody walks into the boss dungeon; only the carts go in
   mChasm: [{ ox: 0, oy: 0, hw: 300, hh: 62 }, { ox: 0, oy: 0, hw: 220, hh: 100 }], mChasmV: [{ ox: 0, oy: 0, hw: 62, hh: 285 }, { ox: 0, oy: 0, hw: 100, hh: 205 }] });   // a chasm: centre-placed, the track crosses it on a bridge
@@ -441,6 +441,9 @@ export const MN_SPOT = { tower: [1450, 1330], station: [850, 565], shaft: [2450,
   dungeon: [3880, 2700, 5990, 3990], portal: [5180, 3230], statue: [4520, 3170], seals: [[4060, 3010], [5600, 2960], [4080, 3480], [5560, 3480]],
   stop: [5000, 3740], shrines: [[4350, 1750], [5350, 900], [1750, 3250], [2700, 2850]] };   // stop: the carts' stop inside the boss dungeon (user, Nov 11); shrines: where the four runes wait
 export const mineCordon = (WW, WH) => ({ x: (MN_SPOT.dungeon[0] + 60) * WW / 6000, y: (MN_SPOT.dungeon[1] + 110) * WH / 4000 });   // the boss dungeon's walls: west wall line x, north wall line y (inside = x > x + 25 and y > y + 10)
+// The boss dungeon's small things (user, Nov 11: "I keep getting stuck at the back and in between things"): they keep their footprints for PLACING
+// (nothing lands on top of them) but nobody collides with them: you walk past candles, braziers, kneeling miners, bones... The fight needs the floor.
+export const MAP_PASS = { mCandles: 1, mBrazier: 1, mMiner: 1, mMinerBroken: 1, mBones: 1, mOffering: 1, mCoffin: 1, mCage: 1, mRuneStone: 1, mAltar: 1, mGate: 1, mTotem: 1 };
 export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x, y (the rails, on the ground), s}; ONE station (the cart station, top left)
   const sx = WW / 6000, sy = WH / 4000, P = MN_WAY.map(([x, y]) => [x * sx, y * sy]), n = P.length, raw = [];
   for (let i = 0; i < n; i++) { const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
@@ -619,6 +622,7 @@ export function mapBoxes(layout) {
   const boxes = [];
   for (const d of layout) {
     if (d.hw) { boxes.push({ x: d.x, y: d.y, hw: d.hw, hh: d.hh }); continue; }   // painted map box
+    if (MAP_PASS[d.kind]) continue;
     for (const s of solidList(d.kind)) boxes.push({ x: d.x + (d.flip ? -s.ox : s.ox), y: d.y + s.oy, hw: s.hw, hh: s.hh });
   }
   return boxes;

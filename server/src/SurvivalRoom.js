@@ -397,8 +397,8 @@ const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
   strike: { range: 185, len: 1.15, hits: [.42, .7], reach: 225, half: 85, mult: [.9, 1.15], push: 150, cd: 1.2 },
   spines: { first: 5, cd: 10, len: 1.25, at: .6, n: 5, fan: 1.0, min: 220, max: 560, fly: .5, fuse: 1.5, r: 85, mult: 1 },
   cavein: { first: 10, cd: 17, len: 1.9, at: .5, delay: 1.35, r: 95, mult: 1.2, perPlayer: 2, extra: 3, dark: 5 },
-  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 255, warn: .9, r: 150, mult: 1.6, emerge: 1.0 },
-  charge: { first: 24, cd: 16, wind: 1.8, speed: 640, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
+  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 204, warn: .9, r: 150, mult: 1.6, emerge: 1.0 },
+  charge: { first: 24, cd: 16, wind: 1.8, speed: 512, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
   stagger: 3.2, staggerMult: 1.5, fleeWait: 10 };
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export class SurvivalRoom extends Room {
@@ -1621,7 +1621,7 @@ export class SurvivalRoom extends Room {
   }
   // E / Q: radio call (0.8s), then the vehicle arrives and she boards it. Returns false (no cooldown used) if it can't come.
   callVehicle(p, kind) {
-    if (this.state.vehicles.has(p.sessionId) || !p.alive || p.ride > 0 || this.inCordon(p)) return false;   // not from a cart seat, and not inside the mine's boss dungeon
+    if (this.state.vehicles.has(p.sessionId) || !p.alive || p.ride > 0 || (this.inCordon(p) && this.mine?.step !== "fight")) return false;   // not from a cart seat, and not inside the mine's boss dungeon
     const spot = kind === "heli" ? { x: p.x, y: p.y } : this.clearSpot(p.x, p.y, SOFEA[kind].body + 6, 160);
     if (!spot) { this.state.message = `${p.name}: no room for the ${kind} here.`; return false; }
     const v = new VehicleState(); v.id = p.sessionId; v.kind = kind; v.phase = "call"; v.x = spot.x; v.y = spot.y;
@@ -1647,6 +1647,7 @@ export class SurvivalRoom extends Room {
   }
   // tank / mecha: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
   solveVehicle(p, v) {
+    if (v.kind === "heli" && this.cordon && this.mine && this.mine.step !== "runes") { const K = this.cordon; p.x = Math.max(p.x, K.x + 70); p.y = Math.max(p.y, K.y + 70); return; }   // the Mine Beast fight: the helicopter stays inside the dungeon
     if (v.kind === "heli") { if (this.cordon) this.pushOut(p, [{ x: (this.cordon.x - 25 + this.A.width) / 2, y: (this.cordon.y - 40 + this.A.height) / 2, hw: (this.A.width - this.cordon.x + 25) / 2, hh: (this.A.height - this.cordon.y + 40) / 2 }], SOFEA.heli.body); return; }   // the helicopter flies over everything, except into the mine's boss dungeon (user, Nov 11)
     const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }];
     {   // tank and mecha
@@ -3010,7 +3011,7 @@ export class SurvivalRoom extends Room {
     s.message = "THE MINE BEAST IS AWAKE!"; this.broadcast("deep", { k: "fight" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) }); this.mineSync();
   }
   mineFlee(z) {   // its bar is empty: it drops to a knee. Everyone gets to the carts (F at the boss stop); then it comes after them
-    const m = this.mine; if (m.step !== "fight") return; m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
+    const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
     this.state.message = "IT WON'T STAY DOWN: GET IN THE CARTS!"; this.broadcast("deep", { k: "flee", len: BEAST.fleeWait }); this.mineSync();
   }
   mineChase() {   // everyone left in the dungeon is put in the carts (the downed are pulled aboard), and it comes after them
