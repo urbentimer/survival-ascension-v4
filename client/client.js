@@ -340,7 +340,7 @@ function renderState() {
   const watching = me && !me.alive && state.phase === "playing", tgt = watching ? viewTarget() : null;
   $("spectate").classList.toggle("hidden", !watching);
   if (watching) {
-    txt("specTitle", me.bledOut ? "YOU BLED OUT · back next wave" : `YOU ARE DOWN · bleed-out in ${Math.ceil(me.bleedout || 0)}s · a teammate can press F next to you`);
+    txt("specTitle", me.bledOut ? "YOU BLED OUT · back next wave" : inSafehouse(me) ? `YOU ARE DOWN · SAFE in the safehouse: bleed-out paused (${Math.ceil(me.bleedout || 0)}s) · a teammate can press F next to you` : `YOU ARE DOWN · bleed-out in ${Math.ceil(me.bleedout || 0)}s · a teammate can press F next to you`);
     txt("specWho", tgt && tgt !== me ? `Watching ${tgt.isBot ? "🤖 " : ""}${tgt.name}` : "Nobody left standing");
     $("specHint").classList.toggle("hidden", aliveMates().length < 2);
   }
@@ -418,7 +418,7 @@ function renderHotbar(me) {
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
   if (ast) {   // R: Safehouse, beside E
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
-    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (you can't be hurt while they build); zombies can't get in (6 hits break it, the workers repair) for 45s", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.hp / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (faster with Quick Recovery; you can't be hurt while they build); zombies can't get in (6 hits break it, +2 per Body Armour pick; the workers repair) for 45s. Downed teammates inside don't bleed out", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.life / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (op) {   // R: Crimson Aegis mecha, beside E
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
@@ -1903,7 +1903,7 @@ function drawAstraFx(f, age) {   // false when finished
 }
 const safeFlash = new Map();   // recent wall hits (bar flashes red)
 function safeHpBar(st, cx, y) {   // 6 pips above the north wall: how many more hits the walls can take
-  const n = st.maxHp || SAFE.hits, w = 14, gap = 3, x0 = cx - (n * (w + gap) - gap) / 2, hit = performance.now() - Math.max(0, ...[...safeFlash.values()]) < 160;
+  const n = st.maxHp || SAFE.hits, gap = n > 12 ? 2 : 3, w = Math.min(14, (220 - gap * (n - 1)) / n), x0 = cx - (n * (w + gap) - gap) / 2, hit = performance.now() - Math.max(0, ...[...safeFlash.values()]) < 160;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x0 - 3, y - 3, n * (w + gap) - gap + 6, 12);
   for (let i = 0; i < n; i++) { ctx.fillStyle = i < st.hp ? (hit ? "#ff8a7a" : st.hp <= 2 ? "#ff6b5b" : "#8ff0ff") : "rgba(255,255,255,.12)"; ctx.fillRect(x0 + i * (w + gap), y, w, 6); }
   ctx.restore();
@@ -1916,7 +1916,8 @@ function drawAstraShield() {   // Astra can't be hurt while his safehouse is bei
     ctx.beginPath(); ctx.ellipse(p.x, p.y - 8, 24, 30, 0, 0, 7); ctx.stroke(); ctx.restore();
   }
 }
-function safeFrame(st) { return st.deploy > 0 ? (st.deploy > SAFE.build / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
+function inSafehouse(p) { if (!state || !p) return false; for (const st of state.structures.values()) if (st.kind === "safehouse" && !(st.deploy > 0) && Math.abs(p.x - st.x) <= SAFE.half && Math.abs(p.y - st.y) <= SAFE.half) return true; return false; }   // a finished safehouse: downed players inside don't bleed out
+function safeFrame(st) { return st.deploy > 0 ? (st.deploy > (st.total || SAFE.build) / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
 function safeAlpha(st) { return st.deploy <= 0 && st.life < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
 // The 4 walls as depth-sorted pieces (north/south: 4 tiles across; east/west: 3 tiles down), so people inside and outside sort right.
 function safePieces(cx, cy, frame, alpha, st = null) {
@@ -3059,7 +3060,7 @@ function drawSurvivorLabels(p) {
   const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
   drawLabel(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift, "#f2ead9");
   if (awayIds.has(p.sessionId)) drawLabel("RECONNECTING…", p.x, p.y - nameLift - 13, "#9fd8ff");   // their connection dropped: the server holds the seat 30s
-  if (!p.alive) drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, "#ff7568");
+  if (!p.alive) { const safe = !p.bledOut && inSafehouse(p); drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : safe ? "DOWN · SAFE (PAUSED " + Math.ceil(p.bleedout || 0) + "s) · F TO REVIVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, safe ? "#8ff0ff" : "#ff7568"); }
 }
 // Name tags: text is rasterised once per (string, colour) and blitted after that (fillText for every survivor every frame added up).
 const labelCache = new Map();

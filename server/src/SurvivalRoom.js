@@ -286,8 +286,10 @@ const ASTRA = {
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
   // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
-  safe: { cd: 90, build: 5, hits: 6, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
+  safe: { cd: 90, build: 5, hits: 6, perArmor: 2, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
+const safeBuildTime = p => Math.round(ASTRA.safe.build * (1 - (p.cdr || 0)) * 100) / 100;   // Nov 11: skill-cooldown upgrades shorten the build too (5s -> 2s at the 60% cap)
+const safeHits = p => ASTRA.safe.hits + ASTRA.safe.perArmor * Math.round((p.armorPct || 0) / armorStep(p));   // Nov 11: +2 wall hits per Body Armour pick (6 -> 22 at 8 picks)
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
   hook: { wind: 0.15, speed: 1400, range: 1100, hitR: 10, dmg: 70, pull: 900, stop: 20, wallStop: 24, maxT: 3, cd: 12, missCd: 4 },
@@ -1931,7 +1933,7 @@ export class SurvivalRoom extends Room {
       let site = c.site && this.safeFits(c.site.x, c.site.y) ? c.site : this.safeSite(p);   // check again: things move during the call
       if (!site) { refund(); return this.astraNo(p, "no room for a safehouse here"); }
       const st = new StructureState(); st.id = `sh${++this.robotSeq}`; st.kind = "safehouse"; st.x = Math.round(site.x); st.y = Math.round(site.y); st.ownerId = p.sessionId;
-      st.deploy = ASTRA.safe.build; st.hp = st.maxHp = ASTRA.safe.hits; st.life = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
+      st.deploy = st.total = safeBuildTime(p); st.hp = st.maxHp = safeHits(p); st.life = ASTRA.safe.life; st.aim = 0; this.state.structures.set(st.id, st);
       const H = ASTRA.safe.half - 30, spots = this.freeSpots(p.x, p.y, 2) || [{ x: p.x - 20, y: p.y }, { x: p.x + 20, y: p.y }];
       this.spawnUnit(p, "worker", spots[0], { site: st.id, goal: { x: st.x + H, y: st.y - H } });   // worker A: north + east walls
       this.spawnUnit(p, "worker", spots[1], { site: st.id, goal: { x: st.x - H, y: st.y + H } });   // worker B: south + west walls
@@ -3751,7 +3753,7 @@ export class SurvivalRoom extends Room {
       if(!rescuer.alive||!target||target.alive||target.bledOut||distance(rescuer,target)>85){rescuer.reviveTargetId="";rescuer.reviveProgress=0;}
       else {rescuer.reviveProgress+=dt;if(rescuer.reviveProgress>=(rescuer.characterClass==="dispatcher"?2.5:5)){ /* Astra's trait (Field Commander): revives in 2.5s */target.alive=true;target.bleedout=0;target.hp=Math.max(30,Math.round(target.maxHp*.35));rescuer.revives++;rescuer.reviveTargetId="";rescuer.reviveProgress=0;this.state.message=`${rescuer.name} revived ${target.name}!`;}}
     }
-    for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
+    for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0&&!this.sheltered(p)){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
       if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).

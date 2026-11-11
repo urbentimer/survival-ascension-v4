@@ -1037,6 +1037,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...and the workers go home");
   { const m2 = room.amemOf(p); m2.safeReady = 0; send(A, "skill2", {}); call(); const s2 = room.safeOf(p); tick(110); ok(s2 && s2.deploy === 0, "a new safehouse");
     s2.life = 0.01; tick(1); ok(!room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together"); }
+  { /* Nov 11: downed teammates inside a finished safehouse don't bleed out; cooldown reduction shortens the build; +2 wall hits per Body Armour pick */
+    const m3 = room.amemOf(p); m3.safeReady = 0; room.state.zombies.clear(); p.cdr = 0.3; p.armorPct = 0.18; send(A, "skill2", {}); call(); const s3 = room.safeOf(p);
+    ok(s3 && Math.abs(s3.deploy - 3.5) < .06 && s3.total === 3.5, `30% cooldown reduction: the safehouse builds in 3.5s, not 5s (${s3?.deploy?.toFixed(2)}s)`);
+    ok(s3 && s3.hp === 12 && s3.maxHp === 12, `3 Body Armour picks: the walls take 12 hits, not 6 (${s3?.hp})`);
+    tick(80); ok(s3 && s3.deploy === 0, "...and it finishes after 3.5s");
+    const q2 = [...room.state.players.values()].find(x => x.sessionId !== p.sessionId) || p; const was = { x: q2.x, y: q2.y };
+    q2.x = s3.x + 20; q2.y = s3.y + 10; q2.alive = false; q2.bledOut = false; q2.bleedout = 20; tick(40);
+    ok(Math.abs(q2.bleedout - 20) < .01, `a downed player inside the safehouse doesn't bleed out (${q2.bleedout.toFixed(2)}s left after 2s)`);
+    q2.x = s3.x + 400; tick(40); ok(q2.bleedout < 19, `...outside it the clock runs again (${q2.bleedout.toFixed(2)}s)`);
+    q2.alive = true; q2.bleedout = 0; q2.x = was.x; q2.y = was.y; p.cdr = 0; p.armorPct = 0; s3.life = 0.01; tick(1); }
   // no room: boss in the way -> refused, no cooldown
   const m = room.amemOf(p); m.safeReady = 0; room.state.zombies.clear(); const boss = placeZombie(room, p.x + 60, p.y, 1e5); boss.boss = true; boss.radius = 40;
   send(A, "skill2", {}); call(); ok(!room.safeOf(p) && m.safeReady === 0, "R with a boss in the way: refused, no cooldown used");
