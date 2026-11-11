@@ -52,7 +52,10 @@ def save(kind, c, width=None, scale=None, lights=0, blue=0, flat=False, loose=Fa
     if flat:   # marks blended with the magenta: pull every pinkish pixel back to neutral
         q = c.astype(int); pk = (q[..., 0] - q[..., 1] > 30) & (q[..., 2] - q[..., 1] > 20) & (np.abs(q[..., 0] - q[..., 2]) < 80); q[..., 0] = np.where(pk, q[..., 1] + 6, q[..., 0]); q[..., 2] = np.where(pk, q[..., 1], q[..., 2]); c = q.clip(0, 255).astype(np.uint8)
     im = Image.fromarray(np.ascontiguousarray(c)).resize((max(1, round(c.shape[1] * sc)), max(1, round(c.shape[0] * sc))), Image.LANCZOS)
-    a = np.array(im); a[..., 3] = np.where(a[..., 3] > 90, 255, 0); im = Image.fromarray(a); im.save(os.path.join(OUT, kind + '.webp'), quality=Q, method=6, alpha_quality=82)
+    a = np.array(im); a[..., 3] = np.where(a[..., 3] > 90, 255, 0)
+    if flat and kind not in ('mPlanks', 'mRopeM'):   # ground marks fade out over their last 16px (no hard outline): they melt into the floor (user, Nov 11: "make the surfaces blend")
+        dist = ndimage.distance_transform_edt(np.pad(a[..., 3] > 0, 1))[1:-1, 1:-1]; k = np.clip(dist / 16, 0, 1); a[..., 3] = (k * k * (3 - 2 * k) * 255).astype(np.uint8)
+    im = Image.fromarray(a); im.save(os.path.join(OUT, kind + '.webp'), quality=Q, method=6, alpha_quality=82)
     w, h = im.size; info = {'url': f'assets/map/mn/{kind}.webp', 'w': w, 'h': h}
     if lights: L = spots(a, 'loose' if loose else 'light', lights); info['lights'] = [[round(x - w / 2), round(y - h)] for x, y, s in L]
     if blue: B = spots(a, 'blue', blue, 30); info['blue'] = [[round(x - w / 2), round(y - h), round(min(2.2, .6 + s / 900), 2)] for x, y, s in B]

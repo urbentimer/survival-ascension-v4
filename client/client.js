@@ -3553,12 +3553,12 @@ function drawDynastyWorld() {
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
     const grass = pattern(base); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
-    for (const g of dynGroundCache.g) { if (g.tile === "dungeon") { if (g.x < vx + vw && g.x + g.w > vx && g.y < vy + vh && g.y + g.h > vy) mineDungeonFloor(g, vx, vy, vw, vh); continue; }
+    if (mn) { mineGroundBlend(dynGroundCache.g, grass, vx, vy, vw, vh); for (const d of decor) if (/^mChasm/.test(d.kind)) { const [w, h] = d.kind === "mChasm" ? [660, 250] : [250, 620]; if (d.x - w / 2 < vx + vw + 30 && d.x + w / 2 > vx - 30 && d.y - h / 2 < vy + vh + 30 && d.y + h / 2 > vy - 30) drawChasm(d, w, h); }
+      mineRails(vx, vy, vw, vh, WW, WH); }   // The Deep Mine: every surface faded softly into the next, then chasms, then the rails over everything (on a chasm they run on a timber bridge)
+    else for (const g of dynGroundCache.g) {
       const p = pattern(T + g.tile); if (wo) { if (p && grass && g.x < vx + vw + 60 && g.x + g.w > vx - 60 && g.y < vy + vh + 60 && g.y + g.h > vy - 60) softPatch(g, p, grass); continue; }
       if (p) fill(p, g.x, g.y, g.w, g.h);
       if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
-    if (mn) { for (const d of decor) if (/^mChasm/.test(d.kind)) { const [w, h] = d.kind === "mChasm" ? [660, 250] : [250, 620]; if (d.x - w / 2 < vx + vw + 30 && d.x + w / 2 > vx - 30 && d.y - h / 2 < vy + vh + 30 && d.y + h / 2 > vy - 30) drawChasm(d, w, h); }
-      mineRails(vx, vy, vw, vh, WW, WH); }   // The Deep Mine: chasms, then the rails over everything (on a chasm they run on a timber bridge)
     ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
   });
   syncDecor();
@@ -3663,6 +3663,30 @@ function drawCart(c, i) {   // views in the strip: driving down, down-right, rig
   for (const p0 of state.players.values()) if (p0.ride > 0 && (p0.ride - 1) >> 1 === i) { const p = V(p0); if (p) riders.push(p); }
   riders.sort((a, b) => a.y - b.y); for (const p of riders) drawRider(p, rim);
 }
+// The Deep Mine (Nov 11, user: "make the surfaces blend with each other"): each patch of slate / mud / planks and the dungeon floor is painted
+// through a heavily blurred mask of its shape (a shadow-blur silhouette, so it works in every browser), and big soft grime blotches
+// lie across everything, so no surface has an edge: one fades into the next. All in world coordinates, so ground chunks join up.
+let mbA = null, mbB = null;
+function mineMasked(shape, blur, paint, vx, vy, vw, vh) {   // paint(g) draws the surface (world coords) on g; it's kept only inside the blurred shape
+  if (!mbA || mbA.width !== vw || mbA.height !== vh) { mbA = document.createElement("canvas"); mbB = document.createElement("canvas"); mbA.width = mbB.width = vw; mbA.height = mbB.height = vh; }
+  const a = mbA.getContext("2d"), b = mbB.getContext("2d");
+  a.setTransform(1, 0, 0, 1, 0, 0); a.clearRect(0, 0, vw, vh); a.setTransform(1, 0, 0, 1, -vx, -vy); a.globalCompositeOperation = "source-over"; a.imageSmoothingEnabled = false; paint(a);
+  b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, vw, vh); b.setTransform(1, 0, 0, 1, -vx - 30000, -vy); b.shadowColor = "#000"; b.shadowBlur = blur; b.shadowOffsetX = 30000; b.fillStyle = "#000"; shape(b); b.shadowColor = "transparent";
+  a.setTransform(1, 0, 0, 1, 0, 0); a.globalCompositeOperation = "destination-in"; a.drawImage(mbB, 0, 0); a.globalCompositeOperation = "source-over";
+  ctx.drawImage(mbA, vx, vy);
+}
+function mineGroundBlend(G, base, vx, vy, vw, vh) {
+  const WARM = { stone: "rgba(70,46,34,.26)", mud: "rgba(30,20,14,.12)", planks: "rgba(20,12,8,.18)" };
+  for (const g of G) { const pad = g.tile === "dungeon" ? 90 : 70; if (g.x > vx + vw + pad || g.x + g.w < vx - pad || g.y > vy + vh + pad || g.y + g.h < vy - pad) continue;
+    if (g.tile === "dungeon") { const r = { x: g.x - 40, y: g.y - 40, w: g.w + 120, h: g.h + 120, tile: "dungeon" };
+      mineMasked(c => c.fillRect(g.x + 30, g.y + 30, g.w + 60, g.h + 60), 90, c => { const m = ctx; ctx = c; try { mineDungeonFloor(r, vx, vy, vw, vh); } finally { ctx = m; } }, vx, vy, vw, vh); continue; }
+    const p = pattern("m" + g.tile); if (!p) continue; const sh = softShape(g).path;
+    mineMasked(c => c.fill(sh), g.tile === "planks" ? 26 : 56, c => { c.fillStyle = p; c.fillRect(vx, vy, vw, vh); c.globalCompositeOperation = "source-atop"; c.fillStyle = WARM[g.tile] || "rgba(0,0,0,0)"; c.fillRect(vx, vy, vw, vh); c.globalCompositeOperation = "source-over"; }, vx, vy, vw, vh);
+  }
+  const CELL = 420; for (let gy = Math.floor((vy - 300) / CELL); gy * CELL < vy + vh + 300; gy++) for (let gx = Math.floor((vx - 300) / CELL); gx * CELL < vx + vw + 300; gx++) {   // grime: big soft light and dark blotches over everything
+    const h = mnHash(gx * 13 + 7, gy * 17 + 3), x = (gx + mnHash(gx, gy * 3)) * CELL, y = (gy + mnHash(gx * 5, gy)) * CELL, r = 180 + h * 220, dark = h < .62;
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, dark ? `rgba(8,5,4,${.16 + h * .14})` : `rgba(150,120,95,${.03 + (h - .62) * .1})`); gr.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+}
 // ---------- The Deep Mine (Nov 11): rails, chasms, the dungeon floor, the rune circle, the portal swirl, the seal crystals ----------
 const mnHash = (a, b) => { let h = (Math.round(a) * 374761393 + Math.round(b) * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 let mineRailCache = null;
@@ -3725,8 +3749,6 @@ function mineDungeonFloor(g, vx, vy, vw, vh) {   // the boss dungeon's floor: bi
     if (hh > .1 && hh < .24) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = "rgba(70,160,255,.42)"; ctx.lineWidth = 2; ctx.shadowColor = "#3aa0ff"; ctx.shadowBlur = 6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + SW, y); ctx.stroke(); ctx.restore(); }   // a rune-lit joint
     if (hh > .45 && hh < .5) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = "rgba(90,180,255,.5)"; ctx.lineWidth = 2; const mx = x + SW / 2, my = y + SH / 2; ctx.beginPath(); ctx.moveTo(mx, my - 16); ctx.lineTo(mx, my + 16); ctx.moveTo(mx, my - 6); ctx.lineTo(mx - 9, my - 14); ctx.moveTo(mx, my - 6); ctx.lineTo(mx + 9, my - 14); ctx.moveTo(mx, my + 4); ctx.lineTo(mx - 9, my - 4); ctx.moveTo(mx, my + 4); ctx.lineTo(mx + 9, my - 4); ctx.stroke(); ctx.restore(); }   // a carved rune
   }
-  const e = ctx.createLinearGradient(g.x, 0, g.x + 70, 0); e.addColorStop(0, "rgba(5,5,10,.7)"); e.addColorStop(1, "rgba(5,5,10,0)"); ctx.fillStyle = e; ctx.fillRect(g.x, g.y, 70, g.h);
-  const e2 = ctx.createLinearGradient(0, g.y, 0, g.y + 70); e2.addColorStop(0, "rgba(5,5,10,.7)"); e2.addColorStop(1, "rgba(5,5,10,0)"); ctx.fillStyle = e2; ctx.fillRect(g.x, g.y, g.w, 70);
   ctx.restore();
 }
 function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a great carved circle of glowing runes, slowly turning
