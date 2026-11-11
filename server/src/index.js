@@ -6,7 +6,7 @@ import { log, commit, handleLogsRequest } from "./logbook.js";
 
 const port = Number(process.env.PORT || 2567);
 const server = new Server({
-  transport: new WebSocketTransport({ pingInterval: 5000, pingMaxRetries: 4, server: createServer((req, res) => { if (!handleLogsRequest(req, res)) { res.writeHead(404); res.end(); } }) }),
+  transport: new WebSocketTransport({ pingInterval: 2000, pingMaxRetries: 3, server: createServer((req, res) => { if (!handleLogsRequest(req, res)) { res.writeHead(404); res.end(); } }) }),
   publicAddress: process.env.PUBLIC_ADDRESS
 });
 warmLayouts();

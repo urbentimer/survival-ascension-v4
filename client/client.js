@@ -4591,9 +4591,13 @@ let lastStateAt = performance.now(), stallReported = false;
 setInterval(() => {
   if (!room || !state || state.phase !== "playing") { lastStateAt = performance.now(); return; }
   const gap = performance.now() - lastStateAt;
-  if (gap > 6000 && !stallReported) { stallReported = true; reportError(`no updates from the server for ${Math.round(gap / 1000)}s`, "connection", "warn"); }
+  if (gap > 3000 && !reconnecting && document.visibilityState === "visible" && room.reconnectionToken && !SOLO_PREVIEW) {   /* the connection is stuck (nothing from the server for 3s mid-wave): drop it and reconnect instead of standing frozen */
+    const old = room, tok = room.reconnectionToken; dropInfo = { code: "stuck " + Math.round(gap) + "ms", at: Date.now(), vis: "visible" }; lastStateAt = performance.now();
+    try { old.removeAllListeners(); } catch {} try { old.connection.close(); } catch {}
+    reconnectRoom(tok); return;
+  }
   if (gap < 1000) stallReported = false;
-}, 2000);
+}, 1000);
 function frame(t){
   if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);
