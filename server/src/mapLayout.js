@@ -32,7 +32,7 @@ export const MAP_KINDS = ["car", "burntCar", "bus", "police", "building", "ruin"
   "wBuggy", "wWatchtower", "wMast", "wDish", "wShed", "wSandbags", "wBarrier", "wCrates", "wGasRack", "wRocks", "wIce", "wPines", "wRockArch", "wFloodlight", "wLamp", "wWindsock",
   "wBeacon", "wShelf", "wPipes", "wBarrels", "wBigCrate", "wFence", "wSign", "wFlag",
   "rTowers", "rTank", "rTankBurnt", "rControl", "rPumpjack", "rTanker", "rPipeRack", "rLoading", "rPyramid", "rFlare", "rHTank", "rGenerator", "rCooler", "rSphere", "rTruck", "rDozer", "rPickup", "rContainers", "rBarrels", "rCrates", "rIbc", "rPipeBend", "rTransformer", "rLight", "rBarrier", "rPipes", "rValve", "rFence", "rSign", "rStairs", "rSpool", "rBlocks", "rSandbags", "rRubble", "rOil1", "rOil2", "rCrack", "rTracks1", "rTracks2", "rStripes", "rArrow", "rHeli", "rHazard", "rFlameMark", "rDebris", "rBlood",
-  "cvHaunted", "cvFerris", "cvCarousel", "cvBigtop", "cvFunhouse", "cvBumper", "cvGate", "cvSwing", "cvStation", "cvPopcorn", "cvCandy", "cvHotdog", "cvDrinks", "cvRingToss", "cvBalloons", "cvDarts", "cvPrize", "cvFoodTrailer", "cvIceCream", "cvClaw", "cvWagon", "cvNewsVan", "cvAmbulance", "cvLightTower", "cvTicket", "cvBalloonBox", "cvSignpost", "cvLamp", "cvBanner", "cvBench", "cvBin", "cvCrates", "cvHay", "cvBarrier", "cvArrow", "cvBear", "cvJack", "cvFireworks", "cvBarrel", "cvPoster", "cvCrackM", "cvPuddle", "cvBloodM", "cvStar", "cvTickets", "cvPopSpill", "cvConfetti", "cvPrints", "cvPlanks", "cvBunting", "cvOil", "cvLeaves", "cvRope", "cvPaint"];
+  "cvHaunted", "cvFerris", "cvCarousel", "cvBigtop", "cvFunhouse", "cvBumper", "cvGate", "cvSwing", "cvStation", "cvPopcorn", "cvCandy", "cvHotdog", "cvDrinks", "cvRingToss", "cvBalloons", "cvDarts", "cvPrize", "cvFoodTrailer", "cvIceCream", "cvClaw", "cvWagon", "cvNewsVan", "cvAmbulance", "cvLightTower", "cvTicket", "cvBalloonBox", "cvSignpost", "cvLamp", "cvBanner", "cvBench", "cvBin", "cvCrates", "cvHay", "cvBarrier", "cvArrow", "cvBear", "cvJack", "cvFireworks", "cvBarrel", "cvPoster", "cvCrackM", "cvPuddle", "cvBloodM", "cvStar", "cvTickets", "cvPopSpill", "cvConfetti", "cvPrints", "cvPlanks", "cvBunting", "cvOil", "cvLeaves", "cvRope", "cvPaint", "cvMedallion", "cvSunburst"];
 
 // ---------- FALLEN DYNASTY (grid map, Nov 5): the same kind of map as the city, built from pieces (art: tools/extract-dynasty.py) ----------
 // Sprite sizes (game px) and solid footprints {ox, oy, hw, hh} from the bottom centre (a list = several boxes, e.g. the gate's two walls).
@@ -303,8 +303,8 @@ export function buildRefineryLayout(WW, WH, start = 7070) {
 
 // ---------- MIDNIGHT CARNIVAL (grid map, Nov 10): an abandoned fairground with a RIDEABLE ROLLER COASTER looping round it ----------
 // (art: tools/extract-carnival.py). Same organic placement as the refinery; the coaster track is laid first and everything keeps clear of it.
-export const CV_SIZE = { cvHaunted: [620, 608], cvFerris: [520, 527], cvCarousel: [450, 455], cvBigtop: [520, 499], cvFunhouse: [500, 488], cvBumper: [480, 474], cvGate: [760, 372], cvSwing: [430, 427], cvStation: [540, 359], cvPopcorn: [190, 204], cvCandy: [190, 196], cvHotdog: [190, 199], cvDrinks: [190, 204], cvRingToss: [195, 203], cvBalloons: [195, 187], cvDarts: [190, 192], cvPrize: [190, 184], cvFoodTrailer: [205, 170], cvIceCream: [200, 188], cvClaw: [185, 177], cvWagon: [195, 166], cvNewsVan: [200, 186], cvAmbulance: [200, 166], cvLightTower: [150, 152], cvTicket: [140, 134], cvBalloonBox: [110, 170], cvSignpost: [120, 166], cvLamp: [110, 169], cvBanner: [125, 154], cvBench: [140, 102], cvBin: [90, 91], cvCrates: [130, 117], cvHay: [140, 114], cvBarrier: [140, 99], cvArrow: [120, 116], cvBear: [110, 107], cvJack: [100, 118], cvFireworks: [105, 110], cvBarrel: [90, 106], cvPoster: [110, 113], cvCrackM: [150, 133], cvPuddle: [160, 139], cvBloodM: [140, 128], cvStar: [190, 175], cvTickets: [130, 98], cvPopSpill: [120, 120], cvConfetti: [140, 131], cvPrints: [100, 103], cvPlanks: [140, 122], cvBunting: [140, 125], cvOil: [150, 130], cvLeaves: [130, 118], cvRope: [130, 110], cvPaint: [120, 111] };
-const CV_FLATS = ["cvCrackM", "cvPuddle", "cvBloodM", "cvStar", "cvTickets", "cvPopSpill", "cvConfetti", "cvPrints", "cvPlanks", "cvBunting", "cvOil", "cvLeaves", "cvRope", "cvPaint"];
+export const CV_SIZE = { cvMedallion: [520, 520], cvSunburst: [420, 420], cvHaunted: [620, 608], cvFerris: [520, 527], cvCarousel: [450, 455], cvBigtop: [520, 499], cvFunhouse: [500, 488], cvBumper: [480, 474], cvGate: [760, 372], cvSwing: [430, 427], cvStation: [540, 359], cvPopcorn: [190, 204], cvCandy: [190, 196], cvHotdog: [190, 199], cvDrinks: [190, 204], cvRingToss: [195, 203], cvBalloons: [195, 187], cvDarts: [190, 192], cvPrize: [190, 184], cvFoodTrailer: [205, 170], cvIceCream: [200, 188], cvClaw: [185, 177], cvWagon: [195, 166], cvNewsVan: [200, 186], cvAmbulance: [200, 166], cvLightTower: [150, 152], cvTicket: [140, 134], cvBalloonBox: [110, 170], cvSignpost: [120, 166], cvLamp: [110, 169], cvBanner: [125, 154], cvBench: [140, 102], cvBin: [90, 91], cvCrates: [130, 117], cvHay: [140, 114], cvBarrier: [140, 99], cvArrow: [120, 116], cvBear: [110, 107], cvJack: [100, 118], cvFireworks: [105, 110], cvBarrel: [90, 106], cvPoster: [110, 113], cvCrackM: [150, 133], cvPuddle: [160, 139], cvBloodM: [140, 128], cvStar: [190, 175], cvTickets: [130, 98], cvPopSpill: [120, 120], cvConfetti: [140, 131], cvPrints: [100, 103], cvPlanks: [140, 122], cvBunting: [140, 125], cvOil: [150, 130], cvLeaves: [130, 118], cvRope: [130, 110], cvPaint: [120, 111] };
+const CV_FLATS = ["cvMedallion", "cvSunburst", "cvCrackM", "cvPuddle", "cvBloodM", "cvStar", "cvTickets", "cvPopSpill", "cvConfetti", "cvPrints", "cvPlanks", "cvBunting", "cvOil", "cvLeaves", "cvRope", "cvPaint"];
 for (const k of CV_FLATS) MAP_FLAT[k] = 1;
 const cvBox = (k, wf = .45, hf = .68) => { const [w, h] = CV_SIZE[k]; return { ox: 0, oy: -Math.round((h * hf + 6) / 2), hw: Math.round(w * wf), hh: Math.round((h * hf - 6) / 2) }; };
 for (const k of Object.keys(CV_SIZE)) if (!MAP_FLAT[k]) MAP_SOLID[k] = cvBox(k);
@@ -342,25 +342,20 @@ const CV_HOUSE_Y = 760;
 // The ground: grass everywhere, then {x, y, w, h, tile}: dirt patches, the paved plaza and the path from the haunted house, a boardwalk under every big ride.
 export function carnivalGround(WW, WH, layout = []) {
   const cx = WW / 2, cy = WH / 2, R = []; let seed = 404; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 16; i++) { const w = 260 + rnd() * 420, h = 170 + rnd() * 260; R.push({ x: 40 + rnd() * (WW - w - 80), y: 120 + rnd() * (WH - h - 160), w, h, tile: "dirt", blob: 1 }); }
+  for (let i = 0; i < 26; i++) { const w = 260 + rnd() * 420, h = 170 + rnd() * 260; R.push({ x: 40 + rnd() * (WW - w - 80), y: 120 + rnd() * (WH - h - 160), w, h, tile: "dirt", blob: 1 }); }
   R.push({ x: cx - 150, y: CV_HOUSE_Y - 40, w: 300, h: cy - 250 - CV_HOUSE_Y + 110, tile: "paving", road: 1 });
   R.push({ x: cx - 150, y: cy + 250, w: 300, h: WH - 150 - cy - 250, tile: "paving", road: 1 });   // and on down to the ticket gate
-  R.push({ x: 600, y: cy - 140, w: WW - 1200, h: 280, tile: "paving", road: 1 });   // the east-west avenue
   for (const d of layout) for (const s of solidList(d.kind)) if (s.hw >= 150 && d.kind !== "cvHaunted") { const x0 = d.x + (d.flip ? -s.ox : s.ox) - s.hw, y0 = d.y + s.oy - s.hh;
-    R.push({ x: x0 - 34, y: y0 - 18, w: s.hw * 2 + 68, h: s.hh * 2 + 60, tile: d.kind === "cvStation" || d.kind === "cvBumper" ? "wood" : d.kind === "cvBigtop" ? "dirt" : "paving", road: 1 }); }
+    R.push({ x: x0 - 34, y: y0 - 18, w: s.hw * 2 + 68, h: s.hh * 2 + 60, tile: d.kind === "cvStation" || d.kind === "cvBumper" ? "wood" : d.kind === "cvBigtop" || d.kind === "cvFerris" ? "dirt" : "paving", road: 1 }); }
   R.push({ x: cx - 470, y: cy - 300, w: 940, h: 620, tile: "paving", road: 1 });
   return R;
 }
 export function buildCarnivalLayout(WW, WH, start = 5150) {
-  // PURPOSEFUL layout (Nov 11, user: "too random, things too close that don't make sense"). Zones:
-  //   centre: the tower plaza on the crossing of two avenues (north-south: haunted house -> plaza -> ticket gate; east-west across the park)
-  //   along the east-west avenue: game stalls (west) and food stalls (east) in neat rows facing it; benches, bins and lamps on its south side
-  //   the rides: bumper cars + fun house inside the loop south of the avenue, swing ride by the loop's south-east bend, the carousel past the station, each with a ticket booth, a bench and a lamp
-  //   inside the loop, north: a food court (food trucks parked in a row, benches in front) west, a prize corner east
-  //   outside the loop: the haunted house (top centre, bosses), ferris wheel (top left), big top (top right), service yards on both sides,
-  //   the ticket gate at the bottom with the ONE coaster station beside it, a van park on the other side
+  // SPREAD OUT like Whiteout Station (Nov 11, user): every piece dropped at a random spot, biggest first, with generous room around it.
+  // Fixed: the haunted house (top centre, bosses), the ticket gate (bottom centre), the ONE coaster station. Kept open: the tower plaza,
+  // the path from the haunted house down to the gate, the ground in front of the station's steps, the coaster's track.
   let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
-  const cx = WW / 2, cy = WH / 2, out = [], boxes = [], T = coasterTrack(WW, WH), TP = T.pts.filter((_, i) => i % 2 === 0), AV = 140;   // AV: half-width of the east-west avenue
+  const cx = WW / 2, cy = WH / 2, out = [], boxes = [], T = coasterTrack(WW, WH), TP = T.pts.filter((_, i) => i % 2 === 0);
   const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id, ov: s.hw > 50 && !Array.isArray(MAP_SOLID[k]) ? Math.max(0, CV_SIZE[k][1] + s.oy - s.hh) * .8 : 0 }));
   const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
   const sealed = R => { const g = new Uint8Array(GW * GH);
@@ -371,64 +366,40 @@ export function buildCarnivalLayout(WW, WH, start = 5150) {
     return g.includes(0); };
   const walkable = () => !sealed(22) && !sealed(30);
   const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1; return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
-  const inMap = q => q.x0 >= 60 && q.x1 <= WW - 60 && q.y1 <= WH - 40 && q.y0 >= 90;
+  const inMap = q => q.x0 >= 70 && q.x1 <= WW - 70 && q.y1 <= WH - 40 && q.y0 >= 90;
   const st0 = T.stations[0];
-  const keep = [[cx - 520, cy - 340, cx + 520, cy + 310], [cx - 200, 760, cx + 200, cy], [cx - 190, cy, cx + 190, WH - 60], [0, cy - AV, WW, cy + AV], [st0.x - 200, st0.y + 60, st0.x + 200, st0.y + 260]];   // plaza, the avenues, the ground in front of the station's steps
-  const offKeep = q => !keep.some(([x0, y0, x1, y1]) => q.x0 < x1 && q.x1 > x0 && q.y0 < y1 && q.y1 > y0);
+  const keep = [[cx - 520, cy - 340, cx + 520, cy + 310], [cx - 210, CV_HOUSE_Y - 80, cx + 210, cy], [cx - 200, cy, cx + 200, WH - 60], [st0.x - 200, st0.y + 60, st0.x + 200, st0.y + 260]];
+  const offKeep = q => !keep.some(([x0, y0, x1, y1]) => q.x0 < x1 && q.x1 > x0 && q.y0 - (y1 === cy + 310 ? q.ov || 0 : 0) < y1 && q.y1 > y0);
   const offTrack = q => !TP.some(p => Math.max(q.x0 - p.x, p.x - q.x1, 0) < 64 && p.y > q.y0 - (q.ov || 0) - 44 && p.y < q.y1 + 92);
-  const place = (k, x, y, o = {}) => {
-    x = Math.round(x); y = Math.round(y); const id = out.length, flip = !!o.flip, b = bx(k, x, y, flip, id), gap = o.gap ?? 90;
+  const place = (k, x, y, gap, flip = false) => {
+    x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
     if (!b.every(q => inMap(q) && offKeep(q) && offTrack(q) && boxes.every(z => dist(q, z) >= gap))) return false;
     out.push({ kind: k, x, y, flip }); boxes.push(...b);
     if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
     return true;
   };
-  const near = (k, tx, ty, R = 260, o = {}) => {   // the free spot nearest the target (deterministic: the plan decides where things go, not chance)
-    const cand = []; for (let dy = -R; dy <= R; dy += 30) for (let dx = -R; dx <= R; dx += 30) cand.push([dx * dx + dy * dy, tx + dx, ty + dy]);
-    cand.sort((a, b) => a[0] - b[0]); for (const [, x, y] of cand) if (place(k, x, y, o)) return { x, y }; return null;
-  };
+  const drop = (k, gap, tries = 400, area = [80, 170, WW - 80, WH - 60]) => { for (let t = 0; t < tries; t++) if (place(k, area[0] + rnd() * (area[2] - area[0]), area[1] + rnd() * (area[3] - area[1]), gap)) return true; return false; };
   const fixed = (k, x, y) => { const id = out.length; out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip: false }); boxes.push(...bx(k, x, y, false, id)); };
-  const row = (kinds, x0, x1, y, o = {}) => {   // stalls side by side along a line, a squeeze-gap apart, from x0 toward x1
-    const dir = Math.sign(x1 - x0); let x = x0, n = 0;
-    for (let t = 0; t < 40 && (x1 - x) * dir > 0; t++) { const k = kinds[n % kinds.length], w = CV_SIZE[k][0] * .9; const cxp = x + dir * w / 2;
-      if ((x1 - (cxp + dir * w / 2)) * dir < 0) break; if (place(k, cxp, y, { gap: 40, ...o })) { n++; x = cxp + dir * (w / 2 + (o.step ?? 48)); } else x += dir * 40; }
-    return n;
-  };
-  // the fixed landmarks
   fixed("cvHaunted", cx, CV_HOUSE_Y); fixed("cvGate", cx, WH - 70); fixed("cvStation", st0.x, st0.y + 84);
-  // outside the loop
-  near("cvFerris", 1150, 930, 360, { gap: 120 }); near("cvBigtop", WW - 1150, 930, 360, { gap: 120 });
-  // the east-west avenue: game stalls west of the plaza, food east, all facing the avenue (their fronts are on its north edge)
-  row(["cvRingToss", "cvBalloons", "cvDarts", "cvPrize", "cvClaw", "cvTicket"], cx - 540, 700, cy - AV - 4);
-  row(["cvPopcorn", "cvCandy", "cvHotdog", "cvDrinks", "cvIceCream", "cvPopcorn"], cx + 540, WW - 700, cy - AV - 4);
-  // its south side: a bench, a bin and a lamp, repeating
-  for (const sg of [-1, 1]) { let x = cx + sg * 600; for (let i = 0; x > 800 && x < WW - 800 && i < 12; i++, x += sg * 300) { const k = ["cvBench", "cvBin", "cvLamp"][i % 3]; place(k, x, cy + AV + (k === "cvLamp" ? 30 : 110), { gap: 34 }); } }
-  // lamps lining the north-south avenue
-  for (const sg of [-1, 1]) { for (let y = CV_HOUSE_Y + 260; y < cy - 360; y += 230) place("cvLamp", cx + sg * 235, y, { gap: 30 }); for (let y = cy + 420; y < WH - 380; y += 230) place("cvLamp", cx + sg * 225, y, { gap: 30 }); }
-  // the rides, inside the loop south of the avenue: each gets a ticket booth, a bench and a light
-  const ride = (k, tx, ty) => { const p = near(k, tx, ty, 300, { gap: 110 }); if (!p) return; const [w] = CV_SIZE[k];
-    near("cvTicket", p.x + w * .5 + 40, p.y - 40, 150, { gap: 40 }); near("cvBench", p.x - w * .5 - 40, p.y - 30, 150, { gap: 40 }); near("cvLightTower", p.x + w * .5 + 50, p.y - 220, 160, { gap: 40 }); };
-  ride("cvBumper", cx - 760, cy + 790); ride("cvCarousel", cx - 1650, WH - 420);   /* the carousel stands outside the loop, past the station */ ride("cvFunhouse", cx + 780, cy + 790); ride("cvSwing", cx + 1500, cy + 760);
-  // inside the loop, north: a food court (west) and a prize corner (east)
-  row(["cvFoodTrailer", "cvIceCream", "cvFoodTrailer"], cx - 640, 1000, cy - 560, { step: 70 }); for (let x = cx - 760; x > 1100; x -= 260) place("cvBench", x, cy - 400, { gap: 40 });
-  row(["cvClaw", "cvPrize", "cvClaw"], cx + 640, WW - 1000, cy - 560, { step: 70 }); for (const [k, dx] of [["cvBalloonBox", 700], ["cvBear", 980], ["cvJack", 1260], ["cvBalloonBox", 1540]]) place(k, cx + dx, cy - 400, { gap: 40 });
-  // service yards outside the loop, left and right: hay, crates, barrels (two burning), fireworks, a light tower
-  for (const sg of [-1, 1]) { const x0 = sg < 0 ? 330 : WW - 330; let y = cy - 700;
-    for (const k of ["cvLightTower", "cvHay", "cvCrates", "cvBarrel", "cvFireworks", "cvCrates", "cvHay", "cvBarrel", "cvLightTower"]) { near(k, x0 + (rnd() - .5) * 120, y, 120, { gap: 46 }); y += 190; } }
-  // the bottom: queue barriers and a ticket booth by the station, signposts and balloons at the gate, a van park east of it
-  near("cvTicket", st0.x + 330, st0.y + 170, 140, { gap: 40 }); for (const dx of [-120, 0, 120]) place("cvBarrier", st0.x + dx, st0.y + 330, { gap: 20 });
-  near("cvSignpost", cx - 330, WH - 150, 120, { gap: 30 }); near("cvSignpost", cx + 330, WH - 150, 120, { gap: 30 }); near("cvBalloonBox", cx - 500, WH - 140, 120, { gap: 30 }); near("cvBalloonBox", cx + 500, WH - 140, 120, { gap: 30 });
-  for (const [k, dx] of [["cvNewsVan", 900], ["cvAmbulance", 1180], ["cvWagon", 1460], ["cvFoodTrailer", 1740]]) near(k, cx + dx, WH - 180, 140, { gap: 50 });
-  // top band beside the haunted house: banners and posters lining the path, a ticket booth
-  for (const sg of [-1, 1]) { near("cvBanner", cx + sg * 420, CV_HOUSE_Y + 60, 100, { gap: 30 }); near("cvPoster", cx + sg * 560, CV_HOUSE_Y + 40, 100, { gap: 30 }); }
-  // flat marks with a reason: litter along the avenues and in front of the stalls, stars on the plaza, puddles / rope / planks in the yards
+  // landmarks: the ferris wheel and the big top, each somewhere in a top corner
+  drop("cvFerris", 220, 400, [150, 200, cx - 700, cy - 200]); drop("cvBigtop", 220, 400, [cx + 700, 200, WW - 150, cy - 200]);
+  // the rides, one of each, then a few more where there's lots of room
+  for (const k of ["cvCarousel", "cvBumper", "cvFunhouse", "cvSwing"]) drop(k, 220);
+  for (const k of ["cvCarousel", "cvSwing", "cvFunhouse"]) drop(k, 260, 200);
+  // stalls and trucks, each on its own with space round it
+  const STALLS = ["cvPopcorn", "cvCandy", "cvHotdog", "cvDrinks", "cvRingToss", "cvBalloons", "cvDarts", "cvPrize", "cvFoodTrailer", "cvIceCream", "cvClaw", "cvWagon", "cvNewsVan", "cvAmbulance", "cvTicket"];
+  for (let n = 0, t = 0; n < 34 && t < 80; t++) if (drop(STALLS[n % STALLS.length], 150, 60)) n++;
+  // small props, spread thin
+  const SMALL = ["cvBalloonBox", "cvSignpost", "cvBanner", "cvBench", "cvBench", "cvBin", "cvCrates", "cvHay", "cvBarrier", "cvArrow", "cvBear", "cvJack", "cvFireworks", "cvBarrel", "cvBarrel", "cvPoster"];
+  for (let n = 0, t = 0; n < 60 && t < 140; t++) if (drop(pick(SMALL), 120, 50)) n++;
+  // lamps round the plaza, then dotted all over
+  for (const [dx, dy] of [[-440, -270], [440, -270], [-440, 285], [440, 285]]) fixed("cvLamp", cx + dx, cy + dy);
+  for (let n = 0, t = 0; n < 30 && t < 80; t++) if (drop(t % 4 ? "cvLamp" : "cvLightTower", 150, 40)) n++;
+  // flat things: a medallion round the tower, a sunburst before the haunted house, litter everywhere
   const flat = (k, x, y) => out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip: false });
-  flat("cvStar", cx - 290, cy + 250); flat("cvStar", cx + 300, cy - 110); flat("cvStar", cx, CV_HOUSE_Y + 210); flat("cvStar", cx, WH - 330);
-  for (let i = 0; i < 70; i++) flat(pick(["cvConfetti", "cvConfetti", "cvTickets", "cvPopSpill", "cvTickets"]), 700 + rnd() * (WW - 1400), cy - AV + rnd() * AV * 2);   // along the avenue
-  for (let i = 0; i < 26; i++) flat(pick(["cvConfetti", "cvTickets", "cvPrints"]), cx - 180 + rnd() * 360, CV_HOUSE_Y + 200 + rnd() * (WH - CV_HOUSE_Y - 500));
-  for (let i = 0; i < 24; i++) { const sg = rnd() < .5 ? -1 : 1; flat(pick(["cvPuddle", "cvRope", "cvPlanks", "cvLeaves", "cvOil"]), (sg < 0 ? 120 : WW - 520) + rnd() * 400, cy - 800 + rnd() * 1700); }
-  for (let i = 0; i < 18; i++) flat(pick(["cvLeaves", "cvPuddle", "cvBunting", "cvCrackM"]), 200 + rnd() * (WW - 400), WH - 520 + rnd() * 380);
-  return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0));
+  flat("cvMedallion", cx, cy + 260); flat("cvSunburst", cx, CV_HOUSE_Y + 330);
+  for (let i = 0; i < 120; i++) flat(pick(["cvConfetti", "cvConfetti", "cvTickets", "cvTickets", "cvPopSpill", "cvPrints", "cvPuddle", "cvLeaves", "cvLeaves", "cvBunting", "cvPlanks", "cvCrackM", "cvRope", "cvOil", "cvPaint"]), 60 + rnd() * (WW - 120), 170 + rnd() * (WH - 210));
+  return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "cvMedallion" || b.kind === "cvSunburst") - (a.kind === "cvMedallion" || a.kind === "cvSunburst"));   // medallions first: litter lies on top
 }
 
 // Two main avenues through the tower, plus side streets (the client draws the same roads).
