@@ -2889,7 +2889,8 @@ export class SurvivalRoom extends Room {
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
     const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid); C.cd.set(sid, Date.now() + C.K.cd * 1000);
     if (!p) return; p.ride = 0;
-    if (C.wait > 0) { const st = C.T.stations[C.next]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
+    const [dx0, dy0] = MN_SPOT.dungeon, cord = c => C.K.along && c.x > dx0 * this.A.width / 6000 - 40 && c.y > dy0 * this.A.height / 4000 - 40;   // (the mine: knocked off inside the cordoned dungeon = back on the station deck)
+    if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
     this.solveCollisions(p); this.broadcast("coaster", { k: "off", id: sid });
   }
   updateCoaster(dt) {

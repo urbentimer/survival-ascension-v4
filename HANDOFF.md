@@ -458,3 +458,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - NOT built yet: the wave 20 mission (scavenge parts, 2 laps, shoot the 4 seals on lap 1, Beast wakes on lap 2 and chases), the statue (needs the Mine Beast design first), crystal crack stages.
 
 - Nov 11 (cache 20261111g): Deep Mine ground blend: mineGroundBlend() paints each slate/mud/planks patch and the dungeon floor through a shadow-blurred mask (mineMasked), plus soft grime blotches; extract-mine.py fades flat marks over their last 16px.
+- Nov 11 (cache 20261111h): dungeon floor kept clean: flats skip the dungeon rect (only mChains, away from the statue spot).

@@ -72,6 +72,8 @@ def load(name, halo=False):
 BIG = [('shaft', 'mShaft', 520, 4, 6), ('lift', 'mLift', 470, 8, 4), ('station', 'mStation', 600, 8, 3), ('crusher', 'mCrusher', 450, 4, 6), ('shack', 'mShack', 400, 6, 3),
        ('crystal-big', 'mCrystal', 380, 2, 8), ('collapsed', 'mCollapsed', 420, 3, 4), ('wrecks', 'mWrecks', 400, 3, 5), ('arch', 'mArch', 420, 2, 4)]
 for f, k, w, nl, nb in BIG: save(k, load(f + '.png'), w, lights=nl, blue=nb, loose=k in ('mStation', 'mShack', 'mShaft', 'mCollapsed'))
+save('mStatue', load('statue.png'), 600, blue=0)   # the Mine Beast asleep in stone (the 4 runes on its plinth light up in code)
+pieces['mStatue']['runes'] = [[-132, -92], [-43, -92], [46, -92], [133, -91]]   # the plinth's four rune carvings (one lights up per rune put in)
 a = save('mPortal', load('portal.png'), 560, blue=6)
 blk = (a[..., :3].max(2) < 16) & (a[..., 3] > 0); lab, n = ndimage.label(blk); sz = ndimage.sum(blk, lab, range(1, n + 1)); ys, xs = np.where(lab == 1 + int(np.argmax(sz)))
 pieces['mPortal']['door'] = [round((xs.min() + xs.max()) / 2 - a.shape[1] / 2), int(ys.min() - a.shape[0]), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)]   # centre x, top y (from the bottom centre), width, height

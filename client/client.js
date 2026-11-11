@@ -3567,9 +3567,10 @@ function drawDynastyWorld() {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
     if (/^mChasm/.test(d.kind)) continue;   // (drawn into the ground)
     if (d.kind === "mRuneCircle") { drawRuneCircle(d); continue; }
+    if (d.kind === "mWardGate") { tall.push({ y: d.flip ? d.y + 130 : d.y + 40, draw: () => drawWard(d) }); continue; }
     if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .3 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
       if (img) tall.push({ y: d.kind === "mStation" ? d.y - 185 : d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); dynPieceFx(d, a); } });
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); if (d.kind === "mStatue") statueFx(d, a); dynPieceFx(d, a); } });
   }
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
@@ -3761,6 +3762,23 @@ function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a gr
   ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 204, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 112, 0, 7); ctx.stroke();
   ctx.save(); ctx.rotate(t * .06); for (let i = 0; i < 28; i++) { ctx.rotate(Math.PI * 2 / 28); const s = i % 3; ctx.beginPath(); ctx.moveTo(-5, -232); ctx.lineTo(0, -212); ctx.lineTo(5, -232); if (s === 1) { ctx.moveTo(0, -232); ctx.lineTo(0, -210); } if (s === 2) { ctx.moveTo(-6, -222); ctx.lineTo(6, -222); } ctx.stroke(); } ctx.restore();   // the runes round the rim
   ctx.save(); ctx.rotate(-t * .04); ctx.strokeStyle = `rgba(90,180,255,${.38 * k})`; ctx.beginPath(); for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 4 / 5; i ? ctx.lineTo(Math.cos(a) * 200, Math.sin(a) * 200) : ctx.moveTo(Math.cos(a) * 200, Math.sin(a) * 200); } ctx.stroke(); ctx.restore();   // a five-pointed seal
+  ctx.restore();
+}
+function drawWard(d) {   // the rune-ward sealing a way into the boss dungeon: a shimmering curtain of blue light with runes drifting up it (the carts pass through)
+  if (!inView(d.x, d.y, 260)) return; const t = performance.now() / 1000, H = 150, k = .75 + .25 * Math.sin(t * 2.4);
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  const quad = d.flip ? [[d.x, d.y - 100], [d.x, d.y + 110]] : [[d.x - 98, d.y], [d.x + 98, d.y]], [[x0, y0], [x1, y1]] = quad;
+  const g = ctx.createLinearGradient(0, Math.max(y0, y1), 0, Math.min(y0, y1) - H); g.addColorStop(0, `rgba(90,190,255,${.42 * k})`); g.addColorStop(.6, `rgba(60,140,255,${.18 * k})`); g.addColorStop(1, "rgba(40,100,255,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - H); ctx.lineTo(x0, y0 - H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = `rgba(150,220,255,${.8 * k})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();   // its foot line
+  ctx.lineWidth = 1.6; for (let i = 0; i < 7; i++) { const u = (t * .32 + i / 7) % 1, f = (i * .37 + .1) % 1, x = x0 + (x1 - x0) * f, y = y0 + (y1 - y0) * f - u * H; ctx.globalAlpha = Math.sin(u * Math.PI) * .9; ctx.strokeStyle = "#bfe8ff";   // runes drifting up
+    ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x, y + 7); ctx.moveTo(x, y - 2); ctx.lineTo(x - 5, y - 7); ctx.moveTo(x, y - 2); ctx.lineTo(x + 5, y - 7); ctx.moveTo(x - 4, y + 3); ctx.lineTo(x + 4, y + 3); ctx.stroke(); }
+  ctx.restore();
+}
+function statueFx(d, a) {   // the sleeping Mine Beast: its plinth's runes glow faintly (later: one lights up bright per rune put in), a thin mist round its feet
+  const t = performance.now() / 1000; ctx.save(); ctx.globalCompositeOperation = "lighter";
+  (a.runes || []).forEach(([rx, ry], i) => { const x = d.x + rx, y = d.y + ry, k = .55 + .2 * Math.sin(t * 1.7 + i * 1.3), r = 30; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(110,210,255,${.5 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
+  for (let i = 0; i < 5; i++) { const u = (t * .05 + i / 5) % 1, x = d.x - 260 + ((i * 137 + t * 9) % 520), y = d.y - 12 - Math.sin(u * Math.PI) * 10; ctx.globalAlpha = .12 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(x, y, 2, x, y, 70); g.addColorStop(0, "rgba(160,190,230,1)"); g.addColorStop(1, "rgba(160,190,230,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70, y - 40, 140, 80); }
   ctx.restore();
 }
 function portalFx(d, a) {   // the portal: the user's swirl turning inside the black arch, light spilling down the steps
