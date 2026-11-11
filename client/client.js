@@ -1,7 +1,8 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
+import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
+import { MN_ART, MN_TILES, MN_CART, MN_FX } from "./mineArt.js";   // The Deep Mine pieces, the mine cart, the portal swirl + crystal shatter (tools/extract-mine.py)
 import { CV_ART, CV_TILES, CV_CART } from "./carnivalArt.js";   // Midnight Carnival pieces + the coaster cart (tools/extract-carnival.py)
 import { RF_ART, RF_TILES } from "./refineryArt.js";   // Scorched Refinery pieces (tools/extract-refinery.py)
 import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
@@ -135,7 +136,7 @@ function connected() {
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
   room.onMessage("coaster", m => { if (m.id !== myId) return; coastQueued = m.k === "queue"; if (m.k === "on" || m.k === "off") playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5);
-    if (m.k === "queue") feed.unshift({ text: "Wait here: you'll hop on when the train stops", t: Date.now() }); if (m.k === "on") feed.unshift({ text: "On the coaster! One lap, shoot from the cart. F at a station to get off.", t: Date.now() }); feed.length = Math.min(feed.length, 5); });
+    if (m.k === "queue") feed.unshift({ text: mineMap() ? "Wait here: you'll hop in when the carts stop" : "Wait here: you'll hop on when the train stops", t: Date.now() }); if (m.k === "on") feed.unshift({ text: mineMap() ? "In the mine cart! One lap of the mine: shoot from the cart." : "On the coaster! One lap, shoot from the cart. F at a station to get off.", t: Date.now() }); feed.length = Math.min(feed.length, 5); });
   room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
   room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
   room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
@@ -3447,19 +3448,22 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
-Object.assign(DYN_ART, WO_ART, RF_ART, CV_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
+Object.assign(DYN_ART, WO_ART, RF_ART, CV_ART, MN_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
+for (const [k, url] of Object.entries(MN_TILES)) TILE_URLS["m" + k] = url;
 const cartImg = new Image(); if (CV_CART.url) cartImg.src = CV_CART.url;
+const mineCartImg = new Image(); mineCartImg.src = MN_CART.url; const portalFxImg = new Image(); portalFxImg.src = MN_FX.portal.url; const shatterFxImg = new Image(); shatterFxImg.src = MN_FX.shatter.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img._mine = !!MN_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); img._mine = k[0] === "m" && !!MN_TILES[k.slice(1)]; /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
 const SPOOKY_CARN = { filter: "brightness(.6) saturate(.78) contrast(1.12)", tint: "rgba(22,14,58,.32)" };   // Midnight Carnival (user, Nov 11): a NIGHT carnival, dark tint like the city maps but keeping more colour so the bulbs and paint still read   // Midnight Carnival: a light night tint, so the bulbs and colours still pop
+const SPOOKY_MINE = { filter: "brightness(.84) saturate(.9) contrast(1.06)", tint: "rgba(14,20,42,.16)" };   // The Deep Mine: a light cold tint; the gloom comes from the cave darkness (drawNight) with the lanterns and crystals lighting it
 const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", tint: "rgba(18,44,70,.18)" };   // Whiteout Station (user: "a little brighter"): its pieces and tiles (img._snow) get a much lighter tint
 const spookyCache = new Map();
 function spooky(img) {
@@ -3467,7 +3471,7 @@ function spooky(img) {
   if (img._raw) return img;   // Scorched Refinery (user: bright, no tint): its art is drawn as it is
   if (spookyCache.has(img)) return spookyCache.get(img);
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  const S = img._snow ? SPOOKY_SNOW : img._carn ? SPOOKY_CARN : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
+  const S = img._snow ? SPOOKY_SNOW : img._mine ? SPOOKY_MINE : img._carn ? SPOOKY_CARN : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
   g.globalCompositeOperation = "source-atop"; g.fillStyle = S.tint; g.fillRect(0, 0, c.width, c.height);
   spookyCache.set(img, c); return c;
 }
@@ -3485,20 +3489,22 @@ function drawMapObj(d) {
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery"];   // (Nov 11: Midnight Carnival removed)
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery", "mine"];   // (Nov 11: Midnight Carnival removed)
 const carnivalMap = () => SITE_STYLE[state?.mapSite || 0] === "carnival";   // lobby sites (server SITES)
 const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
 const refineryMap = () => SITE_STYLE[state?.mapSite || 0] === "refinery";
-const softGround = () => whiteoutMap() || refineryMap() || carnivalMap();   // ground patches with soft irregular edges
-const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]) || !!CV_ART[k];   // pieces that burn with the user's fire loops + smoke
-const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery" || st === "carnival"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
+const mineMap = () => SITE_STYLE[state?.mapSite || 0] === "mine";
+const softGround = () => whiteoutMap() || refineryMap() || carnivalMap() || mineMap();   // ground patches with soft irregular edges
+const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]) || !!CV_ART[k] || !!MN_ART[k];   // pieces that burn with the user's fire loops + smoke
+const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery" || st === "carnival" || st === "mine"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
   dynFires = []; dynLights = [];
   decor = src.startsWith("P:") ? [] : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
   for (const d of decor) { const a = DYN_ART[d.kind]; if (!a) continue; const f = d.flip ? -1 : 1;
     for (const [x, y, sc] of a.fires || []) dynFires.push([d.x + x * f, d.y + y, sc]);
-    for (const [x, y] of a.lights || []) dynLights.push([d.x + x * f, d.y + y]); }
+    for (const [x, y] of a.lights || []) dynLights.push([d.x + x * f, d.y + y]);
+    for (const [x, y, sc] of a.blue || []) if (sc >= .8) dynLights.push([d.x + x * f, d.y + y, 1]); }   // The Deep Mine: the bigger crystals light the dark too (blue)
 }
 const STREETLIGHT_LAMP = { x: 0.36, y: -0.83 };   // lamp position relative to the sprite (x from centre, y from the base), in sprite widths/heights
 function drawDecor(d) {
@@ -3540,36 +3546,41 @@ function drawWorld(){
 let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
-  const rf = refineryMap(), cv = carnivalMap(), wo = softGround(), T = cv ? "c" : rf ? "r" : wo ? "w" : "d", base = cv ? "cgrass" : rf ? "rsand" : wo ? "wsnow" : "dgrass";
+  const rf = refineryMap(), cv = carnivalMap(), mn = mineMap(), wo = softGround(), T = mn ? "m" : cv ? "c" : rf ? "r" : wo ? "w" : "d", base = mn ? "mgravel" : cv ? "cgrass" : rf ? "rsand" : wo ? "wsnow" : "dgrass";
   syncDecor();   // Whiteout Station's ground (foundation pads, ponds) is worked out from where the pieces stand
-  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: cv ? carnivalGround(WW, WH, decor) : rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: mn ? mineGround(WW, WH, decor) : cv ? carnivalGround(WW, WH, decor) : rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
   const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
     const grass = pattern(base); ctx.fillStyle = "#14161c"; ctx.fillRect(vx, vy, vw, vh); if (grass) fill(grass, 0, 0, WW, WH);
-    for (const g of dynGroundCache.g) { const p = pattern(T + g.tile); if (wo) { if (p && grass && g.x < vx + vw + 60 && g.x + g.w > vx - 60 && g.y < vy + vh + 60 && g.y + g.h > vy - 60) softPatch(g, p, grass); continue; }
+    for (const g of dynGroundCache.g) { if (g.tile === "dungeon") { if (g.x < vx + vw && g.x + g.w > vx && g.y < vy + vh && g.y + g.h > vy) mineDungeonFloor(g, vx, vy, vw, vh); continue; }
+      const p = pattern(T + g.tile); if (wo) { if (p && grass && g.x < vx + vw + 60 && g.x + g.w > vx - 60 && g.y < vy + vh + 60 && g.y + g.h > vy - 60) softPatch(g, p, grass); continue; }
       if (p) fill(p, g.x, g.y, g.w, g.h);
       if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
+    if (mn) { for (const d of decor) if (/^mChasm/.test(d.kind)) { const [w, h] = d.kind === "mChasm" ? [660, 250] : [250, 620]; if (d.x - w / 2 < vx + vw + 30 && d.x + w / 2 > vx - 30 && d.y - h / 2 < vy + vh + 30 && d.y + h / 2 > vy - 30) drawChasm(d, w, h); }
+      mineRails(vx, vy, vw, vh, WW, WH); }   // The Deep Mine: chasms, then the rails over everything (on a chasm they run on a timber bridge)
     ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
   });
   syncDecor();
   const tall = [];
   for (const d of decor) {
     const a = DYN_ART[d.kind], w = a ? a.w : 160, h = a ? a.h : 160; if (!inView(d.x, d.y - h / 2, Math.max(w, h) / 2 + 40)) continue;
-    if (d.kind === "cvStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * .33);   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
-      if (img) tall.push({ y: d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (a?.door) pyramidFx(d, a); dynPieceFx(d, a); } });
+    if (/^mChasm/.test(d.kind)) continue;   // (drawn into the ground)
+    if (d.kind === "mRuneCircle") { drawRuneCircle(d); continue; }
+    if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .3 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
+      if (img) tall.push({ y: d.kind === "mStation" ? d.y - 185 : d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); dynPieceFx(d, a); } });
   }
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
   if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }
 }
 // ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
-let coast = null, coastLast = 0;
+let coast = null, coastLast = 0, CO = COASTER;   // CO: the ride's numbers (the coaster, or the mine train: T.cfg)
 function coastSync() {   // every frame: glide our copy of the train toward where the server says it is
-  if (!state || !carnivalMap()) { coast = null; return; }
+  if (!state || !(carnivalMap() || mineMap())) { coast = null; return; }
   const WW = worldW(), WH = worldH(), now = performance.now(), dt = Math.min(.1, (now - coastLast) / 1000); coastLast = now;
-  if (!coast || coast.w !== WW) { coast = { w: WW, T: coasterTrack(WW, WH), s: state.coasterS || 0 }; coastQueued = false; feed.unshift({ text: "Ride the coaster: walk to a COASTER station (teal dots on the minimap) and press F", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
+  if (!coast || coast.w !== WW || coast.mn !== mineMap()) { const mn = mineMap(); coast = { w: WW, mn, T: mn ? mineTrack(WW, WH) : coasterTrack(WW, WH), s: state.coasterS || 0 }; CO = coast.T.cfg || COASTER; coastQueued = false; feed.unshift({ text: mn ? "Ride the mine carts: walk to the CART STATION (top left, teal dot on the minimap) and press F" : "Ride the coaster: walk to a COASTER station (teal dots on the minimap) and press F", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
   const L = coast.T.L; let e = ((state.coasterS || 0) - coast.s) % L; if (e > L / 2) e -= L; if (e < -L / 2) e += L;
   coast.s = Math.abs(e) > 400 ? state.coasterS : ((coast.s + e * Math.min(1, dt * 10)) % L + L) % L;
 }
@@ -3586,16 +3597,17 @@ function coastEta(st) {   // seconds until the train next stops at this station
   const T = coast.T, i = T.stations.indexOf(st); let s = coast.s, t = state.coasterWait > 0 ? state.coasterWait : 0;
   let ahead = ((st.s - s) % T.L + T.L) % T.L; if (ahead < 6 && state.coasterWait > 0) return 0;
   const stops = T.stations.filter(q => { const d = ((q.s - s) % T.L + T.L) % T.L; return d > 6 && d < ahead - 6; }).length;
-  return Math.max(1, Math.round(t + ahead / COASTER.speed + stops * COASTER.wait + 1));
+  return Math.max(1, Math.round(t + ahead / CO.speed + stops * CO.wait + 1));
 }
 function drawCoasterPrompt() {   // screen space, over your head (like the repair prompts)
   const me = me_(); if (!coast || !me?.alive) return; const v = V(me), st = coastStation(); let text = "", col = "#ffe08a";
-  if (me.ride > 0) { text = st ? "[F] Get off here" : "Riding the coaster · aim and shoot!"; col = st ? "#ffe08a" : "#9fe3ff"; }
+  const RW = coast.mn ? "MINE CART" : "COASTER", rw = coast.mn ? "mine cart" : "coaster";
+  if (me.ride > 0) { text = st ? "[F] Get off here" : `Riding the ${rw} · aim and shoot!`; col = st ? "#ffe08a" : "#9fe3ff"; }
   else { const near = coastNear(me); if (!near) return;
-    if (me.rideCd > 0) { text = `Coaster: ride again in ${Math.ceil(me.rideCd)}s`; col = "#ff9d6b"; }
-    else if (st === near) text = `[F] GET ON THE COASTER · leaves in ${Math.ceil(state.coasterWait)}s`;
-    else if (coastQueued) { text = `Waiting for the train · ${coastEta(near)}s   ([F] cancel)`; col = "#9fe3ff"; }
-    else text = `[F] Wait for the coaster · arrives in ${coastEta(near)}s`; }
+    if (me.rideCd > 0) { text = `${coast.mn ? "Mine cart" : "Coaster"}: ride again in ${Math.ceil(me.rideCd)}s`; col = "#ff9d6b"; }
+    else if (st === near) text = `[F] GET IN THE ${RW} · leaves in ${Math.ceil(state.coasterWait)}s`;
+    else if (coastQueued) { text = `Waiting for the ${coast.mn ? "carts" : "train"} · ${coastEta(near)}s   ([F] cancel)`; col = "#9fe3ff"; }
+    else text = `[F] Wait for the ${rw} · arrives in ${coastEta(near)}s`; }
   const x = v.x - Math.round(cam.x), y = v.y - Math.round(cam.y) - 96;
   ctx.save(); ctx.font = "bold 15px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(text).width + 22;
   ctx.fillStyle = "rgba(10,6,4,.72)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 17, w, 25, 7); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
@@ -3604,26 +3616,26 @@ function drawCoasterPrompt() {   // screen space, over your head (like the repai
 function drawStationSigns() {   // world space, over each station: "COASTER · train here / arrives in Ns", so you can find them and see when it comes
   if (!coast) return; const t = performance.now() / 1000, here = coastStation();
   for (const st of coast.T.stations) { if (!inView(st.x, st.y, 300)) continue;
-    const x = st.x, y = st.y - 150 + Math.sin(t * 3 + st.x) * 4, txt = here === st ? "TRAIN HERE · press F" : `TRAIN IN ${coastEta(st)}s`;
+    const x = st.x, y = st.y - (coast.mn ? 172 : 150) + Math.sin(t * 3 + st.x) * 4, txt = here === st ? (coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`;
     ctx.save(); ctx.font = "bold 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(txt).width + 26;
     ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 16, w, 24, 12); ctx.fill();
     ctx.fillStyle = here === st ? "#2a1405" : "#ffe08a"; ctx.fillText(txt, x, y + 1);
     ctx.beginPath(); ctx.moveTo(x - 7, y + 8); ctx.lineTo(x + 7, y + 8); ctx.lineTo(x, y + 16); ctx.closePath(); ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.fill(); ctx.restore(); }
 }
 const atStation = q => coast.T.stations.some(st => Math.abs(q.x - st.x) < 262 && Math.abs(q.y - st.y) < 70);
-const cartKey = c => atStation(c) ? c.y - COASTER.H + 6 : c.y + 15;   // the cart's depth; its riders are drawn straight after it
-const CART_RIM = [.52, .5, .46, .5, .52];   // per view (D, DR, R, UR, U): how far up the cart (from its bottom, as a share of its height) the tub's rim is
+const cartKey = c => atStation(c) ? c.y - CO.H + 6 : c.y + 15;   // the cart's depth; its riders are drawn straight after it
+const CART_RIM = [.52, .5, .46, .5, .52], CART_RIM_MN = [.56, .58, .55, .58, .56];   // per view (D, DR, R, UR, U): how far up the cart (from its bottom, as a share of its height) the tub's rim is
 function drawRider(p, rimY) {   // a survivor sitting INSIDE a cart: drawn over the cart, everything below the tub's rim cut off (head, shoulders and arms show)
   ctx.save(); ctx.beginPath(); ctx.rect(p.x - 80, rimY - 260, 160, 260); ctx.clip(); drawSurvivor(p); ctx.restore();
 }
 function coasterTall(tall) {   // the track's pieces and the carts go into the depth-sorted list at rail height, so the cart hides its riders' legs and things in front cover it
-  const T = coast.T, P = T.pts, n = P.length, H = COASTER.H;
+  const T = coast.T, P = T.pts, n = P.length, H = CO.H;
   // depth: out in the park the track sorts at its GROUND line (+14), so whoever walks under it is drawn under it; along a station's platform it is part of the floor (people on the deck stand in front of the rails)
-  for (let i = 0; i < n; i++) { const p = P[i]; if (!inView(p.x, p.y - H / 2, 90)) continue; tall.push({ y: atStation(p) ? -1e6 : p.y + 14, draw: () => drawTrackSeg(p, P[(i + 1) % n], i) }); }
-  for (let i = COASTER.carts - 1; i >= 0; i--) { const c = coasterCart(T, coast.s, i); if (inView(c.x, c.y - H, 140)) tall.push({ y: cartKey(c), draw: () => drawCart(c, i) }); }
+  if (!coast.mn) for (let i = 0; i < n; i++) { const p = P[i]; if (!inView(p.x, p.y - H / 2, 90)) continue; tall.push({ y: atStation(p) ? -1e6 : p.y + 14, draw: () => drawTrackSeg(p, P[(i + 1) % n], i) }); }
+  for (let i = CO.carts - 1; i >= 0; i--) { const c = coasterCart(T, coast.s, i); if (inView(c.x, c.y - H, 140)) tall.push({ y: cartKey(c), draw: () => drawCart(c, i) }); }
 }
 function drawTrackSeg(p0, p1, i) {
-  const H = COASTER.H, dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len * .6, line = (x0, y0, x1, y1, w, c) => { ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+  const H = CO.H, dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len * .6, line = (x0, y0, x1, y1, w, c) => { ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
   ctx.save(); ctx.lineCap = "round";
   ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse((p0.x + p1.x) / 2, (p0.y + p1.y) / 2 + 3, len * .75, 8, Math.atan2(dy, dx), 0, 7); ctx.fill();   // its shadow on the ground
   if (i % 4 === 0) {   // a trestle bent: two white legs and a brace
@@ -3639,13 +3651,116 @@ function drawTrackSeg(p0, p1, i) {
   ctx.restore();
 }
 function drawCart(c, i) {   // views in the strip: driving down, down-right, right, up-right, up (left ones mirrored)
-  if (!cartImg.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(performance.now() / 38 + i * 2) * .8 : 0;
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(Math.round(c.x), Math.round(c.y - COASTER.H + 8 + jit)); if (ax < 0) ctx.scale(-1, 1);
-  ctx.drawImage(cartImg, v * CV_CART.w, 0, CV_CART.w, CV_CART.h, -CV_CART.w / 2 * .82, -CV_CART.h * .82, CV_CART.w * .82, CV_CART.h * .82); ctx.restore();
+  const mn = coast.mn, img = mn ? mineCartImg : cartImg, CI = mn ? MN_CART : CV_CART, k = mn ? 1 : .82;
+  if (!img.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(performance.now() / 38 + i * 2) * (mn ? 1.1 : .8) : 0;
+  const flip = mn && (v === 1 || v === 3) ? ax > 0 : ax < 0;   // (the mine cart's three-quarter views were drawn facing left)
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(Math.round(c.x), Math.round(c.y - CO.H + 8 + jit)); if (flip) ctx.scale(-1, 1);
+  if (mn) { ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(0, -4, CI.w * .42, 12, 0, 0, 7); ctx.fill(); }   // its shadow on the rails
+  ctx.drawImage(img, v * CI.w, 0, CI.w, CI.h, -CI.w / 2 * k, -CI.h * k, CI.w * k, CI.h * k); ctx.restore();
+  if (mn && i === 0 && moving) { const hx = c.x + ax * 70, hy = c.y - 30 + ay * 46; ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(hx, hy, 4, hx, hy, 90); g.addColorStop(0, "rgba(255,210,130,.32)"); g.addColorStop(1, "rgba(255,170,80,0)"); ctx.fillStyle = g; ctx.fillRect(hx - 90, hy - 90, 180, 180); ctx.restore(); }   // the front cart's lamps light the rails ahead
   // its riders, drawn straight after it (so nothing can come between), the back seat first
-  const rim = Math.round(c.y - COASTER.H + 8 + jit) - CV_CART.h * .82 * CART_RIM[v], riders = [];
+  const rim = Math.round(c.y - CO.H + 8 + jit) - CI.h * k * (mn ? CART_RIM_MN : CART_RIM)[v], riders = [];
   for (const p0 of state.players.values()) if (p0.ride > 0 && (p0.ride - 1) >> 1 === i) { const p = V(p0); if (p) riders.push(p); }
   riders.sort((a, b) => a.y - b.y); for (const p of riders) drawRider(p, rim);
+}
+// ---------- The Deep Mine (Nov 11): rails, chasms, the dungeon floor, the rune circle, the portal swirl, the seal crystals ----------
+const mnHash = (a, b) => { let h = (Math.round(a) * 374761393 + Math.round(b) * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+let mineRailCache = null;
+function mineRailPts(WW, WH) {   // the track's points, each marked if it runs over a chasm (a bridge there)
+  if (mineRailCache && mineRailCache.w === WW && mineRailCache.src === decorSrc) return mineRailCache.P;
+  const T = mineTrack(WW, WH), ch = (decor || []).filter(d => /^mChasm/.test(d.kind)).map(d => d.kind === "mChasm" ? [d.x, d.y, 360, 150] : [d.x, d.y, 150, 345]);
+  const P = T.pts.map(p => ({ x: p.x, y: p.y, br: ch.some(([x, y, rx, ry]) => ((p.x - x) / rx) ** 2 + ((p.y - y) / ry) ** 2 < 1) }));
+  mineRailCache = { w: WW, src: decorSrc, P }; return P;
+}
+function mineRails(vx, vy, vw, vh, WW, WH) {   // ground-level rails: a dark gravel bed, wooden sleepers, two steel rails (a timber trestle over a chasm)
+  const P = mineRailPts(WW, WH), n = P.length, inR = p => p.x > vx - 70 && p.x < vx + vw + 70 && p.y > vy - 70 && p.y < vy + vh + 70;
+  const runs = []; let run = null;
+  for (let i = 0; i <= n; i++) { const p = P[i % n]; if (inR(p)) { if (!run) { run = [P[(i - 1 + n) % n]]; runs.push(run); } run.push(p); } else if (run) { run.push(p); run = null; } }
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const nrm = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+  for (const R of runs) {
+    ctx.beginPath(); R.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.strokeStyle = "rgba(14,10,9,.38)"; ctx.lineWidth = 64; ctx.stroke(); ctx.strokeStyle = "rgba(60,48,40,.35)"; ctx.lineWidth = 50; ctx.stroke();   // the gravel bed
+    for (let i = 0; i < R.length - 1; i++) { const p = R[i], q = R[i + 1]; if (!p.br) continue; const [nx, ny] = nrm(p, q);   // the bridge: two long beams, cross braces, posts dropping into the dark
+      for (const sg of [-1, 1]) { ctx.strokeStyle = "#140d09"; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(p.x + nx * 30 * sg, p.y + ny * 30 * sg); ctx.lineTo(q.x + nx * 30 * sg, q.y + ny * 30 * sg); ctx.stroke(); ctx.strokeStyle = "#5e4029"; ctx.lineWidth = 6; ctx.stroke(); }
+      if (i % 2 === 0) { for (const sg of [-1, 1]) { const px = p.x + nx * 30 * sg, py = p.y + ny * 30 * sg, gp = ctx.createLinearGradient(0, py, 0, py + 60); gp.addColorStop(0, "#3a281a"); gp.addColorStop(1, "rgba(10,7,5,0)"); ctx.fillStyle = gp; ctx.fillRect(px - 3.5, py, 7, 60); } ctx.strokeStyle = "#2c1d13"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x + nx * 28, p.y + ny * 28); ctx.lineTo(q.x - nx * 28, q.y - ny * 28); ctx.stroke(); } }
+    for (let i = 0; i < R.length - 1; i++) { const p = R[i], q = R[i + 1], [nx, ny] = nrm(p, q), L = p.br ? 36 : 27, hsh = mnHash(p.x, p.y);   // sleepers
+      ctx.strokeStyle = "#160f0b"; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(p.x + nx * L, p.y + ny * L); ctx.lineTo(p.x - nx * L, p.y - ny * L); ctx.stroke();
+      ctx.strokeStyle = hsh < .33 ? "#4a3322" : hsh < .66 ? "#553b27" : "#3f2c1e"; ctx.lineWidth = 7; ctx.stroke(); }
+    for (const sg of [-1, 1]) { const line = (w, c, off = 0) => { ctx.beginPath(); for (let i = 0; i < R.length; i++) { const p = R[i], q = R[Math.min(i + 1, R.length - 1)], o = R[Math.max(i - 1, 0)], [nx, ny] = nrm(o, q); const x = p.x + nx * 14 * sg, y = p.y + ny * 14 * sg + off; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.strokeStyle = c; ctx.lineWidth = w; ctx.stroke(); };
+      line(6, "#101215"); line(3.2, "#5f646c"); line(1.3, "#c4cad2", -1); }   // the rails
+  }
+  ctx.restore();
+}
+function drawChasm(d, w, h) {   // a deep crack in the cave floor: a rocky lip, the far wall falling away into black, a cold glow far below
+  if (!d._ch) { let seed = (Math.round(d.x) * 7919 + Math.round(d.y) * 104729) % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, N = 64, p1 = rnd() * 7, p2 = rnd() * 7, pts = [];
+    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, r = 1 + .1 * Math.sin(3 * a + p1) + .06 * Math.sin(7 * a + p2) + (rnd() - .5) * .09; pts.push([d.x + Math.cos(a) * w / 2 * .92 * r, d.y + Math.sin(a) * h / 2 * .92 * r]); }
+    const path = new Path2D(), lip = new Path2D(); pts.forEach(([x, y], i) => i ? path.lineTo(x, y) : path.moveTo(x, y)); path.closePath();
+    pts.forEach(([x, y], i) => { const X = d.x + (x - d.x) * 1.09 + (rnd() - .5) * 10, Y = d.y + (y - d.y) * 1.12 + (rnd() - .5) * 8; i ? lip.lineTo(X, Y) : lip.moveTo(X, Y); }); lip.closePath();
+    const rocks = []; for (let i = 0; i < N; i += 2 + Math.floor(rnd() * 3)) { const [x, y] = pts[i]; rocks.push([d.x + (x - d.x) * (1.06 + rnd() * .1), d.y + (y - d.y) * (1.08 + rnd() * .12), 5 + rnd() * 9, rnd()]); }
+    d._ch = { path, lip, rocks }; }
+  const { path, lip, rocks } = d._ch, x0 = d.x - w / 2, y0 = d.y - h / 2;
+  ctx.save(); ctx.fillStyle = "rgba(10,8,7,.55)"; ctx.fill(lip); ctx.fillStyle = "#2b221e"; ctx.save(); ctx.translate(0, -3); ctx.fill(lip); ctx.restore();
+  ctx.fillStyle = "#020204"; ctx.fill(path); ctx.save(); ctx.clip(path);
+  const D = Math.min(w, h) * .34, g = ctx.createLinearGradient(0, y0, 0, y0 + h * .55); g.addColorStop(0, "#5c4a40"); g.addColorStop(.3, "#3a2e28"); g.addColorStop(1, "#120d0c"); ctx.fillStyle = g; ctx.fillRect(x0 - 20, y0 - 20, w + 40, h + 40);   // the far wall: the rock face under the north rim...
+  ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 2; for (let k = 1; k < 6; k++) { const yy = y0 + h * .04 + k * D / 5; ctx.beginPath(); ctx.moveTo(x0, yy); for (let xx = x0; xx <= x0 + w; xx += 26) ctx.lineTo(xx, yy + Math.sin(xx * .05 + k * 1.7) * 5); ctx.stroke(); }   // ...with its strata
+  ctx.fillStyle = "rgba(255,230,200,.05)"; for (let xx = x0; xx < x0 + w; xx += 34) ctx.fillRect(xx + (xx * 7 % 13), y0 + h * .05, 3, D * .9);   // drips down the rock
+  ctx.save(); ctx.translate(0, D); const gd = ctx.createLinearGradient(0, y0, 0, y0 + 46); gd.addColorStop(0, "rgba(2,2,4,0)"); gd.addColorStop(1, "#020204"); ctx.fillStyle = "#020204"; ctx.fill(path); ctx.restore();   // ...falling away into the black
+  ctx.save(); ctx.translate(0, D - 46); ctx.fillStyle = gd; ctx.fill(path); ctx.restore();
+  ctx.globalCompositeOperation = "lighter"; const gl = ctx.createRadialGradient(d.x, d.y + h * .2, 6, d.x, d.y + h * .2, Math.max(w, h) * .4); gl.addColorStop(0, "rgba(40,120,220,.22)"); gl.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = gl; ctx.fillRect(x0, y0, w, h);   // a faint glow far below
+  ctx.restore();
+  ctx.strokeStyle = "#0b0807"; ctx.lineWidth = 4; ctx.stroke(path); ctx.strokeStyle = "rgba(170,140,115,.35)"; ctx.lineWidth = 1.5; ctx.save(); ctx.translate(0, 2); ctx.stroke(path); ctx.restore();
+  for (const [x, y, r, k] of rocks) { ctx.fillStyle = "#14100e"; ctx.beginPath(); ctx.ellipse(x + 1, y + 2, r, r * .7, k * 3, 0, 7); ctx.fill(); ctx.fillStyle = k < .5 ? "#4d3e36" : "#5d4b41"; ctx.beginPath(); ctx.ellipse(x, y, r * .85, r * .6, k * 3, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+function mineDungeonFloor(g, vx, vy, vw, vh) {   // the boss dungeon's floor: big dark carved slabs, some joints glowing with faint blue runes
+  const ax = Math.max(g.x, vx), ay = Math.max(g.y, vy), bx = Math.min(g.x + g.w, vx + vw), by = Math.min(g.y + g.h, vy + vh); if (bx <= ax || by <= ay) return;
+  ctx.save(); ctx.beginPath(); ctx.rect(ax, ay, bx - ax, by - ay); ctx.clip();
+  const p = pattern("mstone"); ctx.fillStyle = p || "#2b2833"; ctx.fillRect(ax, ay, bx - ax, by - ay); ctx.fillStyle = "rgba(16,20,40,.58)"; ctx.fillRect(ax, ay, bx - ax, by - ay);
+  const SW = 128, SH = 92;
+  for (let r = Math.floor((ay - g.y) / SH) - 1; r * SH + g.y < by + SH; r++) for (let c = Math.floor((ax - g.x) / SW) - 2; c * SW + g.x < bx + SW; c++) {
+    const x = g.x + c * SW + (r % 2 ? SW / 2 : 0), y = g.y + r * SH, hh = mnHash(c * 3 + 11, r * 7 + 5);
+    ctx.fillStyle = hh < .3 ? "rgba(255,255,255,.035)" : hh > .8 ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.06)"; ctx.fillRect(x + 3, y + 3, SW - 6, SH - 6);
+    ctx.strokeStyle = "#07080e"; ctx.lineWidth = 4; ctx.strokeRect(x, y, SW, SH); ctx.strokeStyle = "rgba(150,150,190,.10)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 3, y + SH - 3); ctx.lineTo(x + 3, y + 3); ctx.lineTo(x + SW - 3, y + 3); ctx.stroke();
+    if (hh > .86) { ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + SW * .2, y + SH * .3); ctx.lineTo(x + SW * .45, y + SH * .55); ctx.lineTo(x + SW * .4, y + SH * .85); ctx.stroke(); }   // a crack
+    if (hh > .1 && hh < .24) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = "rgba(70,160,255,.42)"; ctx.lineWidth = 2; ctx.shadowColor = "#3aa0ff"; ctx.shadowBlur = 6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + SW, y); ctx.stroke(); ctx.restore(); }   // a rune-lit joint
+    if (hh > .45 && hh < .5) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = "rgba(90,180,255,.5)"; ctx.lineWidth = 2; const mx = x + SW / 2, my = y + SH / 2; ctx.beginPath(); ctx.moveTo(mx, my - 16); ctx.lineTo(mx, my + 16); ctx.moveTo(mx, my - 6); ctx.lineTo(mx - 9, my - 14); ctx.moveTo(mx, my - 6); ctx.lineTo(mx + 9, my - 14); ctx.moveTo(mx, my + 4); ctx.lineTo(mx - 9, my - 4); ctx.moveTo(mx, my + 4); ctx.lineTo(mx + 9, my - 4); ctx.stroke(); ctx.restore(); }   // a carved rune
+  }
+  const e = ctx.createLinearGradient(g.x, 0, g.x + 70, 0); e.addColorStop(0, "rgba(5,5,10,.7)"); e.addColorStop(1, "rgba(5,5,10,0)"); ctx.fillStyle = e; ctx.fillRect(g.x, g.y, 70, g.h);
+  const e2 = ctx.createLinearGradient(0, g.y, 0, g.y + 70); e2.addColorStop(0, "rgba(5,5,10,.7)"); e2.addColorStop(1, "rgba(5,5,10,0)"); ctx.fillStyle = e2; ctx.fillRect(g.x, g.y, g.w, 70);
+  ctx.restore();
+}
+function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a great carved circle of glowing runes, slowly turning
+  if (!inView(d.x, d.y, 320)) return; const t = performance.now() / 1000, k = .75 + .25 * Math.sin(t * 1.3);
+  ctx.save(); ctx.translate(d.x, d.y); ctx.scale(1, .56);
+  ctx.fillStyle = "rgba(4,6,14,.55)"; ctx.beginPath(); ctx.arc(0, 0, 252, 0, 7); ctx.fill();
+  ctx.globalCompositeOperation = "lighter";
+  const gl = ctx.createRadialGradient(0, 0, 10, 0, 0, 250); gl.addColorStop(0, `rgba(60,150,255,${.22 * k})`); gl.addColorStop(1, "rgba(20,60,140,0)"); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, 250, 0, 7); ctx.fill();
+  ctx.strokeStyle = `rgba(90,180,255,${.55 * k})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, 238, 0, 7); ctx.stroke();
+  ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 204, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 112, 0, 7); ctx.stroke();
+  ctx.save(); ctx.rotate(t * .06); for (let i = 0; i < 28; i++) { ctx.rotate(Math.PI * 2 / 28); const s = i % 3; ctx.beginPath(); ctx.moveTo(-5, -232); ctx.lineTo(0, -212); ctx.lineTo(5, -232); if (s === 1) { ctx.moveTo(0, -232); ctx.lineTo(0, -210); } if (s === 2) { ctx.moveTo(-6, -222); ctx.lineTo(6, -222); } ctx.stroke(); } ctx.restore();   // the runes round the rim
+  ctx.save(); ctx.rotate(-t * .04); ctx.strokeStyle = `rgba(90,180,255,${.38 * k})`; ctx.beginPath(); for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 4 / 5; i ? ctx.lineTo(Math.cos(a) * 200, Math.sin(a) * 200) : ctx.moveTo(Math.cos(a) * 200, Math.sin(a) * 200); } ctx.stroke(); ctx.restore();   // a five-pointed seal
+  ctx.restore();
+}
+function portalFx(d, a) {   // the portal: the user's swirl turning inside the black arch, light spilling down the steps
+  const [dx, dy, w, h] = a.door, f0 = d.flip ? -1 : 1, x = d.x + dx * f0, y = d.y + dy, cx = x, cy = y + h * .5, t = performance.now() / 1000;
+  ctx.save(); ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, y + h); ctx.lineTo(x - w / 2 + 2, y + w / 2); ctx.ellipse(x, y + w / 2 + 2, w / 2 - 2, w / 2, 0, Math.PI, Math.PI * 2); ctx.lineTo(x + w / 2 - 2, y + h); ctx.closePath(); ctx.clip();
+  ctx.globalCompositeOperation = "lighter";
+  if (portalFxImg.naturalWidth) { const F = MN_FX.portal, ft = t * 1000 / F.ms, fi = Math.floor(ft) % F.n, f2 = (fi + 1) % F.n, k = ft - Math.floor(ft), S = Math.max(w, h) * 1.18;
+    ctx.translate(cx, cy); ctx.rotate(t * .3); ctx.globalAlpha = 1 - k * .5; ctx.drawImage(portalFxImg, fi * F.s, 0, F.s, F.s, -S / 2, -S / 2, S, S); ctx.globalAlpha = k * .5; ctx.drawImage(portalFxImg, f2 * F.s, 0, F.s, F.s, -S / 2, -S / 2, S, S); }
+  ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; const p = .8 + .2 * Math.sin(t * 2.1);
+  const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, w * .9); g.addColorStop(0, `rgba(160,220,255,${.35 * p})`); g.addColorStop(1, "rgba(40,110,255,0)"); ctx.fillStyle = g; ctx.fillRect(cx - w, cy - w, w * 2, w * 2);
+  const s = ctx.createRadialGradient(cx, y + h + 40, 10, cx, y + h + 40, 190); s.addColorStop(0, `rgba(70,160,255,${.28 * p})`); s.addColorStop(1, "rgba(30,90,200,0)"); ctx.fillStyle = s; ctx.fillRect(cx - 190, y + h - 150, 380, 340);   // on the steps
+  for (let i = 0; i < 8; i++) { const u = (t * .35 + i / 8) % 1, ang = i * 2.4 + t * .5, r = (1 - u) * w * .55; ctx.globalAlpha = Math.sin(u * Math.PI) * .9; ctx.fillStyle = "#cfeeff"; ctx.fillRect(cx + Math.cos(ang) * r - 1.5, cy + Math.sin(ang) * r * 1.3 - 1.5, 3, 3); }   // motes drawn in
+  ctx.restore();
+}
+function sealFx(d, a) {   // a seal crystal: breathing blue halo, a ring of runes turning at its foot, sparks rising
+  const t = performance.now() / 1000, sd = (d.x * 7 + d.y) % 10, b = a.blue?.[0] || [0, -130], f0 = d.flip ? -1 : 1, x = d.x + b[0] * f0, y = d.y + b[1], k = .7 + .3 * Math.sin(t * 2.2 + sd);
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  const g = ctx.createRadialGradient(x, y, 4, x, y, 96); g.addColorStop(0, `rgba(120,210,255,${.42 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 96, y - 96, 192, 192);
+  ctx.strokeStyle = `rgba(120,205,255,${.6 * k})`; ctx.lineWidth = 2; ctx.setLineDash([7, 9]); ctx.lineDashOffset = -t * 24; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 70, 22, 0, 0, 7); ctx.stroke(); ctx.lineDashOffset = t * 16; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 54, 16, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  for (let i = 0; i < 6; i++) { const u = (t * .45 + i / 6 + sd * .1) % 1; ctx.globalAlpha = Math.sin(u * Math.PI); ctx.fillStyle = i % 2 ? "#bfe9ff" : "#7fd0ff"; ctx.fillRect(x + Math.sin(i * 2.3 + t) * 34 - 1.5, y + 40 - u * 140, 3, 3); }
+  ctx.restore();
 }
 // Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
 // rounded shape, then the snow is feathered back over its edge in soft bands, with drifts of snow lying across the border.
@@ -3692,7 +3807,7 @@ function drawAnimPiece(d, a) {
 }
 // a piece's fires (animated flames + smoke, drawn on the burning building) and lit lanterns / windows (a warm flickering glow)
 function dynPieceFx(d, a) {
-  if (!a || (!a.fires && !a.lights)) return;
+  if (!a || (!a.fires && !a.lights && !a.blue)) return;
   const t = performance.now() / 1000, f = d.flip ? -1 : 1, seed = (d.x * 7 + d.y * 13) % 100;
   ctx.save();
   (a.fires || []).forEach(([fx, fy, s], i) => {
@@ -3707,6 +3822,12 @@ function dynPieceFx(d, a) {
     if (fire3Piece(d.kind)) { if (s >= .7) drawSmoke3(x, y - 20 * s, s * 1.15, i * 1.7 + seed, t); drawFire3(a.fires[i][3] ?? 1, x, y, s, i * 2.3 + seed, t); }   // the user's own fire loops, smoke behind the bigger ones
     else drawFireSprite(x, y + 10 * s, s * .62, i * 5 + seed, t, .95);
   });
+  if (a.blue && !/^mSeal/.test(d.kind)) {   // The Deep Mine: glowing crystals: a cold blue halo, slowly breathing
+    ctx.globalCompositeOperation = "lighter";
+    a.blue.forEach(([lx, ly, sc], i) => { const x = d.x + lx * f, y = d.y + ly, r = 30 * sc, k = .55 + .25 * Math.sin(t * 1.6 + i * 2.1 + seed);
+      ctx.globalAlpha = k; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, "rgba(110,205,255,.5)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
   if (a.lights) {   // lanterns / lit windows: soft warm halo that breathes and now and then stutters
     ctx.globalCompositeOperation = "lighter";
     a.lights.forEach(([lx, ly], i) => {
@@ -3822,6 +3943,11 @@ function drawPaintedOverlay(fires) {
     const COL = ["#ff5d6c", "#ffd24a", "#5ad1c9", "#b98cff", "#ff9a3d", "#f4efe0"];
     for (let i = 0; i < 70; i++) { const x = cam.x + ((i * 191.7 + t * (26 + i % 6 * 9) + Math.sin(t * .9 + i) * 26) % (W + 40)) - 20, y = cam.y + ((i * 113.3 + t * (34 + i % 4 * 12)) % (H + 40)) - 20;
       ctx.save(); ctx.translate(x, y); ctx.rotate(t * (1.5 + i % 4) + i); ctx.globalAlpha = .75; ctx.fillStyle = COL[i % 6]; ctx.fillRect(-2.5, -1.5, 5, 3); ctx.restore(); }
+    ctx.globalAlpha = 1;
+  } else if (mineMap()) {   // The Deep Mine: dust drifting down from the roof, now and then a drip catching the light
+    for (let i = 0; i < 70; i++) { const x = cam.x + ((i * 173.3 + Math.sin(t * .4 + i) * 30 + t * 6) % (W + 40)) - 20, y = cam.y + ((i * 97.1 + t * (12 + (i % 5) * 7)) % (H + 40)) - 20;
+      ctx.globalAlpha = .18 + (i % 5) * .06; ctx.fillStyle = i % 4 ? "#c9b8a6" : "#e8dcc8"; ctx.fillRect(x, y, 1 + (i % 3 === 0), 1 + (i % 3 === 0)); }
+    for (let i = 0; i < 6; i++) { const u = (t * .7 + i * .37) % 1, x = cam.x + ((i * 331.7) % W), y = cam.y + ((i * 211.3) % (H * .6)) + u * 160; ctx.globalAlpha = .55 * (1 - u); ctx.fillStyle = "#9fd8ff"; ctx.fillRect(x, y, 2, 5); }
     ctx.globalAlpha = 1;
   } else if (refineryMap()) {   // Scorched Refinery: sand blowing across in the wind
     for (let i = 0; i < 90; i++) { const sp = 150 + (i % 7) * 40, x = cam.x + ((i * 173.3 + t * sp) % (W + 80)) - 40, y = cam.y + ((i * 97.1 + t * 22 + Math.sin(t * 1.3 + i) * 14) % (H + 40)) - 20;
@@ -3951,7 +4077,7 @@ const VISION_STEPS = [0.2, 0.3];
 // The darkness layer is built at half resolution (a quarter of the pixels to fill and punch holes in) and scaled up with smoothing:
 // soft light edges look the same and the night costs a fraction of a full-size layer.
 const DARK_SCALE = .5, darkCv = document.createElement("canvas"); darkCv.width = Math.ceil(W * DARK_SCALE); darkCv.height = Math.ceil(H * DARK_SCALE); const dctx = darkCv.getContext("2d"); dctx.scale(DARK_SCALE, DARK_SCALE);
-let nightK = 0, nightLast = 0, forceNight = false;   // forceNight: N key in the solo preview, to test the look
+let nightK = 0, nightLast = 0, forceNight = false; const CAVE_DARK = .5;   // forceNight: N key in the solo preview, to test the look
 const isNightView = () => !!state && (state.isNight || forceNight);
 let eyeGlowCv = null;
 function eyeGlow() {   // a 16x16 glowing green dot, blurred once
@@ -3975,7 +4101,7 @@ function lightHole(x, y, r, a) {
 }
 function drawNight() {
   const now = performance.now(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
-  nightK += ((isNightView() ? 1 : 0) - nightK) * Math.min(1, dt * 1.5);          // fade in/out over ~2 seconds
+  nightK += ((isNightView() ? 1 : mineMap() ? CAVE_DARK : 0) - nightK) * Math.min(1, dt * 1.5);   // The Deep Mine is always half dark (a cave): lanterns, crystals and you light it          // fade in/out over ~2 seconds
   if (nightK < .01) return;
   ctx.fillStyle = `rgba(4,8,15,${.25 * nightK})`; ctx.fillRect(0, 0, W, H);     // cold blue tint
   dctx.globalCompositeOperation = "source-over"; dctx.clearRect(0, 0, W, H);
@@ -3986,9 +4112,11 @@ function drawNight() {
     if (d.kind !== "streetlight" || !inView(d.x, d.y, NIGHT.lightR)) continue;
     lightHole(d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, d.y - 24 - cam.y, NIGHT.lightR, NIGHT.lightAlpha);
   }
-  if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - COASTER.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - COASTER.H - cam.y, 120, .75); }   // the bulbs along the track, the train
+  if (coast && coast.mn) { for (let i = 0; i < CO.carts; i++) { const c = coasterCart(coast.T, coast.s, i); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - 30 - cam.y, i ? 70 : 150, i ? .5 : .85); } }   // the mine carts' lamps
+  else if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - CO.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - CO.H - cam.y, 120, .75); }   // the bulbs along the track, the train
   if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
-    for (const [x, y] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, 110, .8);
+    for (const [x, y, b] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, b ? 95 : 110, b ? .7 : .8);
+    if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); }
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
   }
   const pmN = paintedMap();
@@ -4067,9 +4195,9 @@ function drawScreen() {
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
-  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(); m.fillStyle = rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
-    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
-    if (coast) { m.strokeStyle = '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); for (const q of coast.T.stations) { m.fillStyle = '#5ad1c9'; m.beginPath(); m.arc(q.x * sx, q.y * sy, 3, 0, 7); m.fill(); } const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
+  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(), mnM = mineMap(); m.fillStyle = mnM ? '#3b302b' : rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = mnM ? ({ stone: '#3a3340', mud: '#4a3526', planks: '#6b4a2e', dungeon: '#252838' }[g.tile] || '#3b302b') : rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind === 'mPortal' ? '#4fc3e8' : d.kind[0] === 'm' ? (/Crystal|Seal/.test(d.kind) ? '#4fc3e8' : /Rock/.test(d.kind) ? '#5b463f' : '#7a5a3c') : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
+    if (coast) { m.strokeStyle = coast.mn ? '#d9a35c' : '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); for (const q of coast.T.stations) { m.fillStyle = '#5ad1c9'; m.beginPath(); m.arc(q.x * sx, q.y * sy, 3, 0, 7); m.fill(); } const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
   m.fillStyle = '#d58b45'; m.fillRect(towerX() * sx - 5, towerY() * sy - 5, 10, 10);
@@ -4152,7 +4280,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["THE DEEP MINE", "Underground · Mine Carts & a Sealed Portal"]];
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -4260,11 +4388,11 @@ function drawMapThumb() {   // a little satellite view of the chosen map (from t
     g.fillStyle = "#ff4a2a"; g.shadowColor = "#ff4a2a"; g.shadowBlur = 10; g.beginPath(); g.arc(pm.tower[0] * k, (pm.tower[1] - sy) * k, 4, 0, 7); g.fill(); g.shadowBlur = 0;
     return;
   }
-  if (["dynasty", "whiteout", "refinery", "carnival"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
-    const rfT = SITE_STYLE[state?.mapSite || 0] === "refinery", MW = state?.worldW || 4400, k = W / 1900, x0 = MW / 2 - 950, y0 = rfT ? 330 : SITE_STYLE[state?.mapSite || 0] === "carnival" ? 240 : 20;
-    g.fillStyle = { whiteout: "#5d6a80", refinery: "#c99a55", carnival: "#3a4632" }[SITE_STYLE[state?.mapSite || 0]] || "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
+  if (["dynasty", "whiteout", "refinery", "carnival", "mine"].includes(SITE_STYLE[state?.mapSite || 0]) && src) {   // Fallen Dynasty: the temple gate and the wall, drawn from the real pieces
+    const rfT = SITE_STYLE[state?.mapSite || 0] === "refinery", mnT = SITE_STYLE[state?.mapSite || 0] === "mine", MW = state?.worldW || 4400, k = W / 1900, x0 = mnT ? MW - 1960 : MW / 2 - 950, y0 = mnT ? 2620 : rfT ? 330 : SITE_STYLE[state?.mapSite || 0] === "carnival" ? 240 : 20;   // the mine: its boss dungeon
+    g.fillStyle = { whiteout: "#5d6a80", refinery: "#c99a55", carnival: "#3a4632", mine: "#2a2a38" }[SITE_STYLE[state?.mapSite || 0]] || "#231f29"; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true;
     const items = src.split(";").map(r => { const [ki, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[ki], x, y, f }; })
-      .filter(d => d.kind && d.y < y0 + H / k + 260 && Math.abs(d.x - MW / 2) < 1200).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
+      .filter(d => d.kind && d.y < y0 + H / k + 260 && d.x > x0 - 250 && d.x < x0 + 2150).sort((a, b) => (MAP_FLAT[a.kind] ? 0 : 1) - (MAP_FLAT[b.kind] ? 0 : 1) || a.y - b.y);
     let waiting = false;
     for (const d of items) { const im = mapImgs[d.kind]; if (!im?.naturalWidth) { if (im && !waiting) { waiting = true; im.addEventListener("load", drawMapThumb, { once: true }); } continue; }
       g.save(); g.translate((d.x - x0) * k, (d.y - y0) * k); if (d.f === 1) g.scale(-1, 1); const fw = DYN_ART[d.kind]?.frames ? DYN_ART[d.kind].w : im.width; g.drawImage(im, 0, 0, fw, im.height, -fw * k / 2, -im.height * k, fw * k, im.height * k); g.restore(); }

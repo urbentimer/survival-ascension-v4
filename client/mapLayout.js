@@ -334,9 +334,11 @@ export function coasterAt(T, s) {   // where the rails are s px along the loop: 
   s = ((s % T.L) + T.L) % T.L; const n = T.pts.length, i = Math.floor(s / T.step) % n, k = s / T.step - Math.floor(s / T.step), a = T.pts[i], b = T.pts[(i + 1) % n];
   return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, a: Math.atan2(b.y - a.y, b.x - a.x) };
 }
-export const coasterCart = (T, s, i) => coasterAt(T, s + COASTER.gap * ((COASTER.carts - 1) / 2 - i));   // cart i (0 = front) when the train's middle is at s
-export function coasterSeat(T, s, n) {   // where rider n (0..7) sits: two side by side per cart, feet just above the cart's floor (the client cuts them off at the rim)
-  const c = coasterCart(T, s, n >> 1), sd = n & 1 ? 1 : -1; return { x: c.x - Math.sin(c.a) * 13 * sd, y: c.y - COASTER.H - 36 + Math.cos(c.a) * 3 * sd };
+export const coasterCart = (T, s, i) => { const K = T.cfg || COASTER; return coasterAt(T, s + K.gap * ((K.carts - 1) / 2 - i)); };   // cart i (0 = front) when the train's middle is at s (T.cfg: the mine train's own numbers)
+export function coasterSeat(T, s, n) {   // where rider n (0..7) sits: two per cart (coaster: side by side; mine cart: one behind the other), feet just above the cart's floor (the client cuts them off at the rim)
+  const K = T.cfg || COASTER, c = coasterCart(T, s, n >> 1), sd = n & 1 ? 1 : -1;
+  if (K.along) return { x: c.x - Math.cos(c.a) * 17 * sd, y: c.y - K.H - 34 - Math.sin(c.a) * 9 * sd };
+  return { x: c.x - Math.sin(c.a) * 13 * sd, y: c.y - K.H - 36 + Math.cos(c.a) * 3 * sd };
 }
 const CV_HOUSE_Y = 760;
 // The ground: grass everywhere, then {x, y, w, h, tile}: dirt patches, the paved plaza and the path from the haunted house, a boardwalk under every big ride.
@@ -400,6 +402,144 @@ export function buildCarnivalLayout(WW, WH, start = 5150) {
   flat("cvMedallion", cx, cy + 260); flat("cvSunburst", cx, CV_HOUSE_Y + 330);
   for (let i = 0; i < 120; i++) flat(pick(["cvConfetti", "cvConfetti", "cvTickets", "cvTickets", "cvPopSpill", "cvPrints", "cvPuddle", "cvLeaves", "cvLeaves", "cvBunting", "cvPlanks", "cvCrackM", "cvRope", "cvOil", "cvPaint"]), 60 + rnd() * (WW - 120), 170 + rnd() * (WH - 210));
   return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "cvMedallion" || b.kind === "cvSunburst") - (a.kind === "cvMedallion" || a.kind === "cvSunburst"));   // medallions first: litter lies on top
+}
+
+// ---------- THE DEEP MINE (grid map, Nov 11): an abandoned mine deep underground, ridden on MINE CARTS ----------
+// (art: tools/extract-mine.py). Top-left: the scavenge zone (cart station, radio tower, crusher, shack, collapsed tunnel, flooded pit).
+// The rest: one long winding cart track (ground-level rails, drawn in code) through caves, under rock arches and over chasms on bridges,
+// past the boss dungeon in the bottom-right corner (the portal, four seal crystals, the spot where the Mine Beast's statue will stand).
+// Designed on a 6000 x 4000 map; every position below is in those units and scales with the map.
+export const MN_SIZE = {mShaft: [520, 520], mLift: [470, 471], mStation: [600, 296], mCrusher: [450, 439], mShack: [400, 388], mCrystal: [380, 374], mCollapsed: [420, 409], mWrecks: [400, 258], mArch: [420, 273], mPortal: [560, 546], mSeal1: [149, 229], mSeal2: [148, 228], mSeal3: [150, 228], mSeal4: [149, 228], mRock1: [221, 181], mRock2: [221, 180], mRock3: [223, 180], mRock4: [215, 204], mRock5: [219, 215], mRock6: [218, 210], mRock7: [222, 201], mRock8: [159, 209], mRock9: [215, 217], mRock10: [218, 207], mRock11: [221, 189], mRock12: [221, 203], mRock13: [219, 191], mRock14: [218, 194], mRock15: [224, 197], mRock16: [226, 198], mLanternPost: [124, 143], mLanternPost2: [128, 142], mSkullSign: [132, 148], mSignpost: [132, 144], mCrystalCrate: [134, 141], mOreCart: [137, 139], mBarrel: [134, 134], mTnt: [137, 138], mToolRack: [144, 127], mWinch: [144, 128], mRopeCoil: [130, 112], mTimber: [145, 119], mOrePile: [148, 112], mCrystalSmall: [141, 137], mFloodlight: [130, 142], mBanner: [148, 137], mDrill: [223, 205], mExcavator: [221, 215], mCrystalCart: [207, 187], mLoco: [232, 209], mConveyor: [219, 216], mGenerator: [221, 207], mFan: [216, 200], mPump: [215, 192], mScaffold: [221, 217], mWinchFrame: [218, 216], mFurnace: [223, 220], mCrane: [229, 212], mTrommel: [221, 200], mSilos: [215, 213], mFuelTank: [214, 164], mCrawler: [221, 197], mPillar: [94, 180], mPillarBroken: [138, 166], mBrazier: [126, 118], mCandles: [101, 186], mGate: [177, 169], mChains: [167, 132], mCage: [161, 175], mAltar: [184, 111], mMiner: [139, 181], mMinerBroken: [153, 148], mTotem: [115, 184], mCoffin: [174, 151], mBones: [167, 115], mRuneStone: [166, 144], mOffering: [171, 133], mClawWall: [181, 156], mStones: [158, 140], mPuddles: [157, 135], mDirt: [156, 144], mShards: [156, 142], mGoldVein: [156, 136], mBlueCrack: [155, 130], mStain: [157, 135], mPlanks: [155, 151], mRopeM: [144, 138], mRocksM: [152, 136], mCrystalRocks: [157, 144], mHatch: [158, 138], mChevron: [156, 139], mGrate: [156, 141], mStripes: [156, 138],
+  mChasm: [660, 250], mChasmV: [250, 620], mRuneCircle: [560, 360] };   // (the last three are drawn in code: chasms, the rune circle where the statue will stand)
+export const MN_KINDS = Object.keys(MN_SIZE);
+MAP_KINDS.push(...MN_KINDS);   // (appended after every older kind: their indexes never change)
+const MN_FLATS = ["mStones", "mPuddles", "mDirt", "mShards", "mGoldVein", "mBlueCrack", "mStain", "mPlanks", "mRopeM", "mRocksM", "mCrystalRocks", "mHatch", "mChevron", "mGrate", "mStripes", "mRopeCoil", "mChains", "mRuneCircle"];
+for (const k of MN_FLATS) MAP_FLAT[k] = 1;
+const mnBox = (k, wf = .44, hf = .55) => { const [w, h] = MN_SIZE[k]; return { ox: 0, oy: -Math.round((h * hf + 6) / 2), hw: Math.round(w * wf), hh: Math.round((h * hf - 6) / 2) }; };
+for (const k of MN_KINDS) if (!MAP_FLAT[k]) MAP_SOLID[k] = mnBox(k);
+for (let i = 1; i <= 16; i++) MAP_SOLID["mRock" + i] = mnBox("mRock" + i, .46, .56);
+Object.assign(MAP_SOLID, {
+  // the cart station: you walk up its steps onto the deck (open); solid: the skirts either side of the steps, the back rail (the carts run behind it), the ends, the booth, the crates
+  mStation: [{ ox: -194, oy: -48, hw: 98, hh: 48 }, { ox: 194, oy: -48, hw: 98, hh: 48 }, { ox: 0, oy: -152, hw: 292, hh: 8 }, { ox: -287, oy: -122, hw: 7, hh: 24 }, { ox: 287, oy: -122, hw: 7, hh: 24 }, { ox: -206, oy: -130, hw: 50, hh: 12 }, { ox: 210, oy: -128, hw: 40, hh: 10 }],
+  // the boss shaft: the slope down from its black mouth is open (the boss walks out); the portal: its steps up to the doorway are open
+  mShaft: [{ ox: -190, oy: -190, hw: 74, hh: 175 }, { ox: 190, oy: -190, hw: 74, hh: 175 }, { ox: 0, oy: -300, hw: 120, hh: 58 }],
+  mPortal: [{ ox: -205, oy: -175, hw: 72, hh: 150 }, { ox: 205, oy: -175, hw: 72, hh: 150 }, { ox: 0, oy: -245, hw: 135, hh: 70 }],
+  mArch: [{ ox: -152, oy: -30, hw: 56, hh: 26 }, { ox: 152, oy: -30, hw: 56, hh: 26 }],   // the track runs through the middle
+  mLift: mnBox("mLift", .44, .42), mCrusher: mnBox("mCrusher", .45, .5), mShack: mnBox("mShack", .45, .52), mCrystal: mnBox("mCrystal", .42, .45), mCollapsed: mnBox("mCollapsed", .45, .5), mWrecks: mnBox("mWrecks", .44, .5),
+  mSeal1: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal2: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal3: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal4: { ox: 0, oy: -30, hw: 50, hh: 26 },
+  mLanternPost: { ox: -10, oy: -12, hw: 16, hh: 9 }, mLanternPost2: { ox: 0, oy: -12, hw: 18, hh: 9 }, mSkullSign: { ox: 0, oy: -12, hw: 48, hh: 9 }, mSignpost: { ox: 0, oy: -12, hw: 18, hh: 9 }, mFloodlight: { ox: 0, oy: -14, hw: 34, hh: 12 }, mBanner: { ox: 0, oy: -12, hw: 58, hh: 9 },
+  mPillar: { ox: 0, oy: -22, hw: 34, hh: 18 }, mCandles: { ox: 0, oy: -10, hw: 20, hh: 8 }, mTotem: { ox: 0, oy: -12, hw: 18, hh: 9 }, mBones: mnBox("mBones", .38, .45),
+  mChasm: [{ ox: 0, oy: 0, hw: 300, hh: 62 }, { ox: 0, oy: 0, hw: 220, hh: 100 }], mChasmV: [{ ox: 0, oy: 0, hw: 62, hh: 285 }, { ox: 0, oy: 0, hw: 100, hh: 205 }] });   // a chasm: centre-placed, the track crosses it on a bridge
+export const MINECART = { speed: 340, gap: 112, H: 0, wait: 8, cd: 45, seats: 8, carts: 4, along: 1 };   // the mine train: rails on the ground, riders sit one behind the other
+export const MN_WAY = [[850, 400], [1300, 400], [1900, 360], [2600, 320], [3300, 400], [4000, 330], [4800, 420], [5500, 380], [5820, 820], [5550, 1280], [4800, 1330], [4100, 1080], [3450, 1300], [3350, 1900], [3900, 2280], [4700, 2000], [5350, 2150], [5800, 2650], [5840, 3350], [5600, 3720], [4800, 3740], [4000, 3720], [3400, 3350], [2800, 3720], [2250, 3200], [1650, 3650], [1050, 3080], [550, 3600], [220, 3250], [200, 2400], [330, 1650], [190, 950], [300, 520], [430, 400]];   // clockwise from the station: east along the top, snaking down the right, through the dungeon, back west along the bottom, up the left
+export const MN_SPOT = { tower: [1450, 1330], station: [850, 565], shaft: [2450, 1080], lift: [620, 1650], collapsed: [1950, 820], crusher: [2560, 2060], shack: [820, 2220], wrecks: [1380, 830], pit: [1720, 2080],
+  dungeon: [3880, 2700, 5990, 3990], portal: [5180, 3230], statue: [4520, 3170], seals: [[4060, 3010], [5600, 2960], [4080, 3480], [5560, 3480]] };
+export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x, y (the rails, on the ground), s}; ONE station (the cart station, top left)
+  const sx = WW / 6000, sy = WH / 4000, P = MN_WAY.map(([x, y]) => [x * sx, y * sy]), n = P.length, raw = [];
+  for (let i = 0; i < n; i++) { const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    const d = (a, b) => Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1]), .5) || 1, t1 = d(p0, p1), t2 = t1 + d(p1, p2), t3 = t2 + d(p2, p3);   // centripetal Catmull-Rom: smooth, no loops or cusps
+    for (let k = 0; k < 60; k++) { const t = t1 + (t2 - t1) * k / 60, L = (a, b, ta, tb) => [a[0] * (tb - t) / (tb - ta) + b[0] * (t - ta) / (tb - ta), a[1] * (tb - t) / (tb - ta) + b[1] * (t - ta) / (tb - ta)];
+      const A1 = L(p0, p1, 0, t1), A2 = L(p1, p2, t1, t2), A3 = L(p2, p3, t2, t3), B1 = L(A1, A2, 0, t2), B2 = L(A2, A3, t1, t3);
+      raw.push({ x: B1[0] * (t2 - t) / (t2 - t1) + B2[0] * (t - t1) / (t2 - t1), y: B1[1] * (t2 - t) / (t2 - t1) + B2[1] * (t - t1) / (t2 - t1) }); } }
+  raw.push(raw[0]);
+  const step = 24, pts = [{ x: raw[0].x, y: raw[0].y, s: 0 }]; let acc = 0, total = 0;
+  for (let i = 1; i < raw.length; i++) { const a = raw[i - 1], b = raw[i], dd = Math.hypot(b.x - a.x, b.y - a.y); let from = 0;
+    while (acc + (dd - from) >= step) { from += step - acc; acc = 0; total += step; const k = from / dd; pts.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, s: total }); }
+    acc += dd - from; }
+  if (Math.hypot(pts[pts.length - 1].x - pts[0].x, pts[pts.length - 1].y - pts[0].y) < step * .5) pts.pop();
+  return { pts, L: pts.length * step, step, stations: [{ s: 0, x: Math.round(P[0][0]), y: Math.round(P[0][1]) }], cfg: MINECART };
+}
+// The ground: gravel everywhere, then {x, y, w, h, tile}: slate and mud patches (soft edges), the flooded pit, plank decks under the station /
+// shack / crusher / lift, and the boss dungeon's carved floor ("dungeon": drawn in code).
+export function mineGround(WW, WH, layout = []) {
+  const sx = WW / 6000, sy = WH / 4000, R = []; let seed = 1717; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 34; i++) { const w = 300 + rnd() * 520, h = 200 + rnd() * 320; R.push({ x: 40 + rnd() * (WW - w - 80), y: 60 + rnd() * (WH - h - 100), w, h, tile: rnd() < .78 ? "stone" : "mud", blob: 1 }); }
+  const [px, py] = MN_SPOT.pit; R.push({ x: (px - 330) * sx, y: (py - 190) * sy, w: 660 * sx, h: 380 * sy, tile: "mud", blob: 1 });
+  for (const d of layout) if (/^m(Station|Shack|Crusher|Lift)$/.test(d.kind)) { const [w, h] = MN_SIZE[d.kind]; R.push({ x: d.x - w * .5 - 20, y: d.y - h * .42, w: w + 40, h: h * .42 + 40, tile: "planks", road: 1 }); }
+  const [x0, y0, x1, y1] = MN_SPOT.dungeon; R.push({ x: x0 * sx, y: y0 * sy, w: (x1 - x0) * sx, h: (y1 - y0) * sy, tile: "dungeon", road: 1 });
+  return R;
+}
+export function buildMineLayout(WW, WH, start = 6060) {
+  let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
+  const sx = WW / 6000, sy = WH / 4000, S = ([x, y]) => [x * sx, y * sy], out = [], boxes = [], T = mineTrack(WW, WH), TP = T.pts.filter((_, i) => i % 2 === 0);
+  const [tx, ty] = S(MN_SPOT.tower), [dx0, dy0] = S(MN_SPOT.dungeon), [dx1, dy1] = S(MN_SPOT.dungeon.slice(2)), st0 = T.stations[0];
+  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id, ov: s.hw > 40 && !Array.isArray(MAP_SOLID[k]) ? Math.max(0, MN_SIZE[k][1] + s.oy - s.hh) * .8 : 0 }));
+  const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
+  const sealed = R => { const g = new Uint8Array(GW * GH);
+    for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.x0 - R) / C)), i1 = Math.min(GW - 1, Math.floor((b.x1 + R) / C)), j0 = Math.max(0, Math.floor((b.y0 - R) / C)), j1 = Math.min(GH - 1, Math.floor((b.y1 + R) / C));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const px = i * C + C / 2, py = j * C + C / 2; if (px > b.x0 - R && px < b.x1 + R && py > b.y0 - R && py < b.y1 + R) g[j * GW + i] = 1; } }
+    const q = [Math.floor((ty + 120) / C) * GW + Math.floor(tx / C)]; g[q[0]] = 2;
+    for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
+    return g.includes(0); };
+  const walkable = () => !sealed(22) && !sealed(30);
+  const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1; return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
+  const inMap = q => q.x0 >= 30 && q.x1 <= WW - 30 && q.y1 <= WH - 20 && q.y0 >= 40;
+  const [shx, shy] = S(MN_SPOT.shaft), [ptx, pty] = S(MN_SPOT.portal), [stx, sty] = S(MN_SPOT.statue);
+  const keep = [[tx - 430, ty - 320, tx + 430, ty + 300], [st0.x - 230, st0.y + 150, st0.x + 230, st0.y + 420], [shx - 190, shy - 140, shx + 190, shy + 300], [stx - 330, sty - 470, stx + 330, sty + 150], [ptx - 170, pty - 10, ptx + 170, pty + 260]];   // the tower's yard, in front of the station's steps, the boss's way out of the shaft, the statue's spot, the portal's steps
+  const offKeep = q => !keep.some(([x0, y0, x1, y1], i) => q.x0 < x1 && q.x1 > x0 && q.y0 - (i === 0 ? q.ov || 0 : 0) < y1 && q.y1 > y0);
+  const offTrack = q => !TP.some(p => Math.max(q.x0 - p.x, p.x - q.x1, 0) < 62 && p.y > q.y0 - (q.ov || 0) - 50 && p.y < q.y1 + 64);
+  const inDungeon = q => q.x1 > dx0 && q.y1 > dy0;
+  const place = (k, x, y, gap, flip = false, o = {}) => {
+    x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
+    if (!b.every(q => (o.edge || inMap(q)) && offKeep(q) && (o.track || offTrack(q)) && (o.dungeon || !inDungeon(q)) && boxes.every(z => dist(q, z) >= gap))) return false;
+    out.push({ kind: k, x, y, flip }); boxes.push(...b);
+    if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
+    return true;
+  };
+  const fixed = (k, x, y, flip = false) => { const id = out.length; out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); boxes.push(...bx(k, Math.round(x), Math.round(y), flip, id)); };
+  const drop = (k, gap, area, tries = 300, o) => { for (let t = 0; t < tries; t++) if (place(k, area[0] + rnd() * (area[2] - area[0]), area[1] + rnd() * (area[3] - area[1]), gap, !/Sign|Seal|Portal|Station/.test(k) && rnd() < .5, o)) return true; return false; };
+  // the landmarks (fixed): the cart station on the track's straight, the boss shaft, the part areas
+  fixed("mStation", st0.x, st0.y + 165);
+  for (const [k, spot] of [["mShaft", "shaft"], ["mLift", "lift"], ["mCollapsed", "collapsed"], ["mCrusher", "crusher"], ["mShack", "shack"], ["mWrecks", "wrecks"]]) fixed(k, ...S(MN_SPOT[spot]));
+  // chasms the track crosses on bridges, and rock arches it runs through (wherever it heads roughly up / down, spread out)
+  fixed("mChasm", ...S([2520, 3450])); fixed("mChasmV", ...S([4400, 375])); fixed("mChasm", ...S([150, 2760]));
+  const chasms = out.filter(d => /Chasm/.test(d.kind)), arches = [];
+  for (let i = 0; i < T.pts.length; i++) { const a = T.pts[(i + T.pts.length - 5) % T.pts.length], b = T.pts[(i + 5) % T.pts.length], p = T.pts[i];
+    if (Math.abs(b.x - a.x) > .6 * Math.abs(b.y - a.y) || p.x < 120 * sx || p.x > WW - 230 || p.y < 700 * sy || p.y > WH - 300) continue;
+    if (arches.some(q => Math.hypot(q.x - p.x, q.y - p.y) < 1150) || chasms.some(c => Math.hypot(c.x - p.x, c.y - p.y) < 560) || (p.x > dx0 - 200 && p.y > dy0 - 200) || Math.hypot(p.x - st0.x, p.y - st0.y) < 600) continue;
+    arches.push({ x: p.x, y: p.y }); fixed("mArch", p.x, p.y + 34); }
+  // the boss dungeon (bottom right): the portal and the statue's rune circle against a wall of pillars, four seal crystals, braziers, kneeling miners
+  out.push({ kind: "mRuneCircle", x: Math.round(stx), y: Math.round(sty), flip: false });
+  fixed("mPortal", ptx, pty); MN_SPOT.seals.forEach((q, i) => fixed("mSeal" + (i + 1), ...S(q)));
+  for (const [x, y] of [[stx - 250, sty + 90], [stx + 250, sty + 90], [ptx - 330, pty + 70], [ptx + 330, pty + 70]]) fixed("mBrazier", x, y);
+  for (const [x, y, f] of [[stx - 300, sty + 330, false], [stx - 110, sty + 390, false], [stx + 110, sty + 390, true], [stx + 300, sty + 330, true]]) fixed(rnd() < .25 ? "mMinerBroken" : "mMiner", x, y, f);
+  for (const [x, y] of [[stx - 170, sty + 170], [stx + 170, sty + 170], [ptx - 230, pty + 230], [ptx + 230, pty + 230]]) fixed("mCandles", x, y);
+  let wi = 0; for (let x = dx0 + 80; x < WW - 400; x += 150 * sx, wi++) { if (Math.abs(x - stx) < 330 || Math.abs(x - ptx) < 310) continue; fixed(wi % 2 ? (rnd() < .3 ? "mPillarBroken" : "mPillar") : "mClawWall", x, dy0 + 110); }   // the north wall, broken in places
+  for (let y = dy0 + 330, j = 0; y < dy1 - 380; y += 150 * sy, j++) { if (Math.abs(y - (dy0 + dy1) / 2) < 150) continue; fixed(j % 2 ? "mClawWall" : rnd() < .4 ? "mPillarBroken" : "mPillar", dx0 + 60, y); }   // the west wall, with a way in in the middle
+  for (const y of [(dy0 + dy1) / 2 - 190, (dy0 + dy1) / 2 + 190]) place("mTotem", dx0 + 170, y, 20, false, { dungeon: 1 });   // skull totems either side of the way in
+  const DUN = ["mCoffin", "mBones", "mBones", "mOffering", "mOffering", "mCage", "mRuneStone", "mRuneStone", "mAltar", "mGate"];
+  for (const area of [[dx0 + 150, dy1 - 520, stx - 330, dy1 - 140], [ptx + 300, dy1 - 520, dx1 - 60, dy1 - 140], [dx0 + 200, dy0 + 330, stx - 380, dy0 + 700]])
+    for (let n = 0, t = 0; n < 3 && t < 30; t++) if (drop(pick(DUN), 60, area, 20, { dungeon: 1 })) n++;
+  const ROCK = Array.from({ length: 16 }, (_, i) => "mRock" + (i + 1));
+  const ridge = (x0, y0, x1, y1, gaps) => { const n = Math.round(Math.hypot(x1 - x0, y1 - y0) / 235); for (let i = 0; i <= n; i++) { const f = i / n; if (gaps.some(g => Math.abs(f - g) < .05)) continue; place(pick(ROCK), x0 + (x1 - x0) * f + (rnd() - .5) * 40, y0 + (y1 - y0) * f + (rnd() - .5) * 50, 6, rnd() < .5); } };
+  ridge(3080 * sx, 700 * sy, 3080 * sx, 2380 * sy, [.2, .55, .85]); ridge(450 * sx, 2470 * sy, 3000 * sx, 2470 * sy, [.15, .45, .75]);   // the scavenge zone's cave walls, with ways through
+  // big crystal clusters in the open caves, machines and wrecks out along the track, a few in the scavenge zone
+  const zone = [80, 80, 3050 * sx, 2350 * sy], wild = [80, 80, WW - 80, WH - 60];
+  drop("mCrystal", 170, S([3900, 1500]).concat(S([5300, 1900]))); drop("mCrystal", 170, S([3500, 2500]).concat(S([4300, 3100]))); drop("mCrystal", 170, S([700, 2600]).concat(S([2600, 3100])));
+  const MACH = ["mDrill", "mExcavator", "mCrystalCart", "mLoco", "mConveyor", "mGenerator", "mFan", "mPump", "mScaffold", "mWinchFrame", "mFurnace", "mCrane", "mTrommel", "mSilos", "mFuelTank", "mCrawler"];
+  for (let n = 0, t = 0; n < 24 && t < 90; t++) { const k = MACH[n % MACH.length], [x, y] = [80 + rnd() * (WW - 160), 120 + rnd() * (WH - 180)]; if ((x < zone[2] && y < zone[3]) ? false : place(k, x, y, 130, rnd() < .5)) n++; }
+  for (const k of ["mPump", "mGenerator", "mConveyor", "mWinchFrame", "mFuelTank", "mScaffold"]) drop(k, 130, zone, 120);
+  // cave rock: walls round the edge of the map, then outcrops everywhere (never sealing anything off, never on the track)
+  for (let x = 120; x < WW - 100; x += 190 + rnd() * 60) { place(pick(ROCK), x, 30 + 150 + rnd() * 30, 20, rnd() < .5, { edge: 1 }); place(pick(ROCK), x, WH - 10 - rnd() * 20, 20, rnd() < .5, { edge: 1, dungeon: x < dx0 }); }
+  for (let y = 380; y < WH - 120; y += 170 + rnd() * 50) { place(pick(ROCK), 95 + rnd() * 20, y, 20, rnd() < .5, { edge: 1 }); place(pick(ROCK), WW - 95 - rnd() * 20, y, 20, rnd() < .5, { edge: 1, dungeon: y < dy0 }); }
+  for (let n = 0, t = 0; n < 30 && t < 500; t++) { const x = 160 + rnd() * (WW - 320), y = 220 + rnd() * (WH - 300), inZone = x < zone[2] && y < zone[3]; if (inZone && rnd() < .7) continue;
+    if (place(pick(ROCK), x, y, 150 + rnd() * 80, rnd() < .5)) { n++; const a = rnd() * Math.PI, m = 2 + Math.floor(rnd() * 3);   // an outcrop: a short line of rocks, a cave wall
+      for (let j = 1; j <= m; j++) for (const sg of [1, -1]) if (rnd() < .75) place(pick(ROCK), x + Math.cos(a) * 175 * j * sg + (rnd() - .5) * 30, y + Math.sin(a) * 120 * j * sg + (rnd() - .5) * 30, 6, rnd() < .5); } }
+  // lanterns along the track (the only light out on the long dark stretches), props everywhere
+  for (let i = 0; i < T.pts.length; i += 22) { const p = T.pts[i], q = T.pts[(i + 1) % T.pts.length], a = Math.atan2(q.y - p.y, q.x - p.x), side = (i / 22) % 2 ? 1 : -1;
+    place(rnd() < .7 ? "mLanternPost" : "mLanternPost2", p.x - Math.sin(a) * 108 * side, p.y + Math.cos(a) * 108 * side + 10, 40, side > 0); }
+  const PROPS = ["mSkullSign", "mSkullSign", "mSignpost", "mCrystalCrate", "mCrystalCrate", "mOreCart", "mBarrel", "mBarrel", "mTnt", "mTnt", "mToolRack", "mWinch", "mTimber", "mTimber", "mOrePile", "mFloodlight", "mBanner"];
+  for (let n = 0, t = 0; n < 40 && t < 140; t++) if (drop(pick(PROPS), 100, zone, 30)) n++;
+  for (let n = 0, t = 0; n < 34 && t < 200; t++) if (drop(pick(PROPS), 140, wild, 30)) n++;
+  for (let n = 0, t = 0; n < 26 && t < 200; t++) { const x = 3200 * sx + rnd() * (WW - 3300 * sx), y = 200 + rnd() * (WH - 300); if (place(rnd() < .75 ? "mCrystalSmall" : "mCrystalCrate", x, y, 90, rnd() < .5)) n++; }   // crystals glinting out in the caves
+  for (const [x, y] of [[tx - 450, ty - 330], [tx + 450, ty - 330], [tx - 450, ty + 310], [tx + 450, ty + 310]]) place("mFloodlight", x, y, 30);
+  // flat ground marks (under everything): puddles round the flooded pit, hazard paint by the station and the crusher, rubble and shards everywhere
+  const flat = (k, x, y, flip = false) => { if (!TP.some(p => Math.abs(p.x - x) < 110 && Math.abs(p.y - y + 50) < 90)) out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); };   // (never lying across the rails)
+  const [ppx, ppy] = S(MN_SPOT.pit); for (let i = 0; i < 9; i++) flat("mPuddles", ppx + (rnd() - .5) * 560, ppy + 40 + (rnd() - .5) * 300, rnd() < .5);
+  flat("mStripes", st0.x - 150, st0.y + 300); flat("mChevron", st0.x + 160, st0.y + 300); flat("mHatch", tx - 260, ty + 200); flat("mGrate", tx + 270, ty - 160);
+  for (let i = 0; i < 150; i++) flat(pick(["mStones", "mStones", "mDirt", "mDirt", "mRocksM", "mRocksM", "mPlanks", "mRopeM", "mGoldVein", "mBlueCrack", "mBlueCrack", "mShards", "mCrystalRocks", "mStain", "mRopeCoil"]), 60 + rnd() * (WW - 120), 120 + rnd() * (WH - 160), rnd() < .5);
+  for (let i = 0; i < 10; i++) flat(pick(["mChains", "mChains", "mBlueCrack", "mShards"]), dx0 + 100 + rnd() * (dx1 - dx0 - 200), dy0 + 250 + rnd() * (dy1 - dy0 - 320), rnd() < .5);
+  return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "mRuneCircle") - (a.kind === "mRuneCircle"));   // flats first (the rune circle first of all: marks lie on top)
 }
 
 // Two main avenues through the tower, plus side streets (the client draws the same roads).

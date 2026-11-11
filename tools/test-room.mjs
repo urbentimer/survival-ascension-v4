@@ -808,6 +808,23 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.phase = "playing"; room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
   ok(z && Math.abs(z.x - 2200) < 60 && z.y > 700 && z.y < 820 && !room.blockedByMap(z.x, z.y, 0), `the boss walks out of the pyramid (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }
+// 33h. The Deep Mine (Nov 11): a 6000x4000 underground map, the tower in the scavenge zone (top left), a long mine-cart loop, bosses climb out of the shaft
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 6 });
+  ok(room.state.mapSite === 6 && room.state.worldW === 6000 && room.state.worldH === 4000 && room.flow && room.state.towerX === 1450 && room.state.towerY === 1330, "host picks The Deep Mine: 6000x4000, the tower in the scavenge zone, flow-field zombies");
+  const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)); ok(lay.length > 200 && lay.every(r => r[0] >= 186), `built from its own pieces (${lay.length})`);
+  ok(!room.blockedByMap(p.x, p.y, 0) && Math.hypot(p.x - 1450, p.y - 1330) < 260, "everyone starts by the tower");
+  const C = 20, GW = 300, GH = 200, flood = R => { const g = new Uint8Array(GW * GH); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (room.blockedByMap(i * C + 10, j * C + 10, R)) g[j * GW + i] = 1;
+    const q = [Math.floor(1450 / C) * GW + Math.floor(1450 / C)]; g[q[0]] = 2; for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) if (a >= 0 && b >= 0 && a < GW && b < GH && !g[b * GW + a]) { g[b * GW + a] = 2; q.push(b * GW + a); } } return g; };
+  const f16 = flood(16), f28 = flood(28); ok(!f16.includes(0) && !f28.includes(0), `no sealed pockets, and a boss fits wherever a survivor does (${f16.filter(v => !v).length} / ${f28.filter(v => !v).length} cut off)`);
+  const T = room.coaster?.T, st = T?.stations[0]; ok(T && T.L > 18000 && T.cfg?.H === 0 && st.x === 850 && st.y === 400, `the mine-cart loop: one station top left, ${Math.round(T?.L)}px long (${Math.round(T?.L / (T?.cfg?.speed || 1))}s a lap)`);
+  ok(!room.blockedByMap(850, 640, 0) && !room.blockedByMap(850, 448, 0) && room.blockedByMap(640, 520, 0) && room.blockedByMap(850, 410, 0), "the station: up its steps onto the deck (open); the skirts beside the steps and the back rail are solid");
+  room.state.phase = "playing"; room.state.zombies.clear(); room.spawnClock = 1e9; const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  p.x = 850; p.y = 650; room.coaster.wait = 5; send(A, "coaster"); ok(p.ride === 1, "F at the station while the carts are in: you get in");
+  tick(140); const c0 = { x: p.x, y: p.y }; tick(40); ok(Math.hypot(p.x - c0.x, p.y - c0.y) > 400 && p.ride === 1, `the carts roll off along the track with you in them (${Math.round(Math.hypot(p.x - c0.x, p.y - c0.y))}px in 2s)`);
+  p.hp = 1e6; tick(Math.ceil(T.L / T.cfg.speed * 20) + 200); ok(p.ride === 0 && !room.blockedByMap(p.x, p.y, 0) && Math.abs(p.x - 850) < 260 && p.y > 400 && p.y < 520, `one lap later you get out onto the station's deck (${Math.round(p.x)},${Math.round(p.y)})`);
+  room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
+  ok(z && Math.abs(z.x - 2450) < 60 && Math.abs(z.y - 952) < 40 && !room.blockedByMap(z.x, z.y, 0), `the boss climbs out of the DANGER shaft (${Math.round(z?.x)},${Math.round(z?.y)})`);
+  room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
   send(A, "settings", { map: 3 });
