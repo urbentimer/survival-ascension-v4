@@ -67,14 +67,22 @@ const inlineAssets = (text) => text.replace(ASSET_RE, (rel) => {
   const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
   return `data:${mime};base64,` + readFileSync(join(root, "client", rel)).toString("base64");
 });
+// (Nov 11) The game's art no longer fits one 16 MB page. Every asset path that is a whole string in the code ("assets/x.webp") becomes a lookup
+// __A["assets/x.webp"], and the data URIs live in separate script files published next to the page (preview-assets-N.js, each well under 16 MB).
+// Paths inside bigger strings (CSS, HTML) are still inlined.
+const table = {}; mkdirSync(join(here, "dist"), { recursive: true });
+js = js.replace(/(["'`])(assets\/[\w\/.-]+\.(?:webp|png|jpg|mp3))\1/g, (m, q, rel) => { const key = rel.slice(7); if (!(key in table)) table[key] = inlineAssets(rel); return `__A[${JSON.stringify(key)}]`; });   // (key without "assets/": the inlining pass below must not touch it)
 js = inlineAssets(js);
+const dev = !!process.env.SA_NOMIN, base = dev ? "preview-dev-assets" : "preview-assets", chunks = [[]], LIMIT = 9 * 1024 * 1024; let size = 0;
+for (const [rel, uri] of Object.entries(table)) { if (size + uri.length > LIMIT && chunks[chunks.length - 1].length) { chunks.push([]); size = 0; } chunks[chunks.length - 1].push([rel, uri]); size += uri.length; }
+const files = chunks.map((c, i) => { const name = `${base}-${i + 1}.js`; writeFileSync(join(here, "dist", name), "window.__A=Object.assign(window.__A||{}," + JSON.stringify(Object.fromEntries(c)) + ");\n"); return name; });
 const page = `<title>Survival Ascension</title>
 <style>${inlineAssets(styles)}
 ${extraCss}</style>
 ${inlineAssets(body)}
+${files.map(f => `<script src="${f}"></script>`).join("\n")}
 <script>${js}</script>
 `;
-mkdirSync(join(here, "dist"), { recursive: true });
-const outName = process.env.SA_NOMIN ? "dist/preview-dev.html" : "dist/preview.html";
+const outName = dev ? "dist/preview-dev.html" : "dist/preview.html";
 writeFileSync(join(here, outName), page);
-console.log(`${outName.slice(5)} written (${(page.length / 1024).toFixed(0)} KB)`);
+console.log(`${outName.slice(5)} written (${(page.length / 1024).toFixed(0)} KB) + ${files.length} asset files (${chunks.map(c => (c.reduce((a, [, u]) => a + u.length, 0) / 1048576).toFixed(1) + " MB").join(", ")})`);

@@ -134,15 +134,6 @@ for i, v in enumerate(views):
     im = Image.fromarray(np.ascontiguousarray(v)).resize((round(v.shape[1] * sc), round(v.shape[0] * sc)), Image.LANCZOS); q = np.array(im); q[..., 3] = np.where(q[..., 3] > 90, 255, 0); im = Image.fromarray(q); strip.paste(im, (i * CW + (CW - im.width) // 2, CH - im.height))
 strip.save(os.path.join(OUT, 'mnCart.webp'), quality=84, method=6, alpha_quality=85); print('cart cell', CW, CH)
 
-# the Mine Beast (placeholder until its walk / run sheets arrive): the design sheet's three views (front, side facing right, back), one row of equal cells, bottom-centred
-bs = load('beast-sheet.png'); cols = np.where((bs[..., 3] > 0).sum(0) > 2)[0]; runs = []; s0 = cols[0]
-for i in range(1, len(cols)):
-    if cols[i] - cols[i - 1] > 14: runs.append((s0, cols[i - 1])); s0 = cols[i]
-runs.append((s0, cols[-1])); runs = [q for q in runs if q[1] - q[0] > 150]; assert len(runs) == 3, runs
-bv = [crop(bs[:, a:b + 1]) for a, b in runs]; bsc = 330 / max(v.shape[0] for v in bv); BW = round(max(v.shape[1] for v in bv) * bsc) + 4; BH = round(max(v.shape[0] for v in bv) * bsc) + 2; strip = Image.new('RGBA', (BW * 3, BH))
-for i, v in enumerate(bv):
-    im = Image.fromarray(np.ascontiguousarray(v)).resize((round(v.shape[1] * bsc), round(v.shape[0] * bsc)), Image.LANCZOS); q = np.array(im); q[..., 3] = np.where(q[..., 3] > 90, 255, 0); im = Image.fromarray(q); strip.paste(im, (i * BW + (BW - im.width) // 2, BH - im.height))
-strip.save(os.path.join(OUT, 'mnBeast.webp'), quality=82, method=6, alpha_quality=85); print('beast cell', BW, BH)
 # the two GIF effects: frames side by side (black background: drawn with "lighter", so the black adds nothing)
 def gif_strip(name, out, size):
     im = Image.open(os.path.join(ART, name)); n = im.n_frames; st = Image.new('RGB', (size * n, size))
@@ -177,6 +168,5 @@ open(os.path.join(here, '..', 'client', 'mineArt.js'), 'w').write('// GENERATED 
     '// the cart strip and the two effect strips (portal swirl, crystal shatter)\n'
     'export const MN_ART = ' + json.dumps(pieces, separators=(',', ':')) + ';\nexport const MN_TILES = ' + json.dumps({t: f'assets/map/mn/tile-{t}.webp' for t in TILES}, separators=(',', ':')) + ';\n'
     f'export const MN_CART = {{"url":"assets/map/mn/mnCart.webp","w":{CW},"h":{CH}}};\n'
-    f'export const MN_BEAST = {{"url":"assets/map/mn/mnBeast.webp","w":{BW},"h":{BH}}};\n'
     f'export const MN_FX = {{"portal":{{"url":"assets/map/mn/mnPortalFx.webp","n":{NP},"s":300,"ms":110}},"shatter":{{"url":"assets/map/mn/mnShatterFx.webp","n":{NS},"s":240,"ms":90}}}};\n')
 print('->', len(os.listdir(OUT)), 'files', sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT)) // 1024, 'KB')

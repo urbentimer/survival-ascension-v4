@@ -842,8 +842,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
   ok(z && Math.abs(z.x - 2450) < 60 && Math.abs(z.y - 952) < 40 && !room.blockedByMap(z.x, z.y, 0), `the boss climbs out of the DANGER shaft (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }
-// 33i. WAVE 20: the Deep Mine mission (Nov 11): runes -> fuel -> ride -> statue, four times; then the Beast chases the carts for a lap; then the portal
-{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); p.hp = p.maxHp; q.hp = q.maxHp; } };
+// 33i. WAVE 20: the Deep Mine mission (Nov 11): runes -> fuel -> ride -> statue, four times; the Mine Beast fight in the dungeon; it chases the carts for a lap; the portal
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); for (const o of [p, q]) { o.hp = o.maxHp; if (!o.alive) { o.alive = true; o.bledOut = false; o.bleedout = 0; } } } };
   room.state.phase = "lobby"; send(A, "settings", { map: 4 }); room.state.phase = "playing"; room.state.scrap = 9999; p.x = 2200; p.y = 1700; send(A, "build", { kind: "barricade", x: 2260, y: 1700 }); const nSt = room.state.structures.size;
   room.jumpToWave(20); const m = room.mine, C = room.coaster, T = C?.T;
   ok(m && room.state.mapSite === 6 && room.state.waveType === "mission" && room.state.mission.startsWith("runes|0|0|") && room.state.structures.size === 0 && Math.hypot(p.x - 1450, p.y - 1330) < 300, `wave 20 takes the team to the Deep Mine: mission on, 4 runes at their shrines (${room.state.mission.slice(0, 40)}...)`);
@@ -859,8 +859,23 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     if (n === 1) { ok(m.placed === 1 && r.st === 3 && m.inserted, "F at the statue's plinth: the rune goes in (1/4)"); const b0 = C.s; tick(100); ok(C.s === b0, "the carts wait while you're off"); }
     if (n < 4) { p.x = T.stations[1].x; p.y = T.stations[1].y - 150; send(A, "coaster"); home(); if (n === 1) ok(p.ride === 0 && Math.abs(p.x - 850) < 260 && !room.inCordon(p), `they take you back to the station (${Math.round(p.x)},${Math.round(p.y)})`); }
   }
-  ok(m.placed === 4 && m.step === "awake", "the fourth rune wakes the Mine Beast"); tick(Math.ceil(7 / .05) + 5);
-  const z = [...room.state.zombies.values()].find(o => o.kind === "minebeast"); ok(m.step === "chase" && p.ride > 0 && z, "after the awakening you're put in the carts and it comes after them");
+  ok(m.placed === 4 && m.step === "awake" && room.inCordon(p) && room.inCordon(q) && !(p.ride > 0), "the fourth rune wakes the Mine Beast: the whole team is pulled into the dungeon in front of the statue"); tick(Math.ceil(7 / .05) + 5);
+  const z = [...room.state.zombies.values()].find(o => o.kind === "minebeast"); ok(m.step === "fight" && z?.boss && z.hp > 5000, `the fight: the Mine Beast, a boss with its own health bar (${Math.round(z?.hp)} HP)`);
+  // its skills, one at a time (the team kept alive by the test's tick)
+  const bm = () => room.bossMem.get(z.id), ev = []; room._onBroadcast = (t, d) => { if (t === "deep") ev.push(d.k); }; const idle = () => { z.act = ""; z.slam = 0; const b = bm(); if (b) { b.next = 1e15; b.strikeReady = 1e15; } room.mine.haz = []; };
+  tick(2); idle(); p.x = z.x; p.y = z.y + 150; q.x = z.x + 600; q.y = z.y + 500; bm().strikeReady = 0; p.maxHp = 1e5; p.hp = 1e5; let hp0 = p.hp, lost = 0; tick(1); const st1 = z.act; for (let i = 0; i < 30; i++) { room.lastTick = Date.now() - 50; room.tick(); lost += hp0 - p.hp; p.hp = hp0; }
+  ok(st1 === "strike" && ev.filter(k => k === "jab").length === 2 && lost > 0, `DRILL STRIKE: two jabs at whoever is in front (${Math.round(lost)} dmg)`);
+  idle(); p.hp = p.maxHp; p.x = z.x + 400; p.y = z.y + 300; bm().next = 0; bm().spinesReady = 0; bm().chargeReady = bm().burrowReady = bm().caveReady = 1e15; tick(20); const hz = room.mine.haz.length; idle(); room.mine.haz = [];
+  ok(ev.includes("spines") && hz === 5, "CRYSTAL SPINES: five crystals stick in the floor in a fan, then shatter");
+  bm().next = 0; bm().caveReady = 0; bm().spinesReady = 1e15; tick(25); ok(ev.includes("cavein") && room.mine.haz.length >= 4 + 3, `CAVE-IN: rocks fall on marked circles (${room.mine.haz.length}; q alive ${q.alive} in ${room.inCordon(q)} at ${Math.round(q.x)},${Math.round(q.y)}; z ${Math.round(z.x)},${Math.round(z.y)})`); idle();
+  bm().next = 0; bm().burrowReady = 0; bm().caveReady = 1e15; p.x = z.x + 500; p.y = z.y + 420; q.x = p.x + 30; q.y = p.y; tick(1); const dv = z.act; tick(25); const un = z.act, hpU = z.hp; room.hitZombie(z, p, 500); const safe = z.hp === hpU; for (let i = 0; i < 200 && z.act !== "emerge"; i++) tick(1);
+  ok(dv === "dive" && un === "under" && safe && ev.includes("erupt") && ev.includes("burst") && Math.hypot(z.x - p.x, z.y - p.y) < 200, "BURROW: it dives, tunnels to a survivor (can't be hurt underground) and erupts under a marked circle"); idle();
+  bm().next = 0; bm().chargeReady = 0; bm().burrowReady = 1e15; p.x = z.x - 700; p.y = z.y; q.x = z.x - 650; q.y = z.y + 300; tick(1); const wd = z.act; tick(40); const ch = z.act, x0 = z.x; tick(12); ok(wd === "wind" && ch === "charge" && z.x < x0 - 200, `DRILL CHARGE: it winds up, then charges down the lane (${Math.round(x0 - z.x)}px in .6s)`); for (let i = 0; i < 60 && z.act; i++) tick(1); idle();
+  bm().next = 0; bm().chargeReady = 0; p.x = z.x + 600; p.y = z.y; q.x = z.x + 600; q.y = z.y + 60; tick(3); room.hitZombie(z, p, z.maxHp * .05); tick(1); ok(z.act === "stagger" && ev.includes("broke"), "enough damage during the wind-up breaks the charge: it staggers"); idle();
+  const hpS = z.hp; z.act = "stagger"; z.slam = 2; room.hitZombie(z, p, 100); ok(Math.abs(hpS - z.hp - 150) < 1, "staggered: it takes 50% more damage"); idle();
+  room.hitZombie(z, p, 1e9); tick(1); ok(m.step === "flee" && room.state.zombies.has(z.id) && !z.boss, "its bar is empty: it can't be killed, it drops to a knee (get in the carts)");
+  p.x = T.stations[1].x; p.y = T.stations[1].y - 150; send(A, "coaster"); const rode = p.ride > 0; tick(Math.ceil(10 / .05) + 10);
+  ok(rode && m.step === "chase" && q.ride > 0, "F at the boss stop gets you aboard; when the time is up everyone left is put in the carts and it comes after them");
   tick(100); const g0 = m.gap; ok(g0 < 500 && C.wait === 0, `it closes in on the carts (${Math.round(g0)}px behind)`);
   room.hitZombie(z, p, 2000); tick(1); ok(m.gap > g0 + 100 && z.hp === z.maxHp, `shooting it shoves it back (${Math.round(g0)} -> ${Math.round(m.gap)}px) and can't kill it`);
   m.gap = 141; tick(2); ok(m.cartHp === 4 && m.gap > 380, "if it reaches the carts it smashes them (4 hits left) and falls back");
@@ -870,7 +885,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // the carts smashed = defeat; a dropped rune can be picked up again
   room.jumpToWave(20); const m2 = room.mine, r2 = m2.runes[0]; p.x = r2.x; p.y = r2.y + 40; send(A, "deep"); p.x = 1500; p.y = 1700; tick(2); p.alive = false; tick(2); ok(r2.st === 2 && Math.hypot(r2.x - 1500, r2.y - 1700) < 60, "the carrier goes down: the rune lies where they fell");
   p.alive = true; q.x = r2.x; q.y = r2.y; send(B, "deep"); ok(r2.st === 1 && r2.by === "B", "a teammate picks it up");
-  m2.step = "chase"; m2.cartHp = 1; m2.gap = 100; room.mineChase(); m2.gap = 100; m2.cartHp = 1; tick(2); ok(room.state.phase === "defeat" || !room.coaster.riders.size, "the last hit on the carts ends the run");
+  room.mineAwaken(); ok(m2.step === "awake" && m2.placed === 4 && room.inCordon(p) && room.inCordon(q), "the test button: straight to the awakening, everyone teleported to the statue"); tick(150); ok(m2.step === "fight", "...then the fight");
+  room.mineChase(); m2.gap = 100; m2.cartHp = 1; tick(2); ok(room.state.phase === "defeat", "the last hit on the carts ends the run");
   room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
