@@ -1040,7 +1040,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   { /* Nov 11: downed teammates inside a finished safehouse don't bleed out; cooldown reduction shortens the build; +2 wall hits per Body Armour pick */
     const m3 = room.amemOf(p); m3.safeReady = 0; room.state.zombies.clear(); p.cdr = 0.3; p.armorPct = 0.18; send(A, "skill2", {}); call(); const s3 = room.safeOf(p);
     ok(s3 && Math.abs(s3.deploy - 3.5) < .06 && s3.total === 3.5, `30% cooldown reduction: the safehouse builds in 3.5s, not 5s (${s3?.deploy?.toFixed(2)}s)`);
-    ok(s3 && s3.hp === 12 && s3.maxHp === 12, `3 Body Armour picks: the walls take 12 hits, not 6 (${s3?.hp})`);
+    ok(s3 && s3.hp === 9 && s3.maxHp === 9, `3 Body Armour picks: the walls take 9 hits, not 6 (${s3?.hp})`);
     tick(80); ok(s3 && s3.deploy === 0, "...and it finishes after 3.5s");
     const q2 = [...room.state.players.values()].find(x => x.sessionId !== p.sessionId) || p; const was = { x: q2.x, y: q2.y };
     q2.x = s3.x + 20; q2.y = s3.y + 10; q2.alive = false; q2.bledOut = false; q2.bleedout = 20; tick(40);

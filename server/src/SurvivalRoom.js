@@ -286,10 +286,10 @@ const ASTRA = {
   catchUp: { far: 250, mult: 1.35 },   // police / medic walk slower than Astra (180) so they trail behind him; when far behind they hurry
   // hits: zombie attacks the walls take before they break (each attack = 1, whoever hits); builders stay inside at half speed
   // and each repairs 1 every repairEvery seconds (much slower than zombies hit: it's catch-up)
-  safe: { cd: 90, build: 5, hits: 6, perArmor: 2, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
+  safe: { cd: 90, build: 5, hits: 6, perArmor: 1, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const safeBuildTime = p => Math.round(ASTRA.safe.build * (1 - (p.cdr || 0)) * 100) / 100;   // Nov 11: skill-cooldown upgrades shorten the build too (5s -> 2s at the 60% cap)
-const safeHits = p => ASTRA.safe.hits + ASTRA.safe.perArmor * Math.round((p.armorPct || 0) / armorStep(p));   // Nov 11: +2 wall hits per Body Armour pick (6 -> 22 at 8 picks)
+const safeHits = p => ASTRA.safe.hits + ASTRA.safe.perArmor * Math.round((p.armorPct || 0) / armorStep(p));   // +1 wall hit per Body Armour pick (6 -> 14 at 8 picks; Nov 12, was +2)
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
 const ARSHAN = {
   hook: { wind: 0.15, speed: 1400, range: 1100, hitR: 10, dmg: 70, pull: 900, stop: 20, wallStop: 24, maxT: 3, cd: 12, missCd: 4 },

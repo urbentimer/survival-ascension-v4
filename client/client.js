@@ -418,7 +418,7 @@ function renderHotbar(me) {
   if (qS.card) { qS.locked = (me.ultKills || 0) < 100; qS.active = me.ultActive > 0 ? me.ultActive / (UL.life || 40) : 0; qS.frac = !qS.locked && !me.ultReady && !qS.active ? Math.min(1, (me.ultCd || 0) / (UL.cd || 60)) : 0; if (qS.active) qS.cd = 0; }
   if (ast) {   // R: Safehouse, beside E
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
-    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (faster with Quick Recovery; you can't be hurt while they build); zombies can't get in (6 hits break it, +2 per Body Armour pick; the workers repair) for 45s. Downed teammates inside don't bleed out", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.life / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (faster with Quick Recovery; you can't be hurt while they build); zombies can't get in (6 hits break it, +1 per Body Armour pick; the workers repair) for 45s. Downed teammates inside don't bleed out", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.life / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (op) {   // R: Crimson Aegis mecha, beside E
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
