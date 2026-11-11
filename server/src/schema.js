@@ -7,8 +7,7 @@ defineTypes(PlayerState, {
   xpNext: "number", kills: "number", damage: "number", fireRate: "number",
   speed: "number", defence: "number", alive: "boolean", ready: "boolean",
   characterClass: "string", abilityCooldown: "number", bleedout: "number", weapon: "string", melee: "string", ammo: "number", currency: "number",
-  killLeadSince: "number", bossDamage: "number", revives: "number", damageDealt: "number",
-  damageTaken: "number", towerRepairs: "number", structuresBuilt: "number",
+  killLeadSince: "number",
   aim: "number", facing: "number", bledOut: "boolean", owned: "string", armor: "number", isBot: "boolean",
   primary: "string", secondary: "string", activeSlot: "number", mag: "number", reloadLeft: "number", medkits: "number",
   isHost: "boolean", color: "string", charging: "boolean", stunned: "number", slowed: "number", ultKills: "number", ultCd: "number", ultReady: "boolean", ultActive: "number", shadow: "number", fire: "number", storm: "number", katanaKills: "number", robotCharges: "number", chargeCd: "number", skillT: "number",
@@ -17,8 +16,11 @@ defineTypes(PlayerState, {
   cdr: "number",   // skill cooldown reduction from level-up upgrades (0 .. 0.6)
   hands: "number",   // Fast Hands picks (0..5): +15% reload speed, +20% magazine each
   reloadTotal: "number",   // length of the current reload (s), for the reload bar
-  armorPct: "number"   // Body Armour: damage taken reduced by this fraction (0 .. 0.64)
+  armorPct: "number",   // Body Armour: damage taken reduced by this fraction (0 .. 0.64)
+  stats: "string"   // scoreboard numbers packed (server keeps them as plain props): bossDamage|revives|towerRepairs|structuresBuilt|damageDealt|damageTaken
 });
+// HARD LIMIT: a Schema class may have at most 64 synced fields. Field 65+ silently corrupts every patch it is in (Nov 10-11: armorPct was field 65 -> players invisible / frozen online). index.js checks this at boot and the tests check it too.
+export function schemaFieldCounts() { const out = {}; for (const [k, C] of Object.entries({ PlayerState, ZombieState, LootState, StructureState, RobotState, VehicleState, PuddleState, GameState })) out[k] = Object.keys(C[Symbol.metadata] || {}).filter(x => !isNaN(+x)).length; return out; }
 // Server-only player numbers (not sent to browsers): bonusDamage, rateMult, buffDamage, magSize, reviveProgress.
 
 export class ZombieState extends Schema {}

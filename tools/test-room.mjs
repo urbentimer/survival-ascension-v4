@@ -1494,4 +1494,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     for (const pl of room.state.players.values()) send({ sessionId: pl.sessionId }, "ackBoss"); step(400); const z = [...room.state.zombies.values()].find(o => o.kind === "abomination"); ok(z?.act === "sunder", "...then he arrives already tearing apart");
     send(A, "debugMorph"); ok(z.act === "sunder", "debugMorph again: nothing breaks"); }
   room._dispose(); }
+{ /* NETWORK SCHEMA: at most 64 synced fields per class (field 65+ silently corrupts patches: Nov 10-11 players invisible/frozen online), and a real encode -> decode round trip of a player */
+  const SC = await import(join(root, "server/src/schema.js")), SS = await import(join(root, "server/node_modules/@colyseus/schema/build/esm/index.mjs"));
+  const counts = SC.schemaFieldCounts(); ok(Object.values(counts).every(n => n <= 64), `every synced class has <= 64 fields (${Object.entries(counts).map(([k, n]) => k.replace("State", "") + " " + n).join(", ")})`);
+  const st = new SC.GameState(); st.players = new SS.MapSchema(); const mk = id => { const p = new SC.PlayerState(); p.sessionId = id; p.name = id; p.alive = true; p.x = 100; p.y = 200; st.players.set(id, p); return p; };
+  const a = mk("A"); const enc = new SS.Encoder(st), dec = SS.Reflection.decode(SS.Reflection.encode(enc)); dec.decode(enc.encodeAll()); enc.discardChanges();
+  const names = Object.values(SC.PlayerState[Symbol.metadata]).map(f => f?.name).filter(Boolean), same = (u, v) => typeof v === "number" ? Math.abs((u ?? 0) - v) < 1e-4 : JSON.stringify(u ?? null) === JSON.stringify(v ?? null);
+  const b = mk("B"); for (const p of [a, b]) for (const n of names) { const t = SC.PlayerState[Symbol.metadata][names.indexOf(n)]?.type; if (n === "sessionId") continue; p[n] = t === "string" ? "v" + n : t === "boolean" ? true : typeof t === "string" ? 7 : p[n]; }
+  dec.decode(enc.encode()); enc.discardChanges(); a.x = 321; b.alive = false; dec.decode(enc.encode());
+  const bad = [...st.players].flatMap(([id, p]) => names.filter(n => typeof p[n] !== "object" && p[n] !== undefined && !same(dec.state.players.get(id)?.[n], p[n])).map(n => id + "." + n));
+  ok(!bad.length, `every player field reaches the browser intact after a change (${bad.slice(0, 6).join(", ") || "all " + names.length + " fields ok"})`);
+}
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

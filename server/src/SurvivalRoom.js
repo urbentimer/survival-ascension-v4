@@ -3688,6 +3688,7 @@ export class SurvivalRoom extends Room {
   }
   tick() {
     try { this.tickInner(); } catch (e) { this.logErr("game tick", e); }   // a bug skips one tick instead of freezing the room
+    for (const p of this.state.players.values()) { const v = `${Math.round(p.bossDamage || 0)}|${p.revives || 0}|${Math.round(p.towerRepairs || 0)}|${p.structuresBuilt || 0}|${Math.round(p.damageDealt || 0)}|${Math.round(p.damageTaken || 0)}`; if (p.stats !== v) p.stats = v; }   // the scoreboard numbers, packed into one synced field (PlayerState is at the 64-field limit)
     if (this.state.phase !== this.logPhase || (this.state.phase === "playing" && this.state.stage !== this.logStage)) {   // wave start / cleared / defeat / victory
       const ph = this.state.phase, alive = [...this.state.players.values()].filter(p => p.alive).length;
       if (this.logPhase !== undefined) this.log(ph === "defeat" ? "warn" : "info", "game", ph === "playing" ? `wave ${this.state.stage} started (${this.state.waveType}, ${this.state.players.size} players)` : ph === "cleared" ? `wave ${this.state.stage} cleared (${alive} alive)` : ph === "defeat" ? `TEAM DEFEATED on wave ${this.state.stage}: ${this.state.message}` : ph === "victory" ? "VICTORY: all 50 waves" : `phase: ${ph}`);
