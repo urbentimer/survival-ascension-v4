@@ -1404,8 +1404,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.deployHeavyTurret(p); send(A, "setName", {});   // Viktor's heavy turret is a structure too
   for (let i = 0; i < 20; i++) send(A, "build", { kind: "barricade", x: p.x + 40 + i * 3, y: p.y });
   const deployables = [...room.state.structures.values()].filter(st => st.kind === "barricade").length;
-  ok(deployables === 20 && room.state.structures.size === 21, `20 barricades next to the heavy turret (${deployables} + heavy turret = ${room.state.structures.size})`);
-  send(A, "build", { kind: "barricade", x: p.x + 40, y: p.y + 60 }); ok([...room.state.structures.values()].filter(st => st.kind === "barricade").length === 20, "the 21st is refused");
+  ok(deployables === 10 && room.state.structures.size === 11, `barricades (per-player cap 10) sit next to the heavy turret, which doesn't count (${deployables} + heavy turret = ${room.state.structures.size})`);
+  send(A, "build", { kind: "barricade", x: p.x + 40, y: p.y + 60 }); ok([...room.state.structures.values()].filter(st => st.kind === "barricade").length === 10 && [...room.state.structures.values()].some(st => st.kind === "heavyTurret"), "one more replaces the oldest barricade (still 10), the heavy turret stays");
   room._dispose(); }
 // 60. THE SCREAMER (wave 12): keeps his distance, shriek cone, echo rings (dash dodges), resonance, wail vs cover, choke, call of the horde, enrage
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); room.setMapBoxes([]); room.lineClear = () => true;
@@ -1525,4 +1525,19 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     placeZombie(room, p.x + 160, p.y, 1e6); for (let i = 0; i < 80 && !shots.length; i++) { room.lastTick = Date.now() - 50; room.tick(); } return shots[0] || 0; };
   const d0 = fire(0), d2 = fire(40);
   ok(d0 > 0 && Math.abs(d2 / d0 - 1.3) < .01, `2 Heavy Weapon picks: Astra's officers hit 30% harder (${d0.toFixed(2)} -> ${d2.toFixed(2)} per bullet)`); room._dispose(); }
+{ /* Nov 12: deployable caps PER PLAYER per type (turret 3, fence 4, flame trap 4, mine 8, barricade 10); one more replaces your oldest; Viktor +1 turret */
+  const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room._onBroadcast = () => {}; const A = { sessionId: "A" }, B = { sessionId: "B" };
+  room.onJoin(A, { name: "Ann" }); room.onJoin(B, { name: "Vik" }); room._handlers.chooseClass(B, { id: "engineer" }); room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
+  const s = room.state; s.scrap = s.electronics = s.explosives = s.fuel = 1e5; const a = s.players.get("A"), b = s.players.get("B"); a.x = 1000; a.y = 1000; b.x = 1600; b.y = 1000;
+  const build = (c, p, kind, i) => room._handlers.build(c, { kind, x: p.x + 40 + (i % 5) * 40, y: p.y + 60 + Math.floor(i / 5) * 40 });
+  const own = (id, kind) => [...s.structures.values()].filter(st => st.kind === kind && st.ownerId === id);
+  for (let i = 0; i < 3; i++) build(A, a, "turret", i); const first = own("A", "turret").map(t => t.id);
+  ok(own("A", "turret").length === 3, "a player can have 3 turrets");
+  build(A, a, "turret", 3); const now4 = own("A", "turret").map(t => t.id);
+  ok(now4.length === 3 && !now4.includes(first[0]) && now4.includes(first[1]), "a 4th turret replaces your OLDEST one (still 3)");
+  for (let i = 0; i < 4; i++) build(B, b, "turret", i); ok(own("B", "turret").length === 4 && own("A", "turret").length === 3, "Viktor can have 4 turrets; the caps are per player (Ann still has 3)");
+  for (let i = 0; i < 12; i++) build(A, a, "barricade", i); ok(own("A", "barricade").length === 10, `barricades cap at 10 per player (${own("A", "barricade").length})`);
+  for (let i = 0; i < 10; i++) build(A, a, "mine", i); ok(own("A", "mine").length === 8, "mines cap at 8");
+  for (let i = 0; i < 6; i++) { build(A, a, "fence", i); build(A, a, "flameTrap", i + 6); } ok(own("A", "fence").length === 4 && own("A", "flameTrap").length === 4, "fences and flame traps cap at 4");
+  ok([...s.structures.values()].length > 20, `no team-wide 20 cap any more (${s.structures.size} out)`); room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

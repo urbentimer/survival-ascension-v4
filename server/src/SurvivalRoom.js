@@ -289,6 +289,9 @@ const ASTRA = {
   safe: { cd: 90, build: 5, hits: 6, perArmor: 1, repairEvery: 5, stay: .5, life: 45, half: 130, wall: 24, search: 90, worker: 200 },   // 260x260 outside, 212x212 inside, 24px walls
 };
 const policeDmgMult = p => 1 + ASTRA.police.perHeavy * ((p?.bonusDamage || 0) / 20);   // Nov 12: each Heavy Weapon pick Astra takes = +15% officer damage (his own guns get +20%)
+// Deployables (Nov 12, user): a cap PER PLAYER per type; building one more removes your oldest of that type. Viktor (engineer) gets +1 turret.
+const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };
+const buildCap = (p, kind) => (BUILD_CAP[kind] || 0) + (kind === "turret" && p?.characterClass === "engineer" ? 1 : 0);
 const safeBuildTime = p => Math.round(ASTRA.safe.build * (1 - (p.cdr || 0)) * 100) / 100;   // Nov 11: skill-cooldown upgrades shorten the build too (5s -> 2s at the 60% cap)
 const safeHits = p => ASTRA.safe.hits + ASTRA.safe.perArmor * Math.round((p.armorPct || 0) / armorStep(p));   // +1 wall hit per Body Armour pick (6 -> 14 at 8 picks; Nov 12, was +2)
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]);
@@ -726,8 +729,7 @@ export class SurvivalRoom extends Room {
       const kind = String(data?.kind || "");
       const costs = { barricade:{scrap:15,hp:450}, turret:{scrap:35,electronics:8,hp:300}, mine:{scrap:8,explosives:3,hp:1}, fence:{scrap:25,electronics:5,hp:250}, flameTrap:{scrap:20,fuel:8,hp:180} };
       const cfg = costs[kind];
-      const built = [...this.state.structures.values()].filter(st => costs[st.kind]).length;   // the 20 cap counts deployables only (not Viktor's heavy turret or Astra's safehouse)
-      if (!p?.alive || this.state.vehicles.has(client.sessionId) || !cfg || built >= 20 || !["playing", "cleared"].includes(this.state.phase)) return;
+      if (!p?.alive || this.state.vehicles.has(client.sessionId) || !cfg || !["playing", "cleared"].includes(this.state.phase)) return;   // Nov 12: no team cap any more: each player has a cap per type (BUILD_CAP)
       if (this.state.scrap < (cfg.scrap||0) || this.state.electronics < (cfg.electronics||0) || this.state.explosives < (cfg.explosives||0) || this.state.fuel < (cfg.fuel||0)) return;
       { let tx = Number.isFinite(Number(data?.x)) ? Number(data.x) : p.x, ty = Number.isFinite(Number(data?.y)) ? Number(data.y) : p.y; const td = hyp(tx - p.x, ty - p.y);
         if (td > BUILD_RANGE) { tx = p.x + (tx - p.x) / td * BUILD_RANGE; ty = p.y + (ty - p.y) / td * BUILD_RANGE; }
@@ -741,8 +743,10 @@ export class SurvivalRoom extends Room {
       st.hp = cfg.hp; st.maxHp = cfg.hp; st.ownerId = p.sessionId;
       if (kind === "turret") st.aim = Number.isFinite(Number(data?.face)) ? Number(data.face) : bd > 20 ? Math.atan2(by - p.y, bx - p.x) : 0;   // faces away from you until it has a target
       if (LINES[kind]) st.aim = snapFace(Number.isFinite(Number(data?.face)) ? Number(data.face) : bd > 20 ? Math.atan2(by - p.y, bx - p.x) : (p.aim || 0), LINES[kind]);   // across the way you face (face: what the client's preview showed)
+      const mineOf = [...this.state.structures.values()].filter(o => o.kind === kind && o.ownerId === p.sessionId).sort((u, v) => parseInt(u.id.slice(1)) - parseInt(v.id.slice(1)));
+      let replaced = 0; while (mineOf.length >= buildCap(p, kind)) { const old = mineOf.shift(); this.state.structures.delete(old.id); this.broadcast("buildGone", { x: Math.round(old.x), y: Math.round(old.y), kind }); replaced++; }   // at your cap: your OLDEST one of that type goes
       this.state.structures.set(st.id, st); p.structuresBuilt++;
-      this.state.message = `${p.name} built a ${kind}.`;
+      this.state.message = replaced ? `${p.name} built a ${kind} (replaced their oldest: max ${buildCap(p, kind)}).` : `${p.name} built a ${kind}.`;
     });
     // Host-only: after a win or loss, bring everyone back to the lobby for a fresh match.
     this.onMessage("restart", client => {

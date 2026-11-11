@@ -48,6 +48,9 @@ const SKILLS = {
   sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
+const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
+const buildCap = (me, kind) => (BUILD_CAP[kind] || 0) + (kind === "turret" && me?.characterClass === "engineer" ? 1 : 0);
+const ownedOf = kind => state ? [...state.structures.values()].filter(st => st.kind === kind && st.ownerId === myId).length : 0;
 const BUILD_WHEEL = [
   { id: "barricade",  name: "Barricade",        cost: { scrap: 15 } },
   { id: "turret",     name: "Turret",           cost: { scrap: 35, electronics: 8 } },
@@ -160,6 +163,7 @@ function connected() {
     else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
+  room.onMessage("buildGone", m => { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 10, s: .8, t: performance.now() }); playSfx("zap", m.x, m.y, .4); });   // your oldest deployable of a type was replaced (per-player cap)
   room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
@@ -897,7 +901,6 @@ function resolveWheel() {   // let go of right-click: actions happen now; a depl
 }
 function placeProblem(me, spot, opt) {   // why it can't go here (the same checks as the server), or ""
   if (!canAfford(opt.cost)) return "not enough resources";
-  if ([...state.structures.values()].filter(st => BUILD_WHEEL.some(o => o.id === st.kind)).length >= 20) return "20 deployables max";
   const grid = predGrid(), gx = Math.floor(spot.x / 160), gy = Math.floor(spot.y / 160);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const b of grid.get((gx + i) + "," + (gy + j)) || []) if (Math.abs(spot.x - b.x) < b.hw + 12 && Math.abs(spot.y - b.y) < b.hh + 12) return "blocked";
   return "";
@@ -946,6 +949,7 @@ function drawBuildWheel() {
     const pic = WHEEL_PIC[o.id], img = pic && (pic.obj ? objImgs[pic.obj] : ICON_IMG[pic.icon]);
     if (img?.complete && img.naturalWidth) { const k = Math.min(46 / img.width, 40 / img.height) * (sel ? 1.15 : 1); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, x - img.width * k / 2, y - 22 - img.height * k, img.width * k, img.height * k); }
     ctx.fillStyle = sel ? "#ffd2a8" : "#eef2f0"; ctx.font = "bold 15px Inter, system-ui, sans-serif"; ctx.strokeStyle = "#000c"; ctx.lineWidth = 3; ctx.strokeText(o.name, x, y - 3); ctx.fillText(o.name, x, y - 3);
+    { const n = ownedOf(o.id), cap = buildCap(meS, o.id), full = n >= cap; ctx.font = "bold 11px ui-monospace, monospace"; ctx.fillStyle = full ? "#ffb35c" : "#9fb0ab"; const tx = full ? `${n}/${cap} · replaces oldest` : `${n}/${cap}`; ctx.strokeText(tx, x, y + 33); ctx.fillText(tx, x, y + 33); }   // your count / your cap for this type
     ctx.fillStyle = ok ? "#ffd27a" : "#ff8a7a"; ctx.font = "bold 13px ui-monospace, monospace";
     const parts = Object.entries(o.cost);
     if (parts.every(([r]) => ICON_IMG[r]?.naturalWidth)) {   // "40 [scrap icon]  8 [chip icon]"
@@ -4633,7 +4637,7 @@ const ROSTER = [
   { id: "engineer", name: "VIKTOR", role: "ENGINEER", cat: "specialist", hp: 110, dmg: 15, spd: 175, def: 1, desc: "Builds his own army: three kinds of combat robot and a heavy minigun turret.",
     skills: [{ k: "E", n: "Robot Squad", card: "robotSquad", cd: 25, t: "Deploy an assault, support or hunter robot. 3 charges, +1 every 25s." },
              { k: "Q", n: "Heavy Turret", card: "heavyTurret", cd: 60, t: "A heavy minigun turret that shreds everything for 40s." }],
-    trait: { n: "Tinkerer", t: "Robot charges refill on their own (+1 every 25s, up to 3) and his gear gives him 1 armour: every hit does 1 less damage. Slightly lower damage (×0.97)." }, gear: ["rifle", "pistol", "knife"] },
+    trait: { n: "Tinkerer", t: "Robot charges refill on their own (+1 every 25s, up to 3), he can keep 1 extra turret out (4 instead of 3), and his gear gives him 1 armour: every hit does 1 less damage. Slightly lower damage (×0.97)." }, gear: ["rifle", "pistol", "knife"] },
   { id: "scout", name: "RAVEN", role: "SCOUT", cat: "assault", hp: 90, dmg: 15, spd: 225, def: 0, desc: "Katana only. Dashes through the horde, vanishes, then strikes with a burning blade.",
     skills: [{ k: "E", n: "Shadow Pass", card: "shadowPass", cd: 25, t: "Dash through zombies and vanish. Your next attack ignites the katana." },
              { k: "Q", n: "Blade Storm", card: "bladeStorm", cd: 60, t: "A whirlwind of katana slashes around you." }],
