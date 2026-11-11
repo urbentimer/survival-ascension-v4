@@ -401,6 +401,7 @@ const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
   charge: { first: 24, cd: 16, wind: 1.8, speed: 512, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
   stagger: 3.2, staggerMult: 1.5, fleeWait: 10 };
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
+export function warmLayouts() { for (let i = 0; i < SITES.length; i++) if (!paintedOf(SITES[i])) siteLayout(i); }   // build every map once at boot, before anyone joins (the free Render server has 0.15 CPU: building them inside the first room stalled it for seconds)
 export class SurvivalRoom extends Room {
   maxClients = 8;
   patchRate = 50;

@@ -163,20 +163,20 @@ function connected() {
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     const dropped = code !== 1000 && code !== 4000 && state && state.phase !== "lobby" && !SOLO_PREVIEW && room?.reconnectionToken;   // 1000 = you left on purpose, 4000 = kicked
-    if (dropped) { reconnectRoom(room.reconnectionToken); return; }   // a wifi blip / sleeping phone: the server holds your spot for 30s
+    if (dropped) { dropInfo = { code, at: Date.now(), vis: document.visibilityState }; reconnectRoom(room.reconnectionToken); return; }   // a wifi blip / sleeping phone: the server holds your spot for 30s
     forgetSeat(); status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
     document.body.classList.remove("in-match"); closePanels(); $("gameArea").classList.add("hidden");
   });
   room.onError((code, msg) => message("Room error: " + msg));
 }
 // Connection dropped mid-match: try to get back in with the reconnection token (the server keeps the seat for 30s), a few times.
-let reconnecting = false;
+let reconnecting = false, dropInfo = null;   /* why the last connection closed: reported to the server log after reconnecting */
 async function reconnectRoom(token) {
   if (reconnecting) return; reconnecting = true; room = null;
   const feedMsg = t => { feed.unshift({ text: t, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
   status("Reconnecting…"); feedMsg("Connection lost. Reconnecting…");
   for (let i = 0; i < 6; i++) {
-    try { room = await client.reconnect(token); connected(); reconnecting = false; feedMsg("Reconnected."); toast("Reconnected"); return; }
+    try { room = await client.reconnect(token); connected(); reconnecting = false; feedMsg("Reconnected."); if (dropInfo) { try { room.send("clientError", { m: `connection dropped: close code ${dropInfo.code}, back after ${Date.now() - dropInfo.at}ms, tab ${dropInfo.vis}`, lv: "warn", ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, "") }); } catch {} dropInfo = null; } toast("Reconnected"); return; }
     catch (e) { console.warn("[reconnect]", i + 1, e?.message || e); await new Promise(r => setTimeout(r, 1500 + i * 1200)); }
   }
   reconnecting = false; forgetSeat(); status("Disconnected"); state = null; toast("Couldn't reconnect. Create or join a room to play again."); renderLobbyRoom();
