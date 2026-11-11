@@ -3774,7 +3774,7 @@ function mineDungeonFloor(g, vx, vy, vw, vh) {   // the boss dungeon's floor: bi
 }
 function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a great carved circle of glowing runes, slowly turning
   if (!inView(d.x, d.y, 320)) return; const t = performance.now() / 1000, k = .75 + .25 * Math.sin(t * 1.3);
-  ctx.save(); ctx.translate(d.x, d.y); ctx.scale(1, .56);
+  ctx.save(); ctx.translate(d.x, d.y); ctx.scale(.72, .56 * .72);   /* (sized to the statue: Nov 11, the statue came down to the Beast's own size) */
   ctx.fillStyle = "rgba(4,6,14,.55)"; ctx.beginPath(); ctx.arc(0, 0, 252, 0, 7); ctx.fill();
   ctx.globalCompositeOperation = "lighter";
   const gl = ctx.createRadialGradient(0, 0, 10, 0, 0, 250); gl.addColorStop(0, `rgba(60,150,255,${.22 * k})`); gl.addColorStop(1, "rgba(20,60,140,0)"); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, 250, 0, 7); ctx.fill();
@@ -3963,12 +3963,11 @@ function darkCopy(img) { let c = darkCopies.get(img); if (c) return c; c = docum
 // The Mine Beast's sheets (tools/extract-minebeast.py). The side rows were drawn facing LEFT: rows = D, DL, L, UL, U; the right side is mirrored.
 const mbImgs = {}; for (const [k, v] of Object.entries(MB)) if (v?.url) { const im = new Image(); im.src = v.url; mbImgs[k] = im; }
 const MB_ROWS = [[2, true], [1, true], [0, false], [1, false], [2, false], [3, false], [4, false], [3, true]];   // by octant: R, DR, D, DL, L, UL, U, UR -> [row, mirrored]
-const MBS = MB.k * 266 / 300;   // his size against the 300px he was first built at (labels, shadow and effects follow it)
 const mbDir = a => MB_ROWS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 function mbDraw(key, col, row, x, y, flip, o = {}) {
   const S = MB[key], img = mbImgs[key]; if (!img?.naturalWidth) return; const k = MB.k * (o.scale || 1);
   ctx.save(); ctx.globalAlpha = o.alpha ?? 1; ctx.globalCompositeOperation = "source-over";
-  if (!o.noShadow) { ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(x, y - 2, 108 * MBS, 30 * MBS, 0, 0, 7); ctx.fill(); }
+  if (!o.noShadow) { ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(x, y - 2, 108, 30, 0, 0, 7); ctx.fill(); }
   ctx.translate(Math.round(x + (o.shake ? (Math.random() - .5) * o.shake : 0)), Math.round(y)); if (flip) ctx.scale(-1, 1); ctx.scale(k, k); ctx.imageSmoothingEnabled = true;
   ctx.drawImage(img, col * S.w, row * S.h, S.w, S.h, -S.ax, -S.fy, S.w, S.h); ctx.restore();
 }
@@ -3986,15 +3985,15 @@ function drawMineBeast(z) {
   else if (act === "wind") mbDraw("charge", Math.min(2, Math.floor(u * 3)), 0, x, y, !right, { shake: 2 + u * 5 });
   else if (act === "charge") mbDraw("charge", 3 + Math.floor(t * 12) % 2, 0, x, y, !right);
   else if (act === "skid") mbDraw("charge", 5, 0, x, y, !right);
-  else if (act === "dive") { mbDraw("dive", Math.min(5, Math.floor(u * 6)), 0, x, y, false, { noShadow: u > .3 }); if (u > .25) mbFx("rubble", Math.floor(u * 8), x, y + 30, 1.7 * MBS); }
-  else if (act === "under") { mbFx("rubble", 8 + Math.floor(t * 10) % 8, x, y + 24, 1.7 * MBS); label = false; }
-  else if (act === "erupt") { mbFx("erupt", Math.min(7, Math.floor(u * 8)), x, y + 30, 1.9 * MBS); label = false; }
-  else if (act === "emerge") { mbDraw("emerge", Math.min(5, Math.floor(u * 6)), 0, x, y, false, { noShadow: u < .5 }); mbFx("erupt", 8 + Math.floor(u * 16), x, y + 30, 1.9 * MBS); }
+  else if (act === "dive") { mbDraw("dive", Math.min(5, Math.floor(u * 6)), 0, x, y, false, { noShadow: u > .3 }); if (u > .25) mbFx("rubble", Math.floor(u * 8), x, y + 30, 1.7); }
+  else if (act === "under") { mbFx("rubble", 8 + Math.floor(t * 10) % 8, x, y + 24, 1.7); label = false; }
+  else if (act === "erupt") { mbFx("erupt", Math.min(7, Math.floor(u * 8)), x, y + 30, 1.9); label = false; }
+  else if (act === "emerge") { mbDraw("emerge", Math.min(5, Math.floor(u * 6)), 0, x, y, false, { noShadow: u < .5 }); mbFx("erupt", 8 + Math.floor(u * 16), x, y + 30, 1.9); }
   else if (act === "stagger") { const tl = z.slam, f = len - tl < .25 ? 0 : tl < .35 ? 3 : 1 + Math.floor(t * 2.2) % 2; mbDraw("stagger", f, 0, x, y, false, { shake: f === 0 ? 8 : 0 });
-    ctx.save(); ctx.font = "800 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#9fe3ff"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3; ctx.strokeText("STAGGERED", x, y - 330 * MBS); ctx.fillText("STAGGERED", x, y - 330 * MBS); ctx.restore(); label = false; }
+    ctx.save(); ctx.font = "800 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#9fe3ff"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3; ctx.strokeText("STAGGERED", x, y - 330); ctx.fillText("STAGGERED", x, y - 330); ctx.restore(); label = false; }
   else { const mv = Math.hypot(v.x - (z._lx ?? v.x), v.y - (z._ly ?? v.y)) > .15; z._lx = v.x; z._ly = v.y; if (mv) z._mvT = now; mbDraw("walk", now - (z._mvT || 0) < 200 ? Math.floor(t * 4.5) % 4 : 0, row, x, y, flip, { shake: sh }); }
-  if (stg < 350 && step === "chase") { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(190,235,255,${.55 * (1 - stg / 350)})`; ctx.beginPath(); ctx.ellipse(x, y - 150 * MBS, 150 * MBS, 190 * MBS, 0, 0, 7); ctx.fill(); ctx.restore(); }
-  if (label && step === "chase") { ctx.save(); ctx.font = "800 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#ffb3a8"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3; ctx.strokeText("THE MINE BEAST", x, y - 330 * MBS); ctx.fillText("THE MINE BEAST", x, y - 330 * MBS); ctx.restore(); }
+  if (stg < 350 && step === "chase") { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(190,235,255,${.55 * (1 - stg / 350)})`; ctx.beginPath(); ctx.ellipse(x, y - 150, 150, 190, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  if (label && step === "chase") { ctx.save(); ctx.font = "800 13px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#ffb3a8"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3; ctx.strokeText("THE MINE BEAST", x, y - 330); ctx.fillText("THE MINE BEAST", x, y - 330); ctx.restore(); }
 }
 // The fight's marks and effects (world space, drawn over the floor and everything on it). deepFx.marks: {kind, x, y, r, t0, at (ms it lands), ...}
 function drawBeastFx() {
@@ -4004,7 +4003,7 @@ function drawBeastFx() {
     const v = V(z) || z, a = z.aim || 0, L = deepFx.windReach || 950, hw = deepFx.windHalf || 95, u = 1 - z.slam / (z.actLen || 1);
     ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(a); ctx.fillStyle = "rgba(255,70,50,.12)"; ctx.fillRect(0, -hw, L, hw * 2); ctx.fillStyle = "rgba(255,70,50,.2)"; ctx.fillRect(0, -hw, L * u, hw * 2); ctx.strokeStyle = `rgba(255,90,60,${.6 + .4 * Math.sin(t * 16)})`; ctx.lineWidth = 3; ctx.strokeRect(0, -hw, L, hw * 2);
     ctx.fillStyle = "rgba(255,120,90,.8)"; for (let i = 0; i < 6; i++) { const ax = ((t * 420 + i * L / 6) % L); ctx.beginPath(); ctx.moveTo(ax + 22, 0); ctx.lineTo(ax, -16); ctx.lineTo(ax, 16); ctx.closePath(); ctx.fill(); } ctx.restore();
-    ctx.save(); ctx.font = "800 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#9fe3ff"; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = 3; ctx.strokeText("SHOOT IT TO BREAK THE CHARGE", v.x, v.y - 320 * MBS); ctx.fillText("SHOOT IT TO BREAK THE CHARGE", v.x, v.y - 320 * MBS); ctx.restore(); }
+    ctx.save(); ctx.font = "800 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#9fe3ff"; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = 3; ctx.strokeText("SHOOT IT TO BREAK THE CHARGE", v.x, v.y - 320); ctx.fillText("SHOOT IT TO BREAK THE CHARGE", v.x, v.y - 320); ctx.restore(); }
   deepFx.marks = (deepFx.marks || []).filter(m => now < m.end);
   for (const m of deepFx.marks) { if (!inView(m.x, m.y, 320)) continue; const u = (now - m.t0) / (m.at - m.t0), since = now - m.at;
     if (m.kind === "rock") { if (since < 0) { ring(m.x, m.y, m.r, u); mbFx("rock", Math.floor(u * 8), m.x, m.y - (1 - u) * 260 + 34, 1.5, Math.min(1, u * 3)); } else { if (!m.hit) { m.hit = 1; if (Math.hypot(m.x - cam.x - W / 2, m.y - cam.y - H / 2) < 700) shake(7, 250); } mbFx("rock", 8 + Math.floor(since / 75), m.x, m.y + 34, 1.5); } }
@@ -4015,7 +4014,7 @@ function drawBeastFx() {
         ctx.save(); ctx.translate(x, y); ctx.rotate(an); ctx.fillStyle = "#0b2740"; ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(-12, -11); ctx.lineTo(-20, 0); ctx.lineTo(-12, 11); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#6fd0ff"; ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-10, -7); ctx.lineTo(-15, 0); ctx.lineTo(-10, 7); ctx.closePath(); ctx.fill(); ctx.restore(); }
       else if (since < 0) { const k = (el - fly) / (m.at - m.t0 - fly), sc = .8; if (im?.naturalWidth) { ctx.drawImage(im, m.x - im.width * sc / 2, m.y - im.height * sc + 14, im.width * sc, im.height * sc); ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(m.x, m.y - 40, 4, m.x, m.y - 40, 40 + 70 * k); g.addColorStop(0, `rgba(160,225,255,${.3 + .6 * k * (.7 + .3 * Math.sin(t * 20))})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(m.x - 120, m.y - 160, 240, 240); ctx.restore(); } }
       else { const F = MN_FX.shatter, f = Math.floor(since / F.ms); if (f < F.n && shatterFxImg.naturalWidth) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.drawImage(shatterFxImg, f * F.s, 0, F.s, F.s, m.x - 130, m.y - 210, 260, 260); ctx.restore(); } } }
-    else if (m.kind === "shock") { const f = Math.floor((now - m.t0) / 70); mbFx("shock", f, m.x, m.y + 60, 3.2 * MBS, .9); }
+    else if (m.kind === "shock") { const f = Math.floor((now - m.t0) / 70); mbFx("shock", f, m.x, m.y + 60, 3.2, .9); }
     else if (m.kind === "jab") { const k = (now - m.t0) / 260; ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(255,210,120,${1 - k})`; ctx.lineWidth = 3; for (let i = 0; i < 10; i++) { const an = i * .63 + m.x, r0 = 14 + k * 30, r1 = r0 + 26 + (i % 3) * 14; ctx.beginPath(); ctx.moveTo(m.x + Math.cos(an) * r0, m.y - 60 + Math.sin(an) * r0); ctx.lineTo(m.x + Math.cos(an) * r1, m.y - 60 + Math.sin(an) * r1); ctx.stroke(); } ctx.restore(); }
   }
 }
@@ -4035,15 +4034,15 @@ function onBeastMsg(m, now) {   // the fight's server events -> marks, shakes, h
 function drawDeepStatue(d, a) {
   const D = deepState(), img = spooky(mapImgs.mStatue), now = performance.now(), t = now / 1000; if (!img) return;
   const aw = D && D.step !== "runes" ? (now - deepFx.awake) / 1000 : -1, L = deepFx.awakeLen, burst = L * .58;
-  const plinthTop = Math.round(a.h * .76);
+  const plinthTop = Math.round(a.h * .76), sf = a.w / 600;
   if (aw < 0 || aw < burst) {   // still stone (shaking harder and harder once it starts)
     const k = aw < 0 ? 0 : aw / burst, sx = (Math.random() - .5) * 8 * k, sy = (Math.random() - .5) * 4 * k;
     ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(d.x - a.w / 2 + sx), Math.round(d.y - a.h + sy));
     if (k > 0) { ctx.globalCompositeOperation = "lighter"; const cx = d.x, cy = d.y - a.h * .56;   // the heart lights, cracks of light spread from it, the eyes open
-      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, 60 + 220 * k); g.addColorStop(0, `rgba(170,225,255,${.85 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(cx - 300, cy - 300, 600, 600);
+      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, (60 + 220 * k) * sf); g.addColorStop(0, `rgba(170,225,255,${.85 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(cx - 300, cy - 300, 600, 600);
       ctx.strokeStyle = `rgba(160,225,255,${.9 * k})`; ctx.lineWidth = 3; ctx.shadowColor = "#6cc8ff"; ctx.shadowBlur = 12;
-      for (let i = 0; i < 9; i++) { const an = i * .7 + .3, len = (40 + (i * 37 % 90)) * 2.2 * k; ctx.beginPath(); ctx.moveTo(cx, cy); let px = cx, py = cy; for (let j = 1; j <= 4; j++) { px = cx + Math.cos(an + Math.sin(i * 3 + j) * .5) * len * j / 4; py = cy + Math.sin(an + Math.sin(i * 3 + j) * .5) * len * j / 4 * .8; ctx.lineTo(px, py); } ctx.stroke(); }
-      if (k > .45) for (const sgn of [-1, 1]) { ctx.fillStyle = `rgba(190,235,255,${(k - .45) * 1.8})`; ctx.beginPath(); ctx.ellipse(d.x + sgn * 26, d.y - a.h * .705, 9, 5, 0, 0, 7); ctx.fill(); } }
+      for (let i = 0; i < 9; i++) { const an = i * .7 + .3, len = (40 + (i * 37 % 90)) * 2.2 * k * sf; ctx.beginPath(); ctx.moveTo(cx, cy); let px = cx, py = cy; for (let j = 1; j <= 4; j++) { px = cx + Math.cos(an + Math.sin(i * 3 + j) * .5) * len * j / 4; py = cy + Math.sin(an + Math.sin(i * 3 + j) * .5) * len * j / 4 * .8; ctx.lineTo(px, py); } ctx.stroke(); }
+      if (k > .45) for (const sgn of [-1, 1]) { ctx.fillStyle = `rgba(190,235,255,${(k - .45) * 1.8})`; ctx.beginPath(); ctx.ellipse(d.x + sgn * 26 * sf, d.y - a.h * .705, 9 * sf, 5 * sf, 0, 0, 7); ctx.fill(); } }
     ctx.restore();
   } else {   // the shell is gone: the bare plinth stays; the Beast stands on it roaring, then steps down (the chase takes over from the server's zombie)
     ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, plinthTop, a.w, a.h - plinthTop, Math.round(d.x - a.w / 2), d.y - a.h + plinthTop, a.w, a.h - plinthTop); ctx.restore();
@@ -4052,7 +4051,7 @@ function drawDeepStatue(d, a) {
         ctx.fillStyle = "#6f7480"; for (let i = 0; i < 26; i++) { const an = i * 2.4, r = 60 + f * (240 + (i * 53 % 200)); ctx.fillRect(d.x + Math.cos(an) * r - 5, d.y - a.h * .5 + Math.sin(an) * r * .7 + f * f * 160 - 5, 8 + i % 5, 8 + i % 4); } } }
   }
   ctx.save(); ctx.globalCompositeOperation = "lighter";   // the plinth's runes: faint, or bright once that rune is in
-  (a.runes || []).forEach(([rx, ry], i) => { const on = D && i < D.placed, x = d.x + rx, y = d.y + ry, k = on ? .9 + .1 * Math.sin(t * 4 + i) : .35 + .15 * Math.sin(t * 1.7 + i * 1.3), r = on ? 46 : 28; const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${on ? "190,235,255" : "110,210,255"},${(on ? .95 : .5) * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
+  (a.runes || []).forEach(([rx, ry], i) => { const on = D && i < D.placed, x = d.x + rx, y = d.y + ry, k = on ? .9 + .1 * Math.sin(t * 4 + i) : .35 + .15 * Math.sin(t * 1.7 + i * 1.3), r = (on ? 46 : 28) * Math.max(.7, sf); const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${on ? "190,235,255" : "110,210,255"},${(on ? .95 : .5) * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); });
   ctx.restore();
 }
 // Whiteout Station ground patches (Nov 10, user: the tiles looked "boxy and harsh" side by side): each pad / pond is drawn as a wobbly
@@ -4410,7 +4409,7 @@ function drawNight() {
   else if (coast) { const P = coast.T.pts; for (let i = 0; i < P.length; i += 5) if (inView(P[i].x, P[i].y, 120)) lightHole(P[i].x - cam.x, P[i].y - CO.H + 15 - cam.y, 64, .5); const c = coasterCart(coast.T, coast.s, 0); if (inView(c.x, c.y, 200)) lightHole(c.x - cam.x, c.y - CO.H - cam.y, 120, .75); }   // the bulbs along the track, the train
   if (dynastyMap()) {   // Fallen Dynasty: every lantern / lit window and fire lights the night
     for (const [x, y, b] of dynLights) if (inView(x, y, 120)) lightHole(x - cam.x, y + 30 - cam.y, b ? 95 : 110, b ? .7 : .8);
-    if (mineMap()) for (const z of state.zombies.values()) if (z.kind === "minebeast" && inView(z.x, z.y, 400)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 150 * MBS - cam.y, 300 * MBS, .9); }   // the Mine Beast glows: you always see it coming
+    if (mineMap()) for (const z of state.zombies.values()) if (z.kind === "minebeast" && inView(z.x, z.y, 400)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 150 - cam.y, 300, .9); }   // the Mine Beast glows: you always see it coming
     if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); else if ((d.kind === "mShrine" || d.kind === "mStop") && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - (d.kind === "mStop" ? 40 : 150) - cam.y, 150, .8); }
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
   }
