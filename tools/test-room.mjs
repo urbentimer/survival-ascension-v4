@@ -819,7 +819,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(!outside(f16, 0) && !outside(f28, 0), `no sealed pockets outside the boss dungeon, and a boss fits wherever a survivor does (${outside(f16, 0)} / ${outside(f28, 0)} cut off)`);
   ok(f16[Math.floor(3400 / C) * GW + Math.floor(5000 / C)] === 0 && f16[Math.floor(3800 / C) * GW + Math.floor(4300 / C)] === 0, "the boss dungeon is cordoned off: nobody can walk in (only the carts go in)");
   const T = room.coaster?.T, st = T?.stations[0]; ok(T && T.L > 18000 && T.cfg?.H === 0 && st.x === 850 && st.y === 400, `the mine-cart loop: one station top left, ${Math.round(T?.L)}px long (${Math.round(T?.L / (T?.cfg?.speed || 1))}s a lap)`);
-  ok(!room.blockedByMap(850, 640, 0) && !room.blockedByMap(850, 448, 0) && room.blockedByMap(640, 520, 0) && room.blockedByMap(850, 410, 0), "the station: up its steps onto the deck (open); the skirts beside the steps and the back rail are solid");
+  ok(!room.blockedByMap(850, 640, 0) && !room.blockedByMap(850, 448, 0) && room.blockedByMap(640, 520, 0) && room.blockedByMap(850, 388, 0), "the station: up its steps onto the deck (open); the skirts beside the steps and the back rail are solid");
   room.state.phase = "playing"; room.state.zombies.clear(); room.spawnClock = 1e9; const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   p.x = 850; p.y = 650; room.coaster.wait = 5; send(A, "coaster"); ok(p.ride === 1, "F at the station while the carts are in: you get in");
   tick(140); const c0 = { x: p.x, y: p.y }; tick(40); ok(Math.hypot(p.x - c0.x, p.y - c0.y) > 400 && p.ride === 1, `the carts roll off along the track with you in them (${Math.round(Math.hypot(p.x - c0.x, p.y - c0.y))}px in 2s)`);
@@ -832,6 +832,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const sHold = room.coaster.s; tick(600); ok(room.coaster.s === sHold && room.coaster.wait > 0 && room.state.coasterWait === 1001, "30s later the carts are still waiting for you (\"waiting for 1\")");
   send(A, "coaster"); tick(200); ok(p.ride > 0 && room.coaster.s !== sHold, "hop back on: the carts leave");
   for (let i = 0; i < 3000 && p.ride > 0; i++) tick(1); ok(p.ride === 0 && Math.abs(p.x - 850) < 260 && p.y > 400 && p.y < 520, `they take you back to the station (${Math.round(p.x)},${Math.round(p.y)})`);
+  // nobody gets into the boss dungeon except by cart (user, Nov 11): not Sofea's helicopter, not a dash through the wall, not a zombie
+  room.state.zombies.clear(); p.hp = p.maxHp; p.x = 4600; p.y = 2600; p.characterClass = "operator"; const okH = room.callVehicle(p, "heli"); for (let i = 0; i < 100 && room.state.vehicles.get(p.sessionId)?.phase !== "ride"; i++) tick(1);
+  const hv = room.state.vehicles.get(p.sessionId); for (let i = 0; i < 200; i++) { room.moveVehicle(p, hv, 0, 1, .05); } tick(1);
+  ok(okH && hv?.phase === "ride" && p.y < 2775 && p.y > 2600, `Sofea's helicopter can't fly over the dungeon wall (stopped at y ${Math.round(p.y)})`);
+  for (let i = 0; i < 400; i++) room.moveVehicle(p, hv, 1, 1, .05); ok(!(p.x > 3965 && p.y > 2820), `...nor slide in along it (${Math.round(p.x)},${Math.round(p.y)})`);
+  room.state.vehicles.delete(p.sessionId); p.x = 4500; p.y = 3500; tick(1); ok(!(p.x > 3965 && p.y > 2820) && !room.blockedByMap(p.x, p.y, 0), `someone who ends up inside without the cart (a dash through the wall) is put back outside (${Math.round(p.x)},${Math.round(p.y)})`);
+  const zi = placeZombie(room, 5200, 3600, 500); zi.speed = 0; tick(1); ok(!(zi.x > 3965 && zi.y > 2820), `a zombie that gets inside is put back outside too (${Math.round(zi.x)},${Math.round(zi.y)})`); room.state.zombies.clear();
   room.jumpToWave(4); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
   ok(z && Math.abs(z.x - 2450) < 60 && Math.abs(z.y - 952) < 40 && !room.blockedByMap(z.x, z.y, 0), `the boss climbs out of the DANGER shaft (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }

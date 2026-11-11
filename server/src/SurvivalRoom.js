@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -424,6 +424,7 @@ export class SurvivalRoom extends Room {
     this.flow = !!P || ["dynasty", "whiteout", "refinery", "carnival", "mine"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
     const layout = P ? paintedLayout(P) : S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : S.style === "mine" ? buildMineLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed);
+    this.cordon = S.style === "mine" ? mineCordon(W, H) : null;   // The Deep Mine: nobody gets into the boss dungeon except by cart (cordonCheck)
     const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted" || d.kind === "mShaft"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - ({ rPyramid: 118, mShaft: 128 }[pyr.kind] || 74) } : null;   // the Deep Mine: bosses climb out of the DANGER shaft
     if (this.state.players) for (const q of this.state.players.values()) { q.ride = 0; q.rideCd = 0; }
     const CT = S.style === "carnival" ? coasterTrack(W, H) : S.style === "mine" ? mineTrack(W, H) : null; this.coaster = CT ? { T: CT, K: CT.cfg || COASTER, s: CT.stations[0].s, wait: (CT.cfg || COASTER).wait, next: 0, riders: new Map(), cd: new Map(), queue: new Map() } : null;   // Midnight Carnival: the train starts at the first station
@@ -1589,7 +1590,7 @@ export class SurvivalRoom extends Room {
   }
   // E / Q: radio call (0.8s), then the vehicle arrives and she boards it. Returns false (no cooldown used) if it can't come.
   callVehicle(p, kind) {
-    if (this.state.vehicles.has(p.sessionId) || !p.alive) return false;
+    if (this.state.vehicles.has(p.sessionId) || !p.alive || p.ride > 0 || this.inCordon(p)) return false;   // not from a cart seat, and not inside the mine's boss dungeon
     const spot = kind === "heli" ? { x: p.x, y: p.y } : this.clearSpot(p.x, p.y, SOFEA[kind].body + 6, 160);
     if (!spot) { this.state.message = `${p.name}: no room for the ${kind} here.`; return false; }
     const v = new VehicleState(); v.id = p.sessionId; v.kind = kind; v.phase = "call"; v.x = spot.x; v.y = spot.y;
@@ -1615,7 +1616,7 @@ export class SurvivalRoom extends Room {
   }
   // tank / mecha: blocked by the tower, generator, solid structures and map pieces; the helicopter flies over all of it
   solveVehicle(p, v) {
-    if (v.kind === "heli") return;
+    if (v.kind === "heli") { if (this.cordon) this.pushOut(p, [{ x: (this.cordon.x - 25 + this.A.width) / 2, y: (this.cordon.y - 40 + this.A.height) / 2, hw: (this.A.width - this.cordon.x + 25) / 2, hh: (this.A.height - this.cordon.y + 40) / 2 }], SOFEA.heli.body); return; }   // the helicopter flies over everything, except into the mine's boss dungeon (user, Nov 11)
     const boxes = [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }];
     {   // tank and mecha
       boxes.push({ x: this.A.cx + GEN_OFF.x, y: this.A.cy + GEN_OFF.y, hw: GEN_OFF.h, hh: GEN_OFF.h });
@@ -2110,6 +2111,7 @@ export class SurvivalRoom extends Room {
   }
   // ---------- RAVEN ----------
   startShadowPass(p) {
+    if (p.ride > 0) return;   // (not from a cart seat: the cart would snap her straight back)
     const a = p.aim || 0, len = Math.max(0, Math.min(RAVEN.dash.dist, this.wallDist(p.x, p.y, a, RAVEN.dash.dist + BODY_R + 2) - BODY_R - 2));
     this.shadowDash.set(p.sessionId, { fx: p.x, fy: p.y, tx: p.x + Math.cos(a) * len, ty: p.y + Math.sin(a) * len, t0: Date.now(), hit: new Set(), a, px: p.x, py: p.y });
     p.dashT = RAVEN.dash.time; p.aim = a;
@@ -2896,7 +2898,7 @@ export class SurvivalRoom extends Room {
   }
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
-    const holding = () => { if (!C.held?.size || !T.stations[C.next]?.boss) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0) C.held.delete(sid); else n++; } return n; };   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
+    const holding = () => { if (!C.held?.size || !T.stations[C.next]?.boss) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0 || (this.cordon && !(q.x > this.cordon.x && q.y > this.cordon.y))) C.held.delete(sid); else n++; } return n; };   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
     if (C.wait > 0) { C.hold = holding(); C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
     else { C.hold = 0; let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
       const step = Math.min(C.K.speed, Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
@@ -2908,7 +2910,14 @@ export class SurvivalRoom extends Room {
     for (const [sid, until] of [...C.cd]) { const p = this.state.players.get(sid), left = Math.ceil((until - now) / 1000); if (!p || left <= 0) { C.cd.delete(sid); if (p) p.rideCd = 0; } else if (p.rideCd !== left) p.rideCd = left; }
     this.state.coasterS = Math.round(C.s * 10) / 10; const w = C.hold && C.wait <= .26 ? 1000 + C.hold : C.wait > 0 ? Math.ceil(C.wait * 4) / 4 : 0; if (this.state.coasterWait !== w) this.state.coasterWait = w;   // 1000 + n: the carts are holding at the boss stop for n survivors (no new schema field)
   }
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
+  cordonCheck() {   // The Deep Mine: anyone in the boss dungeon who didn't come by cart (a dash through the wall, a knockback, a boss's leap) is put back outside
+    const K = this.cordon, inside = e => this.inCordon(e), held = this.coaster?.held;
+    const out = e => { const toN = e.y - (K.y - 40), toW = e.x - (K.x - 25); if (toN < toW) e.y = K.y - 40 - 34; else e.x = K.x - 25 - 34; };
+    for (const p of this.state.players.values()) if (!(p.ride > 0) && !held?.has(p.sessionId) && !this.state.vehicles.has(p.sessionId) && inside(p)) { out(p); this.shadowDash?.delete(p.sessionId); this.solveCollisions(p); }
+    for (const z of this.state.zombies.values()) if (inside(z)) { out(z); this.solveZombie(z); }
+  }
+  inCordon(e) { const K = this.cordon; return !!K && e.x > K.x + 25 && e.y > K.y + 10; }   // inside the mine's boss dungeon: nothing outside can reach you (and you can't be chased in)
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return this.inCordon(p) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -3480,6 +3489,7 @@ export class SurvivalRoom extends Room {
     // Break between waves: 20-second countdown (shop open), then the next wave starts by itself.
     if (this.state.phase !== "playing" && this.state.vehicles.size) this.dismountAll();   // wave over / match over: everyone gets out
     if (this.coaster && (this.state.phase === "playing" || this.state.phase === "cleared")) this.updateCoaster(dt);
+    if (this.cordon) this.cordonCheck();
     if (this.state.phase !== "playing") for (const st of this.state.structures.values()) if (st.fire) st.fire = false;   // the wave is over (zombies wiped): turrets stop shooting at where their last target was
     if (this.state.phase === "cleared") {
       if (!this.inBreak) this.beginBreak();
@@ -3574,8 +3584,8 @@ export class SurvivalRoom extends Room {
     const machines = [...[...this.state.robots.values()].filter(r => r.kind !== "worker"), ...[...this.state.structures.values()].filter(st => st.kind === "heavyTurret")];
     const flying = id => (this.state.vehicles.get(id)?.kind === "heli" && this.state.vehicles.get(id).phase === "ride") || this.state.players.get(id)?.ride > 0;   // up in the helicopter / on the coaster
     this.bossUp = false; for (const z of this.state.zombies.values()) if (z.boss) { this.bossUp = true; break; }   // a boss can reach Sofea's helicopter (ordinary zombies can't): see untouchable()
-    const seenBoss = players.filter(p => !(p.shadow > 0) && !this.away.has(p.sessionId));
-    const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId) && !this.away.has(p.sessionId));   // invisible Raven / Sofea up in her helicopter / someone reconnecting: zombies can't get them
+    const seenBoss = players.filter(p => !(p.shadow > 0) && !this.away.has(p.sessionId) && !this.inCordon(p));
+    const seen = players.filter(p => !(p.shadow > 0) && !flying(p.sessionId) && !this.away.has(p.sessionId) && !this.inCordon(p));   // invisible Raven / Sofea up in her helicopter / someone reconnecting: zombies can't get them
     const shelter = this.shelterGuard();   // survivors inside a finished safehouse: zombies outside can't touch them
     if (this.abFx.puddles.length) this.abomPuddles(now);
     const barricades = []; for (const st of this.state.structures.values()) if (st.kind === "barricade") barricades.push(st);

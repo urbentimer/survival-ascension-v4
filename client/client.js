@@ -3570,8 +3570,8 @@ function drawDynastyWorld() {
     if (d.kind === "mStop") { drawBossStop(d); continue; }
     if (d.kind === "mShrine") { tall.push({ y: d.y - 6, draw: () => { drawMapObj(d); shrineFx(d); dynPieceFx(d, a); } }); continue; }
     if (d.kind === "mWardGate") { tall.push({ y: d.flip ? d.y + 130 : d.y + 40, draw: () => drawWard(d) }); continue; }
-    if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .3 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
-      if (img) tall.push({ y: d.kind === "mStation" ? d.y - 185 : d.y - 6, draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
+    if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .25 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
+      if (img) tall.push({ y: d.kind === "mStation" ? d.y - 104 : d.y - 6, /* the mine station: its roof goes over the carts parked under it (their riders sit below the eave), but not over people on the deck */ draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
     if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); if (d.kind === "mStatue") statueFx(d, a); dynPieceFx(d, a); } });
   }
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
@@ -3620,7 +3620,7 @@ function drawCoasterPrompt() {   // screen space, over your head (like the repai
 function drawStationSigns() {   // world space, over each station: "COASTER · train here / arrives in Ns", so you can find them and see when it comes
   if (!coast) return; const t = performance.now() / 1000, here = coastStation();
   for (const st of coast.T.stations) { if (!inView(st.x, st.y, 300)) continue;
-    const x = st.x, y = st.y - (st.boss ? 300 : coast.mn ? 172 : 150) + Math.sin(t * 3 + st.x) * 4, txt = (st.boss ? "BOSS STOP · " : "") + (here === st ? (state.coasterWait >= 1000 ? `WAITING FOR ${state.coasterWait - 1000}` : coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`);
+    const x = st.x, y = st.y - (st.boss ? 300 : coast.mn ? 196 : 150) + Math.sin(t * 3 + st.x) * 4, txt = (st.boss ? "BOSS STOP · " : "") + (here === st ? (state.coasterWait >= 1000 ? `WAITING FOR ${state.coasterWait - 1000}` : coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`);
     ctx.save(); ctx.font = "bold 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(txt).width + 26;
     ctx.fillStyle = here === st ? "rgba(255,190,60,.92)" : "rgba(20,12,8,.78)"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 16, w, 24, 12); ctx.fill();
     ctx.fillStyle = here === st ? "#2a1405" : "#ffe08a"; ctx.fillText(txt, x, y + 1);
@@ -4159,6 +4159,7 @@ function lightHole(x, y, r, a) {
 }
 function drawNight() {
   const now = performance.now(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
+  if (window.__saNoDark) return;   // (automated map surveys: no darkness)
   nightK += ((isNightView() ? 1 : mineMap() ? CAVE_DARK : 0) - nightK) * Math.min(1, dt * 1.5);   // The Deep Mine is always half dark (a cave): lanterns, crystals and you light it          // fade in/out over ~2 seconds
   if (nightK < .01) return;
   ctx.fillStyle = `rgba(4,8,15,${.25 * nightK})`; ctx.fillRect(0, 0, W, H);     // cold blue tint

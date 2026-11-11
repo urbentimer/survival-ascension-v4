@@ -71,7 +71,10 @@ def load(name, halo=False):
 # big pieces: (file, kind, width in game px, max lanterns, max crystal glows)
 BIG = [('shaft', 'mShaft', 520, 4, 6), ('lift', 'mLift', 470, 8, 4), ('station', 'mStation', 600, 8, 3), ('crusher', 'mCrusher', 450, 4, 6), ('shack', 'mShack', 400, 6, 3),
        ('crystal-big', 'mCrystal', 380, 2, 8), ('collapsed', 'mCollapsed', 420, 3, 4), ('wrecks', 'mWrecks', 400, 3, 5), ('arch', 'mArch', 420, 2, 4)]
-for f, k, w, nl, nb in BIG: save(k, load(f + '.png'), w, lights=nl, blue=nb, loose=k in ('mStation', 'mShack', 'mShaft', 'mCollapsed'))
+def unpink(a):   # the station's art has magenta-ish roof sheets and pink halos round its lanterns (the background bleeding in): turn them rust-brown
+    q = a.astype(float); r, g, b = q[..., 0], q[..., 1], q[..., 2]; pk = (r > g + 45) & (b > g + 22) & (b > 80); lum = .35 * r + .4 * g + .25 * b
+    q[..., 0] = np.where(pk, np.clip(lum * 1.45, 0, 255), r); q[..., 1] = np.where(pk, lum * .72, g); q[..., 2] = np.where(pk, lum * .5, b); return q.astype(np.uint8)
+for f, k, w, nl, nb in BIG: save(k, unpink(load(f + '.png')) if k == 'mStation' else load(f + '.png'), w, lights=nl, blue=nb, loose=k in ('mStation', 'mShack', 'mShaft', 'mCollapsed'))
 save('mStatue', load('statue.png'), 600, blue=0)   # the Mine Beast asleep in stone (the 4 runes on its plinth light up in code)
 pieces['mStatue']['runes'] = [[-132, -92], [-43, -92], [46, -92], [133, -91]]   # the plinth's four rune carvings (one lights up per rune put in)
 a = save('mPortal', load('portal.png'), 560, blue=6)

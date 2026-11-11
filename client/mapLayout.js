@@ -422,7 +422,7 @@ for (const k of MN_KINDS) if (!MAP_FLAT[k]) MAP_SOLID[k] = mnBox(k);
 for (let i = 1; i <= 16; i++) MAP_SOLID["mRock" + i] = mnBox("mRock" + i, .46, .56);
 Object.assign(MAP_SOLID, {
   // the cart station: you walk up its steps onto the deck (open); solid: the skirts either side of the steps, the back rail (the carts run behind it), the ends, the booth, the crates
-  mStation: [{ ox: -194, oy: -48, hw: 98, hh: 48 }, { ox: 194, oy: -48, hw: 98, hh: 48 }, { ox: 0, oy: -152, hw: 292, hh: 8 }, { ox: -287, oy: -122, hw: 7, hh: 24 }, { ox: 287, oy: -122, hw: 7, hh: 24 }, { ox: -206, oy: -130, hw: 50, hh: 12 }, { ox: 210, oy: -128, hw: 40, hh: 10 }],
+  mStation: [{ ox: -194, oy: -48, hw: 98, hh: 48 }, { ox: 194, oy: -48, hw: 98, hh: 48 }, { ox: 0, oy: -136, hw: 292, hh: 8 }, { ox: -287, oy: -122, hw: 7, hh: 24 }, { ox: 287, oy: -122, hw: 7, hh: 24 }, { ox: -206, oy: -130, hw: 50, hh: 12 }, { ox: 210, oy: -128, hw: 40, hh: 10 }],
   // the boss shaft: the slope down from its black mouth is open (the boss walks out); the portal: its steps up to the doorway are open
   mShaft: [{ ox: -190, oy: -190, hw: 74, hh: 175 }, { ox: 190, oy: -190, hw: 74, hh: 175 }, { ox: 0, oy: -300, hw: 120, hh: 58 }],
   mPortal: [{ ox: -205, oy: -175, hw: 72, hh: 150 }, { ox: 205, oy: -175, hw: 72, hh: 150 }, { ox: 0, oy: -245, hw: 135, hh: 70 }],
@@ -440,6 +440,7 @@ export const MN_WAY = [[850, 400], [1300, 400], [1900, 360], [2600, 320], [3300,
 export const MN_SPOT = { tower: [1450, 1330], station: [850, 565], shaft: [2450, 1080], lift: [620, 1650], collapsed: [1950, 820], crusher: [2560, 2060], shack: [820, 2220], wrecks: [1380, 830], pit: [1720, 2080],
   dungeon: [3880, 2700, 5990, 3990], portal: [5180, 3230], statue: [4520, 3170], seals: [[4060, 3010], [5600, 2960], [4080, 3480], [5560, 3480]],
   stop: [5000, 3740], shrines: [[4350, 1750], [5350, 900], [1750, 3250], [2700, 2850]] };   // stop: the carts' stop inside the boss dungeon (user, Nov 11); shrines: where the four runes wait
+export const mineCordon = (WW, WH) => ({ x: (MN_SPOT.dungeon[0] + 60) * WW / 6000, y: (MN_SPOT.dungeon[1] + 110) * WH / 4000 });   // the boss dungeon's walls: west wall line x, north wall line y (inside = x > x + 25 and y > y + 10)
 export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x, y (the rails, on the ground), s}; ONE station (the cart station, top left)
   const sx = WW / 6000, sy = WH / 4000, P = MN_WAY.map(([x, y]) => [x * sx, y * sy]), n = P.length, raw = [];
   for (let i = 0; i < n; i++) { const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
@@ -496,7 +497,7 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const fixed = (k, x, y, flip = false) => { const id = out.length; out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); boxes.push(...bx(k, Math.round(x), Math.round(y), flip, id)); };
   const drop = (k, gap, area, tries = 300, o) => { for (let t = 0; t < tries; t++) if (place(k, area[0] + rnd() * (area[2] - area[0]), area[1] + rnd() * (area[3] - area[1]), gap, !/Sign|Seal|Portal|Station/.test(k) && rnd() < .5, o)) return true; return false; };
   // the landmarks (fixed): the cart station on the track's straight, the boss shaft, the part areas
-  fixed("mStation", st0.x, st0.y + 165);
+  fixed("mStation", st0.x, st0.y + 124);   // the rails run through the open back of the station, under its roof
   for (const [k, spot] of [["mShaft", "shaft"], ["mLift", "lift"], ["mCollapsed", "collapsed"], ["mCrusher", "crusher"], ["mShack", "shack"], ["mWrecks", "wrecks"]]) fixed(k, ...S(MN_SPOT[spot]));
   // chasms the track crosses on bridges, and rock arches it runs through (wherever it heads roughly up / down, spread out)
   fixed("mChasm", ...S([2520, 3450])); fixed("mChasmV", ...S([4400, 375])); fixed("mChasm", ...S([150, 2760]));
@@ -555,7 +556,8 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const [ppx, ppy] = S(MN_SPOT.pit); for (let i = 0; i < 9; i++) flat("mPuddles", ppx + (rnd() - .5) * 560, ppy + 40 + (rnd() - .5) * 300, rnd() < .5);
   flat("mStripes", st0.x - 150, st0.y + 300); flat("mChevron", st0.x + 160, st0.y + 300); flat("mHatch", tx - 260, ty + 200); flat("mGrate", tx + 270, ty - 160);
   for (let i = 0; i < 150; i++) flat(pick(["mStones", "mStones", "mDirt", "mDirt", "mRocksM", "mRocksM", "mPlanks", "mRopeM", "mGoldVein", "mBlueCrack", "mBlueCrack", "mShards", "mCrystalRocks", "mStain", "mRopeCoil"]), 60 + rnd() * (WW - 120), 120 + rnd() * (WH - 160), rnd() < .5);
-  for (let i = 0; i < 6; i++) flat("mChains", dx0 + 100 + rnd() * (dx1 - dx0 - 200), dy0 + 250 + rnd() * (dy1 - dy0 - 320), rnd() < .5);
+  { const ch = [], keepOff = [[bs.x, bs.y - 60, 330], [ptx, pty + 120, 300], ...MN_SPOT.seals.map(q => [...S(q), 170])];   // a few piles of chains on the dungeon floor: apart from each other, clear of the stop, the portal steps and the seals
+    for (let t = 0; t < 200 && ch.length < 5; t++) { const x = dx0 + 160 + rnd() * (dx1 - dx0 - 300), y = dy0 + 300 + rnd() * (dy1 - dy0 - 420); if (ch.some(c => Math.hypot(c[0] - x, c[1] - y) < 380) || keepOff.some(([kx, ky, r]) => Math.hypot(kx - x, ky - y) < r)) continue; const n0 = out.length; flat("mChains", x, y, rnd() < .5); if (out.length > n0) ch.push([x, y]); } }
   return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "mRuneCircle") - (a.kind === "mRuneCircle"));   // flats first (the rune circle first of all: marks lie on top)
 }
 
