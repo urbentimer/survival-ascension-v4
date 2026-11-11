@@ -10,7 +10,7 @@ from PIL import Image
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'minebeast')
 C = os.path.join(here, '..', 'client', 'assets'); D8 = os.path.join(C, 'sprites', 'zombies', 'dir8'); FX = os.path.join(C, 'sprites', 'fx')
-GAME_H = 300   # his standing height in the game (px); the files keep the art's own size and are drawn scaled up (META.k)
+GAME_H = 480   # his standing height in the game (px); the files keep the art's own size and are drawn scaled up (META.k)
 meta = {}
 
 def load(n): return np.array(Image.open(os.path.join(ART, n + '.png')).convert('RGB')).astype(int)

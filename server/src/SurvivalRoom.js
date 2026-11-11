@@ -393,12 +393,12 @@ const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5
 // drops to a knee ("flee": get in the carts), then it chases them for a lap. Skills: DRILL STRIKE (two jabs), CRYSTAL SPINES (a fan of crystals that
 // stick in the floor and shatter), CAVE-IN (rocks fall on marked circles, the lights go out), BURROW (dives, tunnels after someone, erupts under a
 // marked circle), DRILL CHARGE (winds up, then charges down a marked lane: enough damage during the wind-up staggers it instead).
-const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
-  strike: { range: 185, len: 1.15, hits: [.42, .7], reach: 225, half: 85, mult: [.9, 1.15], push: 150, cd: 1.2 },
+const BEAST = { hp: 3300, speed: 100, radius: 100, dmg: 22, gap: 2.4,   // (Nov 11: as big as his statue, 480px tall: every reach below grew with him)
+  strike: { range: 270, len: 1.15, hits: [.42, .7], reach: 330, half: 125, mult: [.9, 1.15], push: 150, cd: 1.2 },
   spines: { first: 5, cd: 10, len: 1.25, at: .6, n: 5, fan: 1.0, min: 220, max: 560, fly: .5, fuse: 1.5, r: 85, mult: 1 },
   cavein: { first: 10, cd: 17, len: 1.9, at: .5, delay: 1.35, r: 95, mult: 1.2, perPlayer: 2, extra: 3, dark: 5 },
-  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 255, warn: .9, r: 150, mult: 1.6, emerge: 1.0 },
-  charge: { first: 24, cd: 16, wind: 1.8, speed: 640, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
+  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 255, warn: .9, r: 210, mult: 1.6, emerge: 1.0 },
+  charge: { first: 24, cd: 16, wind: 1.8, speed: 640, len: 950, half: 145, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
   stagger: 3.2, staggerMult: 1.5, fleeWait: 10 };
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export class SurvivalRoom extends Room {
@@ -3003,7 +3003,7 @@ export class SurvivalRoom extends Room {
   }
   mineFight() {   // the stone has burst off: the fight, on foot, inside the dungeon
     const m = this.mine, s = this.state, ST = this.minePieces.statue, D = DIFFICULTY[s.difficulty] || DIFFICULTY.normal, scale = 1 + (s.stage - 1) * .08;
-    const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 110; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
+    const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 150; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
     z.maxHp = BEAST.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, s.players.size - 1)) * D.hp; z.hp = z.maxHp; z.damage = BEAST.dmg * scale * D.dmg;
     s.zombies.set(z.id, z); m.beast = z.id; m.step = "fight"; m.haz = []; this.bossMem.delete(z.id);
     this.beastBoxes = mapBoxes([this.minePieces.statue, this.minePieces.portal].filter(Boolean));
@@ -3018,13 +3018,13 @@ export class SurvivalRoom extends Room {
     for (const p of s.players.values()) { if (!p.alive && !p.bledOut && this.inCordon(p)) { p.alive = true; p.hp = Math.max(1, p.maxHp * .3); p.bleedout = 0; } if (p.alive && !(p.ride > 0) && (this.inCordon(p) || C.held?.has(p.sessionId))) this.coasterBoard(p.sessionId); }
     if (!C.riders.size) { this.mineEscape(); return; }   // (nobody left in there: nothing to chase)
     let z = s.zombies.get(m.beast); if (!z) { z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 40; z.attackCooldown = 0; z.targetId = ""; z.role = "mine"; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2; s.zombies.set(z.id, z); }
-    z.maxHp = 1e8; z.hp = 1e8; z.speed = 0; z.damage = 0; z.radius = 70; z.boss = false; z.slam = 0; z.act = ""; m.haz = [];
+    z.maxHp = 1e8; z.hp = 1e8; z.speed = 0; z.damage = 0; z.radius = 110; z.boss = false; z.slam = 0; z.act = ""; m.haz = [];
     m.beast = z.id; m.step = "chase"; m.gap = DEEP.gap0; m.t = 0; C.wait = Math.min(C.wait, .1); C.held?.clear();
     s.message = "IT'S COMING AFTER THE CARTS: SHOOT IT TO HOLD IT BACK!"; this.broadcast("deep", { k: "chase" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
   }
   // ---------- the Mine Beast's fight (see BEAST) ----------
   beastMove(z, dx, dy) {   // it walks over the dungeon's small things (braziers, candles, statues of miners); only the walls, its plinth and the portal stop it
-    const K = this.cordon, x0 = z.x, y0 = z.y; z.x = clamp(z.x + dx, K.x + 25 + 85, this.A.width - 90); z.y = clamp(z.y + dy, K.y + 10 + 150, this.A.height - 75);
+    const K = this.cordon, x0 = z.x, y0 = z.y; z.x = clamp(z.x + dx, K.x + 25 + 130, this.A.width - 135); z.y = clamp(z.y + dy, K.y + 10 + 190, this.A.height - 80);
     this.pushOut(z, this.beastBoxes || [], BEAST.radius); return hyp(z.x - x0, z.y - y0);
   }
   beastHazards(now) {   // planted crystals shattering, rocks landing
@@ -3072,13 +3072,13 @@ export class SurvivalRoom extends Room {
     const prey = near(); if (!prey) return; const d = hyp(prey.x - z.x, prey.y - z.y), a = Math.atan2(prey.y - z.y, prey.x - z.x); z.aim = a; z.targetId = prey.sessionId;
     const pick = () => targets[Math.floor(Math.random() * targets.length)], skill = (key, act, len, cd, extra) => { bm[key] = now + (len + cd) * 1000; bm.next = now + (len + B.gap) * 1000; this.startAct(z, act, len); if (extra) extra(); };
     if (now >= bm.next) {
-      if (now >= bm.chargeReady && d > 240) return skill("chargeReady", "wind", B.charge.wind, B.charge.cd, () => { bm.prey = prey; bm.windDmg = 0; this.broadcast("deep", { k: "wind", len: B.charge.wind, reach: B.charge.len, half: B.charge.half }); });
+      if (now >= bm.chargeReady && d > 340) return skill("chargeReady", "wind", B.charge.wind, B.charge.cd, () => { bm.prey = prey; bm.windDmg = 0; this.broadcast("deep", { k: "wind", len: B.charge.wind, reach: B.charge.len, half: B.charge.half }); });
       if (now >= bm.burrowReady) return skill("burrowReady", "dive", B.burrow.dive, B.burrow.cd + B.burrow.under, () => { bm.prey = pick(); z.aim = Math.PI / 2; });
       if (now >= bm.caveReady) return skill("caveReady", "roar", B.cavein.len, B.cavein.cd, () => { z.aim = Math.PI / 2; });
-      if (now >= bm.spinesReady && d > 190) return skill("spinesReady", "throw", B.spines.len, B.spines.cd, () => { bm.prey = prey; });
+      if (now >= bm.spinesReady && d > 270) return skill("spinesReady", "throw", B.spines.len, B.spines.cd, () => { bm.prey = prey; });
     }
     if (d < B.strike.range && now >= bm.strikeReady) { bm.strikeReady = now + (B.strike.len + B.strike.cd) * 1000; this.startAct(z, "strike", B.strike.len); return; }
-    if (d > 120) this.beastMove(z, Math.cos(a) * z.speed * dt, Math.sin(a) * z.speed * dt);
+    if (d > 180) this.beastMove(z, Math.cos(a) * z.speed * dt, Math.sin(a) * z.speed * dt);
   }
   mineEscape() { const m = this.mine; if (m.step === "escaped") return; m.step = "escaped"; m.t = DEEP.flash; this.state.message = "THROUGH THE PORTAL!"; this.broadcast("deep", { k: "escaped" }); this.mineSync(); }
   mineTick(dt, now) {
@@ -3109,7 +3109,7 @@ export class SurvivalRoom extends Room {
       if (C.wait <= 0) m.gap -= DEEP.gain * dt;
       if (m.gap <= DEEP.catchGap) { m.cartHp--; m.gap = DEEP.bounce; this.broadcast("deep", { k: "smash", hp: m.cartHp }); s.message = m.cartHp > 0 ? `THE BEAST HIT THE CARTS! ${m.cartHp} hit${m.cartHp === 1 ? "" : "s"} left.` : "THE MINE BEAST SMASHED THE CARTS: TEAM DEFEATED.";
         if (m.cartHp <= 0) { s.phase = "defeat"; this.mineSync(); return; } }
-      const q = coasterAt(C.T, C.s - 170 - m.gap); z.x = q.x; z.y = q.y; z.aim = q.a;
+      const q = coasterAt(C.T, C.s - 250 - m.gap); z.x = q.x; z.y = q.y; z.aim = q.a;
     } else if (m.step === "escaped") { m.t -= dt; if (m.t <= 0) { this.endMine(true); s.phase = "cleared"; this.beginBreak(); s.message = `Wave ${s.stage} survived: you escaped the Deep Mine! Host can launch the next wave.`; return; } }
     this.mineSync();
   }
