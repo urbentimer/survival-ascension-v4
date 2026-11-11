@@ -115,6 +115,7 @@ const RECON_KEY = "sa-recon";   // sessionStorage: this tab's reconnection token
 const rememberSeat = () => { try { if (!SOLO_PREVIEW && room?.reconnectionToken) sessionStorage.setItem(RECON_KEY, JSON.stringify({ token: room.reconnectionToken, at: Date.now() })); } catch {} };
 const forgetSeat = () => { try { sessionStorage.removeItem(RECON_KEY); } catch {} };
 function connected() {
+  try { const d = JSON.parse(sessionStorage.getItem("sa-drop") || "null"); if (d) { sessionStorage.removeItem("sa-drop"); setTimeout(() => { try { room?.send("clientError", { m: `earlier drop: close code ${d.code} in ${d.ph}, ${Math.round((Date.now() - d.at) / 1000)}s ago, tab ${d.vis}, online ${navigator.onLine}, ${navigator.connection?.effectiveType || "?"} rtt ${navigator.connection?.rtt ?? "?"}`, lv: "warn", ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, "") }); } catch {} }, 800); } } catch {}
   myId = room.sessionId; status("Connected · " + room.roomId, true); rememberSeat();
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
@@ -163,6 +164,7 @@ function connected() {
   room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     const dropped = code !== 1000 && code !== 4000 && state && state.phase !== "lobby" && !SOLO_PREVIEW && room?.reconnectionToken;   // 1000 = you left on purpose, 4000 = kicked
+    try { if (code !== 1000 && code !== 4000) sessionStorage.setItem("sa-drop", JSON.stringify({ code, at: Date.now(), vis: document.visibilityState, ph: state?.phase })); } catch {}
     if (dropped) { dropInfo = { code, at: Date.now(), vis: document.visibilityState }; reconnectRoom(room.reconnectionToken); return; }   // a wifi blip / sleeping phone: the server holds your spot for 30s
     forgetSeat(); status("Disconnected"); room = null; state = null; toast(code === 4000 ? "The host removed you from the room." : "You left the room."); renderLobbyRoom();
     document.body.classList.remove("in-match"); closePanels(); $("gameArea").classList.add("hidden");

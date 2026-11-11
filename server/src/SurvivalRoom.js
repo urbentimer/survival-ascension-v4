@@ -905,7 +905,13 @@ export class SurvivalRoom extends Room {
     s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
   }
 
+  watchSocket(client) {   /* log WHY a socket closed (1001 page reloaded/closed, 1006 network cut, 1009 message too big, 4002 server error) */
+    try { const ws = client?.ref; if (!ws?.on) return; const ip = String(ws._socket?.remoteAddress || "");
+      ws.on("close", (code, reason) => { if (code !== 4000 && code !== 1000) this.log("warn", "socket", `socket closed: code ${code}${reason?.length ? " (" + String(reason).slice(0, 80) + ")" : ""}, ${ws.bufferedAmount || 0} bytes unsent`, client); });
+      ws.on("error", e => this.log("warn", "socket", `socket error: ${e?.code || ""} ${e?.message || e}`, client)); } catch {}
+  }
   onJoin(client, options = {}) {
+    this.watchSocket(client);
     if (this.state.players.size >= 8) throw new Error("This room is full (8/8).");
     if (this.pyreFx?.wheel && client.send) setTimeout(() => { try { if (this.pyreFx.wheel) client.send("pyre", this.wheelMsg(Date.now())); } catch {} }, 1500);   // joined mid-wheel: show it
     const p = new PlayerState();
@@ -938,7 +944,7 @@ export class SurvivalRoom extends Room {
       this.away.add(client.sessionId); this.lastInputs.delete(client.sessionId); this.inQ?.delete(client.sessionId); p.charging = false; p.reviveTargetId = ""; p.reviveProgress = 0;
       this.state.message = `${p.name} lost connection... holding their spot for 30s.`; this.log("warn", "leave", `${p.name} lost connection: 30s to come back`, client);
       this.broadcast("away", { id: client.sessionId, on: true });   // clients: "RECONNECTING…" tag + faded sprite
-      try { const back = await this.allowReconnection(client, 30); this.away.delete(client.sessionId); this.broadcast("away", { id: client.sessionId, on: false }); this.state.message = `${p.name} is back!`; this.log("info", "join", `${p.name} reconnected`, client);
+      try { const back = await this.allowReconnection(client, 30); this.watchSocket(back || client); this.away.delete(client.sessionId); this.broadcast("away", { id: client.sessionId, on: false }); this.state.message = `${p.name} is back!`; this.log("info", "join", `${p.name} reconnected`, client);
         if (this.pyreFx?.wheel) setTimeout(() => { try { if (this.pyreFx.wheel) (back || client).send("pyre", this.wheelMsg(Date.now())); } catch {} }, 1500); return; }
       catch { this.away.delete(client.sessionId); this.broadcast("away", { id: client.sessionId, on: false }); if (!this.state.players.has(client.sessionId)) return; }   // never came back (or the match was reset meanwhile)
     }
