@@ -544,3 +544,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server: SITES[7] {style "crucible", 6000x4000}; CHAPTERS waves 21-24 -> site 7 (no more stand-in); A.cx/cy = KC_SPOT.tower; bossDoor kCrucible y-150. wallDist(x,y,a,range, move) / lineClear(a,b, move): lava (low boxes) blocks walking but not shots / sight; move=true for Raven's dash length and the path straight-line check.
 - Client: SITE_STYLE[7] "crucible", crucibleMap(); ground T "k" base "kbasalt"; drawLava() every frame over the cached ground (scorched rim, drifting crust, flowing molten core, hot edge glow, bubbles), bridges drawn as flats over it; LAVA_DARK .46 warm darkness, lavaLights() along the rivers + piece lava glows; ash + rising embers; minimap rivers + bridges; SPOOKY_LAVA tint; kCrucible sorts at y-190 so the boss shows in its doorway.
 - Tests: 69 (lava solid / shots over / boss body reaches both strips); 66 updated (wave 21 -> site 7). Sims: kc-sim (160/160 zombies reach the tower, none on lava, boss walks out over the bridges), sim-waves SA_SITE=7, sim-bosses 24 killed on it. Preview now has 3 asset files (publish preview-assets-3.js too). Cache 20261112o.
+
+## Nov 12 — Screamer boss theme
+- The user's Screamer video (1 h) is one 62.48 s song repeated (exact period 2,755,368 samples at 44.1 kHz, copies correlate 0.998+).
+- Game file `client/assets/audio/music_boss_scream.mp3`: one cycle, starting on the 3-beat build (42.04 s into the cut) before the big entry, 0.25 s linear crossfade, -16.5 LUFS, padded 0.5 s each side. `MUSIC_LOOP.scream = { pad: .5, len: 62.48 }`.
+- `musicScene()` returns "scream" when a Screamer boss is out or `bossIntro === "screamer"` (card + fight). Hivemind keeps the normal boss track.
+- User got a 3:07 version (the song 3 times) + a 30 s seam check. Work dir `/home/claude/work/scream` (render2.py).
+- Cache now `20261112p`; next `20261112q`.
