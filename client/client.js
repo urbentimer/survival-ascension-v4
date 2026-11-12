@@ -1568,10 +1568,10 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/abom-
 const ABM = { bw: 340, bh: 260, bax: 170, bfy: 236, mw: 460, sw: 240, sh: 210, sax: 120, sfy: 182, lava: "255,90,31", sc: 2, ssc: 1.5 };   // (Nov 12) sc: he is drawn 2x (he looked small on The Crucible), ssc: the Five 1.5x (the Sundering shrinks 2x -> 1.5x as he parts, so the hand-over still lines up)
 const abFlames = [];   // this frame's ground fires [x, y, scale, loop, phase, alpha] (lava puddles, slam scorch lines): drawn by drawAbomFlames
 const abMove = new Map(), abTele = new Map(), abPuddles = [];   // walk cycles; latest telegraph per boss / spawn; lava puddles
-function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // one additive frame of a 24-frame strip; (x, y) = its centre (or its left-middle with `left`)
+function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false, sy = 1) {   // one additive frame of a 24-frame strip; (x, y) = its centre (or its left-middle with `left`); sy squashes its height
   const im = abImgs[key]; if (!im?.naturalWidth) return; const fw = im.naturalWidth / 24, fh = im.naturalHeight, f = Math.max(0, Math.min(23, frame)), f0 = Math.floor(f);
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, Math.min(1, alpha)); ctx.translate(x, y); if (rot) ctx.rotate(rot);
-  blendCells(im, 0, 0, fw, fh, f0, Math.min(23, f0 + 1), f - f0, left ? 0 : -fw * scale / 2, -fh * scale / 2, fw * scale, fh * scale); ctx.restore();
+  blendCells(im, 0, 0, fw, fh, f0, Math.min(23, f0 + 1), f - f0, left ? 0 : -fw * scale / 2, -fh * scale * sy / 2, fw * scale, fh * scale * sy); ctx.restore();
 }
 function onAbom(m) {
   const t = gnow(), feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
@@ -1689,8 +1689,8 @@ function drawAbomFx(f, age) {   // false when finished
     const zr = state?.zombies?.get(f.id), z = zr ? (V(zr) || zr) : null; if (!z || (zr.act !== "spew" && e < f.dur)) return false;
     const fr = e < .3 ? e / .3 * 8 : e < f.dur ? 8 + ((e - .3) / .09) % 8 : 16 + Math.min(7.9, (e - f.dur) / .45 * 8);
     const S = ABM.sc, ox = z.x + Math.cos(f.a) * 34 * S, oy = z.y + z.radius * .8 - 99 * S + Math.sin(f.a) * 18 * S, tx = z.x + Math.cos(f.a) * f.len, ty = z.y + Math.sin(f.a) * f.len;   // from his mouth to the far end of the cone on the ground
-    const rot = Math.atan2(ty - oy, tx - ox), len = Math.hypot(tx - ox, ty - oy), sc = len / 200;
-    aFx("fxLava", fr, ox, oy, sc, 1, rot, true); aFx("fxLava", (fr + 3) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot + .16, true); aFx("fxLava", (fr + 5) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot - .16, true);
+    const rot = Math.atan2(ty - oy, tx - ox), len = Math.hypot(tx - ox, ty - oy), sc = len / 200, sy = .62;   // (Nov 12) twice as long, not twice as fat: the height is squashed to match the narrower cone
+    aFx("fxLava", fr, ox, oy, sc, 1, rot, true, sy); aFx("fxLava", (fr + 3) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot + .09, true, sy); aFx("fxLava", (fr + 5) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot - .09, true, sy);
     if (!f.snd) { f.snd = true; playSfx("flame", z.x, z.y, .8); }
     return true;
   }

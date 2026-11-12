@@ -1509,8 +1509,11 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     ok(z.x > 1860 && z.act !== "daze" || z.act === "daze" && z.x > 1860, `rolls THROUGH a building (x ${Math.round(z.x)})`); step(1500);
     ok(z.act === "daze" && ev.some(e => e.k === "daze") && !room.blockedByMap(z.x, z.y, 10), "the roll always ends with him DAZED, never inside a building"); const h = z.hp; room.hitZombie(z, p, 100); ok(Math.round(h - z.hp) === 150, "dazed: takes x1.5 damage"); room.setMapBoxes([]); }
   { const z = fresh(); only(z, "spewReady"); z.speed = 0; heal(); p.x = 1700; p.y = 1500; q.x = 1500; q.y = 1250; step(1500); const d1 = p.maxHp - p.hp;
-    ok(ev.some(e => e.k === "spew") && d1 > 0 && q.hp === q.maxHp && room.abFx.puddles.length === 3, `lava spew: burns the cone (${Math.round(d1)} dmg), leaves 3 puddles`);
-    room.abmem(z, t).spewReady = t + 1e9; step(1500); p.x = z.x + 235; p.y = z.y - 14; const h = p.hp; step(1200); ok(p.hp < h && p.slowed > 0, "standing in a lava puddle burns and slows"); step(8000); ok(room.abFx.puddles.length === 0, "puddles cool after 7s"); }
+    ok(ev.some(e => e.k === "spew") && d1 > 0 && q.hp === q.maxHp && room.abFx.puddles.length === 5, `lava spew: burns the cone (${Math.round(d1)} dmg), leaves 5 puddles`);
+    room.abmem(z, t).spewReady = t + 1e9; step(1500); p.x = z.x + 330; p.y = z.y - 14; const h = p.hp; step(1200); ok(p.hp < h && p.slowed > 0, "standing in a lava puddle burns and slows"); step(8000); ok(room.abFx.puddles.length === 0, "puddles cool after 7s"); }
+  { const z = fresh(); only(z, "spewReady"); z.speed = 0; heal(); p.x = 2150; p.y = 1500; far(q); room.setMapBoxes([{ x: 1850, y: 1500, hw: 30, hh: 120 }]); const stub = room.lineClear; delete room.lineClear; step(1500);
+    ok(ev.some(e => e.k === "spew") && p.hp === p.maxHp, "the 840px lava jet doesn't go through walls (no puddles past it either)"); room.setMapBoxes([]); room.lineClear = stub;
+    const z2 = fresh(); only(z2, "spewReady"); z2.speed = 0; heal(); p.x = 2150; p.y = 1500; step(1500); ok(p.hp < p.maxHp, `...but reaches ${p.x - z2.x}px in the open`); }
   { const z = fresh(); only(z, "none"); z.speed = 0; heal(); p.x = 1900; p.y = 1500; q.x = 1900; q.y = 1700; const max = z.maxHp;
     room.hitZombie(z, p, max * 5); ok(z.hp > 0 && z.hp <= max * .45, "one huge hit can't kill him: he stops at the split point");
     step(100); ok(z.act === "sunder" && ev.some(e => e.k === "sunder"), "at 45% HP: THE SUNDERING starts"); const h = z.hp; room.hitZombie(z, p, 500); ok(z.hp === h, "...and he can't be hurt while he tears apart");

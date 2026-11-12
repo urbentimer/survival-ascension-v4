@@ -98,7 +98,7 @@ const ABOM = {
   hp: 3900, speed: 74, radius: 88, dmg: 22, splitAt: .45,   // (Nov 12) drawn 2x bigger: radius 46 -> 88, slam / roll / spew reach grew with him
   slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 350, hw: 75, mult: 1.1, push: 110, cd: 3.2 },
   roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, hitR: 88, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
-  spew: { first: 4, cd: 9, trigger: 440, wind: .6, dur: 1.3, total: 2.2, len: 420, arc: .36, every: .2, mult: .3, puddles: [150, 265, 380], pr: 58, life: 7, pmult: .22, pevery: .5 },
+  spew: { first: 4, cd: 9, trigger: 700, wind: .6, dur: 1.3, total: 2.2, len: 840, arc: .21, every: .2, mult: .3, puddles: [170, 330, 490, 650, 800], pr: 66, life: 7, pmult: .22, pevery: .5 },   // (Nov 12) len 420 -> 840 (user: twice as long now he's twice the size), arc .36 -> .21 so it is a long jet, not a wider wall (the far end is ~350px across); walls block it
   sunder: { len: 3.4, fan: [[-150, 46], [-87, 24], [-6, 20], [78, 24], [150, 46]] },   // fan = where the five stand in the last painted frame (client ABM_FAN), so the live ones appear exactly there (x1.5 since Nov 12: the Five are drawn 1.5x)
   spawn: { hpFrac: .13, speed: 232, radius: 30, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 70, mult: 1, cd: 2.0 } },   // radius 20 -> 30, landing r 58 -> 70 (Nov 12, 1.5x)
 };
@@ -2563,13 +2563,13 @@ export class SurvivalRoom extends Room {
           m.spewTick = now + A.spew.every * 1000;
           for (const p of this.state.players.values()) {
             if (!p.alive || this.untouchable(p)) continue; const dx = p.x - z.x, dy = p.y - z.y, d = hyp(dx, dy); if (d > A.spew.len + BODY_R) continue;
-            const off = Math.atan2(dy, dx) - z.aim; if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > A.spew.arc) continue;
+            const off = Math.atan2(dy, dx) - z.aim; if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > A.spew.arc || !this.lineClear(z, p)) continue;   // hiding behind a wall works (it reaches 840px now)
             this.hiveHurt(p, z.damage * A.spew.mult);
           }
         }
         if (!m.spewDone && t1 >= A.spew.wind + A.spew.dur * .5) {
           m.spewDone = true; const list = [];
-          for (const d of A.spew.puddles) { const x = Math.round(z.x + Math.cos(z.aim) * d), y = Math.round(z.y + Math.sin(z.aim) * d); if (this.blockedByMap(x, y, 4)) continue; this.abFx.puddles.push({ x, y, r: A.spew.pr, until: now + A.spew.life * 1000, dmg: z.damage * A.spew.pmult, hit: new Map() }); list.push([x, y]); }
+          const wall = this.wallDist(z.x, z.y, z.aim, A.spew.len); for (const d of A.spew.puddles) { const x = Math.round(z.x + Math.cos(z.aim) * d), y = Math.round(z.y + Math.sin(z.aim) * d); if (d > wall || this.blockedByMap(x, y, 4)) continue;   /* no puddles past a wall */ this.abFx.puddles.push({ x, y, r: A.spew.pr, until: now + A.spew.life * 1000, dmg: z.damage * A.spew.pmult, hit: new Map() }); list.push([x, y]); }
           if (list.length) this.broadcast("abom", { k: "puddles", list, r: A.spew.pr, life: A.spew.life });
         }
       }

@@ -558,3 +558,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server: radius 46 -> 88; slam len 300 -> 350, hw 60 -> 75; roll hitR 58 -> 88; spew len 380 -> 420, trigger 440, puddles 150/265/380; spawn radius 20 -> 30, lunge r 58 -> 70. Wall collision / pathing still cap at min(radius, 34), so he still fits over the Crucible bridges.
 - Boss draw culling margin 460 (was 220) so the tall sprite doesn't pop at screen edges.
 - Sim: W24 with 3 bots at level 15 killed in 79s. Cache `20261112q`; next `20261112r`.
+
+## Nov 12 — Abomination lava spew 2x longer
+- ABOM.spew: len 420 -> 840, arc .36 -> .21 (a long jet, ~350px across at the far end), trigger 440 -> 700, puddles [170, 330, 490, 650, 800], pr 66.
+- Walls now block it (lineClear; lava rivers don't, they're low), and no puddles land past the first wall.
+- Client: aFx got a height squash `sy`; the stream is drawn at sy .62 so it is twice as long, not twice as fat; side strands ±.09.
+- Tests: 5 puddles; new "jet doesn't go through walls / reaches 650px in the open". Cache `20261112r`; next `20261112s`.
