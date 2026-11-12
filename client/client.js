@@ -295,6 +295,19 @@ $("pmCopy").onclick = () => { const code = room?.roomId || ""; if (code) copyTex
 $("pmControls").onclick = () => { $("pmCtl").classList.remove("hidden"); $("pmDev").classList.add("hidden"); };
 $("pmCtlBack").onclick = () => { $("pmCtl").classList.add("hidden"); pmRender(true); };
 let leaveSure = 0;
+for (const b of document.querySelectorAll("#menu button.cf")) b.insertAdjacentHTML("beforeend", '<i class="pm-gl" aria-hidden="true"></i>');   // the shine layer: gloss line, bevel, the light sweep on hover
+let uiSndAt = 0, uiHover = null;
+function uiSound(k) {   // the menu's own little sounds, made in code (through the sound effects volume): a soft tick on hover, a click on press, a brighter one on gold buttons
+  const ac = audioContext; if (!sfxOn || !ac || !sfxBus || ac.state !== "running") return; const t = ac.currentTime;
+  if (k === "hover") { if (t - uiSndAt < .045) return; uiSndAt = t; }
+  const tone = (type, f0, f1, peak, len, at = 0) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.connect(g); g.connect(sfxBus);
+    o.frequency.setValueAtTime(f0, t + at); o.frequency.exponentialRampToValueAtTime(f1, t + at + len); g.gain.setValueAtTime(.0001, t + at); g.gain.exponentialRampToValueAtTime(peak, t + at + .004); g.gain.exponentialRampToValueAtTime(.0001, t + at + len); o.start(t + at); o.stop(t + at + len + .02); };
+  if (k === "hover") return tone("sine", 2400, 1800, .022, .04);
+  tone("triangle", 320, 110, .13, .11); tone("sine", 1500, 1300, .045, .06);
+  if (k === "gold") { tone("sine", 1320, 1320, .05, .12, .03); tone("sine", 1980, 1980, .04, .18, .08); }
+}
+$("menu").addEventListener("pointerover", e => { const b = e.target.closest?.("button.cf"); if (b === uiHover) return; uiHover = b; if (b && !b.disabled) uiSound("hover"); });
+$("menu").addEventListener("pointerdown", e => { const b = e.target.closest?.("button.cf"); if (b && !b.disabled) uiSound(b.matches(".pm-resume,.pm-gold,.pm-tab,.pm-fill") ? "gold" : "click"); });
 function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") ? 370 : 1290, h = 760, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
 addEventListener("resize", pmFit);
 $("menu").addEventListener("click", e => { if (e.target === $("menu")) closePanels(); });   // a click on the dimmed backdrop closes it
@@ -308,7 +321,7 @@ function pmRender(force) {   // who sees what, which buttons work right now
   for (const b of document.querySelectorAll(".pm-boss [data-act='beast']")) b.disabled = !play || (!!M && !/^(runes|fight)/.test(M));
   $("exploreToggle").disabled = ph !== "playing"; $("exploreToggle").classList.toggle("off", !state.explore); $("noCdToggle").classList.toggle("off", !state.noCd);
   $("waveJumpGo").disabled = $("levelPlus").disabled = $("ultNow").disabled = ph === "lobby"; for (const b of document.querySelectorAll("#pmSpawn button")) b.disabled = ph !== "playing";
-  txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "HOOK SPEED" : "HOOK: SLOW");
+  txt("hookSpdT", (state.hookSpeed || 2100) >= 2100 ? "HOOK SPEED" : "HOOK: SLOW");
   if (Date.now() > leaveSure && $("leave").classList.contains("sure")) { $("leave").classList.remove("sure"); txt("leaveTxt", "LEAVE ROOM"); }
   if (force) pmFit();
 }

@@ -498,3 +498,12 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - CSS: .cf chamfer (::before border, ::after fill, drop-shadow glow on the element), Barlow Condensed, menu zoom via --pmz (pmFit), stacks under 980px.
 - Test 63 covers the host skips, the 66%/33% arrivals, both Beast shield runs, chase and escape.
 - Cache 20261112h.
+
+## Nov 12 (i): Esc menu premium pass
+- Fixed: the inner fill layer of every .cf piece was never chamfered (`--c:calc(var(--c) - 1px)` on ::after is a self-reference -> invalid -> clip-path none, so square corners poked past the angled border). Now `.cf{--ci:calc(var(--c) - 1px)}` and ::after clips with --ci.
+- JS adds `<i class="pm-gl">` to every `#menu button.cf` (the shine layer: 1px gloss line, bottom bevel, inner hairline, and a ::before light band that sweeps across on hover; RESUME and the open tab sweep on their own every ~4.8s). Hook speed label moved into `#hookSpdT` so txt() doesn't wipe the layer.
+- Metal-gradient edges (cyan, gold, red, steel), glass fills with a split highlight + faint diagonal texture, polished gold (RESUME / open tab / GO), glossy cyan FIGHT, glossy red "SURE?". Hover lifts 1px + brighter edge/glow; press sinks with an inset shadow. Disabled = desaturated, no sweep.
+- Switch knobs slide (translateX with a small overshoot) instead of jumping.
+- Menu sounds made in code (uiSound in client.js, through the SFX bus, off when SFX is off): soft tick on hover, click on press, brighter two-note click on gold/FIGHT/tabs.
+- Testing tab: LEVEL +1 / UNLOCK ULTIMATE back to 68px (the DEEP MINE buttons are 108px).
+- Cache 20261112i.

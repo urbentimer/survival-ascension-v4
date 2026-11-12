@@ -351,9 +351,9 @@ body.in-match #ls{display:none}
 .pm{--pm-f:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;--pm-gold:#ffc531;position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,6,10,.58);backdrop-filter:blur(3px);overflow:auto}
 .pm.hidden,.pm .hidden,.pm-toast.hidden{display:none!important}
 .pm-wrap{display:flex;gap:18px;align-items:stretch;justify-content:center;zoom:var(--pmz,1)}
-.cf{position:relative;isolation:isolate;--c:7px;--bw:2px;--bd:#2f4a60;--fill:#0d1823;background:none;border:0}
+.cf{position:relative;isolation:isolate;--c:7px;--bw:2px;--bd:#2f4a60;--fill:#0d1823;--ci:calc(var(--c) - 1px);background:none;border:0}
 .cf::before,.cf::after{content:"";position:absolute;pointer-events:none;clip-path:polygon(var(--c) 0,calc(100% - var(--c)) 0,100% var(--c),100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,var(--c) 100%,0 calc(100% - var(--c)),0 var(--c))}
-.cf::before{inset:0;z-index:-2;background:var(--bd)}.cf::after{inset:var(--bw);z-index:-1;background:var(--fill);--c:calc(var(--c) - 1px)}
+.cf::before{inset:0;z-index:-2;background:var(--bd)}.cf::after{inset:var(--bw);z-index:-1;background:var(--fill);clip-path:polygon(var(--ci) 0,calc(100% - var(--ci)) 0,100% var(--ci),100% calc(100% - var(--ci)),calc(100% - var(--ci)) 100%,var(--ci) 100%,0 calc(100% - var(--ci)),0 var(--ci))}
 .pm button{cursor:pointer;color:#f2f6fa;font-family:var(--pm-f);font-weight:800;letter-spacing:.4px;padding:0;margin:0;line-height:1.05}
 .pm button:disabled{opacity:.36;cursor:not-allowed;filter:none!important}
 .pm-card{--c:16px;--bw:2px;--bd:linear-gradient(180deg,#4a93c4,#1b3449 30%,#1b3449 70%,#2f6a92);--fill:linear-gradient(180deg,#0e1823,#090f16);padding:14px 18px 18px;filter:drop-shadow(0 0 9px rgba(40,165,235,.28)) drop-shadow(0 12px 26px rgba(0,0,0,.6))}
@@ -397,7 +397,7 @@ body.in-match #ls{display:none}
 .pm-two{width:120px!important;height:52px!important;font-size:16px!important;line-height:1!important}
 .pm-new{--bd:linear-gradient(90deg,#ffcf57,#ffae22);--fill:linear-gradient(180deg,#1e180b,#120e06);filter:drop-shadow(0 0 10px rgba(255,180,40,.55))}
 .pm-util{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}.pm-util .pm-out{height:52px;font-size:23px!important}
-.pm-grid3{display:grid!important;grid-template-columns:repeat(3,1fr);gap:16px;padding:6px 0}.pm-big{height:108px;font-size:24px!important;line-height:1.1!important}
+.pm-grid3{display:grid!important;grid-template-columns:repeat(3,1fr);gap:16px;padding:6px 0}.pm-big{height:108px;font-size:24px!important;line-height:1.1!important}.pm-trow .pm-big{height:68px;font-size:22px!important}
 .pm-trow{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px}.pm-t2{grid-template-columns:1fr 1fr}
 .pm-jump{--c:8px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#0f2131,#0a1520);display:flex;align-items:center;gap:10px;height:68px;padding:0 12px;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
 .pm-jump label{flex:1;white-space:nowrap;font:800 21px/1 var(--pm-f);color:#f2f6fa}
@@ -407,6 +407,63 @@ body.in-match #ls{display:none}
 .pm-spawn{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px}.pm-spawn span{font:800 17px/1 var(--pm-f);color:#9fb3c2;margin-right:4px}.pm-spawn .pm-out{height:38px;font-size:16px!important;padding:0 11px!important}
 .pm-keys{margin:14px 4px 16px;gap:10px 22px!important;font-family:"Barlow",Inter,sans-serif;font-size:15px}.pm-keys div{justify-content:flex-start!important;gap:12px!important}.pm-keys span{color:#d6dde3;text-align:left!important}.pm-keys kbd{flex:none;min-width:34px;text-align:center;font:700 12px/1 ui-monospace,Menlo,monospace!important;padding:5px 7px!important;border:1px solid #3cc8f5!important;border-radius:3px;background:#0b1824!important;color:#bfefff!important}
 .pm-toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:14px;padding:9px 28px;border:2px solid #f5b820;border-radius:30px;background:rgba(7,9,12,.92);color:#fff;font:800 italic 23px/1 "Barlow Condensed",system-ui,sans-serif;box-shadow:0 0 14px rgba(255,190,40,.45);pointer-events:none;white-space:nowrap}
+/* ===== premium pass (Nov 12): metal edges, glass fills, a gloss line, light sweep on hover, lift + press, sliding switches ===== */
+.pm-gl{position:absolute;inset:var(--bw);z-index:0;pointer-events:none;overflow:hidden;clip-path:polygon(var(--ci) 0,calc(100% - var(--ci)) 0,100% var(--ci),100% calc(100% - var(--ci)),calc(100% - var(--ci)) 100%,var(--ci) 100%,0 calc(100% - var(--ci)),0 var(--ci));box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -2px 0 rgba(0,0,0,.32),inset 0 0 0 1px rgba(255,255,255,.035);transition:background .12s}
+.pm-gl::before{content:"";position:absolute;top:-30%;bottom:-30%;left:0;width:34%;min-width:34px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.07) 30%,rgba(255,255,255,.42) 50%,rgba(255,255,255,.07) 70%,transparent);mix-blend-mode:screen;transform:translateX(-170%) skewX(-24deg)}
+.pm-resume>.pm-gl::before,.pm-tab.on>.pm-gl::before,.pm-gold>.pm-gl::before,.pm-fill>.pm-gl::before,.pm-leave.sure>.pm-gl::before{mix-blend-mode:normal;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12) 30%,rgba(255,255,255,.62) 50%,rgba(255,255,255,.12) 70%,transparent)}
+.pm button.cf:hover:not(:disabled)>.pm-gl::before{transform:translateX(420%) skewX(-24deg);transition:transform .7s cubic-bezier(.2,.65,.25,1)}
+.pm-resume>.pm-gl::before,.pm-tab.on>.pm-gl::before{animation:pmSweep 4.8s cubic-bezier(.3,.6,.3,1) infinite}
+@keyframes pmSweep{0%,70%{transform:translateX(-170%) skewX(-24deg)}100%{transform:translateX(420%) skewX(-24deg)}}
+.pm button.cf{transition:transform .14s cubic-bezier(.3,1.5,.5,1),filter .2s}
+.pm button.cf:hover:not(:disabled){transform:translateY(-1px)}
+.pm button.cf:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.05s}
+.pm button.cf:active:not(:disabled)>.pm-gl{background:rgba(255,255,255,.07);box-shadow:inset 0 2px 4px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+.pm button.cf:focus{outline:none}
+.pm button.cf:focus-visible{--bd:#fff}
+.pm button:disabled{opacity:.42;filter:saturate(.2)!important}
+.pm button:disabled>.pm-gl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)}
+
+/* dark glass: outline buttons, tabs, the wave jump box */
+.pm-out,.pm-tab,.pm-jump,.pm-trow-sw{--bd:linear-gradient(180deg,#a8eeff,#3cc8f5 30%,#1c87b8 78%,#3fc0ec);--fill:linear-gradient(180deg,rgba(130,215,255,.11),rgba(130,215,255,.02) 48%,rgba(0,0,0,0) 52%),repeating-linear-gradient(135deg,rgba(255,255,255,.022) 0 1px,transparent 1px 5px),linear-gradient(180deg,#152b3e,#0d1a27 55%,#08121b)}
+.pm-out,.pm-tab{text-shadow:0 1px 0 rgba(0,0,0,.65),0 0 10px rgba(90,210,255,.22)}
+.pm-out:hover:not(:disabled),.pm-tab:hover:not(:disabled):not(.on),.pm-trow-sw:hover:not(:disabled){--bd:linear-gradient(180deg,#e2f9ff,#74ddff 35%,#2aa6da 80%,#6fd8ff);--fill:linear-gradient(180deg,rgba(150,225,255,.2),rgba(150,225,255,.05) 48%,rgba(0,0,0,0) 52%),repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 1px,transparent 1px 5px),linear-gradient(180deg,#1c3a54,#112538 55%,#0b1824);filter:drop-shadow(0 0 10px rgba(80,215,255,.75))}
+
+/* polished gold: RESUME, the open tab, GO */
+.pm-resume,.pm-tab.on,.pm-gold{--bd:linear-gradient(180deg,#fffbe2,#ffd95e 28%,#c27c06 82%,#ffd56c);--fill:linear-gradient(180deg,rgba(255,255,255,.58),rgba(255,255,255,.12) 46%,rgba(255,255,255,0) 50%),linear-gradient(180deg,#ffe56c,#ffc92f 49%,#f2a514 51%,#f7ad1c 80%,#ffd056);text-shadow:0 1px 0 rgba(255,246,205,.75)}
+.pm-resume{--fill:linear-gradient(180deg,rgba(255,255,255,.58),rgba(255,255,255,.12) 46%,rgba(255,255,255,0) 50%),linear-gradient(118deg,transparent 0 7%,rgba(140,80,0,.28) 7% 7.6%,transparent 7.6% 10%,rgba(140,80,0,.2) 10% 10.5%,transparent 10.5% 89.5%,rgba(140,80,0,.2) 89.5% 90%,transparent 90% 92.4%,rgba(140,80,0,.28) 92.4% 93%,transparent 93%),linear-gradient(180deg,#ffe56c,#ffc92f 49%,#f2a514 51%,#f7ad1c 80%,#ffd056)}
+.pm-resume>.pm-gl,.pm-tab.on>.pm-gl,.pm-gold>.pm-gl{box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 0 rgba(120,60,0,.35),inset 0 0 0 1px rgba(255,240,180,.25)}
+.pm-resume:hover:not(:disabled),.pm-gold:hover:not(:disabled){filter:drop-shadow(0 0 18px rgba(255,205,70,.85))}
+
+/* glossy cyan: FIGHT */
+.pm-fill{--bd:linear-gradient(180deg,#f0feff,#9df0ff 30%,#1c9fd4 85%,#8ae9ff);--fill:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,.1) 47%,rgba(255,255,255,0) 50%),linear-gradient(180deg,#a2f5ff,#4ad3f8 49%,#21b3ea 51%,#1ba5de 82%,#52d2f6);text-shadow:0 1px 0 rgba(230,252,255,.6)}
+.pm-fill>.pm-gl{box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -2px 0 rgba(0,60,100,.3),inset 0 0 0 1px rgba(220,250,255,.2)}
+
+/* rows (music / sound) and the room code box: a quieter steel edge */
+.pm-row:not(.pm-trow-sw),.pm-code{--bd:linear-gradient(180deg,#456781,#243a4e 38%,#182a3a 80%,#2a4459);--fill:linear-gradient(180deg,rgba(150,200,240,.07),rgba(0,0,0,0) 50%),linear-gradient(180deg,#14222f,#0d1720 60%,#0a121a)}
+.pm-row:not(.pm-trow-sw):hover:not(:disabled){--bd:linear-gradient(180deg,#6f9cbf,#2f4c66 40%,#1d3347 80%,#3b6080)}
+#pmCode{--bd:linear-gradient(180deg,#1c252e,#4f5d69);--fill:linear-gradient(180deg,#020406,#080d12);box-shadow:none;text-shadow:0 0 12px rgba(255,255,255,.25)}
+
+/* LEAVE ROOM: red glass, and a glossy red "are you sure" */
+.pm-leave{--bd:linear-gradient(180deg,#ffb0b0,#ff3c3c 32%,#a01313 82%,#ff5c5c);--fill:linear-gradient(180deg,rgba(255,130,130,.16),rgba(255,130,130,.02) 48%,rgba(0,0,0,0) 52%),repeating-linear-gradient(135deg,rgba(255,255,255,.02) 0 1px,transparent 1px 5px),linear-gradient(180deg,#4a121a,#2c070c 58%,#1d0407)}
+.pm-leave:hover:not(:disabled){filter:drop-shadow(0 0 14px rgba(255,60,60,.8))}
+.pm-leave.sure{--bd:linear-gradient(180deg,#ffe0e0,#ff8a8a 30%,#b11414 85%,#ff8a8a);--fill:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,.08) 46%,rgba(255,255,255,0) 50%),linear-gradient(180deg,#ff6a6a,#ff3434 49%,#df1c1c 51%,#cf1616 82%,#ff4d4d);text-shadow:0 1px 0 rgba(255,200,200,.5)}
+
+/* the Mine Beast row + boss rows light up a little under the mouse */
+.pm-boss{transition:filter .2s}
+.pm-boss:hover{--bd:linear-gradient(90deg,#4d86ad,#244058 45%,#1f3446)}
+.pm-new{--bd:linear-gradient(90deg,#ffe08a,#ffae22 40%,#b8740a 85%,#ffcf57)}
+.pm-new:hover{--bd:linear-gradient(90deg,#fff0b8,#ffc040 40%,#d08a14 85%,#ffe08a)}
+.pm-host{--bd:linear-gradient(180deg,#fff0a8,#f5b820 45%,#a86c06)}
+
+/* switches: the knob slides (with a tiny overshoot), the track glows on */
+.pm-sw{background:linear-gradient(180deg,#02070b,#0a1a26);transition:border-color .2s,box-shadow .2s,background .2s}
+.pm-sw-k{right:auto;left:5px;transform:translateY(-50%) translateX(54px);transition:transform .24s cubic-bezier(.3,1.45,.5,1),background .2s,box-shadow .2s;box-shadow:0 0 10px #3fd0ff,inset 0 -3px 4px rgba(0,70,110,.45),inset 0 1px 1px rgba(255,255,255,.9)}
+.pm-sw-t{transition:color .2s}
+.off .pm-sw-k{transform:translateY(-50%) translateX(0);box-shadow:inset 0 -3px 4px rgba(0,0,0,.35),inset 0 1px 1px rgba(255,255,255,.7)}
+
+/* the number box */
+.pm-jump input{background:linear-gradient(180deg,#020406,#0a0f14);box-shadow:0 0 7px rgba(255,190,40,.45),inset 0 2px 4px rgba(0,0,0,.6)}
+.pm-jump input:focus{outline:none;border-color:#ffe07a;box-shadow:0 0 12px rgba(255,205,70,.7),inset 0 2px 4px rgba(0,0,0,.6)}
 @media (max-width:980px){.pm{align-items:flex-start}.pm-wrap{flex-direction:column;align-items:center;zoom:1}.pm-left{width:min(420px,100%)}.pm-dev,.pm-ctl{width:100%}.pm-boss{grid-template-columns:72px minmax(0,1fr)}.pm-face{width:72px;height:56px}.pm-face img{width:68px;height:52px}.pm-bb{grid-column:1/-1;flex-wrap:wrap;justify-content:flex-start}.pm-grid3,.pm-trow,.pm-t2,.pm-util{grid-template-columns:1fr 1fr}.pm-title{font-size:30px}.pm-tab{font-size:20px!important}}
 </style>
 </head>
@@ -579,7 +636,7 @@ body.in-match #ls{display:none}
     <header class="pm-dh"><h2 class="pm-title"><i class="pm-sl"></i>DEVELOPER TOOLS<i class="pm-sl"></i></h2><span class="cf pm-host"><svg viewBox="0 0 24 24"><path d="M3 18l-1-11 6 4 4-7 4 7 6-4-1 11z" fill="currentColor"/></svg>HOST ONLY</span></header>
     <nav class="pm-tabs"><button class="cf pm-tab" data-tab="bosses">BOSSES</button><button class="cf pm-tab" data-tab="mine">DEEP MINE</button><button class="cf pm-tab" data-tab="testing">TESTING</button></nav>
     <div class="pm-pane" data-pane="bosses">
-     <div class="pm-boss cf" data-boss="butcher"><span class="pm-face cf"><img data-face="butcher" alt=""></span><span class="pm-bn"><b>THE BUTCHER</b><em>WAVE 4</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="4">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".33">33%</button><button class="cf pm-out pm-wide2" id="hookSpd">HOOK SPEED</button></span></div>
+     <div class="pm-boss cf" data-boss="butcher"><span class="pm-face cf"><img data-face="butcher" alt=""></span><span class="pm-bn"><b>THE BUTCHER</b><em>WAVE 4</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="4">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".33">33%</button><button class="cf pm-out pm-wide2" id="hookSpd"><span id="hookSpdT">HOOK SPEED</span></button></span></div>
      <div class="pm-boss cf" data-boss="pyre"><span class="pm-face cf"><img data-face="pyre" alt=""></span><span class="pm-bn"><b>THE PYRE PRIEST</b><em>WAVE 8</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="8">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".33">33%</button></span></div>
      <div class="pm-boss cf" data-boss="screamer"><span class="pm-face cf"><img data-face="screamer" alt=""></span><span class="pm-bn"><b>THE SCREAMER</b><em>WAVE 12</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="12">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".33">33%</button></span></div>
      <div class="pm-boss cf" data-boss="abomination"><span class="pm-face cf"><img data-face="abomination" alt=""></span><span class="pm-bn"><b>THE ABOMINATION</b><em>WAVE 16</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="16">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".33">33%</button><button class="cf pm-out pm-two" id="skipMorph">SPLIT<br>INTO FIVE</button></span></div>
@@ -624,5 +681,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261112h"></script>
+<script type="module" src="./client.js?v=20261112i"></script>
 </body></html>
