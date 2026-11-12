@@ -526,3 +526,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `client/assets/audio/music_boss_pyre.mp3` (128k): the loop with 0.5s of its own end before it and of its start after it; MUSIC_LOOP.pyre = { pad: .5, len: 180.834 } sets exact loopStart/loopEnd (robust to MP3 decoder delay). musicScene() -> "pyre" while the Pyre Priest is the boss (intro card + fight); other bosses keep music_boss_battle.mp3.
 - Work files in /home/claude/work/pyre (scripts feat.py, score.py, pick.py, render.py). Music isn't in the preview (16 MB limit); SA_MUSIC=1 node tools/build-preview.mjs makes a local test build with it.
 - Cache 20261112k.
+
+## Nov 12 (l): the Pyre Priest is 1.65x bigger
+- User: "the size of the pyramid door". His walk figure is ~138px tall; the pyramid doorway (RF_ART.rPyramid.door) is 165x227, so PY.sc = 1.65 (client): sprite, death anim, aura, glows, firewalk flames and stride all scale; gameplay telegraphs (swing ring, strike, sermon wedge) stay at the server's real radii.
+- Server: PYRE.radius 40 -> 64 (hitbox / body), strike.r 150 -> 175 (so his lamp still reaches past his bigger body). He still fits the 200px notch down the pyramid steps. sim-bosses wave 16: killed (3 bots, level 8). Cache 20261112l.

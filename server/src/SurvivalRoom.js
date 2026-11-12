@@ -59,12 +59,12 @@ const isHiveWave = stage => stage % 4 === 2 && chapterOf(stage).boss !== "hivemi
 //   ON FIRE        players burn for 3s (re-lit while standing in fire): damage over time, armour applies, the dash dodge ignores it.
 //   Enraged below 35%: faster, every cooldown x0.75, longer-lasting fire patches, bigger pillars.
 const PYRE = {
-  hp: 2400, speed: 212, radius: 40,   // speed: 230 -> 184 (-20%) -> 212 (+15%), Nov 8
+  hp: 2400, speed: 212, radius: 64,   // radius 40 -> 64 (Nov 12: drawn 1.65x bigger, as tall as the pyramid door)   // speed: 230 -> 184 (-20%) -> 212 (+15%), Nov 8
   dmg: 26, enrageAt: .35, enrageSpeed: 1.12, enrageCd: .75,
   swing:  { trigger: 260, windup: .7, hit: .95, total: 1.6, r: 260, flat: .6,   // r + trigger: 200 until Nov 8 (+30%)
             mult: 1.3, push: 110, cd: 5 },   // flat: the ring is a ground ellipse (matches the art)
   walk:   { first: 6, every: 16, life: 8, step: 38, patch: 6, patchEnraged: 9, r: 36 },
-  strike: { trigger: 95, windup: .3, hit: .34, total: .7, r: 150, arc: Math.PI / 3, mult: 1, push: 45, cd: 1.3 },   // basic attack; arc: half-angle in front
+  strike: { trigger: 95, windup: .3, hit: .34, total: .7, r: 175, arc: Math.PI / 3, mult: 1, push: 45, cd: 1.3 },   // basic attack; arc: half-angle in front
   sermon: { first: 9, cd: 15, total: 2.6, mark: .5, warn: 1, n: 7, aimed: 3, spread: [110, 400], gap: 110, r: 72, mult: 1.2, back: 2 },   // n pillars: one on each of the `aimed` closest survivors, the rest at random spots around him
   wheel:  { first: 12, gap: 15, cast: 1.2, warn: 2, life: 60, len: 620, hw: 14, turn: 18, enrageTurn: 14, mult: .45, every: .6 },   // gap: rest after one ends; hw: half width
   burn:   { len: 3, dps: .25 },   // fraction of his damage per second
