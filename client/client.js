@@ -1170,11 +1170,9 @@ function pyreAura(z, feet, now, front) {   // the scary part: smoke, heat and em
   const t = now / 1000, en = z.enraged ? 1 : 0, gy = z.y + feet;
   ctx.save(); ctx.translate(z.x, gy); ctx.scale(PY.sc, PY.sc); ctx.translate(-z.x, -gy);   // (Nov 12) he's 1.65x bigger: so is his aura
   if (!front) {
-    let g = ctx.createRadialGradient(z.x, gy, 10, z.x, gy, 160);   // scorched, smoky ground
-    g.addColorStop(0, "rgba(25,4,2,.8)"); g.addColorStop(.55, "rgba(15,2,2,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(z.x, gy, 160, 60, 0, 0, 7); ctx.fill();
-    g = ctx.createRadialGradient(z.x, gy - 75, 20, z.x, gy - 75, 120);   // a dark, smoky halo behind his body
-    g.addColorStop(0, "rgba(12,0,0,.5)"); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(z.x - 125, gy - 200, 250, 250);
+    let g = ctx.createRadialGradient(z.x, gy, 6, z.x, gy, 80);   // (Nov 12, user: "I want him to look clear") just a soft contact shadow under his feet: no dark pool, no dark halo behind him
+    g.addColorStop(0, "rgba(10,2,0,.42)"); g.addColorStop(.6, "rgba(10,2,0,.2)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(z.x, gy, 80, 26, 0, 0, 7); ctx.fill();
     ctx.globalCompositeOperation = "lighter"; const beat = .5 + .5 * Math.sin(t * 5.3) * Math.sin(t * 2.1);
     g = ctx.createRadialGradient(z.x, gy - 40, 6, z.x, gy - 40, 95 + beat * 15);   // heat glow
     g.addColorStop(0, `rgba(255,${110 - en * 40},30,${.22 + beat * .12 + en * .1})`); g.addColorStop(1, "rgba(120,20,0,0)");
@@ -1182,11 +1180,12 @@ function pyreAura(z, feet, now, front) {   // the scary part: smoke, heat and em
     ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,${80 - en * 50},30,${.25 + beat * .3})`; ctx.setLineDash([3, 9]); ctx.lineDashOffset = -t * 30;   // flickering heat ring
     ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + beat * 6, 26 + beat * 2, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
   } else {
-    for (let i = 0; i < 18 + en * 10; i++) {   // embers rising off him, dark smoke curling above
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 14 + en * 8; i++) {   // embers rising off him (the dark smoke puffs that drifted over his body are gone: he stays clear)
+      if (i % 3 === 0) continue;
       const ph = (t * (.45 + (i % 5) * .07) + i * .173) % 1, sd = Math.sin(i * 91.7) * 4371.3, r = sd - Math.floor(sd);
       const x = z.x + (r - .5) * 90 + Math.sin(t * 2 + i) * 8, y = gy - 20 - ph * 150;
-      if (i % 3 === 0) { ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = `rgba(18,8,8,${.38 * (1 - ph)})`; ctx.beginPath(); ctx.arc(x, y - 30, 10 + ph * 20, 0, 7); ctx.fill(); }
-      else { ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = `rgba(255,${140 + (i % 4) * 25},50,${.85 * (1 - ph)})`; ctx.fillRect(x, y, 2.2, 2.2 + (1 - ph) * 3); }
+      ctx.fillStyle = `rgba(255,${140 + (i % 4) * 25},50,${.75 * (1 - ph)})`; ctx.fillRect(x, y, 2, 2 + (1 - ph) * 3);
     }
   }
   ctx.restore();
