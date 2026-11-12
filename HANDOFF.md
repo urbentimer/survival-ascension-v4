@@ -533,3 +533,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 
 ## Nov 12 (m): the Pyre Priest looks clear
 - User: "why does he have a black overcast shadow, I want to see his details". pyreAura: removed the dark smoky halo behind his body and the big scorched dark pool (now a small soft contact shadow), and the dark smoke puffs that drifted over his body in front; kept the embers and the warm heat glow. Cache 20261112m.
+
+## Nov 12 (n): the Abomination's own music
+- User's file: an hour of one ~4:35 track repeated (period 274.78s; 6/8 feel at 120 BPM, 6.0s phrases). Its big part is only ~62s (1:50-2:52 of each cycle), so the loop is the strongest continuous stretch that loops cleanly: cycle 0:53.2 -> 3:47.2 (29 phrases, 174.0s), 2-bar (3s) crossfade, then ROTATED so the file starts 6s before the big hit (~53.17s into the loop; the join sits at 2:00.8 of the file). -2.2 dB to -16.5 LUFS.
+- `client/assets/audio/music_boss_abom.mp3`, MUSIC_LOOP.abom { pad .5, len 174.0001 }; musicScene -> "abom" for the Abomination / the Five / his intro card. Work files /home/claude/work/abom. Cache 20261112n.

@@ -671,8 +671,9 @@ const VOICE = { dispatcher: { Q: "vAstraQ", E: "vAstraE" } };
 function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
 // Music loops (empty in the solo preview: it has to stay under 16 MB). Crossfade 1s between scenes.
 const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
-  pyre: "assets/audio/music_boss_pyre.mp3" };   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
-const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+  pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
+  abom: "assets/audio/music_boss_abom.mp3" };   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -718,6 +719,7 @@ function musicScene() {   // which music fits right now
   if (state.phase === "defeat" || state.phase === "victory") return "";
   const pyre = [...state.zombies.values()].some(z => z.kind === "pyre" && z.boss) || (state.waveType === "boss" && state.bossIntro === "pyre");
   if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)
+  if ([...state.zombies.values()].some(z => (z.kind === "abomination" || z.kind === "abomSpawn") && z.boss) || (state.waveType === "boss" && state.bossIntro === "abomination")) return "abom";   // the Abomination (and the Five)
   const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
   if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
   return state.isNight ? "night" : "day";
