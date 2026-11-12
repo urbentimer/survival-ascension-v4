@@ -15,6 +15,7 @@ const W = ms => new Promise(r => setTimeout(r, ms));
 
 function makeRoom(withMap = false) {
   const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room.state.noCd = false;   // tests check the real cooldowns
+  room.fixedSite = true;   // (Nov 12) most tests stay on one map: the map order (moving on after each boss) has its own test
   if (!withMap) room.mapGrid = new Map();   // most tests use an empty map (fixed test positions may sit inside buildings)
   const events = []; room._onBroadcast = (type, m) => events.push({ type, ...m });
   const A = { sessionId: "A" }, B = { sessionId: "B" };
@@ -677,7 +678,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const gold = p.currency; room.hitZombie(h, p, 1e6); ok(!hive() && p.currency >= gold + 40, "killing it pays everyone gold");
   room.state.zombies.clear(); tick(2); ok(room.state.phase === "cleared", "...and then the wave can end");
   room.state.phase = "playing"; room.inBreak = false; room.state.stage = 3; room.beginWave(); room.state.elapsed = 50; room.spawnClock = 9999; tick(1); ok(!hive(), "wave 3: no Hivemind");
-  room.state.stage = 6; room.beginWave(); room.state.elapsed = 41; room.spawnClock = 9999; tick(1); ok(hive() && hive().maxHp > h.maxHp, "wave 6: it's back, tougher");
+  room.state.stage = 10; room.beginWave(); room.state.elapsed = 41; room.spawnClock = 9999; tick(1); ok(hive() && hive().maxHp > h.maxHp, "wave 10: it's back, tougher (not on wave 6: the Alpha Hivemind is wave 8's boss)");
   room._dispose(); }
 // 32. online: the host can skip to the Butcher fight (other players can't)
 { const { room, A, B } = makeRoom(); room.state.stage = 2; room.beginWave(); room.state.elapsed = 20;
@@ -775,7 +776,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 // 33d. Whiteout Station (Nov 10): a tight maze of Antarctic lab buildings, same piece system as Fallen Dynasty
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
-  send(A, "settings", { map: 4 });
+  room.fixedSite = true; room.loadSite(4);
   ok(room.state.mapSite === 4 && room.state.worldW === 4400 && room.state.worldH === 2800 && room.flow, "host picks Whiteout Station: 4400x2800, flow-field zombies");
   const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)), kinds = new Set(lay.map(r => r[0]));
   ok(lay.length > 100 && kinds.size > 25 && lay.every(r => r[0] >= 44), `built from its own pieces (${lay.length} pieces, ${kinds.size} kinds)`);
@@ -798,7 +799,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 // 33f. (Midnight Carnival: removed Nov 11)
 // 33e. Scorched Refinery (Nov 10): open desert map, bosses walk out of the pyramid
-{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 5 });
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; room.fixedSite = true; room.loadSite(5);
   ok(room.state.mapSite === 5 && room.state.worldW === 4400 && room.flow && room.bossDoor?.x === 2200, "host picks Scorched Refinery: 4400x2800, the pyramid's doorway is known");
   const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)); ok(lay.length > 120 && lay.every(r => r[0] >= 84), `built from its own pieces (${lay.length})`);
   ok(room.blockedByMap(2200, 500) && !room.blockedByMap(2200, 840) && !room.blockedByMap(2200, 1000) && !room.blockedByMap(p.x, p.y, 0), "the pyramid is solid; its steps, the road down from it and the yard are open");
@@ -809,7 +810,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(z && Math.abs(z.x - 2200) < 60 && z.y > 700 && z.y < 820 && !room.blockedByMap(z.x, z.y, 0), `the boss walks out of the pyramid (${Math.round(z?.x)},${Math.round(z?.y)})`);
   room._dispose(); }
 // 33h. The Deep Mine (Nov 11): a 6000x4000 underground map, the tower in the scavenge zone (top left), a long mine-cart loop, bosses climb out of the shaft
-{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "settings", { map: 6 });
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; room.fixedSite = true; room.loadSite(6);
   ok(room.state.mapSite === 6 && room.state.worldW === 6000 && room.state.worldH === 4000 && room.flow && room.state.towerX === 1450 && room.state.towerY === 1330, "host picks The Deep Mine: 6000x4000, the tower in the scavenge zone, flow-field zombies");
   const lay = room.state.mapLayout.split(";").map(r => r.split(",").map(Number)); ok(lay.length > 200 && lay.every(r => r[0] >= 186), `built from its own pieces (${lay.length})`);
   ok(!room.blockedByMap(p.x, p.y, 0) && Math.hypot(p.x - 1450, p.y - 1330) < 260, "everyone starts by the tower");
@@ -844,7 +845,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 // 33i. WAVE 20: the Deep Mine mission (Nov 11): runes -> fuel -> ride -> statue, four times; the Mine Beast fight in the dungeon; it chases the carts for a lap; the portal
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); for (const o of [p, q]) { o.hp = o.maxHp; if (!o.alive) { o.alive = true; o.bledOut = false; o.bleedout = 0; } } } };
-  room.state.phase = "lobby"; send(A, "settings", { map: 4 }); room.state.phase = "playing"; room.state.scrap = 9999; p.x = 2200; p.y = 1700; send(A, "build", { kind: "barricade", x: 2260, y: 1700 }); const nSt = room.state.structures.size;
+  room.state.phase = "lobby"; room.fixedSite = true; room.loadSite(4); room.state.phase = "playing"; room.state.scrap = 9999; p.x = 2200; p.y = 1700; send(A, "build", { kind: "barricade", x: 2260, y: 1700 }); const nSt = room.state.structures.size;
   room.jumpToWave(20); const m = room.mine, C = room.coaster, T = C?.T;
   ok(m && room.state.mapSite === 6 && room.state.waveType === "mission" && room.state.mission.startsWith("runes|0|0|") && room.state.structures.size === 0 && Math.hypot(p.x - 1450, p.y - 1330) < 300, `wave 20 takes the team to the Deep Mine: mission on, 4 runes at their shrines (${room.state.mission.slice(0, 40)}...)`);
   tick(200); ok(room.state.phase === "playing" && C.wait > 0 && C.next === 0, "the wave doesn't end on a timer, and the carts wait at the station");
@@ -924,7 +925,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 // 33c. Fallen Dynasty: a bigger map built from Chinese-city pieces (same system as the city), flow-field zombies
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby";
-  send(A, "settings", { map: 3 });
+  room.fixedSite = true; room.loadSite(3);
   ok(room.state.mapSite === 3 && room.state.worldW === 4400 && room.state.worldH === 2800 && !room.state.mapLayout.startsWith("P:"), "host picks Fallen Dynasty: a bigger map (4400x2800) made of pieces");
   ok(room.state.towerX === 2200 && room.state.towerY === 1400 && room.flow, "the radio tower is in the middle; zombies use the flow field there");
   const kinds = new Set(room.state.mapLayout.split(";").map(r => Number(r.split(",")[0])));
@@ -935,7 +936,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const z = placeZombie(room, 300, 2500, 500); z.kind = "walker"; z.role = "tower"; z.speed = 120; z.damage = 0;
   for (let i = 0; i < 600; i++) { room.lastTick = Date.now() - 50; room.tick(); }
   ok(Math.hypot(z.x - 2200, z.y - 1400) < 150, `a zombie from the far corner finds its way round the buildings to the tower (${Math.round(z.x)},${Math.round(z.y)})`);
-  room.state.phase = "lobby"; send(A, "settings", { map: 0 }); ok(room.state.worldW === 3600 && room.state.towerX === 1800 && !room.flow, "back to a city site: the city map again");
+  room.state.phase = "lobby"; room.fixedSite = true; room.loadSite(0); ok(room.state.worldW === 3600 && room.state.towerX === 1800 && !room.flow, "back to a city site: the city map again");
   room._dispose(); }
 // 34. test mode (host toggle): ultimates unlocked, no cooldown after they end
 { const { room, A, B, send, P } = makeRoom(); const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
@@ -1089,7 +1090,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(B, "setName", { name: "Gemma<>" }); ok(q.name === "Gemma", "players can rename themselves in the lobby (cleaned)");
   const lay0 = room.state.mapLayout; send(B, "settings", { map: 1, difficulty: "hard" }); ok(room.state.mapSite === 0 && room.state.difficulty === "normal", "only the host can change mission settings");
   send(A, "settings", { map: 1, difficulty: "hard", waveMode: "ascension", friendlyFire: true, extraLoot: true });
-  ok(room.state.mapSite === 1 && room.state.mapLayout !== lay0 && room.mapGrid.size > 0, "host picks Site 02: a different map layout");
+  ok(room.state.mapSite === 0 && room.state.mapLayout === lay0, "(Nov 12) no map choice: the match always starts at Ascension");
   ok(room.state.difficulty === "hard" && room.state.waveMode === "ascension" && room.state.friendlyFire && room.state.extraLoot, "difficulty / wave mode / friendly fire / extra loot saved");
   send(A, "settings", { difficulty: "nightmare" }); ok(room.state.difficulty === "hard", "...bad values are ignored");
   send(A, "chooseClass", { id: "slasher" }); ok(p.characterClass !== "slasher", "Arshan can't be picked yet");
@@ -1250,7 +1251,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
   room.mapBoxesNear = () => []; room.mapGrid = new Map();
   room._handlers.start(A, {}); room.spawnClock = 9999; room.state.zombies.clear();
-  room.state.stage = 8; ok(room.bossKind() === "pyre", "wave 8's boss is the Pyre Priest");
+  room.state.stage = 16; ok(room.bossKind() === "pyre", "wave 16's boss is the Pyre Priest (the Refinery's boss, Nov 12)");
   room.spawnZombie(true, "pyre"); const z = [...room.state.zombies.values()].pop(); z.x = 1500; z.y = 1200;
   ok(z.boss && z.role === "hunter" && z.speed === 212, `a boss that hunts survivors, speed ${z.speed} (184 + 15%)`);
   let T = Date.now(); const real = Date.now; const think = sec => { for (let i = 0; i < sec * 20; i++) { T += 50; Date.now = () => T; try { room.pyreThink(z, .05, T, null); room.tickBurn(.05, T); } finally { Date.now = real; } } };
@@ -1529,7 +1530,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     const v = room.state.vehicles.get(p.sessionId); p.x = 1650; p.y = 1500; if (v) { v.x = p.x; v.y = p.y; } p.hp = p.maxHp; ev.length = 0; room.abmem(z, t).slamReady = 0; z.act = ""; z.slam = 0; step(2600);
     ok(ok1 && v?.phase === "ride" && ev.some(e => e.k === "slam") && p.hp < p.maxHp, `bosses attack Sofea in her helicopter (${Math.round(p.maxHp - p.hp)} dmg)`);
     room.state.zombies.clear(); room.bossOverAt = 0; room.state.elapsed = 0; step(100); ok(room.untouchable(p), "no boss around: ordinary zombies still can't reach the helicopter"); room.state.vehicles.delete(p.sessionId); }
-  { const z0 = fresh(); room.state.zombies.clear(); room.state.phase = "playing"; room.bossOverAt = 0; room.state.elapsed = 0; room.state.hostId = A.sessionId; send(A, "debugMorph"); step(300); ok(room.state.stage === 16 && room.state.bossPhase === "intro" && room.state.bossIntro === "abomination", `debugMorph: his boss card first (${room.state.bossPhase})`);
+  { const z0 = fresh(); room.state.zombies.clear(); room.state.phase = "playing"; room.bossOverAt = 0; room.state.elapsed = 0; room.state.hostId = A.sessionId; send(A, "debugMorph"); step(300); ok(room.state.stage === 24 && room.state.bossPhase === "intro" && room.state.bossIntro === "abomination", `debugMorph: his boss card first (${room.state.bossPhase}, wave ${room.state.stage})`);
     for (const pl of room.state.players.values()) send({ sessionId: pl.sessionId }, "ackBoss"); step(400); const z = [...room.state.zombies.values()].find(o => o.kind === "abomination"); ok(z?.act === "sunder", "...then he arrives already tearing apart");
     send(A, "debugMorph"); ok(z.act === "sunder", "debugMorph again: nothing breaks"); }
   room._dispose(); }
@@ -1592,4 +1593,61 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room._dispose(); }
 { const { room, A, send } = makeRoom(); room.state.stage = 3; room.beginWave(); room.state.elapsed = 20;
   send(A, "debugMine", { k: "escape" }); ok(room.mine && room.mine.step === "escaped", "SKIP TO THE ESCAPE from an ordinary wave: the mission starts and goes straight to the portal"); room._dispose(); }
+// 64. (Nov 12) THE HOST PAUSE: Esc menu open = the whole game stops (no moving, no damage, no timers); only the host can pause; leaving unpauses
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.stage = 3; room.beginWave(); room.spawnClock = 9999; p.x = 900; p.y = 900; q.x = 1500; q.y = 900; const z = placeZombie(room, 930, 900, 500); z.speed = 60; z.damage = 30;
+  send(B, "pause", { on: true }); ok(!room.state.paused, "a non-host can't pause");
+  send(A, "pause", { on: true }); ok(room.state.paused, "the host pauses the game");
+  const hp0 = p.hp, zx = z.x, el0 = room.state.elapsed; tick(60); ok(p.hp === hp0 && z.x === zx && room.state.elapsed === el0, `paused: zombies freeze, nobody takes damage, the wave clock stops (hp ${hp0} -> ${p.hp})`);
+  const qx = q.x; send(B, "input", { dx: 1, dy: 0, s: 1, dt: 50 }); tick(3); send(B, "attack", { a: 0 }); ok(q.x === qx, "paused: players can't move or shoot");
+  const bm = { next: Date.now() + 3000 }; room.bossMem.set("zz", bm); const was = bm.next; room.pausedAt = Date.now() - 5000;
+  send(A, "pause", { on: false }); ok(!room.state.paused && bm.next >= was + 4900, "unpaused: the boss timers are pushed back by the pause (no instant attacks)"); room.bossMem.delete("zz");
+  tick(20); ok(p.hp < hp0 || z.x !== zx, "...and the game carries on");
+  send(A, "pause", { on: true }); room.onLeave(A, true); ok(!room.state.paused && room.state.hostId === "B", "the host leaves while paused: the game unpauses for the new host");
+  room._dispose(); }
+// 65. (Nov 12) THE PYRE PLATE: the Pyre Priest drops one per survivor; pick it up, wear it (T): -25% damage, +30 max HP, fireproof; unclaimed ones are handed out
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.stage = 16; room.beginWave(); room.state.zombies.clear(); room.spawnZombie(true); const pz = [...room.state.zombies.values()].find(o => o.boss);
+  ok(pz?.kind === "pyre", "wave 16: the Pyre Priest"); pz.x = 1200; pz.y = 900; p.x = 600; p.y = 600; q.x = 2400; q.y = 1600; room.killZombie(pz, p);
+  const plates = [...room.state.loot.values()].filter(l => l.kind === "pyreplate"); ok(plates.length === 2, `he drops the PYRE PLATE: one per survivor (${plates.length})`);
+  p.x = plates[0].x; p.y = plates[0].y; tick(1); ok(p.armor === 1 && room.state.loot.size >= 1, "walk over one: it's in your backpack");
+  p.x = plates[1].x; p.y = plates[1].y; tick(1); ok([...room.state.loot.values()].some(l => l.kind === "pyreplate"), "...and you can't take a second one (it's left for your teammate)");
+  const hp0 = p.maxHp; send(A, "gear", { id: "pyreplate", on: true }); ok(p.armor === 2 && p.maxHp === hp0 + 30, `wear it: +30 max HP (${hp0} -> ${p.maxHp})`);
+  const base = room.armorHit(q, 100), worn = room.armorHit(p, 100); ok(worn === Math.max(1, Math.round(100 * (1 - (p.armorPct || 0)) * .75 - (p.defence || 0))) && worn < base, `it takes 25% off every hit (${base} -> ${worn})`);
+  room.pBurn.set(p.sessionId, { until: Date.now() + 5000, dps: 20 }); const h1 = p.hp; room.tickBurn(.5, Date.now()); ok(p.hp === h1 && !room.pBurn.has(p.sessionId), "fireproof: it can't burn");
+  send(A, "gear", { id: "pyreplate", on: false }); ok(p.armor === 1 && p.maxHp === hp0, "take it off: back in the backpack"); send(A, "gear", { id: "pyreplate", on: true });
+  ok(q.armor === 0, "your teammate hasn't picked theirs up yet"); room.state.phase = "cleared"; room.inBreak = true; room.startNextWave();
+  ok(q.armor === 1 && ![...room.state.loot.values()].some(l => l.kind === "pyreplate"), "the next wave starts: the unclaimed plate is handed out (nobody misses out)");
+  room._dispose(); }
+// 66. (Nov 12) THE MAP ORDER: Ascension -> Fallen Dynasty -> Whiteout -> Refinery -> The Deep Mine -> (the Crucible, stand-in): 4 waves each, the boss on the 4th, then on to the next map
+{ const { room, A, B, send, P } = makeRoom(); room.fixedSite = false; const p = P(A); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  ok(room.state.mapSite === 0, "the match starts at Ascension");
+  const bossOf = w => { room.state.stage = w; return room.bossKind(); };
+  ok(bossOf(4) === "butcher" && bossOf(8) === "hivemind" && bossOf(12) === "screamer" && bossOf(16) === "pyre" && bossOf(20) === "minebeast" && bossOf(24) === "abomination" && bossOf(28) === "butcher" && bossOf(50) === "apocalypse", "bosses by wave: Butcher 4, Alpha Hivemind 8, Screamer 12, Pyre Priest 16, Mine Beast 20, Abomination 24, then round 2");
+  room.state.stage = 3; room.beginWave(); ok(room.state.mapSite === 0, "waves 1-4 stay on Ascension");
+  room.state.scrap = 9999; room.state.phase = "playing"; send(A, "build", { kind: "barricade", x: p.x + 60, y: p.y }); const built = room.state.structures.size;
+  room.state.stage = 4; room.state.phase = "cleared"; room.beginBreak(); ok(room.state.mapSite === 3 && built > 0 && room.state.structures.size === 0 && room.state.towerHp === room.state.towerMaxHp, `boss down (wave 4): the break is already on FALLEN DYNASTY (built things stay behind, a fresh tower)`);
+  room.startNextWave(); ok(room.state.stage === 5 && room.state.mapSite === 3, "wave 5 is on Fallen Dynasty");
+  room.jumpToWave(9); ok(room.state.mapSite === 4, "a jump to wave 9: Whiteout Station"); room.jumpToWave(13); ok(room.state.mapSite === 5, "wave 13: Scorched Refinery");
+  room.jumpToWave(17); ok(room.state.mapSite === 6 && room.state.waveType === "normal" && !room.mine, "wave 17: The Deep Mine, an ordinary wave first");
+  room.jumpToWave(20); ok(room.state.mapSite === 6 && room.mine && room.state.waveType === "mission", "wave 20: the rune mission on the Mine");
+  room.jumpToWave(21); ok(room.state.mapSite === 2 && !room.mine, "wave 21: on to the Crucible (Crossroads Ruins stands in until the lava map is built)");
+  room.jumpToWave(25); ok(room.state.mapSite === 0, "wave 25: round 2 starts back at Ascension");
+  room.resetMatch?.(); ok(room.state.mapSite === 0, "a new match: Ascension");
+  room._dispose(); }
+// 67. (Nov 12) THE ALPHA HIVEMIND (wave 8, Fallen Dynasty): a bigger Hivemind boss that tears off Hiveminds at 66% / 33%; no mini Hivemind on wave 6
+{ const { room, A, B, send, P } = makeRoom(); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  room.state.stage = 6; room.beginWave(); room.state.elapsed = 41; room.spawnClock = 9999; tick(1); ok(![...room.state.zombies.values()].some(z => z.kind === "hivemind"), "wave 6: no mini Hivemind (the Alpha is coming)");
+  room.state.stage = 8; room.beginWave(); room.state.zombies.clear(); room.spawnBoss(); const z = [...room.state.zombies.values()].find(o => o.boss);
+  room.state.stage = 10; const mini = room.spawnHivemind(); room.state.stage = 8;
+  ok(z?.kind === "hivemind" && z.radius > 60 && z.maxHp > mini.maxHp * 2.5, `wave 8's boss: the ALPHA HIVEMIND, bigger and far tougher (r ${z?.radius}, ${Math.round(z?.maxHp)} HP)`); room.state.zombies.delete(mini.id);
+  const count = () => [...room.state.zombies.values()].filter(o => o.kind === "hivemind" && !o.boss).length;
+  z.hp = z.maxHp * .6; room.hiveThink(z, .05, Date.now(), []); ok(count() === 1, "66%: it tears off a Hivemind");
+  z.hp = z.maxHp * .3; room.hiveThink(z, .05, Date.now(), []); ok(count() === 3, "33%: two more");
+  room.killZombie(z, P(A)); ok(room.state.bossDead && room.bossOverAt > 0, "kill the Alpha: the boss wave is won");
+  room._dispose(); }
+// 68. (Nov 12) the Mine Beast's shield run: the rider can't be hurt, and the cart leaves the moment they're on
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
+  room.mine = { step: "fight", shield: { i: 0, t: 0, by: "", ov: 0 } }; room.bossUp = true; p.ride = 1;
+  ok(room.untouchable(p), "on the cart during the shield run: can't be hurt"); p.ride = 0; ok(!room.untouchable(p), "...off the cart: you can"); room.mine = null; room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

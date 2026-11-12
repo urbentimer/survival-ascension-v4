@@ -10,6 +10,11 @@ import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station piece
 import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
 
 const $ = id => document.getElementById(id);
+// (Nov 12) THE GAME CLOCK: every animation / timer in this file reads gnow(), which stops while the host has the game paused
+// (zombies freeze mid-step, fires and effects hold still) and carries on from the same moment when they unpause.
+const _realNow = () => performance.now(); let gPauseAt = 0, gPauseOff = 0;
+function gnow() { return (gPauseAt || _realNow()) - gPauseOff; }
+function gamePause(on) { if (on && !gPauseAt) gPauseAt = _realNow(); else if (!on && gPauseAt) { gPauseOff += _realNow() - gPauseAt; gPauseAt = 0; } }
 const serverInput = new URLSearchParams(location.search).get("server");
 const defaultEndpoint = location.protocol === "https:" ? `wss://${location.host}` : `ws://${location.hostname || "localhost"}:${GAME_CONFIG.serverPort}`;
 const endpoint = serverInput || GAME_SERVER || defaultEndpoint;
@@ -121,51 +126,54 @@ function connected() {
   try { const d = JSON.parse(sessionStorage.getItem("sa-drop") || "null"); if (d) { sessionStorage.removeItem("sa-drop"); setTimeout(() => { try { room?.send("clientError", { m: `earlier drop: close code ${d.code} in ${d.ph}, ${Math.round((Date.now() - d.at) / 1000)}s ago, tab ${d.vis}, online ${navigator.onLine}, ${navigator.connection?.effectiveType || "?"} rtt ${navigator.connection?.rtt ?? "?"}`, lv: "warn", ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, "") }); } catch {} }, 800); } } catch {}
   myId = room.sessionId; status("Connected · " + room.roomId, true); rememberSeat();
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
-  room.onStateChange(s => { state = s; lastStateAt = performance.now(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
+  room.onStateChange(s => { state = s; lastStateAt = gnow(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
   awayIds.clear(); room.onMessage("away", m => { if (m.on) awayIds.add(m.id); else awayIds.delete(m.id); });   // a teammate's connection dropped / came back
-  room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: performance.now() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
-  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: performance.now() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: performance.now(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = performance.now(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, performance.now()); shotSound(m); });
-  room.onMessage("wreck", m => fx.push({ type: "wreck", t: performance.now(), ...m }));
-  room.onMessage("laser", m => fx.push({ type: "laser", t: performance.now(), ...m }));
-  room.onMessage("heal", m => { if (m.id && state?.players?.has(m.id)) regenPlay(m.id, m.k === "medkit"); else fx.push({ type: "healfx", t: performance.now(), ...m }); });   // healing effect on whoever was healed
-  room.onMessage("summon", m => fx.push({ type: "summon", t: performance.now(), ...m }));
-  room.onMessage("sky", m => { const t = performance.now(); skyAnim.set(m.id, { t0: t, a: m.a }); fx.push({ ...m, type: "dante", k: "sky", t }); });
-  room.onMessage("demo", m => { const t = performance.now(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); playSfx("boom", m.x, m.y); DEMO.rings.forEach(rg => setTimeout(() => playSfx("boom", m.x, m.y, .8), (rg.at + DEMO.flight) * 1000)); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
-  room.onMessage("shadow", m => { const t = performance.now(); fx.push({ ...m, type: "raven", k: m.k, t }); if (m.k === "dash") ravenDash.set(m.id, { t0: t, a: m.a }); if (m.k === "ignite" && m.id === myId) shake(4, 160); });
-  room.onMessage("chop", m => { fx.push({ type: "chop", t: performance.now(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 420) shake(11, 380); });
+  room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: gnow() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
+  room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: gnow() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: gnow(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = gnow(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, gnow()); shotSound(m); });
+  room.onMessage("wreck", m => fx.push({ type: "wreck", t: gnow(), ...m }));
+  room.onMessage("laser", m => fx.push({ type: "laser", t: gnow(), ...m }));
+  room.onMessage("heal", m => { if (m.id && state?.players?.has(m.id)) regenPlay(m.id, m.k === "medkit"); else fx.push({ type: "healfx", t: gnow(), ...m }); });   // healing effect on whoever was healed
+  room.onMessage("summon", m => fx.push({ type: "summon", t: gnow(), ...m }));
+  room.onMessage("sky", m => { const t = gnow(); skyAnim.set(m.id, { t0: t, a: m.a }); fx.push({ ...m, type: "dante", k: "sky", t }); });
+  room.onMessage("demo", m => { const t = gnow(); if (m.k === "place") danteAnim.set(m.id, { t0: t, a: m.a }); else { scorch(m.x, m.y, 1.4); playSfx("boom", m.x, m.y); DEMO.rings.forEach(rg => setTimeout(() => playSfx("boom", m.x, m.y, .8), (rg.at + DEMO.flight) * 1000)); for (const [x, y, ri, big] of m.pts || []) setTimeout(() => scorch(x, y, big ? .8 : 1, big ? "big" : "small"), (DEMO.rings[ri].at + DEMO.flight) * 1000); fx.push({ ...m, type: "dante", k: "ripple", t }); shake(12, 700); } });
+  room.onMessage("shadow", m => { const t = gnow(); fx.push({ ...m, type: "raven", k: m.k, t }); if (m.k === "dash") ravenDash.set(m.id, { t0: t, a: m.a }); if (m.k === "ignite" && m.id === myId) shake(4, 160); });
+  room.onMessage("chop", m => { fx.push({ type: "chop", t: gnow(), ...m }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 420) shake(11, 380); });
   room.onMessage("deflect", m => {
-    const now = performance.now(); fx.push({ type: "deflect", t: now, ...m }); hitStopUntil = now + (m.heavy ? 130 : 90); flashUntil = now + 140;
+    const now = gnow(); fx.push({ type: "deflect", t: now, ...m }); hitStopUntil = now + (m.heavy ? 130 : 90); flashUntil = now + 140;
     const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 600) shake(m.heavy ? 14 : 10, 320);
   });
-  room.onMessage("clang", m => fx.push({ type: "clang", t: performance.now(), ...m }));
+  room.onMessage("clang", m => fx.push({ type: "clang", t: gnow(), ...m }));
   room.onMessage("roar", m => { shake(12, 700); playSfx("roar", m?.x, m?.y); });
   room.onMessage("hooked", m => { if (m.id === myId) shake(7, 250); });
   room.onMessage("deep", m => { try { onDeep(m); } catch (e) { reportError(e, "deep"); } });
   room.onMessage("coaster", m => { if (m.id !== myId) return; coastQueued = m.k === "queue"; if (m.k === "on" || m.k === "off") playSfx(m.k === "on" ? "stomp" : "zap", undefined, undefined, .5);
     if (m.k === "queue") feed.unshift({ text: mineMap() ? "Wait here: you'll hop in when the carts stop" : "Wait here: you'll hop on when the train stops", t: Date.now() }); if (m.k === "on") feed.unshift({ text: mineMap() ? "In the mine cart! One lap of the mine: shoot from the cart." : "On the coaster! One lap, shoot from the cart. F at a station to get off.", t: Date.now() }); feed.length = Math.min(feed.length, 5); });
-  room.onMessage("pyramid", m => { pyrBurst = performance.now(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
-  room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: performance.now() }); shake(10, 500); });
-  room.onMessage("spit", m => fx.push({ type: "spit", t: performance.now(), ...m }));
+  room.onMessage("pyramid", m => { pyrBurst = gnow(); shake(13, 1100); playSfx("boom", m.x, m.y, .9); });
+  room.onMessage("bossDead", m => { bossCorpses.push({ ...m, t: gnow() }); shake(10, 500); });
+  room.onMessage("spit", m => fx.push({ type: "spit", t: gnow(), ...m }));
   room.onMessage("whip", m => { const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 140) shake(6, 180); });
-  room.onMessage("slam", m => { fx.push({ type: "slam", t: performance.now(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
+  room.onMessage("slam", m => { fx.push({ type: "slam", t: gnow(), ...m }); playSfx("stomp", m.x, m.y); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < m.r * 2.2) shake(9, 320); });
   room.onMessage("hive", m => onHive(m));
+  room.onMessage("travel", () => { shake(6, 500); feed.unshift({ text: "NEW MAP: get ready, the next wave starts here", t: Date.now() }); feed.length = Math.min(feed.length, 5); });   // (Nov 12) on to the next map (its title card shows when the wave starts)
+  room.onMessage("plateDrop", m => { fx.push({ type: "plateBurst", x: m.x, y: m.y, t: gnow() }); shake(8, 600); });   // the Pyre Plate falls out of him
+  room.onMessage("plateGot", m => { const p = state?.players.get(m.id); if (p) fx.push({ type: "plateGot", id: m.id, x: p.x, y: p.y, t: gnow() }); if (m.id === myId) { equipKey = ""; flashUntil = gnow() + 120; } });
   room.onMessage("pyre", onPyre); room.onMessage("scream", onScreamer); room.onMessage("abom", onAbom);
-  room.onMessage("zdead", m => { if (m.k === "abomSpawn") { const t = performance.now(); fx.push({ type: "abom", k: "sdead", x: m.x, y: m.y, t }); fx.push({ type: "abom", k: "ember", x: m.x, y: m.y - 30, sc: .8, from: 8, t }); shake(6, 260); playSfx("boom", m.x, m.y, .5); }
-    if (m.k === "screamer") { fx.push({ type: "scream", k: "death", x: m.x, y: m.y, t: performance.now() }); shake(9, 450); scrWail.delete(m.id); playSfx("roar", m.x, m.y, .7); }
-    if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: performance.now() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); if (pyreWheel?.id === m.id) pyreWheel = null; feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: performance.now() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, performance.now()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
+  room.onMessage("zdead", m => { if (m.k === "abomSpawn") { const t = gnow(); fx.push({ type: "abom", k: "sdead", x: m.x, y: m.y, t }); fx.push({ type: "abom", k: "ember", x: m.x, y: m.y - 30, sc: .8, from: 8, t }); shake(6, 260); playSfx("boom", m.x, m.y, .5); }
+    if (m.k === "screamer") { fx.push({ type: "scream", k: "death", x: m.x, y: m.y, t: gnow() }); shake(9, 450); scrWail.delete(m.id); playSfx("roar", m.x, m.y, .7); }
+    if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: gnow() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); if (pyreWheel?.id === m.id) pyreWheel = null; feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: gnow() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, gnow()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
-  room.onMessage("frag", m => { const t = performance.now(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
-  room.onMessage("rush", m => rushStart.set(m.id, performance.now()));   // Marcus Combat Rush started: burst ring + screen flash
+  room.onMessage("frag", m => { const t = gnow(); fragHop.set(m.id, t); fx.push({ ...m, type: "dante", k: "frag", t }); shake(m.id === myId ? 6 : 3, 200); });   // Marcus Frag Barrage
+  room.onMessage("rush", m => rushStart.set(m.id, gnow()));   // Marcus Combat Rush started: burst ring + screen flash
   room.onMessage("dash", m => { if (m.id !== myId) dashBeam(m.id, m.x0, m.y0, m.x1, m.y1); });   // yours is drawn the moment you dash
-  room.onMessage("sofea", m => { const t = performance.now();
+  room.onMessage("sofea", m => { const t = gnow();
     if (m.k === "fire") { sofeaShotAt.set(m.id, t); for (const [ox, oy, bx, by] of m.pts) { fx.push({ type: "sofea", k: "proj", kind: m.kind, ox, oy, bx, by, dur: Math.hypot(bx - ox, by - oy) / m.sp, t }); const a = Math.atan2(by - oy, bx - ox), d = m.kind === "tank" ? SOF.tank.barrel : 26, lift = m.kind === "tank" ? SOF.tank.tur : SOF.heli.alt; fx.push({ type: "sofea", k: "muzzle", kind: m.kind, x: ox + Math.cos(a) * d, y: oy + Math.sin(a) * d - lift, a, t }); } if (m.id === myId) shake(m.kind === "tank" ? 5 : 3, 150); }
     else if (m.k === "slash") { mechaSlash.set(m.id, { t, a: m.a, flip: !mechaSlash.get(m.id)?.flip }); const pl = state?.players?.get(m.id); if (pl) playSfx("zap", pl.x, pl.y, .45); }
     else if (m.k === "leave" && m.kind === "mecha") { const pl = state?.players?.get(m.id), v = m.id === myId && pl ? aimAngle(pl) : (pl?.aim || 0); mechaOut.set(m.id, { t, row: rowOf(v) }); mechaSlash.delete(m.id); mechaFlame.delete(m.id); }
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
-  room.onMessage("buildGone", m => { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 10, s: .8, t: performance.now() }); playSfx("zap", m.x, m.y, .4); });   // your oldest deployable of a type was replaced (per-player cap)
-  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: performance.now() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: performance.now() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
-  room.onMessage("swing", m => { fx.push({ type: "swing", t: performance.now(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: performance.now() }); const a = anim.get(m.id); if (a) { a.swingAt = performance.now(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
+  room.onMessage("buildGone", m => { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 10, s: .8, t: gnow() }); playSfx("zap", m.x, m.y, .4); });   // your oldest deployable of a type was replaced (per-player cap)
+  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: gnow() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: gnow() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
+  room.onMessage("swing", m => { fx.push({ type: "swing", t: gnow(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: gnow() }); const a = anim.get(m.id); if (a) { a.swingAt = gnow(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     const dropped = code !== 1000 && code !== 4000 && state && state.phase !== "lobby" && !SOLO_PREVIEW && room?.reconnectionToken;   // 1000 = you left on purpose, 4000 = kicked
     try { if (code !== 1000 && code !== 4000) sessionStorage.setItem("sa-drop", JSON.stringify({ code, at: Date.now(), vis: document.visibilityState, ph: state?.phase })); } catch {}
@@ -208,7 +216,7 @@ const BOSS_INFO = {
       ["🛡️", "Armoured Front", "Takes half damage from the front. Flank him: shots to his back do full damage.", "#9fc4e8"],
       ["💢", "Berserk (below 30%)", "Faster, hooks more often, and spins in a cleaver whirlwind. Get away from him.", "#ff3737"],
     ] },
-  pyre: { wave: 8, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
+  pyre: { wave: 16, portrait: "assets/portraits/pyre.webp", name: "THE PYRE PRIEST",
     lore: "A burning cultist swinging a giant censer on a chain. He hunts survivors, never the tower, and he never stops coming.",
     skills: [
       ["🏮", "Lamp Strike", "His basic attack: up close he smashes the burning lamp down in front of him every second or so. Get beside or behind him.", "#ffb347"],
@@ -217,6 +225,16 @@ const BOSS_INFO = {
       ["🙏", "Sermon of Ash", "He kneels and 7 glowing circles appear: under the 3 closest survivors and at random spots around him. 1s later they erupt into fire pillars. While he kneels, hit him from BEHIND for double damage.", "#ff4a2a"],
       ["☸️", "Wheel of Flame", "4 lines of fire (12, 3, 6, 9 o'clock) spin CLOCKWISE around him for 60s and follow him everywhere. Walk clockwise with them to stay clear.", "#ffc04a"],
       ["💢", "Enraged (below 35%)", "Faster, attacks come back sooner, the wheel spins faster, the fire lasts longer and the pillars get bigger.", "#ff3737"],
+      ["🛡️", "Reward: THE PYRE PLATE", "Kill him and his armour drops: one piece each. Wear it (T) for the rest of the run: 25% less damage, +30 max HP, and you can't catch fire.", "#ffc531"],
+    ] },
+  hivemind: { wave: 8, portrait: "assets/portraits/hivemind.webp", name: "THE ALPHA HIVEMIND",
+    lore: "The oldest Hivemind in the walled city: twice the size of the others, and it carries a brood inside it.",
+    skills: [
+      ["🦷", "Crushing Bite", "Up close it lunges and bites everything in front of it. Its reach is longer than it looks: stay at range.", "#ff7a5a"],
+      ["💥", "Ground Slam", "A red circle fills up under it, then it slams: damage and a short stun. Get out of the circle before it fills.", "#ff4a3a"],
+      ["🦘", "Leap", "Far away? It jumps at you and lands just short. The landing hurts everyone around it: spread out.", "#ffb347"],
+      ["🧟", "Spawning", "Every few seconds it tears zombies out of its own body. Clear them or they swarm you.", "#b5c26b"],
+      ["🐛", "The Brood", "At 66% health it tears off a whole Hivemind; at 33%, two more. Focus the Alpha: killing it ends the fight.", "#ffd36b"],
     ] },
   screamer: { wave: 12, portrait: "assets/portraits/screamer.webp", name: "THE SCREAMER",
     lore: "The city's old radio voice, now a walking loudspeaker. He hates being close: he backs away and attacks from range.",
@@ -228,7 +246,7 @@ const BOSS_INFO = {
       ["🏃", "Call of the Horde", "At 66% and 33% health he calls a pack of frenzied runners that hunt you down.", "#ffd36b"],
       ["💢", "Enraged (below 35%)", "Faster, more rings, everything comes back sooner.", "#ff3737"],
     ] },
-  abomination: { wave: 16, portrait: "assets/portraits/abomination.webp", name: "THE ABOMINATION",
+  abomination: { wave: 24, portrait: "assets/portraits/abomination.webp", name: "THE ABOMINATION",
     lore: "Five bodies fused into one lump of black rock and lava. Slow and heavy... until it tears itself apart.",
     skills: [
       ["💥", "Flail Slam", "His giant arm smashes a long line in front of him. Step out of the marked line.", "#ff8a3d"],
@@ -259,7 +277,7 @@ function renderBossIntro() {
 function ackBoss() { if (!introAcked && state?.bossPhase === "intro") { introAcked = true; room?.send("ackBoss"); renderBossIntro(); } }
 $("bossAck").onclick = ackBoss;
 // ===== ESC MENU (Nov 12: the user's design): PAUSED on the left; DEVELOPER TOOLS (any host) on the right: BOSSES / DEEP MINE / TESTING =====
-const BOSS_NAMES = { 4: "The Butcher", 8: "The Pyre Priest", 12: "The Screamer", 16: "The Abomination", 20: "The Mine Beast" };
+const BOSS_NAMES = { 4: "The Butcher", 8: "The Alpha Hivemind", 12: "The Screamer", 16: "The Pyre Priest", 20: "The Mine Beast", 24: "The Abomination" };   // (Nov 12: the map order)
 let pmToastAt = 0;
 function pmToast(text) { const el = $("pmToast"); if (!el) return; txt("pmToastT", text); el.classList.remove("hidden"); pmToastAt = Date.now(); setTimeout(() => { if (Date.now() - pmToastAt >= 2350) el.classList.add("hidden"); }, 2400); }
 function pmDo(msg, data, text, close = true) { room?.send(msg, data); if (text) pmToast(text); if (close) closePanels(); }
@@ -267,7 +285,7 @@ let pmTabNow = "bosses"; try { pmTabNow = localStorage.getItem("sa-pmTab") || "b
 function pmTab(t) { pmTabNow = t; try { localStorage.setItem("sa-pmTab", t); } catch {} for (const b of document.querySelectorAll(".pm-tab")) b.classList.toggle("on", b.dataset.tab === t); for (const p of document.querySelectorAll(".pm-pane")) p.classList.toggle("hidden", p.dataset.pane !== t); }
 for (const b of document.querySelectorAll(".pm-tab")) b.onclick = () => pmTab(b.dataset.tab);
 pmTab(pmTabNow);
-const PM_FACES = { butcher: "assets/portraits/butcher.webp", pyre: "assets/portraits/pyre.webp", screamer: "assets/portraits/screamer.webp", abomination: "assets/portraits/abomination.webp", minebeast: "assets/portraits/minebeast.webp" };   // (whole strings: the preview build inlines them)
+const PM_FACES = { butcher: "assets/portraits/butcher.webp", hivemind: "assets/portraits/hivemind.webp", pyre: "assets/portraits/pyre.webp", screamer: "assets/portraits/screamer.webp", abomination: "assets/portraits/abomination.webp", minebeast: "assets/portraits/minebeast.webp" };   // (whole strings: the preview build inlines them)
 for (const img of document.querySelectorAll("img[data-face]")) img.src = PM_FACES[img.dataset.face];   // the bosses' real portraits
 document.querySelector("#pmDev").addEventListener("click", e => { const b = e.target.closest("button[data-act]"); if (!b || b.disabled) return; const pct = Number(b.dataset.pct) || 0, w = Number(b.dataset.wave) || 20, at = pct ? ` at ${Math.round(pct * 100)}%` : "";
   if (b.dataset.act === "boss") pmDo("debugBoss", pct ? { wave: w, pct } : { wave: w }, `Skipped to ${BOSS_NAMES[w]}${at}`);
@@ -308,7 +326,7 @@ function uiSound(k) {   // the menu's own little sounds, made in code (through t
 }
 $("menu").addEventListener("pointerover", e => { const b = e.target.closest?.("button.cf"); if (b === uiHover) return; uiHover = b; if (b && !b.disabled) uiSound("hover"); });
 $("menu").addEventListener("pointerdown", e => { const b = e.target.closest?.("button.cf"); if (b && !b.disabled) uiSound(b.matches(".pm-resume,.pm-gold,.pm-tab,.pm-fill") ? "gold" : "click"); });
-function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") ? 370 : 1290, h = 760, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
+function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") ? 370 : 1290, h = 810, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
 addEventListener("resize", pmFit);
 $("menu").addEventListener("click", e => { if (e.target === $("menu")) closePanels(); });   // a click on the dimmed backdrop closes it
 function pmRender(force) {   // who sees what, which buttons work right now
@@ -351,7 +369,8 @@ function renderState() {
   const playingNow = state.phase !== "lobby";
   document.body.classList.toggle("in-match", playingNow);
   $("gameArea").classList.toggle("hidden", !playingNow);
-  if (!playingNow) { closePanels(); return; }
+  if (!playingNow) { closePanels(); mapCardKey = -1; return; }
+  if (state.phase === "playing" && state.stage) showMapCard(state.stage);   // (Nov 12) the map's title at the start of the match / on arrival
   renderHud(me, players);
   renderScoreboard(players);
   renderLevelUp(me);
@@ -411,7 +430,7 @@ function renderHud(me, players) {
     const five = [...state.zombies.values()].filter(z => z.kind === "abomSpawn"), hp = five.reduce((a, z) => a + Math.max(0, z.hp), 0);
     txt("bossName", `THE FIVE · ${five.length} LEFT` + (five.length === 1 ? " · ENRAGED" : "")); txt("bossText", Math.ceil(hp).toLocaleString()); sty("bossBar", "width", pct(hp, boss.maxHp * 5));
   } else if (boss) {
-    txt("bossName", (boss.kind === "minebeast" ? "THE MINE BEAST" + (deepState()?.step === "fight" ? " · CRYSTALS " + "◆".repeat(Math.max(0, deepState().crystals)) + "◇".repeat(Math.max(0, 4 - deepState().crystals)) + (deepState().sh ? " · SHIELDED" : "") : "") : boss.kind === "hivemind" ? "THE HIVEMIND · MINI BOSS" : BOSS_INFO[boss.kind]?.name || String(boss.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()) + (boss.enraged ? " · ENRAGED" : ""));
+    txt("bossName", (boss.kind === "minebeast" ? "THE MINE BEAST" + (deepState()?.step === "fight" ? " · CRYSTALS " + "◆".repeat(Math.max(0, deepState().crystals)) + "◇".repeat(Math.max(0, 4 - deepState().crystals)) + (deepState().sh ? " · SHIELDED" : "") : "") : boss.kind === "hivemind" ? (boss.boss ? "THE ALPHA HIVEMIND" : "THE HIVEMIND · MINI BOSS") : BOSS_INFO[boss.kind]?.name || String(boss.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()) + (boss.enraged ? " · ENRAGED" : ""));
     txt("bossText", Math.ceil(boss.hp).toLocaleString()); sty("bossBar", "width", pct(boss.hp, boss.maxHp));
   }
   { const pk = boss?.kind === "abomSpawn" ? "abomination" : boss?.kind, src = BOSS_INFO[pk]?.portrait || (pk === "minebeast" ? "assets/portraits/minebeast.webp" : pk === "hivemind" ? "assets/portraits/hivemind.webp" : ""), f = $("bossFace");   // the boss's face next to its bar (Nov 12)
@@ -471,7 +490,7 @@ function renderHotbar(me) {
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { html("hotbar", hb); hotbarHtml = hb; }
-  const dashLeft = Math.max(0, dashReadyAt - performance.now()) / 1000;
+  const dashLeft = Math.max(0, dashReadyAt - gnow()) / 1000;
   txt("dashChip", dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"); $("dashChip").classList.toggle("ready", dashLeft <= 0);
   txt("ammoLine", me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && me.ultActive > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press C" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "");
 }
@@ -566,7 +585,7 @@ $("levelUpChoices").addEventListener("click", e => { const b = e.target.closest(
 let equipKey = "";
 function renderEquip(me) {
   if (!me) return;
-  const key = [me.owned, me.primary, me.secondary, me.melee, me.medkits, me.armor, me.activeSlot, me.characterClass].join("|");
+  const key = [me.owned, me.primary, me.secondary, me.melee, me.medkits, me.armor, me.activeSlot, me.characterClass, me.maxHp].join("|");
   if (key === equipKey) return; equipKey = key;
   const skill = SKILLS[me.characterClass] || SKILLS.assault;
   const row = (k, label, name, sub, ic = "") => `<div class="eq-row"><kbd>${k}</kbd>${ic || "<span></span>"}<div><small>${label}</small><b>${escapeHtml(name)}</b>${sub ? `<small>${sub}</small>` : ""}</div></div>`;
@@ -577,29 +596,33 @@ function renderEquip(me) {
     row(4, "SKILL", skill.name, skill.cd + "s cooldown", `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>`) +
     row(5, "QUICK ITEM", "Medkit ×" + (me.medkits || 0), "heals 60%", icon("medkit")) +
     row("🛡", "ARMOUR", "−" + Math.round((me.armorPct || 0) * 100) + "% damage taken", (ARMOR_STEP[me.characterClass] ? ARMOR_STEP[me.characterClass] * 100 : 6) + "% per pick · max " + Math.round((ARMOR_STEP[me.characterClass] || .06) * 800) + "%" + (me.defence ? " · +" + me.defence + " defence" : ""), icon("armor"));
+  const plateImg = `<img class="ic plate-ic" src="${plateIconUrl()}" alt="" aria-hidden="true">`;
+  if (me.armor === 2) $("equipped").insertAdjacentHTML("beforeend", `<div class="eq-row plate-row" data-gear="pyreplate" title="Double-click to take it off"><kbd>🔥</kbd>${plateImg}<div><small>WORN · PYRE PLATE</small><b>−25% damage · +30 max HP</b><small>fireproof: you can't catch fire</small></div></div>`);
   // backpack: everything you own but don't have equipped right now
   const owned = (me.owned || "").split(",").filter(Boolean);
   const items = [
+    ...(me.armor === 1 ? [{ kind: "gear", id: "pyreplate", name: "Pyre Plate", sub: "armour · legendary" }] : []),
     ...owned.filter(id => id !== me.primary && id !== me.secondary && WEAPON_INFO[id]).map(id => ({ kind: "weapon", id, name: WEAPON_INFO[id].name, sub: WEAPON_INFO[id].slot === 2 ? "primary" : "secondary" })),
     ...Object.keys(MELEE_INFO).filter(id => id !== me.melee).map(id => ({ kind: "melee", id, name: MELEE_INFO[id].name, sub: "melee" })),
   ];
   const cells = [];
   for (let i = 0; i < 20; i++) {
     const it = items[i];
-    cells.push(it ? `<button class="bag-slot" data-kind="${it.kind}" data-id="${it.id}" title="${escapeHtml(it.name)}: double-click to equip">${icon(it.id)}${escapeHtml(it.name)}<small>${it.sub}</small></button>` : `<div class="bag-slot" aria-hidden="true"></div>`);
+    cells.push(it ? `<button class="bag-slot${it.kind === "gear" ? " legendary" : ""}" data-kind="${it.kind}" data-id="${it.id}" title="${escapeHtml(it.name)}: double-click to equip">${it.kind === "gear" ? plateImg : icon(it.id)}${escapeHtml(it.name)}<small>${it.sub}</small></button>` : `<div class="bag-slot" aria-hidden="true"></div>`);
   }
   html("bag", cells.join("")); txt("bagCount", items.length + " / 20");
 }
 // Backpack: click = select (shows what it is), double-click = equip it and put it in your hand.
-const bagName = b => b.textContent.replace(/(primary|secondary|melee)$/, "");
+const bagName = b => b.textContent.replace(/(primary|secondary|melee|armour · legendary)$/, "");
 $("bag").addEventListener("click", e => {
   const b = e.target.closest("button.bag-slot"); if (!b) return;
   $("bag").querySelectorAll(".bag-slot.sel").forEach(x => x.classList.remove("sel")); b.classList.add("sel");
   $("bagInfo").textContent = bagName(b) + " · double-click to equip.";
 });
+$("equipped").addEventListener("dblclick", e => { const r = e.target.closest("[data-gear]"); if (r && room) { room.send("gear", { id: r.dataset.gear, on: false }); $("bagInfo").textContent = "Took off the Pyre Plate (it's in your backpack)."; } });
 $("bag").addEventListener("dblclick", e => {
   const b = e.target.closest("button.bag-slot"); if (!b || !room) return;
-  if (b.dataset.kind === "weapon") room.send("weapon", { id: b.dataset.id }); else room.send("meleeEquip", { id: b.dataset.id });
+  if (b.dataset.kind === "gear") room.send("gear", { id: b.dataset.id, on: true }); else if (b.dataset.kind === "weapon") room.send("weapon", { id: b.dataset.id }); else room.send("meleeEquip", { id: b.dataset.id });
   $("bagInfo").textContent = "Equipped " + bagName(b) + ".";
 });
 
@@ -677,7 +700,7 @@ for (const t of Object.values(musicTracks)) loadRaw(t);
 function playSfx(name, x, y, mult = 1) {
   if (!sfxOn) return; const s = SFX[name], ac = audioContext; if (!s || !ac || ac.state !== "running") return;
   const buf = decoded(s, ac); if (!buf) return;
-  const now = performance.now(); if (now - (s.lastAt || 0) < (s.gap || 0) || (s.playing || 0) >= (s.max || 4)) return;
+  const now = gnow(); if (now - (s.lastAt || 0) < (s.gap || 0) || (s.playing || 0) >= (s.max || 4)) return;
   let vol = s.vol * mult; const me = V(me_());
   if (me && Number.isFinite(x)) { const d = Math.hypot(x - me.x, y - me.y); vol *= Math.max(0, 1 - d / 900); }   // quieter far away
   if (vol < .02) return;
@@ -714,7 +737,7 @@ $("sfxToggle").onclick = () => setSfxOn(!sfxOn);
 // Game-state changes -> sounds (wave start / cleared / defeat, night, tower repairs and alarm, revives, pickups, building, brutes)
 const aw = { phase: null, stage: 0, night: false, tower: 0, gen: 0, fuel: 0, alive: new Map(), loot: new Map(), structs: new Map(), brutes: new Set(), alarmAt: 0, groanAt: 0 };
 function audioWatch() {
-  const s = state; if (!s) return; const now = performance.now(), me = V(me_()), same = aw.phase === s.phase && aw.stage === s.stage;
+  const s = state; if (!s) return; const now = gnow(), me = V(me_()), same = aw.phase === s.phase && aw.stage === s.stage;
   if (aw.phase !== null) {
     if (s.phase === "playing" && !same) playSfx("wave");
     else if (s.phase === "cleared" && aw.phase === "playing") playSfx("victory", undefined, undefined, .8);
@@ -803,10 +826,10 @@ canvas.addEventListener("mousedown", e => {
     e.preventDefault(); if (wheel) return;
     if (squadWheel) return;
     const me = me_();
-    if (state.vehicles?.get(myId)) { firing = true; clickShotAt = performance.now(); return; }   // in a vehicle the mouse is the gun's trigger, whatever slot is selected
+    if (state.vehicles?.get(myId)) { firing = true; clickShotAt = gnow(); return; }   // in a vehicle the mouse is the gun's trigger, whatever slot is selected
     if (me?.activeSlot === 5) room.send("attack", {});
-    else if (me?.activeSlot === 1 && me.melee === "axe") { if (!axeChargeAt) { axeChargeAt = performance.now(); room.send("charge", { on: true }); } }
-    else { firing = true; clickShotAt = performance.now(); }
+    else if (me?.activeSlot === 1 && me.melee === "axe") { if (!axeChargeAt) { axeChargeAt = gnow(); room.send("charge", { on: true }); } }
+    else { firing = true; clickShotAt = gnow(); }
   }
   if (e.button === 2 && state.vehicles?.get(myId)) { e.preventDefault(); const v = state.vehicles.get(myId), me = me_();   // in a vehicle: no build wheel; the mecha swings its saber
     if (v.kind === "mecha" && v.phase === "ride" && me && !anyPanelOpen()) room.send("mechaSlash", { a: aimAngle(me) }); return; }
@@ -827,7 +850,7 @@ window.addEventListener("mousemove", e => {
 $("gameArea").addEventListener("wheel", e => {
   if (!inMatch() || wheel || anyPanelOpen()) return;
   e.preventDefault();
-  const now = performance.now(); if (now - lastWheelScroll < 110) return; lastWheelScroll = now;
+  const now = gnow(); if (now - lastWheelScroll < 110) return; lastWheelScroll = now;
   const me = me_(); if (!me) return;
   const i = SLOT_ORDER.indexOf(me.activeSlot), dir = e.deltaY > 0 ? 1 : -1;
   selectSlot(SLOT_ORDER[(Math.max(0, i) + dir + SLOT_ORDER.length) % SLOT_ORDER.length], false);
@@ -871,7 +894,7 @@ let reviving = null;   // { id, t0 }
 function tryRevive() {
   const me = me_(); if (!me?.alive || !state) return;
   const target = [...state.players.values()].find(p => !p.alive && !p.bledOut && Math.hypot(p.x - me.x, p.y - me.y) < 85);
-  if (target) { room.send("revive", { targetId: target.sessionId }); reviving = { id: target.sessionId, t0: performance.now() }; }
+  if (target) { room.send("revive", { targetId: target.sessionId }); reviving = { id: target.sessionId, t0: gnow() }; }
   return !!target;
 }
 // TOWER / GENERATOR (Nov 9): stand next to one and press (or hold) F. Tower: 10 scrap = +250 HP. Generator: repairs (15 scrap, +300 HP)
@@ -897,13 +920,13 @@ function stationPlan(st) {   // what F does right now: [{ msg, label, cost, ok, 
 }
 let lastStationUse = 0;
 function stationUse() {
-  const st = nearStation(me_()); if (!st || !room) return false; lastStationUse = performance.now();
+  const st = nearStation(me_()); if (!st || !room) return false; lastStationUse = gnow();
   for (const a of stationPlan(st)) if (a.ok) room.send(a.msg, a.data);
   return true;
 }
 function drawStationPrompt() {   // "[F] Repair tower · 10 scrap" over your head when you're next to it (hold F to keep going)
   const meS = me_(), st = nearStation(meS); if (!st || wheel || placing) return;
-  if (keys.f && !reviving && performance.now() - lastStationUse > STATION.every) stationUse();
+  if (keys.f && !reviving && gnow() - lastStationUse > STATION.every) stationUse();
   const me = V(meS), plan = stationPlan(st), x = me.x - Math.round(cam.x), y0 = me.y - Math.round(cam.y) - 78;
   ctx.save(); ctx.font = "bold 12px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "#000c";
   plan.forEach((a, i) => { const t = a.ok ? `[F] ${a.label} · ${a.cost}` : `${a.label}: ${a.why}`, y = y0 - (plan.length - 1 - i) * 16;
@@ -913,7 +936,7 @@ function drawStationPrompt() {   // "[F] Repair tower · 10 scrap" over your hea
 function drawReviveRing() {   // progress ring around the teammate you're reviving
   if (!reviving || !state) return; const me = V(me_()), t = V(state.players.get(reviving.id));
   if (!me || !t || !me_()?.alive || state.players.get(reviving.id)?.alive || Math.hypot(t.x - me.x, t.y - me.y) > 85) { reviving = null; return; }   // done, or walked off (the server cancels too)
-  const L = me_()?.characterClass === "dispatcher" ? 2.5 : 5, k = Math.min(1, (performance.now() - reviving.t0) / (L * 1000));   // Astra's trait: Field Commander
+  const L = me_()?.characterClass === "dispatcher" ? 2.5 : 5, k = Math.min(1, (gnow() - reviving.t0) / (L * 1000));   // Astra's trait: Field Commander
   ctx.save(); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, 0, 7); ctx.stroke();
   ctx.strokeStyle = "#7dff9a"; ctx.shadowColor = "#7dff9a"; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
   ctx.shadowBlur = 0; ctx.fillStyle = "#eaffef"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center"; ctx.fillText(`REVIVING ${Math.ceil(L - k * L)}s`, t.x, t.y - 38); ctx.restore();
@@ -953,7 +976,7 @@ function placeIt() {
 }
 const PLACE_RANGE = { turret: 260, mine: 100, flameTrap: 65 };   // what it reaches (the server's numbers; mine: its blast)
 function drawPlacement(me) {   // a picked deployable follows the mouse: see-through, turned the way it'll be built, green = OK / red = can't
-  const opt = BUILD_WHEEL.find(o => o.id === placing.id), spot = buildSpot(me), face = spotFace(me, spot), bad = placeProblem(me, spot, opt), col = bad ? "255,90,80" : "120,255,150", t = performance.now();
+  const opt = BUILD_WHEEL.find(o => o.id === placing.id), spot = buildSpot(me), face = spotFace(me, spot), bad = placeProblem(me, spot, opt), col = bad ? "255,90,80" : "120,255,150", t = gnow();
   ctx.save(); ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
   ctx.strokeStyle = "rgba(242,139,54,.4)"; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(me.x, me.y, BUILD_RANGE, 0, 7); ctx.stroke();
   if (PLACE_RANGE[opt.id]) { ctx.strokeStyle = `rgba(${col},.45)`; ctx.beginPath(); ctx.arc(spot.x, spot.y, PLACE_RANGE[opt.id], 0, 7); ctx.stroke(); }
@@ -1012,10 +1035,10 @@ let axeChargeAt = 0;
 const AXE_CHARGE_MS = 1000;
 function releaseAxe() {
   if (!axeChargeAt) return;
-  const held = performance.now() - axeChargeAt; axeChargeAt = 0;
+  const held = gnow() - axeChargeAt; axeChargeAt = 0;
   const me = me_();
   if (!room || !me?.alive || me.activeSlot !== 1 || me.melee !== "axe" || state?.phase !== "playing") { room?.send("charge", { on: false }); return; }
-  room.send("attack", { a: aimAngle(me), heavy: held >= AXE_CHARGE_MS }); lastMelee = performance.now();
+  room.send("attack", { a: aimAngle(me), heavy: held >= AXE_CHARGE_MS }); lastMelee = gnow();
 }
 // Auto-update: every minute, look at the live index.html; if it loads a newer client.js?v=..., reload when not in a room, else say so.
 { const mine = (document.querySelector('script[src*="client.js"]')?.getAttribute("src") || "").match(/v=([\w-]+)/)?.[1];
@@ -1033,6 +1056,7 @@ const SOLO_PREVIEW = typeof __SOLO__ !== "undefined" && __SOLO__ === true;
 const DASH_CD_MS = 5000;   // matches DASH_COOLDOWN on the server
 function sendControls(t) {
   if (!room || !state || (state.phase !== "playing" && state.phase !== "cleared")) return;   // the break: you can walk (the server ignores shots then)
+  if (state.paused) { dashQueued = false; return; }   // paused by the host: no moving, no shooting
   const me = me_(); if (!me?.alive) return;
   const ride = state.vehicles?.get(myId);
   if (t - lastInput > 45) {
@@ -1042,12 +1066,12 @@ function sendControls(t) {
     else { room.send("input", { dx, dy, s: seq, dt: Math.round(dt) }); predictInput(me, { seq, dx, dy, dt: dt / 1000 }); }
   }
   if (ride) {   // Sofea's tank / helicopter: hold or click to fire (the server allows one shot every 1.5s)
-    const clicked = clickShotAt && performance.now() - clickShotAt < 300;
+    const clicked = clickShotAt && gnow() - clickShotAt < 300;
     if (ride.phase === "ride" && ride.kind === "tank" && !anyPanelOpen() && (firing || clicked) && t - lastShoot > 120) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
     dashQueued = false; return;
   }
   if (!wheel && !squadWheel && !anyPanelOpen() && !(me.stunned > 0)) {
-    const clicked = clickShotAt && performance.now() - clickShotAt < 300; // a quick click counts even if the button is already released
+    const clicked = clickShotAt && gnow() - clickShotAt < 300; // a quick click counts even if the button is already released
     if (me.activeSlot === 1) {
       const cd = (MELEE_INFO[me.melee] || MELEE_INFO.knife).cd * 1000 / (me.characterClass === "assault" && me.skillT > 0 ? 1.25 : 1);   // Combat Rush: +25% attack speed
       if (me.melee !== "axe" && (firing || clicked) && t - lastMelee > cd) { room.send("attack", { a: aimAngle(me) }); lastMelee = t; clickShotAt = 0; }
@@ -1061,7 +1085,7 @@ function sendControls(t) {
   if (dashQueued && !dashReady) dashQueued = false;   // tapped while on cooldown: ignore
   if (dashQueued && dashReady) {
     dashQueued = false;
-    dashReady = false; dashReadyAt = performance.now() + DASH_CD_MS; setTimeout(() => dashReady = true, DASH_CD_MS);
+    dashReady = false; dashReadyAt = gnow() + DASH_CD_MS; setTimeout(() => dashReady = true, DASH_CD_MS);
     const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
     const seq = ++PRED.seq, from = V(me); room.send("dash", { dx, dy, s: seq }); predictInput(me, { seq, dx, dy, dash: true });
     if (from && PRED.ok) dashBeam(myId, from.x, from.y, PRED.x, PRED.y);
@@ -1087,7 +1111,7 @@ function machineHp(m, w, y) {
   ctx.fillStyle = "#1a1a1a"; ctx.fillRect(m.x - w / 2, y, w, 4); ctx.fillStyle = "#f2a15b"; ctx.fillRect(m.x - w / 2, y, w * Math.max(0, m.hp / m.maxHp), 4);
 }
 function drawHeavyTurret(st) {
-  const now = performance.now();
+  const now = gnow();
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(st.x, st.y + 4, 30, 9, 0, 0, 7); ctx.fill(); ctx.restore();
   if (st.deploy > 0) { vFrame(vImgs.deploy, 170, 130, Math.min(5, Math.floor((1 - st.deploy / 1.0) * 6)), 0, st.x, st.y + 6, 124); return; }
   const since = now - (machineShotAt.get(st.id) || 0), col = since < 70 ? 2 : since < 140 ? 1 : since < 220 ? 3 : 0;
@@ -1101,7 +1125,7 @@ function drawHealRings() {
 }
 function drawRobot(r) {
   if (ASTRA_UNITS.has(r.kind)) return drawAstraUnit(r);
-  const now = performance.now(); let mv = robotMove.get(r.id);
+  const now = gnow(); let mv = robotMove.get(r.id);
   if (!mv) { mv = { x: r.x, y: r.y, at: 0, dist: 0 }; robotMove.set(r.id, mv); }
   const step = Math.hypot(r.x - mv.x, r.y - mv.y); if (step > .4) { mv.at = now; mv.dist += step; mv.x = r.x; mv.y = r.y; }
   const moving = now - mv.at < 160;
@@ -1163,7 +1187,7 @@ function pyreAura(z, feet, now, front) {   // the scary part: smoke, heat and em
   ctx.restore();
 }
 function drawPyre(z) {
-  const now = performance.now(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet;
+  const now = gnow(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet;
   let mv = pyreMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; pyreMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 60) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   pyreAura(z, feet, now, false);
@@ -1211,7 +1235,7 @@ function drawPyre(z) {
   pyreAura(z, feet, now, true);
 }
 function onPyre(m) {   // "wheel" is re-sent when he enrages (spins faster): only a fresh one shakes the screen
-  const t = performance.now();
+  const t = gnow();
   if (m.k === "patch") fx.push({ type: "pyre", k: "patch", x: m.x, y: m.y, life: m.life, t, seed: Math.random() * 8 });
   else if (m.k === "sermon") for (const [x, y] of m.pts || []) fx.push({ type: "pyre", k: "pillar", x, y, warn: m.warn, r: m.r, big: m.big, t });
   else if (m.k === "swing") fx.push({ type: "pyre", k: "ring", id: m.id, x: m.x, y: m.y, r: m.r, wind: m.wind, t });
@@ -1286,7 +1310,7 @@ function drawPyreWheel(now) {   // 4 lines of fire at 12, 3, 6 and 9 o'clock, tu
   ctx.strokeText(left + "s", W.x, W.y + 82); ctx.fillText(left + "s", W.x, W.y + 82); ctx.restore();   // under the rune
 }
 function drawPyreGround() {   // burning patches, the pillars' warning circles and the Wheel of Flame (under everyone)
-  const now = performance.now(); drawPyreWheel(now);
+  const now = gnow(); drawPyreWheel(now);
   for (const f of fx) {
     if (f.type !== "pyre") continue; const s = (now - f.t) / 1000;
     if (f.k === "patch" && s < f.life) {
@@ -1358,7 +1382,7 @@ function sFx(key, frame, x, y, scale, alpha = 1) {   // one additive effect fram
 }
 const sFit = (key, r) => r / SCR.fx[key][0];   // scale so the effect's ring = r px (half width)
 function deafen(sec) {   // the wail got you: muffled sound + a ringing tone, fading back over `sec`
-  const now = performance.now(); deafUntil = now + sec * 1000; const ac = audioContext; if (!ac || !deafF || !sfxOn) return;
+  const now = gnow(); deafUntil = now + sec * 1000; const ac = audioContext; if (!ac || !deafF || !sfxOn) return;
   const t = ac.currentTime; deafF.frequency.cancelScheduledValues(t); deafF.frequency.setValueAtTime(350, t); deafF.frequency.exponentialRampToValueAtTime(22000, t + sec);
   const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = 3900; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.05, t + .05); g.gain.exponentialRampToValueAtTime(.0001, t + sec);
   o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + sec + .1);
@@ -1381,7 +1405,7 @@ function scrCover(z, p) {
   return false;
 }
 function onScreamer(m) {
-  const t = performance.now(), me = me_(), near = me && Math.hypot(me.x - (m.x ?? me.x), me.y - (m.y ?? me.y)) < 700;
+  const t = gnow(), me = me_(), near = me && Math.hypot(me.x - (m.x ?? me.x), me.y - (m.y ?? me.y)) < 700;
   const feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
   if (m.k === "shriek") { scrShriek.set(m.id, { ...m, t }); fx.push({ type: "scream", k: "shriek", id: m.id, a: m.a, r: m.r, arc: m.arc, wind: m.wind, t }); }
   else if (m.k === "ring") { fx.push({ type: "scream", k: "ring", x: m.x, y: m.y, sp: m.sp, max: m.max, big: m.big, t }); playSfx("zap", m.x, m.y, .35); }
@@ -1394,7 +1418,7 @@ function onScreamer(m) {
   else if (m.k === "call") { shake(8, 500); playSfx("roar", undefined, undefined, .8); }
 }
 function drawScreamer(z) {
-  const now = performance.now(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet, en = z.enraged ? 1 : 0;
+  const now = gnow(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet, en = z.enraged ? 1 : 0;
   let mv = scrMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; scrMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 60) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.42)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 48, 13, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -1439,7 +1463,7 @@ function drawScreamer(z) {
   }
 }
 function drawScreamerGround() {   // echo rings rolling outward + the resonance marks under the marked survivors (under everyone)
-  const now = performance.now();
+  const now = gnow();
   for (const f of fx) {
     if (f.type !== "scream" || f.k !== "ring") continue;
     const R = (now - f.t) / 1000 * f.sp; if (R > f.max + SCR.ringW) continue; const fade = R > f.max - 80 ? Math.max(0, (f.max + SCR.ringW - R) / (80 + SCR.ringW)) : 1, key = f.big ? "ring2" : "ring";
@@ -1491,7 +1515,7 @@ function drawScreamerFx(f, age) {   // false when finished
   return false;
 }
 function drawScreamerScreen() {   // screen space: TAKE COVER banner + whether YOU are safe; the deafness after a hit
-  const now = performance.now(), me = V(me_());
+  const now = gnow(), me = V(me_());
   for (const [id, w] of scrWail) {
     const zr = state?.zombies?.get(id); if (!zr) { scrWail.delete(id); continue; }
     const left = w.wind - (now - w.t) / 1000; if (left < -.2) { scrWail.delete(id); continue; }
@@ -1541,7 +1565,7 @@ function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // o
   blendCells(im, 0, 0, fw, fh, f0, Math.min(23, f0 + 1), f - f0, left ? 0 : -fw * scale / 2, -fh * scale / 2, fw * scale, fh * scale); ctx.restore();
 }
 function onAbom(m) {
-  const t = performance.now(), feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
+  const t = gnow(), feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
   if (m.k === "slam" || m.k === "roll" || m.k === "spew" || m.k === "lunge") abTele.set(m.id, { ...m, t });
   if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); fx.push({ type: "abom", k: "scorch", x: m.x, y: m.y, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
   else if (m.k === "roll") playSfx("roar", m.x, m.y, .5);
@@ -1553,7 +1577,7 @@ function onAbom(m) {
   else if (m.k === "land") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 10, sc: .6, from: 8, t }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 300) shake(4, 160); playSfx("stomp", m.x, m.y, .5); }
 }
 function drawAbomination(z) {
-  const now = performance.now(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id);
+  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id);
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, z.act === "roll" ? 52 : 70, 17, 0, 0, 7); ctx.fill(); ctx.restore();
@@ -1609,7 +1633,7 @@ function drawAbomSunder(z, t, gy, now, tele) {
   ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - hand; ctx.strokeText("CAN'T BE HURT", z.x, gy - 205); ctx.fillText("CAN'T BE HURT", z.x, gy - 205); ctx.restore();
 }
 function drawAbomSpawn(z) {
-  const now = performance.now(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 };
+  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 };
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   let sheet = "srun", f = 0, f2 = 0, k = 0, lift = 0;
@@ -1628,7 +1652,7 @@ function drawAbomSpawn(z) {
   const w = 46, hk = Math.max(0, Math.min(1, z.hp / z.maxHp)); ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(z.x - w / 2 - 1, gy - 136 - lift, w + 2, 6); ctx.fillStyle = z.enraged ? "#ff3b30" : "#ff8a3d"; ctx.fillRect(z.x - w / 2, gy - 135 - lift, w * hk, 4);
 }
 function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
-  const now = performance.now();
+  const now = gnow();
   for (let i = abPuddles.length - 1; i >= 0; i--) {
     const q = abPuddles[i], e = now - q.t; if (e > q.life || state?.phase !== "playing") { abPuddles.splice(i, 1); continue; } if (!inView(q.x, q.y, 120)) continue;
     const a = e < 300 ? e / 300 : e > q.life - 900 ? (q.life - e) / 900 : 1, pulse = .5 + .5 * Math.sin(now / 240 + q.x);
@@ -1644,11 +1668,11 @@ function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
     ctx.beginPath(); ctx.rect(0, -m.hw, m.len, m.hw * 2); ctx.fill(); ctx.stroke(); ctx.restore();
   }
 }
-function drawAbomFlames() { const t = performance.now() / 1000; for (const [x, y, sc, k, ph, a] of abFlames) if (inView(x, y, 140)) { if (k) drawSmoke3(x, y - 14, sc * .95, ph, t, a * .8); drawFire3(k, x, y, sc, ph, t, a); } abFlames.length = 0; }   // after the ground, before the sprites
+function drawAbomFlames() { const t = gnow() / 1000; for (const [x, y, sc, k, ph, a] of abFlames) if (inView(x, y, 140)) { if (k) drawSmoke3(x, y - 14, sc * .95, ph, t, a * .8); drawFire3(k, x, y, sc, ph, t, a); } abFlames.length = 0; }   // after the ground, before the sprites
 function drawAbomFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "slamfx") { const from = f.from || 0, T = from ? 1.0 : 1.7; if (s > T) return false; aFx("fxSlam", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
-  if (f.k === "scorch") { if (s > 1.6) return false; const a = s < .15 ? s / .15 : Math.max(0, 1 - (s - .5) / 1.1); drawSmoke3(f.x, f.y, 1.3, f.x * .01, performance.now() / 1000, a * .8); drawFire3(2, f.x, f.y + 26, 1.25 * (.7 + .3 * a), f.x * .01, performance.now() / 1000, a); return true; }   // the ground burns for a moment where the arm landed
+  if (f.k === "scorch") { if (s > 1.6) return false; const a = s < .15 ? s / .15 : Math.max(0, 1 - (s - .5) / 1.1); drawSmoke3(f.x, f.y, 1.3, f.x * .01, gnow() / 1000, a * .8); drawFire3(2, f.x, f.y + 26, 1.25 * (.7 + .3 * a), f.x * .01, gnow() / 1000, a); return true; }   // the ground burns for a moment where the arm landed
   if (f.k === "ember") { const from = f.from || 0, T = 1.5; if (s > T) return false; aFx("fxEmber", from + s / T * (24 - from), f.x, f.y, f.sc); return true; }
   if (f.k === "lava") {   // the stream: start set while it reaches out, loop set while he spews, end set as it dies
     const e = s - f.wind; if (e < 0) return true; if (e > f.dur + .45) return false;
@@ -1672,7 +1696,7 @@ function abomLights(now) {
   for (const q of abPuddles) if (inView(q.x, q.y, 150)) lightHole(q.x - cam.x, q.y - cam.y, q.r + 50, .6);
 }
 function drawPyreBurning() {   // survivors on fire: flames dancing on them
-  if (!pyreBurn.size) return; const now = performance.now();
+  if (!pyreBurn.size) return; const now = gnow();
   for (const [id, until] of pyreBurn) {
     if (now > until) { pyreBurn.delete(id); continue; }
     const p = state?.players?.get(id); if (!p || !p.alive) continue; const v = V(p) || p, left = (until - now) / 1000;
@@ -1688,7 +1712,7 @@ function drawPyreBurning() {   // survivors on fire: flames dancing on them
 function drawPyreDread() {   // screen space: an orange heat haze creeps in at the edges when he's close to you
   const me = me_(); if (!me || !me.alive || !state?.zombies) return; let best = 1e9;
   for (const z of state.zombies.values()) if (z.kind === "pyre") best = Math.min(best, Math.hypot(z.x - me.x, z.y - me.y));
-  if (best > 420) return; const k = 1 - best / 420, fl = .85 + .15 * Math.sin(performance.now() / 70) * Math.sin(performance.now() / 23);
+  if (best > 420) return; const k = 1 - best / 420, fl = .85 + .15 * Math.sin(gnow() / 70) * Math.sin(gnow() / 23);
   const g = ctx.createRadialGradient(W / 2, H / 2, H * .38, W / 2, H / 2, W * .68);
   g.addColorStop(0, "rgba(120,25,0,0)"); g.addColorStop(1, `rgba(130,30,0,${.32 * k * fl})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
@@ -1714,23 +1738,23 @@ function hiveFx(row, col, x, y, alpha = 1, scale = 1) {   // 200x150 cells, bott
   ctx.drawImage(im, col * 200, row * 150, 200, 150, -100, -146, 200, 150); ctx.restore();
 }
 function drawHivemind(z) {
-  const now = performance.now(), feet = (z.radius || 44) * .8, t = actTime(z);
+  const now = gnow(), feet = (z.radius || 44) * .8, t = actTime(z), sc = (z.radius || 44) / 44;   // sc > 1: the Alpha Hivemind (Fallen Dynasty's boss) is drawn bigger
   let mv = hiveMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; hiveMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
   let lift = 0;
   if (z.act === "jump" && t > HV.jumpUp && t < HV.jumpLand) lift = Math.sin(Math.PI * (t - HV.jumpUp) / (HV.jumpLand - HV.jumpUp)) * 70;
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); const sh = 1 - lift / 140; ctx.ellipse(z.x, z.y + feet, 70 * sh, 16 * sh, 0, 0, 7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); const sh = 1 - lift / 140; ctx.ellipse(z.x, z.y + feet, 70 * sh * sc, 16 * sh * sc, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.act === "slam" && t < HV.slamWind + .05) {   // danger zone fills up during the wind-up
     const k = Math.min(1, t / HV.slamWind); ctx.save(); ctx.fillStyle = `rgba(255,70,55,${.08 + .16 * k})`; ctx.strokeStyle = `rgba(255,70,55,${.4 + .5 * k})`; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, HV.slamR, HV.slamR * HV.flat, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, HV.slamR * sc, HV.slamR * sc * HV.flat, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
   }
   const act = hImgs.act, crawl = hImgs.crawl, flip = Math.cos(z.aim || 0) < -.2;
   let row = -1, col = 0;
   if (z.act === "bite") { row = 0; col = Math.min(4, Math.floor(t / (.95 / 5))); }
   else if (z.act === "slam") { row = 1; col = t < .2 ? 0 : t < HV.slamWind ? 1 : t < HV.slamWind + .12 ? 2 : t < HV.slamWind + .35 ? 3 : t < 1.1 ? 4 : 5; }
   else if (z.act === "jump") { row = 2; col = t < HV.jumpUp ? 0 : t < .5 ? 1 : t < .7 ? 2 : t < HV.jumpLand ? 3 : t < 1.05 ? 4 : 5; }
-  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift)));
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift))); if (sc > 1.05) { ctx.scale(sc, sc); if (z.boss) alphaAura(z, now); }
   if (row >= 0 && act?.naturalWidth) { if (flip) ctx.scale(-1, 1); flashDraw(flashing, () => ctx.drawImage(act, col * 260, row * 230, 260, 230, -130, -226, 260, 230)); }
   else if (crawl?.naturalWidth) {
     const r8 = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8], c = now - mv.at < 200 ? Math.floor(mv.dist / 14) % 6 : 0;
@@ -1738,9 +1762,16 @@ function drawHivemind(z) {
   }
   ctx.restore();
 }
+function alphaAura(z, now) {   // the Alpha: a sickly green glow pulsing under it (drawn in its scaled space, at its feet)
+  const k = .55 + .45 * Math.sin(now / 260); ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.scale(1, .32);
+  const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 120); g.addColorStop(0, `rgba(150,255,90,${.32 * k})`); g.addColorStop(.6, `rgba(90,200,60,${.12 * k})`); g.addColorStop(1, "rgba(60,160,40,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 120, 0, 7); ctx.fill(); ctx.restore();
+}
 function onHive(m) {
-  const t = performance.now();
-  if (m.k === "arrive") { shake(8, 900); const el = $("hiveWarn"); if (el) { el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); } }
+  const t = gnow();
+  if (m.k === "brood") { shake(12, 700); playSfx("stomp", m.x, m.y); const el = $("hiveWarn"); if (el) { el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); } return; }
+  if (m.k === "arrive") { shake(8, 900); const el = $("hiveWarn"); if (el) { txt("hiveWarnK", m.a ? "BOSS · FALLEN DYNASTY" : "MINI BOSS"); txt("hiveWarnT", m.a ? "THE ALPHA HIVEMIND HAS ARRIVED" : "THE HIVEMIND HAS ARRIVED");
+      txt("hiveWarnS", m.a ? "Kill it to win the wave. At 66% and 33% health it tears off more Hiveminds." : "It bites, slams, leaps and spawns zombies. The wave won't end until it dies."); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); } }
   else if (m.k === "slam") { fx.push({ ...m, type: "hive", k: "slam", t }); shake(9, 320); playSfx("zap", m.x, m.y); }
   else if (m.k === "land") { fx.push({ ...m, type: "hive", k: "land", t }); shake(11, 380); playSfx("stomp", m.x, m.y); }
   else if (m.k === "spawn") fx.push({ ...m, type: "hive", k: "spawn", t });
@@ -1795,7 +1826,7 @@ function drawDantePlacing(p, now) {
 }
 function drawDemoCrate(st) {
   if (st.deploy > 0.55) return;   // Dante is still putting it down (his placing frames show the crate)
-  const now = performance.now(), armed = st.deploy <= 0;
+  const now = gnow(), armed = st.deploy <= 0;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(st.x, st.y + 2, 22, 7, 0, 0, 7); ctx.fill(); ctx.restore();
   if (armed) {   // pulsing red danger ring on the ground
     const k = .5 + .5 * Math.sin(now / 160); ctx.save(); ctx.strokeStyle = `rgba(255,60,50,${.25 + .35 * k})`; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
@@ -1811,11 +1842,11 @@ function bfxFrame(col, row, x, y, sc = 1, alpha = 1, flip = false) {   // (x, y)
   ctx.drawImage(bImg, col * BFX.cw, row * BFX.ch, BFX.cw, BFX.ch, -BFX.cw * sc / 2, -BFX.ch * sc, BFX.cw * sc, BFX.ch * sc); ctx.restore();
 }
 function onBriggs(m) {
-  const t = performance.now(), a = briggsAnim.get(m.id) || {}, me = me_(), near = me && Math.hypot((m.x ?? me.x) - me.x, (m.y ?? me.y) - me.y) < 900;
+  const t = gnow(), a = briggsAnim.get(m.id) || {}, me = me_(), near = me && Math.hypot((m.x ?? me.x) - me.x, (m.y ?? me.y) - me.y) < 900;
   if (m.k === "bastion") { briggsAnim.set(m.id, { ...a, k: "bastion", t0: t, domeAt: t + 300 }); setTimeout(() => near && shake(7, 220), 300); }
   else if (m.k === "cry") {   // the roar lands 0.18s in: hit-stop, big shake, the shockwave ring
     briggsAnim.set(m.id, { ...a, k: "cry", t0: t });
-    setTimeout(() => { fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: performance.now() }); if (near) { hitStopUntil = performance.now() + 70; shake(16, 520); } }, 180);
+    setTimeout(() => { fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: gnow() }); if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, 180);
   }
   else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5 });
   else if (m.k === "shatter") { fx.push({ type: "briggs", k: "shatter", x: m.x, y: m.y, t }); if (near) shake(10, 360); }
@@ -1868,7 +1899,7 @@ function marcusRush(p, now, front) {
 // Screen pulse for the Marcus player: a red heartbeat around the edges + a flash when it starts.
 function drawRushScreen() {
   const me = me_(); if (!me || me.characterClass !== "assault" || !(me.skillT > 0) || !me.alive) return;
-  const now = performance.now(), fade = Math.min(1, me.skillT / .5), born = now - (rushStart.get(me.sessionId) || -1e9);
+  const now = gnow(), fade = Math.min(1, me.skillT / .5), born = now - (rushStart.get(me.sessionId) || -1e9);
   const ph = (now / 600) % 1, beat = Math.max(Math.exp(-ph * 9), .8 * Math.exp(-Math.abs(ph - .22) * 14));   // lub-dub every 0.6s
   const flash = born < 350 ? 1 - born / 350 : 0, a = (.16 + .2 * beat) * fade + .35 * flash;
   const g = ctx.createRadialGradient(W / 2, H / 2, H * (.42 - .05 * beat), W / 2, H / 2, W * .66);
@@ -1916,7 +1947,7 @@ const aImgs = {};
 for (const [k, url] of Object.entries({ police: "assets/sprites/dir8/astra-police.png", doctor: "assets/sprites/dir8/astra-doctor.png", worker: "assets/sprites/dir8/astra-worker.png", fx: "assets/sprites/fx/astra-fx.png", wallH: "assets/sprites/fx/astra-wall-h.png", wallV: "assets/sprites/fx/astra-wall-v.png" })) { const im = new Image(); im.src = url; aImgs[k] = im; }
 const ASTRA_UNITS = new Set(["police", "doctor", "worker"]), SAFE = { half: 130, wall: 24, build: 5, life: 45, hits: 6 }, astraCall = new Map();   // matches the server
 function onAstra(m) {
-  const t = performance.now();
+  const t = gnow();
   if (m.k === "call") { astraCall.set(m.id, t); playVoice(m.id, m.s); }   // radio call: "Medic!" on E, "Cover me!" on Q
   else if (m.k === "cancel") astraCall.delete(m.id);
   else if (m.k === "arrive" || m.k === "leave") fx.push({ type: "astra", k: m.k, x: m.x, y: m.y, t });
@@ -1947,13 +1978,13 @@ function drawAstraFx(f, age) {   // false when finished
 }
 const safeFlash = new Map();   // recent wall hits (bar flashes red)
 function safeHpBar(st, cx, y) {   // 6 pips above the north wall: how many more hits the walls can take
-  const n = st.maxHp || SAFE.hits, gap = n > 12 ? 2 : 3, w = Math.min(14, (220 - gap * (n - 1)) / n), x0 = cx - (n * (w + gap) - gap) / 2, hit = performance.now() - Math.max(0, ...[...safeFlash.values()]) < 160;
+  const n = st.maxHp || SAFE.hits, gap = n > 12 ? 2 : 3, w = Math.min(14, (220 - gap * (n - 1)) / n), x0 = cx - (n * (w + gap) - gap) / 2, hit = gnow() - Math.max(0, ...[...safeFlash.values()]) < 160;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x0 - 3, y - 3, n * (w + gap) - gap + 6, 12);
   for (let i = 0; i < n; i++) { ctx.fillStyle = i < st.hp ? (hit ? "#ff8a7a" : st.hp <= 2 ? "#ff6b5b" : "#8ff0ff") : "rgba(255,255,255,.12)"; ctx.fillRect(x0 + i * (w + gap), y, w, 6); }
   ctx.restore();
 }
 function drawAstraShield() {   // Astra can't be hurt while his safehouse is being built: a cyan shield ring
-  if (!state) return; const now = performance.now();
+  if (!state) return; const now = gnow();
   for (const st of state.structures.values()) {
     if (st.kind !== "safehouse" || !(st.deploy > 0)) continue; const p = V(state.players.get(st.ownerId)); if (!p || !p.alive || !inView(p.x, p.y)) continue;
     ctx.save(); ctx.globalAlpha = .55 + .2 * Math.sin(now / 160); ctx.strokeStyle = "#8ff0ff"; ctx.lineWidth = 2.5; ctx.shadowColor = "#8ff0ff"; ctx.shadowBlur = 10;
@@ -1962,7 +1993,7 @@ function drawAstraShield() {   // Astra can't be hurt while his safehouse is bei
 }
 function inSafehouse(p) { if (!state || !p) return false; for (const st of state.structures.values()) if (st.kind === "safehouse" && !(st.deploy > 0) && Math.abs(p.x - st.x) <= SAFE.half && Math.abs(p.y - st.y) <= SAFE.half) return true; return false; }   // a finished safehouse: downed players inside don't bleed out
 function safeFrame(st) { return st.deploy > 0 ? (st.deploy > (st.total || SAFE.build) / 2 ? 0 : 1) : 2; }   // foundation, scaffold, complete
-function safeAlpha(st) { return st.deploy <= 0 && st.life < 5 && Math.floor(performance.now() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
+function safeAlpha(st) { return st.deploy <= 0 && st.life < 5 && Math.floor(gnow() / 200) % 2 ? .45 : 1; }   // last 5 seconds: flashes
 // The 4 walls as depth-sorted pieces (north/south: 4 tiles across; east/west: 3 tiles down), so people inside and outside sort right.
 function safePieces(cx, cy, frame, alpha, st = null) {
   const H = SAFE.half, T = SAFE.wall, out = [], h = aImgs.wallH, v = aImgs.wallV;
@@ -1976,7 +2007,7 @@ function safePieces(cx, cy, frame, alpha, st = null) {
   return out;
 }
 function drawAstraGround() {   // safehouse floor / footprint + green heal pulses under patients
-  const now = performance.now();
+  const now = gnow();
   for (const st of state.structures.values()) {
     if (st.kind !== "safehouse" || !inView(st.x, st.y, 260)) continue;
     const H = SAFE.half; ctx.save();
@@ -1992,8 +2023,8 @@ function drawAstraGround() {   // safehouse floor / footprint + green heal pulse
 const regenImg = new Image(); regenImg.src = "assets/sprites/fx/regen.png";
 const REGEN = { n: 51, ms: 30, cell: 128, feet: 111, sc: .9 }, regens = new Map();   // player id -> when its effect started
 const regenLen = () => REGEN.n * REGEN.ms;
-function regenPlay(id, restart = false) { const now = performance.now(), t = regens.get(id); if (restart || t === undefined || now - t > regenLen() * .7) regens.set(id, now); }
-function regenKeep(id) { const now = performance.now(), t = regens.get(id); if (t === undefined || now - t >= regenLen()) regens.set(id, now); }   // continuous healing: start again when one finishes
+function regenPlay(id, restart = false) { const now = gnow(), t = regens.get(id); if (restart || t === undefined || now - t > regenLen() * .7) regens.set(id, now); }
+function regenKeep(id) { const now = gnow(), t = regens.get(id); if (t === undefined || now - t >= regenLen()) regens.set(id, now); }   // continuous healing: start again when one finishes
 function drawRegen(p, age, front) {   // front: the arcs' near halves + the spark / cross; behind: a soft layer so the body stays visible
   if (!regenImg.naturalWidth) return;
   const f = Math.min(REGEN.n - 1, Math.floor(age / REGEN.ms)), C = REGEN.cell, sc = REGEN.sc, x = p.x - C * sc / 2, y = p.y + SPR.feet - REGEN.feet * sc;
@@ -2004,7 +2035,7 @@ function drawRegen(p, age, front) {   // front: the arcs' near halves + the spar
 }
 const healSeen = new Map();   // doctor id -> { tgt, t: when this heal started (burst), last: last frame seen healing }
 function healing() {   // doctors healing right now, with when each heal started
-  const now = performance.now(), live = new Set();
+  const now = gnow(), live = new Set();
   if (state.robots) for (const r of state.robots.values()) {
     if (r.kind !== "doctor" || r.act !== "heal" || !r.tgt) continue;
     live.add(r.id); let h = healSeen.get(r.id);
@@ -2015,7 +2046,7 @@ function healing() {   // doctors healing right now, with when each heal started
   return [...healSeen].filter(([id]) => live.has(id));
 }
 function healOverlays(items) {   // the regen effect on everyone being healed, sorted with them
-  const now = performance.now();
+  const now = gnow();
   for (const [id, t] of regens) {
     const age = now - t; if (age >= regenLen()) { regens.delete(id); continue; }
     const p0 = state.players.get(id), pt = V(p0); if (!pt || !p0.alive || !inView(pt.x, pt.y, 120)) continue;
@@ -2024,7 +2055,7 @@ function healOverlays(items) {   // the regen effect on everyone being healed, s
   }
 }
 function drawAstraUnit(r) {   // police / doctors / workers: 8-direction sheets like the survivors (idle, walk x3, action x2)
-  const now = performance.now(), im = aImgs[r.kind]; let mv = robotMove.get(r.id);
+  const now = gnow(), im = aImgs[r.kind]; let mv = robotMove.get(r.id);
   if (!mv) { mv = { x: r.x, y: r.y, at: 0, dist: 0 }; robotMove.set(r.id, mv); }
   const step = Math.hypot(r.x - mv.x, r.y - mv.y); if (step > .4) { mv.at = now; mv.dist += step; mv.x = r.x; mv.y = r.y; }
   let col = now - mv.at < 160 ? 1 + Math.floor(mv.dist / 14) % 3 : 0;
@@ -2086,7 +2117,7 @@ function blendCells(im, sx, sy, cw, ch, f, f2, k, dx, dy, dw = cw, dh = ch) {
   ctx.drawImage(im, sx + f * cw, sy, cw, ch, dx, dy, dw, dh);
   if (k > .04 && f2 !== f) { const a = ctx.globalAlpha; ctx.globalAlpha = a * k; ctx.drawImage(im, sx + f2 * cw, sy, cw, ch, dx, dy, dw, dh); ctx.globalAlpha = a; }
 }   // per player: stepping out, last saber swing, flame state
-const mechaFiring = (p, v) => v.phase === "ride" && (p.sessionId === myId ? heliTrigger() && performance.now() - (mechaSlash.get(myId)?.t || 0) > MECHA.swing : !!v.fire);
+const mechaFiring = (p, v) => v.phase === "ride" && (p.sessionId === myId ? heliTrigger() && gnow() - (mechaSlash.get(myId)?.t || 0) > MECHA.swing : !!v.fire);
 function drawMechaTf(p, row, u) {   // u: 0 = Sofea, 1 = mecha
   const im = sImgs.mechaTf; if (!im?.naturalWidth) return;
   u = Math.max(0, Math.min(1, u)); const t = u * 7, f = Math.floor(t), tr = MECHA.tfRow[row], feet = Math.round(p.y + SPR.feet);
@@ -2325,7 +2356,7 @@ function drawRavenSpecial(p, img, now) {
   return false;
 }
 function drawBurning(z, stacks) {   // a zombie on fire: bigger flames for more burn stacks
-  const now = performance.now(), off = (z.id?.charCodeAt?.(z.id.length - 1) || 0) * 37;
+  const now = gnow(), off = (z.id?.charCodeAt?.(z.id.length - 1) || 0) * 37;
   fireFrame(2, Math.floor((now + off) / 90) % 6, z.x, z.y + (z.radius || 14) * 0.9, .9, .55 + .12 * Math.min(5, stacks));
 }
 function drawRavenFx(f, age) {   // false when finished
@@ -2386,7 +2417,7 @@ let squadWheel = null, lastRobot = "assault";
 try { const sv = localStorage.getItem("sa-robot"); if (sv) lastRobot = sv; } catch {}
 function openSquadWheel() {
   const me = me_(); if (!me || squadWheel) return;
-  squadWheel = { cx: Math.max(190, Math.min(W - 190, mouse.sx)), cy: Math.max(190, Math.min(H - 190, mouse.sy)), t0: performance.now(), aimX: mouse.x, aimY: mouse.y }; firing = false;
+  squadWheel = { cx: Math.max(190, Math.min(W - 190, mouse.sx)), cy: Math.max(190, Math.min(H - 190, mouse.sy)), t0: gnow(), aimX: mouse.x, aimY: mouse.y }; firing = false;
 }
 function squadSliceAt() {
   if (!squadWheel) return -1; const dx = mouse.sx - squadWheel.cx, dy = mouse.sy - squadWheel.cy;
@@ -2396,7 +2427,7 @@ function squadSliceAt() {
 function closeSquadWheel() {
   if (!squadWheel) return; const w = squadWheel; squadWheel = null; const me = me_();
 const sel = (() => { const dx = mouse.sx - w.cx, dy = mouse.sy - w.cy; return Math.hypot(dx, dy) < 34 ? -1 : ((Math.round((Math.atan2(dy, dx) + Math.PI / 2) / (Math.PI * 2 / 3)) % 3) + 3) % 3; })();
-  const kind = sel >= 0 ? SQUAD_KINDS[sel][0] : performance.now() - w.t0 < 250 ? lastRobot : null;
+  const kind = sel >= 0 ? SQUAD_KINDS[sel][0] : gnow() - w.t0 < 250 ? lastRobot : null;
   if (!kind) return;
   const ch = me?.robotCharges ?? 3;
   if (ch < 1 || (me?.abilityCooldown || 0) > 0) { feed.unshift({ text: ch < 1 ? `No robot charges: next in ${Math.ceil(me.chargeCd || 0)}s` : `Next robot in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); return; }
@@ -2433,7 +2464,7 @@ const BT = { hookAim: .5, get hookSpeed() { return state?.hookSpeed || 2600; }, 
 const bossCorpses = [];
 const bossMove = new Map(), stompDust = [];   // boss walk tracking + dust puffs from his footsteps
 function drawStompDust() {
-  const now = performance.now();
+  const now = gnow();
   for (let i = stompDust.length - 1; i >= 0; i--) {
     const d = stompDust[i], k = (now - d.t) / 450; if (k >= 1) { stompDust.splice(i, 1); continue; }
     ctx.save(); ctx.globalAlpha = .45 * (1 - k); ctx.fillStyle = "#8a8378";
@@ -2443,7 +2474,7 @@ function drawStompDust() {
 }
 const bAct = new Map();   // boss id -> { act, start } (local clock, so animations play smoothly between server updates)
 function actTime(z) {
-  let st = bAct.get(z.id); const now = performance.now();
+  let st = bAct.get(z.id); const now = gnow();
   if (!st || st.act !== z.act) { st = { act: z.act, start: now - Math.max(0, (z.actLen || 0) - (z.slam || 0)) * 1000 }; bAct.set(z.id, st); }
   return (now - st.start) / 1000;
 }
@@ -2460,7 +2491,7 @@ function drawChain(x0, y0, x1, y1, withHook = true) {
   ctx.restore();
 }
 function drawButcher(z) {
-  const now = performance.now(), t = actTime(z), feet = z.radius * .8, row = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8];
+  const now = gnow(), t = actTime(z), feet = z.radius * .8, row = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8];
   const flashAt = feel.flash.get(z.id), flash = flashAt && now - flashAt < 90, filter = flash;   // bFrame(..., flash): additive flash, no ctx.filter
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, 46, 12, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.enraged) bossGlow(z.x, z.y - 40, "255,30,30", 110, .5 + .2 * Math.sin(now / 90));   // enraged: red halo behind him
@@ -2533,7 +2564,7 @@ function drawDeflect(f, age) {   // false when finished
   ctx.restore(); return true;
 }
 function drawBossCorpse(c) {
-  const age = (performance.now() - c.t) / 1000, im = butcherImgs.death, C = BCELL.spin;
+  const age = (gnow() - c.t) / 1000, im = butcherImgs.death, C = BCELL.spin;
   if (age > 14) { bossCorpses.splice(bossCorpses.indexOf(c), 1); return; }
   if (c.kind !== "butcher" || !im?.naturalWidth) return;
   const f = Math.min(5, Math.floor(age / .2));
@@ -2573,14 +2604,14 @@ const DASH_FX = {
 };
 const DASH_MS = 520, dashBeams = [], dodgeAt = new Map();   // dodgeAt: when each player last dashed (0.25s untouchable)
 function dashBeam(id, x0, y0, x1, y1) {
-  const p = state?.players?.get(id); if (p) dodgeAt.set(id, performance.now()); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
-  dashBeams.push({ x0, y0: y0 - 14, x1, y1: y1 - 14, t: performance.now(), fx: DASH_FX[p.characterClass] || DASH_FX.assault, seed: Math.random() * 100 });
-  if (p.characterClass === "assault") marcusDash.set(id, { t0: performance.now(), a: Math.atan2(y1 - y0, x1 - x0) });   // his dash body frames
+  const p = state?.players?.get(id); if (p) dodgeAt.set(id, gnow()); if (!p || Math.hypot(x1 - x0, y1 - y0) < 6) return;
+  dashBeams.push({ x0, y0: y0 - 14, x1, y1: y1 - 14, t: gnow(), fx: DASH_FX[p.characterClass] || DASH_FX.assault, seed: Math.random() * 100 });
+  if (p.characterClass === "assault") marcusDash.set(id, { t0: gnow(), a: Math.atan2(y1 - y0, x1 - x0) });   // his dash body frames
   if (dashBeams.length > 24) dashBeams.shift();
 }
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 function drawDashBeams() {
-  const now = performance.now();
+  const now = gnow();
   for (let i = dashBeams.length - 1; i >= 0; i--) {
     const b = dashBeams[i], age = now - b.t; if (age > DASH_MS) { dashBeams.splice(i, 1); continue; }
     if (!inView(b.x1, b.y1, 120)) continue;
@@ -2623,7 +2654,7 @@ function drawGroundFx() {
   drawPyreGround(); drawScreamerGround(); drawAbomGround(); drawAbomFlames();
   drawDashBeams();
   const sh = butcherImgs.shock; if (!sh?.naturalWidth) return;
-  const now = performance.now();
+  const now = gnow();
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i]; if (f.type !== "chop") continue;
     const age = (now - f.t) / 1000; if (age > 2.6) { fx.splice(i, 1); continue; }
@@ -2658,7 +2689,7 @@ function drawSpit(f, age) {   // returns false when finished
 }
 function drawPuddles() {
   if (!state.puddles) return;
-  const t = performance.now();
+  const t = gnow();
   for (const pu of state.puddles.values()) {
     if (!inView(pu.x, pu.y, pu.r)) continue;
     const a = Math.min(1, pu.life) * (pu.maxLife - pu.life < .35 ? (pu.maxLife - pu.life) / .35 : 1), ry = pu.r * .6, cy = pu.y + 6;
@@ -2696,7 +2727,7 @@ const WHIP_T = { total: .9, frames: [[0, 0], [.17, 1], [.38, 2], [.45, 3], [.53,
 const mutantClaw = new Image(); mutantClaw.src = "assets/sprites/zombies/dir8/mutant-claw.png";
 const whipStart = new Map();
 function drawMutantWhip(z, img8, info) {
-  const now = performance.now();
+  const now = gnow();
   if (!whipStart.has(z.id)) whipStart.set(z.id, now - (WHIP_T.total - z.slam) * 1000);
   const t = (now - whipStart.get(z.id)) / 1000;
   let frame = 0; for (const [t0, f] of WHIP_T.frames) if (t >= t0) frame = f;
@@ -2720,7 +2751,7 @@ const ATTACK_CD = { spitter: 2.6, mutant: 0.85 };   // seconds between attacks (
 const FACE_TARGET = { spitter: 1, mutant: 1 };      // turn toward the survivor they attack
 const zAtk = new Map();   // zombie id -> { cd, at }: when (local time) its current attack started, for smooth timing
 function attackAge(z) {
-  let st = zAtk.get(z.id); const cd = z.attackCooldown ?? 0, now = performance.now();
+  let st = zAtk.get(z.id); const cd = z.attackCooldown ?? 0, now = gnow();
   if (!st) { st = { cd, at: -1e9 }; zAtk.set(z.id, st); }
   if (cd > st.cd + .2) st.at = now - Math.max(0, (ATTACK_CD[z.kind] || 1) - cd) * 1000;   // cooldown jumped up = a new attack
   st.cd = cd; return (now - st.at) / 1000;
@@ -2753,7 +2784,7 @@ function zombieFacing(z) {
   zface.set(z.id, f); return f;
 }
 function drawZombieSprite(z, img, alpha = 1, forceFrame = -1, facing = 0) {
-  const now = performance.now(), info = ZTYPE[z.kind] || ZTYPE.walker;
+  const now = gnow(), info = ZTYPE[z.kind] || ZTYPE.walker;
   const f = facing || zombieFacing(z);
   let frame = forceFrame;
   if (frame < 0) {
@@ -2770,7 +2801,7 @@ function drawZombieSprite(z, img, alpha = 1, forceFrame = -1, facing = 0) {
   return { feet, h: info.h };
 }
 function drawZombieDir8(z, img8, side) {
-  const now = performance.now(), info = ZTYPE[z.kind] || ZTYPE.walker, a = zombieAngle(z);
+  const now = gnow(), info = ZTYPE[z.kind] || ZTYPE.walker, a = zombieAngle(z);
   if (z.kind === "mutant" && z.slam > 0 && img8.naturalWidth) return drawMutantWhip(z, img8, info);
   if (z.kind === "brute" && z.slam > 0 && slamImg.naturalWidth) {          // brute ground slam
     if (!slamStart.has(z.id)) slamStart.set(z.id, now - (SLAM_T.total - z.slam) * 1000);
@@ -2820,7 +2851,7 @@ function drawZombieAny(z) {
   if (!img || !img.complete || !img.naturalWidth) { drawZombie(z); drawHitFlash(z); return; }   // bosses (no art yet) use the old drawing
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + (z.radius || 14) * 0.8, (z.radius || 14) * 1.05, 4, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.kind === "brute" && z.slam > 0) {   // danger zone: fills up during the wind-up so you can get out
-    const st = slamStart.get(z.id), t = st ? (performance.now() - st) / 1000 : SLAM_T.total - z.slam, k = Math.max(0, Math.min(1, t / SLAM_T.windup));
+    const st = slamStart.get(z.id), t = st ? (gnow() - st) / 1000 : SLAM_T.total - z.slam, k = Math.max(0, Math.min(1, t / SLAM_T.windup));
     if (t < SLAM_T.windup + .1) {
       ctx.save(); const cy = z.y + (z.radius || 14) * 0.8;
       ctx.fillStyle = `rgba(255,70,50,${.10 + .18 * k})`; ctx.strokeStyle = `rgba(255,90,60,${.5 + .4 * k})`; ctx.lineWidth = 2;
@@ -2837,9 +2868,9 @@ function drawZombieAny(z) {
 }
 // Bodies stay on the ground for a few seconds after a kill, then fade.
 const corpses = [];
-function addCorpse(p) { if (!zombieImgs[p.kind]) return; corpses.push({ ...p, t: performance.now() }); if (corpses.length > 40) corpses.shift(); }
+function addCorpse(p) { if (!zombieImgs[p.kind]) return; corpses.push({ ...p, t: gnow() }); if (corpses.length > 40) corpses.shift(); }
 function drawCorpses() {
-  const now = performance.now();
+  const now = gnow();
   for (let i = corpses.length - 1; i >= 0; i--) {
     const c = corpses[i], age = now - c.t; if (age > 6000) { corpses.splice(i, 1); continue; }
     if (!inView(c.x, c.y)) continue;
@@ -2893,10 +2924,10 @@ function survivorPose(p){
 // All of it is worked out on this screen from changes in the game state, so it shows for every
 // source of damage (your shots, teammates, turrets, mines) without extra network traffic.
 const feel={hp:new Map(),last:new Map(),flash:new Map(),nums:[],parts:[],stains:[],shakeUntil:0,shakePow:0,hurtUntil:0,myHp:null};
-function shake(power,ms){const now=performance.now();if(now+ms>feel.shakeUntil)feel.shakeUntil=now+ms;feel.shakePow=Math.max(feel.shakePow*(now<feel.shakeUntil?1:0),power);}
-function shakeOffset(){const now=performance.now();if(now>feel.shakeUntil||matchMedia("(prefers-reduced-motion: reduce)").matches){feel.shakePow=0;return{x:0,y:0};}const k=feel.shakePow;return{x:(Math.random()-.5)*k,y:(Math.random()-.5)*k};}
+function shake(power,ms){const now=gnow();if(now+ms>feel.shakeUntil)feel.shakeUntil=now+ms;feel.shakePow=Math.max(feel.shakePow*(now<feel.shakeUntil?1:0),power);}
+function shakeOffset(){const now=gnow();if(now>feel.shakeUntil||matchMedia("(prefers-reduced-motion: reduce)").matches){feel.shakePow=0;return{x:0,y:0};}const k=feel.shakePow;return{x:(Math.random()-.5)*k,y:(Math.random()-.5)*k};}
 function updateFeel(){
- if(!state)return;const now=performance.now(),seen=new Set();
+ if(!state)return;const now=gnow(),seen=new Set();
  for(const z of state.zombies.values()){
   seen.add(z.id);const prev=feel.hp.get(z.id);
   if(prev!==undefined&&z.hp<prev-0.5){const dmg=prev-z.hp;feel.flash.set(z.id,now);feel.last.set(z.id,now);playSfx("zhit",z.x,z.y);
@@ -2915,16 +2946,16 @@ function updateFeel(){
  feel.myHp=me?me.hp:null;
 }
 function splat(x,y,count,big){
- for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,s=40+Math.random()*(big?220:120);feel.parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:performance.now(),life:350+Math.random()*250,c:Math.random()<.6?'#6f8a3c':'#2f3b22',sz:big?4:3});}
- feel.stains.push({x,y,r:(big?26:10)+Math.random()*6,t:performance.now()});if(feel.stains.length>60)feel.stains.shift();
+ for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,s=40+Math.random()*(big?220:120);feel.parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:gnow(),life:350+Math.random()*250,c:Math.random()<.6?'#6f8a3c':'#2f3b22',sz:big?4:3});}
+ feel.stains.push({x,y,r:(big?26:10)+Math.random()*6,t:gnow()});if(feel.stains.length>60)feel.stains.shift();
  if(big)shake(9,420);
 }
 // Burnt craters left by rockets and grenades (art: fx/dante-scorch.png). They don't stay long: 5s, then fade over 2s.
 // kind "hot": rocket / crate blast (starts glowing, cools down); "big": big grenade; "small": small grenade.
 const scorches = [];
-function scorch(x, y, s = 1, kind = "hot") { scorches.push({ x, y, s, kind, v: Math.floor(Math.random() * 4), flip: Math.random() < .5, t: performance.now() }); if (scorches.length > 70) scorches.shift(); }
+function scorch(x, y, s = 1, kind = "hot") { scorches.push({ x, y, s, kind, v: Math.floor(Math.random() * 4), flip: Math.random() < .5, t: gnow() }); if (scorches.length > 70) scorches.shift(); }
 function drawScorches() {
-  const now = performance.now(), im = dImgs.scorch; if (!im?.naturalWidth) return;
+  const now = gnow(), im = dImgs.scorch; if (!im?.naturalWidth) return;
   for (let i = scorches.length - 1; i >= 0; i--) {
     const c = scorches[i], age = (now - c.t) / 1000; if (age > 7) { scorches.splice(i, 1); continue; }
     const row = c.kind === "hot" ? 2 : c.kind === "big" ? 0 : 1, col = c.kind === "hot" ? Math.min(3, Math.floor(age / .7)) : c.v;
@@ -2934,12 +2965,12 @@ function drawScorches() {
     ctx.drawImage(im, col * 180, row * 110, 180, 110, -90, -55, 180, 110); ctx.restore();
   }
 }
-function drawStains(){drawScorches();const now=performance.now();for(let i=feel.stains.length-1;i>=0;i--){const s=feel.stains[i],age=(now-s.t)/1000;if(age>25){feel.stains.splice(i,1);continue;}
+function drawStains(){drawScorches();const now=gnow();for(let i=feel.stains.length-1;i>=0;i--){const s=feel.stains[i],age=(now-s.t)/1000;if(age>25){feel.stains.splice(i,1);continue;}
  ctx.save();ctx.globalAlpha=.32*(1-age/25);ctx.fillStyle='#3b4a24';ctx.beginPath();ctx.ellipse(s.x,s.y+4,s.r,s.r*.6,0,0,7);ctx.fill();ctx.restore();}}
-function drawHitFlash(z){const t=feel.flash.get(z.id);if(!t)return;const age=performance.now()-t;if(age>90)return;
+function drawHitFlash(z){const t=feel.flash.get(z.id);if(!t)return;const age=gnow()-t;if(age>90)return;
  ctx.save();ctx.globalAlpha=.75*(1-age/90);ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(z.x,z.y-z.radius*.3,z.radius*(z.boss?1.4:1.05),0,7);ctx.fill();ctx.restore();}
 function drawFeel(){
- const now=performance.now(),dt=1/60;
+ const now=gnow(),dt=1/60;
  for(let i=feel.parts.length-1;i>=0;i--){const p=feel.parts[i],age=now-p.t;if(age>p.life){feel.parts.splice(i,1);continue;}
   p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.9;p.vy*=.9;ctx.globalAlpha=1-age/p.life;ctx.fillStyle=p.c;ctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);}
  ctx.globalAlpha=1;ctx.textAlign='center';
@@ -2948,7 +2979,7 @@ function drawFeel(){
   const txt=String(Math.round(n.v)),y=n.y-k*26;ctx.strokeText(txt,n.x,y);ctx.fillStyle=n.boss?'#ff8a6a':big?'#ffd27a':'#f3ead6';ctx.fillText(txt,n.x,y);}
  ctx.globalAlpha=1;
 }
-function drawHurt(){const now=performance.now();if(now>feel.hurtUntil)return;const k=(feel.hurtUntil-now)/220;
+function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.hurtUntil-now)/220;
  const g=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.75);g.addColorStop(0,'rgba(200,30,30,0)');g.addColorStop(1,`rgba(200,30,30,${.45*k})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 
 // SIENNA's DEAD EYE (Nov 9): a thick glacier-blue beam down the aimed line, a muzzle flare, and a burst on every zombie it went through
@@ -3014,7 +3045,7 @@ function drawShotgunFx(f, age) {   // false when finished
 // Bullet tracers, muzzle flashes and launcher blasts (sent by the server for every player's shots).
 const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
 function drawShotFx(){
-  const now=performance.now();
+  const now=gnow();
   drawPyreBurning();
   for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','scream','abom','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
@@ -3025,6 +3056,7 @@ function drawShotFx(){
    if(f.type==='briggs'){if(!drawBriggsFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='astra'){if(!drawAstraFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='hive'){if(!drawHiveFx(f,age))fx.splice(i,1);continue;}
+   if(f.type==='plateBurst'||f.type==='plateGot'){if(!drawPlateFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='pyre'){if(!drawPyreFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='scream'){if(!drawScreamerFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='abom'){if(!drawAbomFx(f,age))fx.splice(i,1);continue;}
@@ -3050,8 +3082,15 @@ function drawCrosshair(){
   const me=V(state?.players.get(myId));if(!me||!me.alive||state.phase!=='playing'||wheel)return;
   ctx.save();const a=aimAngle(me);
   ctx.strokeStyle='rgba(255,181,109,.28)';ctx.setLineDash([4,6]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(me.x+Math.cos(a)*22,me.y-4+Math.sin(a)*22);ctx.lineTo(me.x+Math.cos(a)*90,me.y-4+Math.sin(a)*90);ctx.stroke();ctx.setLineDash([]);
-  ctx.strokeStyle=firing?'#ffd08a':'#ffb56d';ctx.lineWidth=2;ctx.beginPath();ctx.arc(mouse.x,mouse.y,firing?7:9,0,7);ctx.stroke();
-  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ctx.beginPath();ctx.moveTo(mouse.x+dx*12,mouse.y+dy*12);ctx.lineTo(mouse.x+dx*17,mouse.y+dy*17);ctx.stroke();}
+  ctx.restore();   // (the ring itself is drawn last, on top of the night: drawReticle)
+}
+function drawReticle(){   // Nov 12: the crosshair is always visible, even in the dark: drawn in screen space after the night layer, with a dark outline under it
+  const me=V(state?.players.get(myId));if(!me||!me.alive||state.phase!=='playing'||wheel)return;
+  const x=mouse.sx,y=mouse.sy,r=firing?7:9,ticks=()=>{ctx.beginPath();ctx.arc(x,y,r,0,7);for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ctx.moveTo(x+dx*12,y+dy*12);ctx.lineTo(x+dx*17,y+dy*17);}ctx.stroke();};
+  ctx.save();ctx.lineCap='round';
+  ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=4.5;ticks();
+  ctx.shadowColor='rgba(255,170,80,.75)';ctx.shadowBlur=nightK>.2?6:0;ctx.strokeStyle=firing?'#ffe0a8':'#ffbf7a';ctx.lineWidth=2;ticks();
+  ctx.shadowBlur=0;ctx.fillStyle='#fff3dc';ctx.fillRect(Math.round(x)-1,Math.round(y)-1,2,2);
   ctx.restore();
 }
 // ---------- Side-view survivor sprites for heroes without 8-direction art (client/assets/sprites/<class>.png, 3 rows x 3 frames: idle / walk / shoot) ----------
@@ -3063,7 +3102,7 @@ const sprites = {};
 for (const [cls, url] of Object.entries(SPRITE_URLS)) { const img = new Image(); img.src = url; sprites[cls] = img; }
 const anim = new Map(); // per player: last position, when they last moved / shot
 function animState(p) {
-  const now = performance.now(); let a = anim.get(p.sessionId);
+  const now = gnow(); let a = anim.get(p.sessionId);
   if (!a) { a = { x: p.x, y: p.y, movedAt: 0, shotAt: 0 }; anim.set(p.sessionId, a); }
   if (Math.hypot(p.x - a.x, p.y - a.y) > 0.4) { a.movedAt = now; a.x = p.x; a.y = p.y; }
   return a;
@@ -3085,7 +3124,7 @@ function drawSurvivorLabels(p) {
     ctx.save(); ctx.globalAlpha = .55; ctx.fillStyle = "#9fc4e8"; ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 18, 6, 0, 0, 7); ctx.fill(); ctx.restore();
   }
   if (p.alive && p.stunned > 0) {   // stunned: little stars circling the head
-    const t = performance.now() / 260;
+    const t = gnow() / 260;
     ctx.save(); ctx.font = "bold 13px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#ffe27a"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
     for (let i = 0; i < 3; i++) { const a = t + i * 2.1; ctx.fillText("✦", p.x + Math.cos(a) * 14, p.y - 52 + Math.sin(a) * 4); }
     ctx.restore();
@@ -3093,10 +3132,10 @@ function drawSurvivorLabels(p) {
   // Fire axe charge ring: fills over 1 second, pulses orange when the heavy swing is ready
   const mine = p.sessionId === myId && axeChargeAt && p.activeSlot === 1 && p.melee === "axe";
   if (p.alive && (mine || p.charging)) {
-    const k = mine ? Math.min(1, (performance.now() - axeChargeAt) / AXE_CHARGE_MS) : 1, full = k >= 1;
+    const k = mine ? Math.min(1, (gnow() - axeChargeAt) / AXE_CHARGE_MS) : 1, full = k >= 1;
     ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.45)";
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 20, 8, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = full ? `rgba(255,${150 + 60 * Math.sin(performance.now() / 70)},60,1)` : "#ffd9a0";
+    ctx.strokeStyle = full ? `rgba(255,${150 + 60 * Math.sin(gnow() / 70)},60,1)` : "#ffd9a0";
     if (full) { ctx.shadowColor = "#ff9a3c"; ctx.shadowBlur = 12; }
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 20, 8, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
     ctx.restore();
@@ -3129,7 +3168,8 @@ const DIR8 = {
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
-  operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"] },   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
+  operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
+    fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
     // his sheets' diagonals were drawn facing the wrong way: row -> [row to use, mirrored?]. The rifle has real up-right / up-left
     // frames now (tools/add-astra-diagonals.py); knife / bat / axe / radio still borrow the back view (bat's up-left is fine)
@@ -3161,7 +3201,7 @@ function drawMarcusDash(p, now) {
   return true;
 }
 function drawSurvivorDir8(p, pose, img) {
-  const now = performance.now(), a = animState(p);
+  const now = gnow(), a = animState(p);
   if (p.characterClass === "assault" && drawMarcusDash(p, now)) return true;
   if (p.characterClass === "scout" && drawRavenSpecial(p, img, now)) return true;
   if (p.characterClass === "demolitionist" && drawDantePlacing(p, now)) return true;
@@ -3204,7 +3244,7 @@ function drawSurvivorSprite(p, pose) {
   if (d8 && d8.complete && d8.naturalWidth) return drawSurvivorDir8(p, pose, d8);
   const img = sprites[p.characterClass];
   if (!img || !img.complete || !img.naturalWidth) return false;
-  const now = performance.now(), a = animState(p);
+  const now = gnow(), a = animState(p);
   const holdingGun = p.activeSlot === 2 || p.activeSlot === 3;
   const shotAge = now - a.shotAt;
   let row = 0, frame = Math.floor(now / 420) % 3;                       // idle
@@ -3224,9 +3264,11 @@ function drawSurvivor(p){
   const pose=survivorPose(p);
   // soft shadow under everyone
   ctx.save();ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(p.x,p.y+17,14,4,0,0,7);ctx.fill();ctx.restore();
-  const dodge=performance.now()-(dodgeAt.get(p.sessionId)||-1e9)<250;   // 0.25s dash dodge: see-through flicker (nothing can hurt them)
-  if(dodge){ctx.save();ctx.globalAlpha=.45+.25*Math.sin(performance.now()/22);}
+  const dodge=gnow()-(dodgeAt.get(p.sessionId)||-1e9)<250;   // 0.25s dash dodge: see-through flicker (nothing can hurt them)
+  if(dodge){ctx.save();ctx.globalAlpha=.45+.25*Math.sin(gnow()/22);}
+  if(p.armor===2&&p.alive)plateAura(p,false);
   const drew=drawSurvivorSprite(p,pose); if(drew){drawHeldItem(p,pose);}
+  if(p.armor===2&&p.alive)plateAura(p,true);
   if(dodge)ctx.restore();
   if(drew){drawSurvivorLabels(p);return;}
   ctx.save();ctx.translate(Math.round(p.x),Math.round(p.y));ctx.scale(pose.facing,1);
@@ -3273,7 +3315,7 @@ function drawObj(name, x, baseY, opts = {}) {
 const powered = () => (state?.generatorFuel || 0) > 0 && (state?.generatorHp || 0) > 0;
 function drawTower(cx, cy) {
   if (!drawObj("tower", cx, cy + 40)) return;
-  const img = objImgs.tower, t = performance.now();
+  const img = objImgs.tower, t = gnow();
   const on = Math.sin(t / 260) > -0.2, bx = cx, by = cy + 40 - img.height + 14;
   if (on) { const g = ctx.createRadialGradient(bx, by, 1, bx, by, 26); g.addColorStop(0, "rgba(255,90,60,.85)"); g.addColorStop(1, "rgba(255,40,40,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, 26, 0, 7); ctx.fill(); }
   if ((state.towerHp || 0) < (state.towerMaxHp || 1) * 0.25 && Math.sin(t / 120) > 0) { ctx.fillStyle = "rgba(255,60,40,.12)"; ctx.fillRect(cx - 60, cy - 140, 120, 180); } // flashing when critical
@@ -3281,18 +3323,74 @@ function drawTower(cx, cy) {
 function drawGenerator(x, y) {
   const broken = (state.generatorHp || 0) <= 0, empty = (state.generatorFuel || 0) <= 0;
   drawObj("generator", x, y + 18, { filter: broken ? "grayscale(1) brightness(.6)" : empty ? "saturate(.4) brightness(.8)" : undefined });
-  if (!broken && !empty && Math.random() < 0.06) feel.parts.push({ x: x + 10, y: y - 40, vx: (Math.random() - .5) * 10, vy: -25, t: performance.now(), life: 900, c: "#6d6a72", sz: 4 });
+  if (!broken && !empty && Math.random() < 0.06) feel.parts.push({ x: x + 10, y: y - 40, vx: (Math.random() - .5) * 10, vy: -25, t: gnow(), life: 900, c: "#6d6a72", sz: 4 });
 }
 const LOOT_ART = { scrap: "crate", medkit: "medkit", ammo: "ammo", weapon: "weaponCase" };
+// ---------- (Nov 12) THE PYRE PLATE: the Pyre Priest's armour, all drawn in code ----------
+let plateUrl = "";
+function plateIconUrl() {   // the plate as a small picture for the backpack / equipment panel (drawn once)
+  if (plateUrl) return plateUrl; const c = document.createElement("canvas"); c.width = c.height = 64; drawPlateIcon(32, 34, 22, .6, 0, c.getContext("2d")); return plateUrl = c.toDataURL();
+}
+function plateShape(g, s) {   // a cuirass with pauldrons, centred on 0,0, about 2s wide
+  g.beginPath(); g.moveTo(-s * .62, -s * .78); g.quadraticCurveTo(0, -s * .58, s * .62, -s * .78); g.lineTo(s * .74, -s * .2); g.quadraticCurveTo(s * .66, s * .55, 0, s * .95); g.quadraticCurveTo(-s * .66, s * .55, -s * .74, -s * .2); g.closePath();
+}
+function drawPlateIcon(x, y, s, glow = 1, now = gnow(), g = ctx) {
+  const pulse = .75 + .25 * Math.sin(now / 180);
+  g.save(); g.translate(x, y);
+  if (glow > 0) { g.save(); g.globalCompositeOperation = "lighter"; const h = g.createRadialGradient(0, 0, s * .2, 0, 0, s * 1.9); h.addColorStop(0, `rgba(255,150,40,${.45 * glow * pulse})`); h.addColorStop(1, "rgba(255,80,0,0)"); g.fillStyle = h; g.fillRect(-s * 2, -s * 2, s * 4, s * 4); g.restore(); }
+  for (const sx of [-1, 1]) { g.save(); g.scale(sx, 1); g.beginPath(); g.ellipse(s * .78, -s * .6, s * .42, s * .3, -.5, 0, 7); const pg = g.createLinearGradient(0, -s, 0, -s * .3); pg.addColorStop(0, "#5a4a40"); pg.addColorStop(1, "#1c1512"); g.fillStyle = pg; g.fill(); g.lineWidth = Math.max(1.5, s * .08); g.strokeStyle = "#0b0706"; g.stroke();
+    g.beginPath(); g.ellipse(s * .78, -s * .62, s * .3, s * .14, -.5, Math.PI, 0); g.strokeStyle = `rgba(255,170,60,${.9 * pulse})`; g.lineWidth = Math.max(1, s * .05); g.stroke(); g.restore(); }   // pauldrons with a molten rim
+  plateShape(g, s); const bg = g.createLinearGradient(0, -s, 0, s); bg.addColorStop(0, "#6b5a4e"); bg.addColorStop(.45, "#2e2420"); bg.addColorStop(1, "#140e0c"); g.fillStyle = bg; g.fill(); g.lineWidth = Math.max(2, s * .1); g.strokeStyle = "#0b0706"; g.stroke();
+  g.save(); plateShape(g, s); g.clip();
+  g.strokeStyle = `rgba(255,${150 + 60 * pulse | 0},50,${.95})`; g.lineWidth = Math.max(1.2, s * .07); g.shadowColor = "#ff8a1a"; g.shadowBlur = s * .5;   // molten seams
+  g.beginPath(); g.moveTo(0, -s * .6); g.lineTo(0, s * .9); g.moveTo(-s * .5, -s * .05); g.quadraticCurveTo(0, s * .16, s * .5, -s * .05); g.moveTo(-s * .4, s * .42); g.quadraticCurveTo(0, s * .58, s * .4, s * .42); g.stroke();
+  g.shadowBlur = 0; g.fillStyle = "rgba(255,255,255,.14)"; g.beginPath(); g.ellipse(-s * .28, -s * .42, s * .2, s * .34, -.4, 0, 7); g.fill();   // a highlight on the iron
+  g.restore();
+  g.beginPath(); g.arc(0, -s * .22, s * .2, 0, 7); const gem = g.createRadialGradient(-s * .05, -s * .28, 1, 0, -s * .22, s * .2); gem.addColorStop(0, "#fff4c0"); gem.addColorStop(.45, "#ffb02a"); gem.addColorStop(1, "#c03a08"); g.fillStyle = gem; g.fill(); g.lineWidth = Math.max(1, s * .06); g.strokeStyle = "#2a0d04"; g.stroke();   // the ember heart
+  g.restore();
+}
+function plateEmbers(x, y, w, h, n, seed, now, big = 1) {   // little embers rising and fading (deterministic: no per-frame random)
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < n; i++) { const r = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453, f = r - Math.floor(r), sp = 900 + f * 900, u = ((now + f * 5000) % sp) / sp;
+    const ex = x + (f - .5) * w + Math.sin(now / 300 + i) * 4, ey = y - u * h, a = (1 - u) * .9, sz = (1.4 + f * 1.6) * big;
+    ctx.fillStyle = `rgba(255,${140 + (f * 90 | 0)},40,${a})`; ctx.fillRect(Math.round(ex - sz / 2), Math.round(ey - sz / 2), sz, sz); }
+  ctx.restore();
+}
+function plateAura(p, front) {   // worn: a warm ring at the feet (behind) and embers drifting up (in front)
+  const now = gnow(), seed = (p.sessionId || "").length * 7.31 + (p.sessionId?.charCodeAt?.(0) || 1);
+  if (!front) { const k = .6 + .4 * Math.sin(now / 240); ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(p.x, p.y + 17); ctx.scale(1, .32);
+    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 34); g.addColorStop(0, `rgba(255,140,40,${.35 * k})`); g.addColorStop(1, "rgba(255,80,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 34, 0, 7); ctx.fill(); ctx.restore(); return; }
+  plateEmbers(p.x, p.y + 6, 30, 46, 6, seed, now);
+}
+function drawPlateFx(f, age) {   // false when finished
+  if (f.type === "plateBurst") { if (age > 1400) return false; const k = age / 1400;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1 - k; ctx.strokeStyle = "#ffb347"; ctx.lineWidth = 6 * (1 - k) + 1; ctx.beginPath(); ctx.ellipse(f.x, f.y + 10, 30 + 160 * k, (30 + 160 * k) * .45, 0, 0, 7); ctx.stroke(); ctx.restore();
+    plateEmbers(f.x, f.y + 10, 160, 140, 26, f.x, gnow(), 1.6); return true; }
+  if (f.type === "plateGot") { if (age > 1100) return false; const p = state?.players.get(f.id), x = p ? p.x : f.x, y = p ? p.y : f.y, k = age / 1100;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createLinearGradient(0, y - 120, 0, y + 20); g.addColorStop(0, "rgba(255,170,60,0)"); g.addColorStop(1, `rgba(255,150,40,${.55 * (1 - k)})`);
+    ctx.fillStyle = g; ctx.fillRect(x - 22 * (1 - k * .5), y - 120, 44 * (1 - k * .5), 140); ctx.restore(); plateEmbers(x, y + 10, 50, 110, 14, f.t, gnow(), 1.3);
+    if (k < .7) { ctx.save(); ctx.globalAlpha = 1 - k / .7; drawPlateIcon(x, y - 46 - 26 * k, 12, .8); ctx.restore(); } return true; }
+  return false;
+}
 function drawLoot(item) {
-  if (item.kind === "shard") { const t = performance.now() / 1000, x = item.x, y = item.y + Math.sin(t * 3 + item.x) * 3, k = .7 + .3 * Math.sin(t * 5 + item.y);   // the mine mission: a crystal shard (cart fuel)
+  if (item.kind === "pyreplate") {   // a legendary drop: a pillar of light, the plate floating and turning in it, embers
+    const now = gnow(), x = item.x, bob = Math.sin(now / 320 + item.x) * 4, y = item.y - 22 + bob, k = .7 + .3 * Math.sin(now / 200 + item.y);
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    const beam = ctx.createLinearGradient(0, item.y - 190, 0, item.y + 12); beam.addColorStop(0, "rgba(255,180,60,0)"); beam.addColorStop(.7, `rgba(255,160,50,${.22 * k})`); beam.addColorStop(1, `rgba(255,140,40,${.45 * k})`);
+    ctx.fillStyle = beam; ctx.fillRect(x - 16, item.y - 190, 32, 202);
+    ctx.translate(x, item.y + 10); ctx.scale(1, .36); const ring = ctx.createRadialGradient(0, 0, 6, 0, 0, 46); ring.addColorStop(0, `rgba(255,170,60,${.55 * k})`); ring.addColorStop(1, "rgba(255,90,0,0)"); ctx.fillStyle = ring; ctx.beginPath(); ctx.arc(0, 0, 46, 0, 7); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(x, y); ctx.scale(.75 + .25 * Math.cos(now / 520), 1); drawPlateIcon(0, 0, 15, 1, now); ctx.restore();
+    plateEmbers(x, item.y + 4, 36, 90, 8, item.x * .37, now);
+    return;
+  }
+  if (item.kind === "shard") { const t = gnow() / 1000, x = item.x, y = item.y + Math.sin(t * 3 + item.x) * 3, k = .7 + .3 * Math.sin(t * 5 + item.y);   // the mine mission: a crystal shard (cart fuel)
     ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y, 2, x, y, 30); g.addColorStop(0, `rgba(110,205,255,${.55 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60); ctx.restore();
     ctx.save(); ctx.translate(x, y); ctx.fillStyle = "#0b2740"; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(9, -2); ctx.lineTo(3, 12); ctx.lineTo(-6, 9); ctx.lineTo(-9, -3); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "#58c4ff"; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, -2); ctx.lineTo(2, 9); ctx.lineTo(-4, 7); ctx.lineTo(-6, -2); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#d6f3ff"; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(-6, -2); ctx.lineTo(-1, -1); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
-  const bob = Math.sin(performance.now() / 300 + item.x) * 2;
+  const bob = Math.sin(gnow() / 300 + item.x) * 2;
   if (item.kind === "weapon") { const c = item.rarity === "Legendary" ? "255,170,40" : item.rarity === "Epic" ? "190,110,255" : item.rarity === "Rare" ? "90,170,255" : "220,220,220"; const g = ctx.createRadialGradient(item.x, item.y, 2, item.x, item.y, 24); g.addColorStop(0, `rgba(${c},.45)`); g.addColorStop(1, `rgba(${c},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(item.x, item.y, 24, 0, 7); ctx.fill(); }
   // soft pulsing light on the ground so drops stand out
-  const pulse = .5 + .5 * Math.sin(performance.now() / 260 + item.x), lc = item.kind === "gold" ? "255,210,90" : item.kind === "medkit" ? "255,120,110" : "150,220,255";
+  const pulse = .5 + .5 * Math.sin(gnow() / 260 + item.x), lc = item.kind === "gold" ? "255,210,90" : item.kind === "medkit" ? "255,120,110" : "150,220,255";
   ctx.save(); ctx.globalAlpha = .35 + .25 * pulse; ctx.fillStyle = `rgba(${lc},.55)`; ctx.beginPath(); ctx.ellipse(item.x, item.y + 12, 22, 8, 0, 0, 7); ctx.fill(); ctx.restore();
   if (LOOT_ART[item.kind] && drawObj(LOOT_ART[item.kind], item.x, item.y + 12 + bob, { scale: 1.8 })) return;
   if (item.kind === "gold" && drawIcon("gold", item.x, item.y + bob - 6, 36)) return;
@@ -3316,7 +3414,7 @@ function turretFrame(st, now) {   // { k: aim 0..7, row: 0 idle / 1 big flash / 
   return { k, row: firing ? [1, 2, 0][Math.floor(now / 65 + st.x * .37) % 3] : 0, firing, gx: st.x, gy: st.y + 14 };
 }
 function drawTurret(st) {
-  const now = performance.now(), f = turretFrame(st, now), A = TURRET_ART;
+  const now = gnow(), f = turretFrame(st, now), A = TURRET_ART;
   if (!turretAtlas.complete || !turretAtlas.naturalWidth) return false;
   ctx.save(); ctx.imageSmoothingEnabled = false; if (!powered()) ctx.filter = "grayscale(1) brightness(.7)";
   ctx.drawImage(turretAtlas, f.k * A.cw, f.row * A.ch, A.cw, A.ch, Math.round(f.gx - A.ax), Math.round(f.gy - A.fy), A.cw, A.ch); ctx.restore();
@@ -3340,7 +3438,7 @@ function turretLights(now) {   // night: muzzle flashes light the dark
 function drawStructure(st) {
   if (st.kind === "heavyTurret") return drawHeavyTurret(st);
   if (st.kind === "demoCharge") return drawDemoCrate(st);
-  const [img, feet] = structSprite(st.kind, st.aim || 0), base = st.y + feet, on = powered(), t = performance.now();
+  const [img, feet] = structSprite(st.kind, st.aim || 0), base = st.y + feet, on = powered(), t = gnow();
   const filter = (st.kind === "fence" || st.kind === "flameTrap") && !on ? "grayscale(1) brightness(.7)" : st.kind === "fence" && Math.random() < 0.25 ? "brightness(1.5)" : undefined;
   if (!(st.kind === "turret" ? drawTurret(st) : drawObj(img, st.x, base, { filter }))) return;
   if (st.kind === "flameTrap" && on) { const f = 0.6 + Math.sin(t / 70 + st.x) * 0.25; const g = ctx.createRadialGradient(st.x, st.y + 4, 2, st.x, st.y + 4, 30); g.addColorStop(0, `rgba(255,140,40,${.45 * f})`); g.addColorStop(1, "rgba(255,80,20,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y + 4, 30, 0, 7); ctx.fill(); }
@@ -3396,7 +3494,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
 }
 // not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
 // the server's smooth updates instead, and prediction picks up again right after
-const serverDriven = me => performance.now() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || performance.now() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, performance.now()));
+const serverDriven = me => gnow() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || gnow() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, gnow()));
 const predicting = me => !!(me && me.alive && (state?.phase === "playing" || state?.phase === "cleared") && !state.vehicles?.get(myId) && !(me.stunned > 0) && !(me.ride > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
@@ -3433,7 +3531,7 @@ let snapT = 0;
 function recordSnapshots() {
   if (!state) return;
   // even out arrival jitter: each update is stamped ~50ms after the last one, drifting slowly toward when it really arrived
-  const arrived = performance.now(), expect = snapT + 50, now = !snapT || Math.abs(arrived - expect) > 120 ? arrived : expect + (arrived - expect) * .2; snapT = now;
+  const arrived = gnow(), expect = snapT + 50, now = !snapT || Math.abs(arrived - expect) > 120 ? arrived : expect + (arrived - expect) * .2; snapT = now;
   const seen = new Set();
   const rec = (key, e) => {
     seen.add(key); let sm = smooth.get(key);
@@ -3451,7 +3549,7 @@ function recordSnapshots() {
   for (const key of smooth.keys()) if (!seen.has(key)) smooth.delete(key);
 }
 function updateSmooth() {
-  const now = performance.now(), rt = now - INTERP_DELAY;
+  const now = gnow(), rt = now - INTERP_DELAY;
   for (const sm of smooth.values()) {
     const b = sm.buf; if (!b.length) continue;
     if (rt <= b[0].t) { sm.x = b[0].x; sm.y = b[0].y; continue; }
@@ -3640,13 +3738,13 @@ function drawDynastyWorld() {
   if (mineMap() && deepFx.boulders?.length) for (const b of deepFx.boulders) if (inView(b.x, b.y - 50, 120)) tall.push({ y: b.y, draw: () => drawBoulder(b) });   // the Beast fight's fallen boulders
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
-  if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); drawDeepWorld(); if (state.mission) { drawBeastFx(); drawShieldBeam(performance.now(), performance.now() / 1000); } } catch (e) { reportError(e, "draw"); } unwindTo(d); }
+  if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); drawDeepWorld(); if (state.mission) { drawBeastFx(); drawShieldBeam(gnow(), gnow() / 1000); } } catch (e) { reportError(e, "draw"); } unwindTo(d); }
 }
 // ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
 let coast = null, coastLast = 0, CO = COASTER;   // CO: the ride's numbers (the coaster, or the mine train: T.cfg)
 function coastSync() {   // every frame: glide our copy of the train toward where the server says it is
   if (!state || !(carnivalMap() || mineMap())) { coast = null; return; }
-  const WW = worldW(), WH = worldH(), now = performance.now(), dt = Math.min(.1, (now - coastLast) / 1000); coastLast = now;
+  const WW = worldW(), WH = worldH(), now = gnow(), dt = Math.min(.1, (now - coastLast) / 1000); coastLast = now;
   if (!coast || coast.w !== WW || coast.mn !== mineMap()) { const mn = mineMap(); coast = { w: WW, mn, T: mn ? mineTrack(WW, WH) : coasterTrack(WW, WH), s: state.coasterS || 0 }; CO = coast.T.cfg || COASTER; coastQueued = false; feed.unshift({ text: mn ? "Ride the mine carts: walk to the CART STATION (top left, teal dot on the minimap) and press F" : "Ride the coaster: walk to a COASTER station (teal dots on the minimap) and press F", t: Date.now() }); feed.length = Math.min(feed.length, 5); }
   if (coast.mn) { const D = deepState(), want = D ? D.ss : -1, T = coast.T, k = T.stations.findIndex(q => q.shrine !== undefined);   // the shield run's extra cart stop by the glowing shrine (as on the server)
     if (k >= 0 && T.stations[k].shrine !== want) T.stations.splice(k, 1);
@@ -3690,7 +3788,7 @@ function drawCoasterPrompt() {   // screen space, over your head (like the repai
   ctx.fillStyle = col; ctx.fillText(text, x, y + 1); ctx.restore();
 }
 function drawStationSigns() {   // world space, over each station: "COASTER · train here / arrives in Ns", so you can find them and see when it comes
-  if (!coast) return; const t = performance.now() / 1000, here = coastStation();
+  if (!coast) return; const t = gnow() / 1000, here = coastStation();
   for (const st of coast.T.stations) { if (!inView(st.x, st.y, 300)) continue;
     const x = st.x, y = st.y - (st.boss ? 300 : coast.mn ? 196 : 150) + Math.sin(t * 3 + st.x) * 4, txt = (st.boss ? "BOSS STOP · " : st.shrine !== undefined ? "SHRINE STOP · " : "") + (here === st ? (state.coasterWait >= 1000 ? `WAITING FOR ${state.coasterWait - 1000}` : coast.mn ? "CARTS HERE · press F" : "TRAIN HERE · press F") : `${coast.mn ? "CARTS" : "TRAIN"} IN ${coastEta(st)}s`);
     ctx.save(); ctx.font = "bold 14px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(txt).width + 26;
@@ -3722,13 +3820,13 @@ function drawTrackSeg(p0, p1, i) {
   line(p0.x, p0.y - H + 7, p1.x, p1.y - H + 7, 17, "#241b16"); line(p0.x, p0.y - H + 7, p1.x, p1.y - H + 7, 13, i % 2 ? "#d9d0ba" : "#cdc3ab");   // the deck beam
   ctx.lineCap = "butt"; line(p0.x + nx * 22, p0.y - H + ny * 22, p0.x - nx * 22, p0.y - H - ny * 22, 5, "#5a3d27"); line((p0.x + p1.x) / 2 + nx * 22, (p0.y + p1.y) / 2 - H + ny * 22, (p0.x + p1.x) / 2 - nx * 22, (p0.y + p1.y) / 2 - H - ny * 22, 5, "#6b4a2e");   // sleepers
   ctx.lineCap = "round"; for (const sg of [-1, 1]) { line(p0.x + nx * 15 * sg, p0.y - H + ny * 15 * sg, p1.x + nx * 15 * sg, p1.y - H + ny * 15 * sg, 4, "#23272d"); line(p0.x + nx * 15 * sg, p0.y - H + ny * 15 * sg - .5, p1.x + nx * 15 * sg, p1.y - H + ny * 15 * sg - .5, 1.6, "#c3ccd6"); }   // rails
-  if (i % 3 === 0) { const on = (i * 7 + Math.floor(performance.now() / 400)) % 11 !== 0, bx = p0.x, by = p0.y - H + 15; ctx.fillStyle = on ? "#ffd98a" : "#6a5a3a"; ctx.beginPath(); ctx.arc(bx, by, 2.4, 0, 7); ctx.fill();   // a string of bulbs under the deck (one in eleven is dark, and it moves along)
+  if (i % 3 === 0) { const on = (i * 7 + Math.floor(gnow() / 400)) % 11 !== 0, bx = p0.x, by = p0.y - H + 15; ctx.fillStyle = on ? "#ffd98a" : "#6a5a3a"; ctx.beginPath(); ctx.arc(bx, by, 2.4, 0, 7); ctx.fill();   // a string of bulbs under the deck (one in eleven is dark, and it moves along)
     if (on) { ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(bx, by, 0, bx, by, 11); g.addColorStop(0, "rgba(255,190,90,.5)"); g.addColorStop(1, "rgba(255,150,40,0)"); ctx.fillStyle = g; ctx.fillRect(bx - 11, by - 11, 22, 22); } }
   ctx.restore();
 }
 function drawCart(c, i) {   // views in the strip: driving down, down-right, right, up-right, up (left ones mirrored)
   const mn = coast.mn, img = mn ? mineCartImg : cartImg, CI = mn ? MN_CART : CV_CART, k = mn ? 1 : .82;
-  if (!img.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(performance.now() / 38 + i * 2) * (mn ? 1.1 : .8) : 0;
+  if (!img.naturalWidth) return; const ax = Math.cos(c.a), ay = Math.sin(c.a), v = Math.round(Math.atan2(Math.abs(ax), ay) / (Math.PI / 4)), moving = !(state.coasterWait > 0), jit = moving ? Math.sin(gnow() / 38 + i * 2) * (mn ? 1.1 : .8) : 0;
   const flip = mn && (v === 1 || v === 3) ? ax > 0 : ax < 0;   // (the mine cart's three-quarter views were drawn facing left)
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(Math.round(c.x), Math.round(c.y - CO.H + 8 + jit)); if (flip) ctx.scale(-1, 1);
   if (mn) { ctx.fillStyle = "rgba(0,0,0,.32)"; ctx.beginPath(); ctx.ellipse(0, -4, CI.w * .42, 12, 0, 0, 7); ctx.fill(); }   // its shadow on the rails
@@ -3828,7 +3926,7 @@ function mineDungeonFloor(g, vx, vy, vw, vh) {   // the boss dungeon's floor: bi
   ctx.restore();
 }
 function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a great carved circle of glowing runes, slowly turning
-  if (!inView(d.x, d.y, 320)) return; const t = performance.now() / 1000, k = .75 + .25 * Math.sin(t * 1.3);
+  if (!inView(d.x, d.y, 320)) return; const t = gnow() / 1000, k = .75 + .25 * Math.sin(t * 1.3);
   ctx.save(); ctx.translate(d.x, d.y); ctx.scale(.72, .56 * .72);   /* (sized to the statue: Nov 11, the statue came down to the Beast's own size) */
   ctx.fillStyle = "rgba(4,6,14,.55)"; ctx.beginPath(); ctx.arc(0, 0, 252, 0, 7); ctx.fill();
   ctx.globalCompositeOperation = "lighter";
@@ -3840,7 +3938,7 @@ function drawRuneCircle(d) {   // where the Mine Beast's statue will stand: a gr
   ctx.restore();
 }
 function drawWard(d) {   // the rune-ward sealing a way into the boss dungeon: a shimmering curtain of blue light with runes drifting up it (the carts pass through)
-  if (!inView(d.x, d.y, 260)) return; const t = performance.now() / 1000, H = 150, k = .75 + .25 * Math.sin(t * 2.4);
+  if (!inView(d.x, d.y, 260)) return; const t = gnow() / 1000, H = 150, k = .75 + .25 * Math.sin(t * 2.4);
   ctx.save(); ctx.globalCompositeOperation = "lighter";
   const quad = d.flip ? [[d.x, d.y - 100], [d.x, d.y + 110]] : [[d.x - 98, d.y], [d.x + 98, d.y]], [[x0, y0], [x1, y1]] = quad;
   const g = ctx.createLinearGradient(0, Math.max(y0, y1), 0, Math.min(y0, y1) - H); g.addColorStop(0, `rgba(90,190,255,${.42 * k})`); g.addColorStop(.6, `rgba(60,140,255,${.18 * k})`); g.addColorStop(1, "rgba(40,100,255,0)");
@@ -3851,12 +3949,12 @@ function drawWard(d) {   // the rune-ward sealing a way into the boss dungeon: a
   ctx.restore();
 }
 function statueFx(d, a) {   // the sleeping Mine Beast: its plinth's runes glow faintly (later: one lights up bright per rune put in), a thin mist round its feet
-  const t = performance.now() / 1000; ctx.save(); ctx.globalCompositeOperation = "lighter";
+  const t = gnow() / 1000; ctx.save(); ctx.globalCompositeOperation = "lighter";
   for (let i = 0; i < 5; i++) { const u = (t * .05 + i / 5) % 1, x = d.x - 260 + ((i * 137 + t * 9) % 520), y = d.y - 12 - Math.sin(u * Math.PI) * 10; ctx.globalAlpha = .12 * Math.sin(u * Math.PI); const g = ctx.createRadialGradient(x, y, 2, x, y, 70); g.addColorStop(0, "rgba(160,190,230,1)"); g.addColorStop(1, "rgba(160,190,230,0)"); ctx.fillStyle = g; ctx.fillRect(x - 70, y - 40, 140, 80); }
   ctx.restore();
 }
 function drawBossStop(d) {   // the carts' stop in the boss dungeon: a low stone platform behind the rails, its edge lit by a line of runes
-  if (!inView(d.x, d.y, 260)) return; const w = 300, h = 74, x = d.x - w / 2, y = d.y - h, t = performance.now() / 1000;
+  if (!inView(d.x, d.y, 260)) return; const w = 300, h = 74, x = d.x - w / 2, y = d.y - h, t = gnow() / 1000;
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(x - 6, y + 8, w + 12, h + 4);
   ctx.fillStyle = pattern("mstone") || "#3b3742"; ctx.fillRect(x, y, w, h); ctx.fillStyle = "rgba(170,175,210,.16)"; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = "#0a0b12"; ctx.lineWidth = 3; for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 5, y); ctx.lineTo(x + i * w / 5, y + h); ctx.stroke(); } ctx.strokeRect(x, y, w, h);
@@ -3865,13 +3963,13 @@ function drawBossStop(d) {   // the carts' stop in the boss dungeon: a low stone
   ctx.restore();
 }
 function shrineFx(d) {   // a rune shrine: its rune floats and turns over the pedestal, glowing (in the mission: only until someone takes it)
-  const i = Math.max(0, decor.filter(q => q.kind === "mShrine").indexOf(d)) % 4, D = deepState(); if (D && D.runes[i] && D.runes[i].st !== 0) return; const img = mapImgs["mRune" + (i + 1)], t = performance.now() / 1000; if (!img?.naturalWidth) return;
+  const i = Math.max(0, decor.filter(q => q.kind === "mShrine").indexOf(d)) % 4, D = deepState(); if (D && D.runes[i] && D.runes[i].st !== 0) return; const img = mapImgs["mRune" + (i + 1)], t = gnow() / 1000; if (!img?.naturalWidth) return;
   const x = d.x, y = d.y - 128 + Math.sin(t * 1.8 + i) * 7, sq = .75 + .25 * Math.cos(t * 1.2 + i);
   ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y - 40, 4, x, y - 40, 90); g.addColorStop(0, "rgba(100,200,255,.45)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 90, y - 130, 180, 180); ctx.restore();
   ctx.save(); ctx.translate(x, y); ctx.scale(sq, 1); ctx.drawImage(img, -img.width / 2, -img.height); ctx.restore();
 }
 function portalFx(d, a) {   // the portal: the user's swirl turning inside the black arch, light spilling down the steps
-  const [dx, dy, w, h] = a.door, f0 = d.flip ? -1 : 1, x = d.x + dx * f0, y = d.y + dy, cx = x, cy = y + h * .5, t = performance.now() / 1000;
+  const [dx, dy, w, h] = a.door, f0 = d.flip ? -1 : 1, x = d.x + dx * f0, y = d.y + dy, cx = x, cy = y + h * .5, t = gnow() / 1000;
   ctx.save(); ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, y + h); ctx.lineTo(x - w / 2 + 2, y + w / 2); ctx.ellipse(x, y + w / 2 + 2, w / 2 - 2, w / 2, 0, Math.PI, Math.PI * 2); ctx.lineTo(x + w / 2 - 2, y + h); ctx.closePath(); ctx.clip();
   ctx.globalCompositeOperation = "lighter";
   if (portalFxImg.naturalWidth) { const F = MN_FX.portal, ft = t * 1000 / F.ms, fi = Math.floor(ft) % F.n, f2 = (fi + 1) % F.n, k = ft - Math.floor(ft), S = Math.max(w, h) * 1.18;
@@ -3884,7 +3982,7 @@ function portalFx(d, a) {   // the portal: the user's swirl turning inside the b
   ctx.restore();
 }
 function sealFx(d, a) {   // a seal crystal: breathing blue halo, a ring of runes turning at its foot, sparks rising
-  const t = performance.now() / 1000, sd = (d.x * 7 + d.y) % 10, b = a.blue?.[0] || [0, -130], f0 = d.flip ? -1 : 1, x = d.x + b[0] * f0, y = d.y + b[1], k = .7 + .3 * Math.sin(t * 2.2 + sd);
+  const t = gnow() / 1000, sd = (d.x * 7 + d.y) % 10, b = a.blue?.[0] || [0, -130], f0 = d.flip ? -1 : 1, x = d.x + b[0] * f0, y = d.y + b[1], k = .7 + .3 * Math.sin(t * 2.2 + sd);
   ctx.save(); ctx.globalCompositeOperation = "lighter";
   const g = ctx.createRadialGradient(x, y, 4, x, y, 96); g.addColorStop(0, `rgba(120,210,255,${.42 * k})`); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 96, y - 96, 192, 192);
   ctx.strokeStyle = `rgba(120,205,255,${.6 * k})`; ctx.lineWidth = 2; ctx.setLineDash([7, 9]); ctx.lineDashOffset = -t * 24; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 70, 22, 0, 0, 7); ctx.stroke(); ctx.lineDashOffset = t * 16; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 54, 16, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
@@ -3901,7 +3999,7 @@ function deepState() {   // the mission, unpacked (null = no mission running)
 }
 const deepFx = { start: -1e9, rune: -1e9, runeN: 0, awake: -1e9, awakeLen: 7, chase: -1e9, smash: -1e9, escaped: -1e9, shatter: [] };
 function onDeep(m) {
-  const now = performance.now();
+  const now = gnow();
   if (m.k === "start") { deepFx.start = now; deepFx.awake = deepFx.chase = deepFx.escaped = -1e9; deepFx.shatter = []; deepObj.id = ""; }
   else if (m.k === "take") playSfx("pickup", undefined, undefined, .8);
   else if (m.k === "rune") { deepFx.rune = now; deepFx.runeN = m.n; deepFx.shatter.push({ i: m.n - 1, t: now }); shake(6, 500); playSfx("zap", undefined, undefined, 1); }
@@ -3916,7 +4014,7 @@ const deepPieces = () => { const sh = [], o = { shrines: sh, statue: null, seals
 const deepInDungeon = e => { const WW = worldW(), WH = worldH(); return e.x > (MN_SPOT.dungeon[0] + 85) * WW / 6000 && e.y > (MN_SPOT.dungeon[1] + 120) * WH / 4000; };
 // What YOU should do right now: { id (changes = a new pop-up), title, sub, at: where the arrow points }
 function deepObjective() {
-  const D = deepState(), me = me_(); if (!D || !me || !coast) return null; const now = performance.now();
+  const D = deepState(), me = me_(); if (!D || !me || !coast) return null; const now = gnow();
   if (now - deepFx.start < 5000 && D.step === "runes") return { id: "intro", title: "WAVE 20 · THE DEEP MINE", sub: "Put 4 runes in the statue. Then outrun what wakes up." };
   const st0 = coast.T.stations[0], bs = coast.T.stations[1], P = deepPieces(), mine = D.runes.find(r => r.st === 1 && r.by === myId), other = D.runes.find(r => r.st === 1 && r.by !== myId), inD = deepInDungeon(me), n = D.placed + 1;
   const station = { x: st0.x, y: st0.y + 60, label: "CARTS" }, stop = { x: bs.x, y: bs.y - 60, label: "CARTS" };
@@ -3924,11 +4022,11 @@ function deepObjective() {
   if (D.step === "awake") return { id: "aw", title: "IT'S BREAKING ITS CHAINS!", sub: "Get ready to fight." };
   if (D.step === "fight" && (D.sh || D.ss >= 0)) {   // THE SHIELD RUN: one rider to the glowing shrine, the rest hold it off
     const shp = P.shrines[D.sh ? D.sh.i : D.ss], shAt = shp ? { x: shp.x, y: shp.y + 20, label: "SHRINE" } : null, rs = coast.T.stations.find(q => q.shrine !== undefined), rsAt = rs ? { x: rs.x, y: rs.y + 30, label: "CART" } : null, heal = D.sh ? ` · it heals in ${Math.max(0, D.sh.t)}s` : "";
-    if (me.ride > 0) return D.sh ? { id: "sr-ride", title: "RIDING TO THE SHRINE", sub: "The cart drops you at its stop. Then press F at the glowing shrine." + heal } : { id: "sr-back", title: "HEADING BACK", sub: "Express to the boss dungeon. Hop off and fight!" };
+    if (me.ride > 0) return D.sh ? { id: "sr-ride", title: "RIDING TO THE SHRINE", sub: "You can't be hurt while you ride. The cart drops you at its stop: then press F at the glowing shrine." + heal } : { id: "sr-back", title: "HEADING BACK", sub: "Safe in the cart. Express to the boss dungeon: hop off and fight!" };
     if (!inD) return D.sh ? (D.sh.by === myId ? { id: "sr-ov", small: 1, title: `OVERLOADING · ${D.sh.ov}%`, sub: "Stay close to the shrine!" } : { id: "sr-go", title: "OVERLOAD THE SHRINE", sub: "Stand at the glowing shrine, press F and stay 3s." + heal, at: shAt })
-      : { id: "sr-home", title: "THE SHIELD IS DOWN!", sub: "Get back in the cart: it waits for you.", at: rsAt };
+      : { id: "sr-home", title: "THE SHIELD IS DOWN!", sub: "Get back in the cart: it leaves as soon as you're on.", at: rsAt };
     if (D.sh) { const out = [...state.players.values()].some(q => q.alive && q.sessionId !== myId && (q.ride > 0 || !deepInDungeon(q)));
-      return out ? { id: "sr-hold", small: 1, title: "HOLD IT OFF", sub: "A teammate is on the shield run." + heal } : { id: "sr-start", title: "IT'S SHIELDED!", sub: "ONE survivor rides the cart (F at the boss stop) to the glowing shrine. The rest hold it off." + heal, at: stop }; } }
+      return out ? { id: "sr-hold", small: 1, title: "HOLD IT OFF", sub: "A teammate is on the shield run." + heal } : { id: "sr-start", title: "IT'S SHIELDED!", sub: "ONE survivor rides the cart (F at the boss stop): it leaves at once, and riders can't be hurt. The rest hold it off." + heal, at: stop }; } }
   if (D.step === "fight") { let bz = null; for (const z of state.zombies.values()) if (z.kind === "minebeast") bz = z; const act = bz?.act;
     return act === "wind" ? { id: "f-wind", small: 1, title: "SHOOT IT NOW!", sub: "Enough damage breaks its charge. Or get out of the red lane." } : act === "dive" || act === "under" || act === "erupt" ? { id: "f-under", small: 1, title: "IT'S UNDER THE FLOOR", sub: "Keep moving. Get out of the red circle." }
       : act === "stagger" ? { id: "f-stag", small: 1, title: "IT'S STAGGERED!", sub: "Hit it with everything." } : act === "roar" ? { id: "f-cave", small: 1, title: "CAVE-IN!", sub: "Get out of the red circles." } : act === "throw" ? { id: "f-spine", small: 1, title: "CRYSTALS!", sub: "Get away from the blue circles before they burst." }
@@ -3970,7 +4068,7 @@ function drawDeepPrompt() {   // screen space, over your head
 const deepObj = { id: "", t: -1e9, title: "", sub: "" }, deepCam = { x: 0, y: 0 };
 function drawDeepHud() {
   const D = deepState(); if (!D || state.phase !== "playing") { deepObj.id = ""; return; }
-  const o = deepObjective(), now = performance.now(); if (o && o.id !== deepObj.id) { deepObj.id = o.id; deepObj.t = o.small ? now - 3600 : now; if (!o.small) playSfx("pickup", undefined, undefined, .6); }   /* small: a quick hint in the tracker line only (no big banner) */ if (o) { deepObj.title = o.title; deepObj.sub = o.sub || ""; }
+  const o = deepObjective(), now = gnow(); if (o && o.id !== deepObj.id) { deepObj.id = o.id; deepObj.t = o.small ? now - 3600 : now; if (!o.small) playSfx("pickup", undefined, undefined, .6); }   /* small: a quick hint in the tracker line only (no big banner) */ if (o) { deepObj.title = o.title; deepObj.sub = o.sub || ""; }
   if (!deepObj.id) return;
   const age = (now - deepObj.t) / 1000, big = age < 3.6, k = big ? Math.min(1, age / .22) : Math.max(0, 1 - (age - 3.6) / .35), e = 1 - (1 - k) * (1 - k), cx = W / 2;
   ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -4013,7 +4111,7 @@ function drawDeepHud() {
 }
 // World-space mission things: the runes (at shrines / on the ground / over their carrier), the statue's lit runes, shattered seals, the awakening
 function drawDeepWorld() {
-  const D = deepState(); if (!D) return; const now = performance.now(), t = now / 1000;
+  const D = deepState(); if (!D) return; const now = gnow(), t = now / 1000;
   D.runes.forEach((r, i) => { if (r.st === 3 || r.st === 0) return; const img = mapImgs["mRune" + (i + 1)]; if (!img?.naturalWidth) return;
     const c = r.st === 1 ? state.players.get(r.by) : null, v = c ? V(c) : r, x = v.x, y = (c ? v.y - 92 : r.y - 12) + Math.sin(t * 2.2 + i) * 5; if (!inView(x, y, 120)) return;
     ctx.save(); ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(x, y - 20, 3, x, y - 20, 62); g.addColorStop(0, "rgba(110,205,255,.5)"); g.addColorStop(1, "rgba(40,120,255,0)"); ctx.fillStyle = g; ctx.fillRect(x - 62, y - 82, 124, 124); ctx.restore();
@@ -4050,17 +4148,17 @@ function mbFx(name, frame, x, y, sc = 1.5, alpha = 1) {   // an effect strip at 
 // ---- particles, light flashes and floor marks for the fight (all client-side dressing) ----
 const deepParts = [], deepFlashes = [], deepDecals = [];
 function deepEmit(kind, x, y, n, o = {}) {   // kinds: chip (rock, falls and bounces), shard (blue crystal, glows), spark (hot streak), dust (soft puff), mote (blue light drifting up)
-  const now = performance.now(); for (let i = 0; i < n; i++) { const a = o.a !== undefined ? o.a + (Math.random() - .5) * (o.spread ?? 1) : Math.random() * 6.283, sp = (o.sp ?? 200) * (.35 + Math.random() * .95);
+  const now = gnow(); for (let i = 0; i < n; i++) { const a = o.a !== undefined ? o.a + (Math.random() - .5) * (o.spread ?? 1) : Math.random() * 6.283, sp = (o.sp ?? 200) * (.35 + Math.random() * .95);
     deepParts.push({ kind, x: x + (Math.random() - .5) * (o.r || 0), y: y + (Math.random() - .5) * (o.r || 0) * .6, z: (o.z || 0) * (.5 + Math.random()), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * .6, vz: (o.up || 0) * (.45 + Math.random() * .9), t0: now, life: (o.life || 700) * (.6 + Math.random() * .8) * (kind === "spark" ? 2.4 : 1), s: (o.s || 6) * (.6 + Math.random() * .9), rot: Math.random() * 6.283, b: 0 }); }
   if (deepParts.length > 520) deepParts.splice(0, deepParts.length - 520);
 }
-const deepFlash = (x, y, r, col, len = 320) => { deepFlashes.push({ x, y, r, col, t0: performance.now(), len }); if (deepFlashes.length > 40) deepFlashes.shift(); };
-const deepDecal = (x, y, r, blue) => { deepDecals.push({ x, y, r, blue, t0: performance.now(), seed: Math.random() * 100 }); if (deepDecals.length > 26) deepDecals.shift(); };
+const deepFlash = (x, y, r, col, len = 320) => { deepFlashes.push({ x, y, r, col, t0: gnow(), len }); if (deepFlashes.length > 40) deepFlashes.shift(); };
+const deepDecal = (x, y, r, blue) => { deepDecals.push({ x, y, r, blue, t0: gnow(), seed: Math.random() * 100 }); if (deepDecals.length > 26) deepDecals.shift(); };
 let deepPartsAt = 0;
 const softDot = (stops => { const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d"), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); for (const [o, col] of stops) gr.addColorStop(o, col); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c; });   // soft dots rendered once (a gradient per particle per frame was too slow)
 const DUST_CV = softDot([[0, "rgba(186,160,130,1)"], [.6, "rgba(120,100,84,.6)"], [1, "rgba(90,76,66,0)"]]), GLOW_CV = softDot([[0, "rgba(110,200,255,.5)"], [1, "rgba(60,140,255,0)"]]);
 function drawDeepDecals() {   // cracked, scorched floor where something hit (fades over 9s); under the marks and particles
-  const now = performance.now();
+  const now = gnow();
   for (let i = deepDecals.length - 1; i >= 0; i--) { const d = deepDecals[i], age = (now - d.t0) / 9000; if (age >= 1) { deepDecals.splice(i, 1); continue; } if (!inView(d.x, d.y, d.r + 60)) continue; const al = Math.min(1, (1 - age) * 2.2);
     ctx.save(); ctx.translate(d.x, d.y); ctx.scale(1, .72); const g = ctx.createRadialGradient(0, 0, d.r * .15, 0, 0, d.r); g.addColorStop(0, `rgba(4,3,6,${.6 * al})`); g.addColorStop(.7, `rgba(6,5,8,${.32 * al})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, 7); ctx.fill();
     ctx.lineCap = "round"; for (let j = 0; j < 9; j++) { const a = j * .7 + d.seed, L = d.r * (.55 + ((j * 37 + d.seed * 13) % 40) / 80); ctx.beginPath(); ctx.moveTo(Math.cos(a) * d.r * .12, Math.sin(a) * d.r * .12); const mx = Math.cos(a + .18) * L * .55, my = Math.sin(a + .18) * L * .55; ctx.lineTo(mx, my); ctx.lineTo(Math.cos(a - .06) * L, Math.sin(a - .06) * L);
@@ -4068,7 +4166,7 @@ function drawDeepDecals() {   // cracked, scorched floor where something hit (fa
     ctx.restore(); }
 }
 function drawDeepParts() {
-  const now = performance.now(), dt = Math.min(.05, (now - (deepPartsAt || now)) / 1000); deepPartsAt = now;
+  const now = gnow(), dt = Math.min(.05, (now - (deepPartsAt || now)) / 1000); deepPartsAt = now;
   for (let i = deepFlashes.length - 1; i >= 0; i--) { const f = deepFlashes[i], k = (now - f.t0) / f.len; if (k >= 1) { deepFlashes.splice(i, 1); continue; } if (!inView(f.x, f.y, f.r)) continue;
     ctx.save(); ctx.globalCompositeOperation = "lighter"; const r = f.r * (.55 + .45 * k), g = ctx.createRadialGradient(f.x, f.y, 2, f.x, f.y, r); g.addColorStop(0, `rgba(${f.col},${.75 * (1 - k)})`); g.addColorStop(.4, `rgba(${f.col},${.3 * (1 - k)})`); g.addColorStop(1, `rgba(${f.col},0)`); ctx.fillStyle = g; ctx.fillRect(f.x - r, f.y - r, r * 2, r * 2); ctx.restore(); }
   for (let i = deepParts.length - 1; i >= 0; i--) { const p = deepParts[i], age = (now - p.t0) / p.life; if (age >= 1) { deepParts.splice(i, 1); continue; }
@@ -4108,7 +4206,7 @@ function drawShieldBeam(now, t) {   // the shrine feeding the shield: a beam of 
   ctx.restore();
 }
 function drawBoulder(b) {   // a fallen rock (the cave-in): drops in, sits, sinks away at the end; glows faintly so you can find it in the dark
-  const img = spooky(mapImgs.mRock4), now = performance.now(), age = now - b.t0, left = b.end - now, drop = Math.max(0, 1 - age / 220), sink = left < 900 ? 1 - left / 900 : 0; if (!img) return;
+  const img = spooky(mapImgs.mRock4), now = gnow(), age = now - b.t0, left = b.end - now, drop = Math.max(0, 1 - age / 220), sink = left < 900 ? 1 - left / 900 : 0; if (!img) return;
   const w = 150, h = w * img.height / img.width, y = b.y - drop * 260 + sink * 30;
   ctx.save(); ctx.fillStyle = `rgba(0,0,0,${.4 * (1 - sink)})`; ctx.beginPath(); ctx.ellipse(b.x, b.y - 4, 62, 18, 0, 0, 7); ctx.fill();
   ctx.globalAlpha = 1 - sink; ctx.drawImage(img, b.x - w / 2, y - h + 10, w, h);
@@ -4119,7 +4217,7 @@ function drawMineBeast(z) {
   mbTint = !!z.enraged; try { drawMineBeast2(z); } finally { mbTint = false; }
 }
 function drawMineBeast2(z) {
-  const v = V(z) || z, a = z.aim || 0, [row, flip] = mbDir(a), now = performance.now(), t = now / 1000, D = deepState(), step = D?.step, act = z.act, len = z.actLen || 1, u = act ? Math.max(0, Math.min(.999, 1 - z.slam / len)) : 0;
+  const v = V(z) || z, a = z.aim || 0, [row, flip] = mbDir(a), now = gnow(), t = now / 1000, D = deepState(), step = D?.step, act = z.act, len = z.actLen || 1, u = act ? Math.max(0, Math.min(.999, 1 - z.slam / len)) : 0;
   const stg = now - (deepFx.stagger || -1e9), sh = now - deepFx.smash < 400 || stg < 350 ? 10 : 0, right = Math.cos(a) > 0, x = v.x, y = v.y, ca = Math.cos(a), sa = Math.sin(a); let label = true, heart = row <= 1 ? .5 : row === 2 ? .25 : 0;
   const every = (ms, key = "_em") => { if (now - (z[key] || 0) < ms) return false; z[key] = now; return true; }, tipX = x + ca * 120, tipY = y - 70 + sa * 70;
   { const big = act === "wind" || act === "roar" || act === "dive" || act === "throw" ? (act === "throw" ? Math.min(1, u * 2) : u) : act === "charge" ? 1 : 0, red = z.enraged, k = (.16 + .3 * big) * (.85 + .15 * Math.sin(t * 3)), R = 260 + 140 * big;   // its crystals light the cave around it (red once enraged); brighter as a big attack winds up
@@ -4155,7 +4253,7 @@ function drawMineBeast2(z) {
 }
 // The fight's marks and effects (world space, drawn over the floor and everything on it). deepFx.marks: {kind, x, y, r, t0, at (ms it lands), ...}
 function drawBeastFx() {
-  const now = performance.now(), t = now / 1000;
+  const now = gnow(), t = now / 1000;
   const ring = (x, y, r, k, col = "255,70,50") => { k = Math.max(0, Math.min(1, k)); ctx.save(); ctx.translate(x, y); ctx.scale(1, .75); const g = ctx.createRadialGradient(0, 0, r * .2, 0, 0, r); g.addColorStop(0, `rgba(${col},.05)`); g.addColorStop(1, `rgba(${col},.22)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
     ctx.fillStyle = `rgba(${col},${.16 + .1 * k})`; ctx.beginPath(); ctx.arc(0, 0, r * k, 0, 7); ctx.fill(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(${col},${.75 + .25 * Math.sin(t * 14)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
     ctx.lineWidth = 2; ctx.setLineDash([10, 12]); ctx.lineDashOffset = -t * 60; ctx.strokeStyle = `rgba(${col},.55)`; ctx.beginPath(); ctx.arc(0, 0, r * .82, 0, 7); ctx.stroke(); ctx.setLineDash([]);
@@ -4223,7 +4321,7 @@ function onBeastMsg(m, now) {   // the fight's server events -> marks, particles
 }
 // The statue during the mission: its plinth runes light up as runes go in; the awakening: cracks of light, shaking, the stone bursts off, the Beast roars and steps down
 function drawDeepStatue(d, a) {
-  const D = deepState(), img = spooky(mapImgs.mStatue), now = performance.now(), t = now / 1000; if (!img) return;
+  const D = deepState(), img = spooky(mapImgs.mStatue), now = gnow(), t = now / 1000; if (!img) return;
   const aw = D && D.step !== "runes" ? (now - deepFx.awake) / 1000 : -1, L = deepFx.awakeLen, burst = L * .58;
   const plinthTop = Math.round(a.h * .76), sf = a.w / 600;
   if (aw < 0 || aw < burst) {   // still stone (shaking harder and harder once it starts)
@@ -4275,7 +4373,7 @@ function softPatch(g, tile, snow) {
 // Scorched Refinery: the pyramid's doorway glows on boss waves, and bursts with light, smoke and a shake when the boss walks out ("pyramid" message)
 let pyrBurst = -1e9;
 function pyramidFx(d, a) {
-  const [dx, dy, w, h] = a.door, x = d.x + dx, y = d.y + dy, now = performance.now(), since = (now - pyrBurst) / 1000, boss = state?.waveType === "boss" && !state.bossDead && state.phase === "playing";
+  const [dx, dy, w, h] = a.door, x = d.x + dx, y = d.y + dy, now = gnow(), since = (now - pyrBurst) / 1000, boss = state?.waveType === "boss" && !state.bossDead && state.phase === "playing";
   const k = since < 3.5 ? 1 - since / 5 : boss ? (state.bossPhase === "intro" ? .8 : state.bossPhase === "horde" ? .4 : .22) : 0; if (k <= 0) return;
   const pulse = .7 + .3 * Math.sin(now / (since < 3.5 ? 55 : 320)); ctx.save(); ctx.beginPath(); ctx.rect(x - w / 2, y, w, h); ctx.clip(); ctx.globalCompositeOperation = "lighter";
   const g = ctx.createRadialGradient(x, y + h * .62, 4, x, y + h * .62, h * .95); g.addColorStop(0, `rgba(255,110,40,${.9 * k * pulse})`); g.addColorStop(.55, `rgba(210,30,10,${.55 * k * pulse})`); g.addColorStop(1, "rgba(90,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(x - w / 2, y, w, h);
@@ -4285,14 +4383,14 @@ function pyramidFx(d, a) {
 }
 // a piece whose art is animated (the burning lab on Whiteout Station: the user's GIF, frames in one row), cross-faded frame to frame
 function drawAnimPiece(d, a) {
-  const img = spooky(mapImgs[d.kind]); if (!img) return; const ft = performance.now() / a.ms + (d.x * 3 + d.y) % a.frames, f = Math.floor(ft) % a.frames, f2 = (f + 1) % a.frames, k = ft - Math.floor(ft);
+  const img = spooky(mapImgs[d.kind]); if (!img) return; const ft = gnow() / a.ms + (d.x * 3 + d.y) % a.frames, f = Math.floor(ft) % a.frames, f2 = (f + 1) % a.frames, k = ft - Math.floor(ft);
   ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(d.x), Math.round(d.y)); if (d.flip) ctx.scale(-1, 1);
   ctx.drawImage(img, f * a.w, 0, a.w, a.h, -Math.round(a.w / 2), -a.h, a.w, a.h); ctx.globalAlpha = k; ctx.drawImage(img, f2 * a.w, 0, a.w, a.h, -Math.round(a.w / 2), -a.h, a.w, a.h); ctx.restore();
 }
 // a piece's fires (animated flames + smoke, drawn on the burning building) and lit lanterns / windows (a warm flickering glow)
 function dynPieceFx(d, a) {
   if (!a || (!a.fires && !a.lights && !a.blue)) return;
-  const t = performance.now() / 1000, f = d.flip ? -1 : 1, seed = (d.x * 7 + d.y * 13) % 100;
+  const t = gnow() / 1000, f = d.flip ? -1 : 1, seed = (d.x * 7 + d.y * 13) % 100;
   ctx.save();
   (a.fires || []).forEach(([fx, fy, s], i) => {
     const x = d.x + fx * f, y = d.y + fy, k = .8 + .2 * Math.sin(t * 7 + i * 1.9 + seed);
@@ -4377,7 +4475,7 @@ function drawFireSprite(x, y, sc, phase, t, alpha = 1) {   // one burning fire: 
   ctx.drawImage(mapFireImg, f * MFIRE.w, 0, MFIRE.w, MFIRE.h, x - w / 2, y - h, w, h); ctx.globalCompositeOperation = op; ctx.globalAlpha = 1;
 }
 function drawPaintedGround(pm) {
-  const t = performance.now() / 1000;
+  const t = gnow() / 1000;
   ctx.save(); ctx.globalCompositeOperation = "lighter";
   pm.lights.forEach(([x, y], i) => {   // street lamps: a soft glow that breathes; now and then one stutters
     if (!inView(x, y, 40)) return;
@@ -4421,7 +4519,7 @@ function drawPaintedGround(pm) {
 }
 // over everything (Fallen Dynasty / painted maps): rain, drifting blossom petals, embers floating up from the fires
 function drawPaintedOverlay(fires) {
-  const t = performance.now() / 1000;
+  const t = gnow() / 1000;
   ctx.save();
   if (carnivalMap()) {   // Midnight Carnival: confetti and litter tumbling past
     const COL = ["#ff5d6c", "#ffd24a", "#5ad1c9", "#b98cff", "#ff9a3d", "#f4efe0"];
@@ -4584,7 +4682,7 @@ function lightHole(x, y, r, a) {
   dctx.globalAlpha = Math.max(0, Math.min(1, a)); dctx.drawImage(c, x - R, y - R); dctx.globalAlpha = 1;
 }
 function drawNight() {
-  const now = performance.now(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
+  const now = gnow(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
   if (window.__saNoDark) return;   // (automated map surveys: no darkness)
   nightK += ((isNightView() ? 1 : mineMap() ? (now < (deepFx.dark || 0) ? .93 : CAVE_DARK) : 0) - nightK) * Math.min(1, dt * (now < (deepFx.dark || 0) ? 4 : 1.5));   // (a cave-in puts the lanterns out for a few seconds)   // The Deep Mine is always half dark (a cave): lanterns, crystals and you light it          // fade in/out over ~2 seconds
   if (nightK < .01) return;
@@ -4653,7 +4751,7 @@ function drawScreen() {
   // street lights glow (warm, stronger at night)
   const sl = mapImgs.streetlight;
   if (decor && sl?.naturalWidth) {
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = .45 + .55 * nightK, flick = .92 + .08 * Math.sin(performance.now() / 90);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = .45 + .55 * nightK, flick = .92 + .08 * Math.sin(gnow() / 90);
     for (const d of decor) {
       if (d.kind !== 'streetlight' || !inView(d.x, d.y - 60, 160)) continue;
       const lx = d.x + (d.flip ? -1 : 1) * STREETLIGHT_LAMP.x * sl.width - cam.x, ly = d.y + STREETLIGHT_LAMP.y * sl.height - cam.y;
@@ -4696,8 +4794,8 @@ function drawScreen() {
   for (const st of state.structures.values()) { m.fillStyle = '#c19a5c'; m.fillRect(st.x * sx - 2, st.y * sy - 2, 4, 4); }
   for (const z of state.zombies.values()) { if (!z.boss && !litAt(z.x, z.y)) continue; m.fillStyle = z.boss ? '#ff3737' : '#a9bd78'; const r = z.boss ? 4 : 2; m.fillRect(z.x * sx - r / 2, z.y * sy - r / 2, r, r); }
   for (const pl of state.players.values()) { m.fillStyle = pl.alive ? pl.color : '#ff7568'; m.fillRect(pl.x * sx - 3, pl.y * sy - 3, 6, 6); }
-  { const D = deepState(); if (D) { for (const r of D.runes) if (r.st !== 3) { m.fillStyle = '#7fd4ff'; m.beginPath(); m.arc(r.x * sx, r.y * sy, 3.2, 0, 7); m.fill(); m.strokeStyle = '#06202f'; m.lineWidth = 1; m.stroke(); } if (D.sh) { const d = deepPieces().shrines[D.sh.i]; if (d) { m.fillStyle = '#9fe3ff'; m.beginPath(); m.arc(d.x * sx, d.y * sy, 4 + Math.sin(performance.now() / 150) * 1.5, 0, 7); m.fill(); } }   // the glowing shrine (shield run)
-    const o = deepObjective(); if (o?.at) { m.strokeStyle = '#ffe08a'; m.lineWidth = 1.5; m.beginPath(); m.arc(o.at.x * sx, o.at.y * sy, 5 + Math.sin(performance.now() / 200) * 1.5, 0, 7); m.stroke(); } for (const z of state.zombies.values()) if (z.kind === 'minebeast') { m.fillStyle = '#ff3737'; m.fillRect(z.x * sx - 3, z.y * sy - 3, 6, 6); } } }
+  { const D = deepState(); if (D) { for (const r of D.runes) if (r.st !== 3) { m.fillStyle = '#7fd4ff'; m.beginPath(); m.arc(r.x * sx, r.y * sy, 3.2, 0, 7); m.fill(); m.strokeStyle = '#06202f'; m.lineWidth = 1; m.stroke(); } if (D.sh) { const d = deepPieces().shrines[D.sh.i]; if (d) { m.fillStyle = '#9fe3ff'; m.beginPath(); m.arc(d.x * sx, d.y * sy, 4 + Math.sin(gnow() / 150) * 1.5, 0, 7); m.fill(); } }   // the glowing shrine (shield run)
+    const o = deepObjective(); if (o?.at) { m.strokeStyle = '#ffe08a'; m.lineWidth = 1.5; m.beginPath(); m.arc(o.at.x * sx, o.at.y * sy, 5 + Math.sin(gnow() / 200) * 1.5, 0, 7); m.stroke(); } for (const z of state.zombies.values()) if (z.kind === 'minebeast') { m.fillStyle = '#ff3737'; m.fillRect(z.x * sx - 3, z.y * sy - 3, 6, 6); } } }
   m.strokeStyle = '#ffffffaa'; m.lineWidth = 1; m.strokeRect(cam.x * sx + .5, cam.y * sy + .5, W * sx, H * sy);
 }
 
@@ -4711,19 +4809,28 @@ function reportError(e, where, lv = "error") {
 addEventListener("error", e => reportError(e.error || e.message, "window"));
 addEventListener("unhandledrejection", e => reportError(e.reason, "promise"));
 // Stall detector: in a game the server sends updates ~20 times a second. 6s of silence = lag / connection trouble.
-let lastStateAt = performance.now(), stallReported = false;
+let lastStateAt = gnow(), stallReported = false;
 setInterval(() => {
-  if (!room || !state || state.phase !== "playing") { lastStateAt = performance.now(); return; }
-  const gap = performance.now() - lastStateAt;
+  if (!room || !state || state.phase !== "playing") { lastStateAt = gnow(); return; }
+  const gap = gnow() - lastStateAt;
   if (gap > 3000 && !reconnecting && document.visibilityState === "visible" && room.reconnectionToken && !SOLO_PREVIEW) {   /* the connection is stuck (nothing from the server for 3s mid-wave): drop it and reconnect instead of standing frozen */
-    const old = room, tok = room.reconnectionToken; dropInfo = { code: "stuck " + Math.round(gap) + "ms", at: Date.now(), vis: "visible" }; lastStateAt = performance.now();
+    const old = room, tok = room.reconnectionToken; dropInfo = { code: "stuck " + Math.round(gap) + "ms", at: Date.now(), vis: "visible" }; lastStateAt = gnow();
     try { old.removeAllListeners(); } catch {} try { old.connection.close(); } catch {}
     reconnectRoom(tok); return;
   }
   if (gap < 1000) stallReported = false;
 }, 1000);
+let pauseSentAt = 0, pauseNoteOn = false;
+function pauseSync() {   // (Nov 12) the host's Esc menu = the whole game paused; closing it (RESUME, Esc, a dev button) unpauses. Everyone else gets a notice.
+  if (!room || !state) return; const host = SOLO_PREVIEW || state.hostId === myId, ph = state.phase, paused = !!state.paused;
+  if (host) { const want = !$("menu").classList.contains("hidden") && (ph === "playing" || ph === "cleared");
+    if (want !== paused && _realNow() - pauseSentAt > 400) { pauseSentAt = _realNow(); room.send("pause", { on: want }); } }
+  const note = paused && !host; if (note !== pauseNoteOn) { pauseNoteOn = note; $("pauseNote").classList.toggle("hidden", !note); }
+  txt("pmTitle", host || paused ? "PAUSED" : "MENU");
+}
 function frame(t){
-  if (performance.now() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
+  gamePause(!!state?.paused); try { pauseSync(); } catch (e) { reportError(e, "pause"); }
+  if (gnow() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);
   unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none";   // start every frame clean
   try {
@@ -4732,7 +4839,8 @@ function frame(t){
     const off = shakeOffset();
     ctx.save(); ctx.translate(off.x - Math.round(cam.x), off.y - Math.round(cam.y)); drawWorld(); drawFeel(); ctx.restore();
     drawScreen(); drawBuildWheel(); drawSquadWheel(); drawHurt();
-    if (performance.now() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - performance.now()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
+    if (gnow() < flashUntil) { ctx.fillStyle = `rgba(255,248,220,${(flashUntil - gnow()) / 140 * .55})`; ctx.fillRect(0, 0, W, H); }
+    drawReticle();   // last: nothing (night, flashes, overlays) can hide where you aim
   } catch (e) { unwindTo(0); ctx.setTransform(1, 0, 0, 1, 0, 0); reportError(e, "frame"); }
 }
 requestAnimationFrame(frame);
@@ -4779,6 +4887,22 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["THE DEEP MINE", "Underground · Mine Carts & a Sealed Portal"]];
+// (Nov 12, user) THE MAP ORDER (as on the server, CHAPTERS): 4 waves per map, its boss on the 4th; beat it and the team moves on.
+const MAP_ORDER = [
+  { site: 0, name: "ASCENSION", short: "ASCENSION", sub: "Research Outpost", boss: "THE BUTCHER" },
+  { site: 3, name: "FALLEN DYNASTY", short: "DYNASTY", sub: "China · Walled City", boss: "THE ALPHA HIVEMIND" },
+  { site: 4, name: "WHITEOUT STATION", short: "WHITEOUT", sub: "Antarctica · Research Base", boss: "THE SCREAMER" },
+  { site: 5, name: "SCORCHED REFINERY", short: "REFINERY", sub: "Desert · Oil Field & Pyramid", boss: "THE PYRE PRIEST" },
+  { site: 6, name: "THE DEEP MINE", short: "DEEP MINE", sub: "Underground · Mine Carts & a Sealed Portal", boss: "THE MINE BEAST" },
+  { site: 2, name: "THE CRUCIBLE", short: "CRUCIBLE", sub: "Volcano · the lava map is coming (stand-in map for now)", boss: "THE ABOMINATION" },
+];
+let mapCardKey = -1;
+function showMapCard(wave) {   // the big title when the team arrives on a map (and at the start of the match)
+  const k = Math.floor((Math.max(1, wave) - 1) / 4), c = MAP_ORDER[k % MAP_ORDER.length]; if (k === mapCardKey) return; mapCardKey = k;
+  txt("mapCardN", `MAP ${k % MAP_ORDER.length + 1} OF ${MAP_ORDER.length}` + (k >= MAP_ORDER.length ? " · ROUND " + (Math.floor(k / MAP_ORDER.length) + 1) : "")); txt("mapCardName", c.name); txt("mapCardSub", c.sub);
+  txt("mapCardBoss", wave >= 49 ? "Wave 50: THE APOCALYPSE" : `Boss on wave ${(k + 1) * 4}: ${c.boss}`);
+  const el = $("mapCard"); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+}
 const SETTING_OPTS = { difficulty: ["easy", "normal", "hard"], waveMode: ["campaign", "ascension"] };
 const ls = { view: "lobby", cat: "all", tab: "abilities", hideCode: false, toastAt: 0 };
 const rosterOf = id => ROSTER.find(r => r.id === id) || ROSTER[0];
@@ -4865,7 +4989,8 @@ function renderLobbyRoom() {
     if (host) { txt("readyLabel", all ? "START MISSION" : "START ANYWAY"); txt("readySub", `${readyN} / ${humans.length} READY`); }
     else { txt("readyLabel", me?.ready ? "READY!" : "READY UP"); txt("readySub", me?.ready ? "click to cancel · waiting for the host" : `${readyN} / ${humans.length} READY`); }
     // mission settings
-    const site = state.mapSite || 0; txt("mapName", SITE_NAMES[site][0]); txt("mapSub", SITE_NAMES[site][1]);
+    const site = state.mapSite || 0; txt("mapName", "MAP 1 · " + MAP_ORDER[0].name); txt("mapSub", "Fixed route: beat each map's boss to move on");
+    setHtml("lsRoute", MAP_ORDER.map((c, i) => `<span class="${c.site === site ? "on" : ""}"><i>${i + 1}</i>${c.short}</span>`).join(""));
     txt("setDifficulty", (state.difficulty || "normal").toUpperCase());
     txt("setWaveMode", state.waveMode === "ascension" ? "ASCENSION (∞)" : "CAMPAIGN (50)");
     txt("setFriendlyFire", state.friendlyFire ? "ON" : "OFF"); txt("setExtraLoot", state.extraLoot ? "ON" : "OFF");

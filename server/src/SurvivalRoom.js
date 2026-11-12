@@ -42,8 +42,9 @@ const HIVE = {
   slam:  { range: 200, windup: .55, total: 1.35, cd: 7, radius: 210, mult: 1.1, stun: .8, flat: .62 },
   jump:  { min: 320, max: 760, total: 1.2, up: .3, land: .9, cd: 9, radius: 150, mult: 1.25 },
   spawn: { every: 8, first: 5, max: 4 },
+  alpha: { hp: 3.0, size: 1.55, dmg: 1.25, speed: 1.1, spawnEvery: 6, brood: [.66, .33], broodN: [1, 2] },   // (Nov 12) THE ALPHA HIVEMIND, Fallen Dynasty's boss (wave 8): a giant Hivemind that tears off normal Hiveminds at 66% and 33%
 };
-const isHiveWave = stage => stage % 4 === 2;
+const isHiveWave = stage => stage % 4 === 2 && chapterOf(stage).boss !== "hivemind";   // (not just before the Alpha Hivemind's own boss wave)
 // THE PYRE PRIEST: boss of wave 8 (user's design + art, Nov 6). A burning cultist swinging a giant censer on a chain.
 // Hunts SURVIVORS only (never the tower, robots or turrets). Walks at 212 (only Raven, 225, outruns him; enraged 237).
 //   LAMP STRIKE   his basic attack: up close, a quick smash with the burning lamp in front of him (a 120-degree arc, 150px), every 1.3s.
@@ -272,7 +273,18 @@ function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p
 // Q = Crimson Cyclone (12s of the red-hot axe circling him, 260px, 24 dmg per target every 0.25s).
 // Astra (dispatcher): E = 1 medic (5 HP/s, each person once), Q = 1 officer per living player, R = safehouse (4 walls zombies can't cross).
 // Lobby mission settings. Sites = map layouts (same city style, different streets).
-const DEFAULT_SITE = 4;   // new rooms start on Whiteout Station (user, Nov 10; before that Fallen Dynasty = 3); the host can still switch in the lobby
+const DEFAULT_SITE = 0;   // (Nov 12) every match starts at Ascension: maps follow the fixed order below (no map choice in the lobby any more)
+// (Nov 12, user) THE MAP ORDER: 4 waves per map, its boss on the 4th wave; beat it and the team moves on to the next map.
+// After the sixth map it starts over (harder: everything scales with the wave). Wave 50 is still the Apocalypse.
+const CHAPTERS = [
+  { site: 0, boss: "butcher", name: "ASCENSION" },                    // waves 1-4    Ascension
+  { site: 3, boss: "hivemind", name: "FALLEN DYNASTY" },                   // waves 5-8    Fallen Dynasty: the ALPHA HIVEMIND (a giant one that tears off more Hiveminds)
+  { site: 4, boss: "screamer", name: "WHITEOUT STATION" },                   // waves 9-12   Whiteout Station
+  { site: 5, boss: "pyre", name: "SCORCHED REFINERY" },                       // waves 13-16  Scorched Refinery (he walks out of the pyramid)
+  { site: 6, boss: "minebeast", mission: true, name: "THE DEEP MINE" },   // waves 17-20  The Deep Mine: wave 20 is the rune mission and the Mine Beast
+  { site: 2, boss: "abomination", standIn: true, name: "THE CRUCIBLE" }, // waves 21-24  THE CRUCIBLE (lava map, art coming): Crossroads Ruins stands in until it's built
+];
+const chapterOf = stage => CHAPTERS[Math.floor((Math.max(1, stage) - 1) / 4) % CHAPTERS.length];
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }, { style: "mine", seed: 6060, w: 6000, h: 4000 }];   // mine: The Deep Mine (Nov 11), a big underground map ridden on mine carts, with the boss dungeon and the portal;   // (Nov 11) Midnight Carnival removed from the lobby (user). Its ride engine (this.coaster, coasterTrack...) stays for the mine-cart map;   // carnival: Midnight Carnival, a bigger map with a rideable coaster;   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
@@ -399,6 +411,8 @@ const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5
 // drops to a knee ("flee": get in the carts), then it chases them for a lap. Skills: DRILL STRIKE (two jabs), CRYSTAL SPINES (a fan of crystals that
 // stick in the floor and shatter), CAVE-IN (rocks fall on marked circles, the lights go out), BURROW (dives, tunnels after someone, erupts under a
 // marked circle), DRILL CHARGE (winds up, then charges down a marked lane: enough damage during the wind-up staggers it instead).
+const PLATE = { dr: .25, hp: 30 };   // (Nov 12) THE PYRE PLATE: the Pyre Priest's armour. Drops when he dies, one per survivor; equip it in the backpack (T). For the rest of the run:
+                                     // 25% less damage from everything (on top of Body Armour), +30 max HP, and you can't be set on fire. p.armor: 0 none, 1 in the backpack, 2 worn.
 const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
   strike: { range: 185, len: 1.15, hits: [.42, .7], reach: 225, half: 85, mult: [.9, 1.15], push: 150, cd: 1.2 },
   spines: { first: 5, cd: 10, len: 1.25, at: .6, n: 5, fan: 1.0, min: 220, max: 560, fly: .5, fuse: 1.5, r: 85, mult: 1 },
@@ -419,7 +433,10 @@ export class SurvivalRoom extends Room {
   onCreate(options = {}) {
     // Every message handler is guarded: a bug logs an error (with the player and the message) instead of breaking the room.
     const onMsg = this.onMessage.bind(this);
+    const PAUSE_BLOCK = new Set(["input", "dash", "coaster", "shoot", "attack", "charge", "melee", "ability", "ult", "skill2", "mechaSlash", "deep", "reload", "weapon", "meleeEquip", "slot",
+      "revive", "reviveStop", "repairTower", "refuelGenerator", "repairGenerator", "build"]);   // (Nov 12) nobody can act while the host has the game paused
     this.onMessage = (type, cb) => onMsg(type, (client, data) => {
+      if (this.state?.paused && PAUSE_BLOCK.has(type)) return;
       try { cb(client, data); } catch (e) { this.logErr(`message "${type}"`, e, client); }
     });
     // Unknown message types are ignored instead of kicking the player (Colyseus' default). A newer page talking to an older
@@ -492,6 +509,9 @@ export class SurvivalRoom extends Room {
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
+    this.onMessage("pause", (client, data) => {   // (Nov 12) the host's Esc menu: the WHOLE game stops (zombies, attacks, damage, timers) until they close it
+      if (!(this.solo || client.sessionId === this.state.hostId)) return; this.setPaused(!!data?.on && ["playing", "cleared"].includes(this.state.phase));
+    });
     this.onMessage("start", (client, data) => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby") return;
       if (this.state.players.size < 1) return;
@@ -575,6 +595,7 @@ export class SurvivalRoom extends Room {
       const p=this.state.players.get(client.sessionId);const w=String(data?.id||"");
       if(!p?.alive||!WEAPONS[w]||!p.owned.split(",").includes(w)){if(p&&WEAPONS[w])this.state.message=`${p.name}: buy the ${w} in the shop first.`;return;}this.storeMag(p);p[WEAPONS[w].slot]=w;this.setSlot(p,WEAPONS[w].slot==="primary"?2:3);
     });
+    this.onMessage("gear", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && String(data?.id) === "pyreplate") this.wearPlate(p, data?.on !== false); });   // (Nov 12) backpack: put on / take off the Pyre Plate
     this.onMessage("meleeEquip",(client,data)=>{
       const p=this.state.players.get(client.sessionId),id=String(data?.id||"");
       if(p&&(["knife","bat","axe","katana"].includes(id)||(id==="chainaxe"&&p.characterClass==="slasher"))){p.melee=id;p.charging=false;if(p.alive)this.setSlot(p,1);}
@@ -629,14 +650,14 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugMorph", client => {   // test: the Abomination at the moment he tears into the Five (starts his boss wave if he isn't here)
       const p = this.state.players.get(client.sessionId); if ((!this.solo && client.sessionId !== this.state.hostId) || !p || !["playing", "cleared"].includes(this.state.phase)) return;
       let z = [...this.state.zombies.values()].find(o => o.kind === "abomination");
-      if (!z) { this.morphOnArrival = true; this.skipToBoss(16); return; }   // not here: his boss card first, then he arrives already tearing apart
+      if (!z) { this.morphOnArrival = true; this.skipToBoss(24); return; }   /* (Nov 12: his wave is 24 now) */   // not here: his boss card first, then he arrives already tearing apart
       if (z.act === "sunder") return; z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
     });
     this.onMessage("deep", client => { const p = this.state.players.get(client.sessionId); if (this.mine && p?.alive && this.state.phase === "playing" && !(p.ride > 0)) this.mineUse(p); });   // F in the mine mission: take a rune / put it in the statue
     this.onMessage("debugMine", (client, data) => {   // test menu: start the mine mission (wave 20); {k: "rune"} = a rune goes straight in, {k: "fuel"} = full fuel
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
       const k = data?.k, pct = Number(data?.pct) > 0 && Number(data?.pct) < 1 ? Number(data.pct) : 0;   // Nov 12 (the new Esc menu): {k: "boss", pct: .66 / .33} = the Beast at that HP (its shield run comes up); {k: "chase"} / {k: "escape"} = straight to the end of the mission
-      if (!this.mine) { this.jumpToWave(DEEP.wave); if (!this.solo) this.state.message = "Host skipped to the mine mission"; if (!this.mine || !["boss", "chase", "escape"].includes(k)) return; }
+      if (!this.mine) { this.jumpToWave(this.state.stage > 20 ? Math.ceil((this.state.stage - 20) / 24) * 24 + 20 : 20); if (!this.solo) this.state.message = "Host skipped to the mine mission"; if (!this.mine || !["boss", "chase", "escape"].includes(k)) return; }
       const m = this.mine;
       if (k === "boss") { this.beastHpOnArrival = pct; if (m.step === "runes") this.mineAwaken(); else if (m.step === "fight" && pct) this.beastSetHp(pct); return; }
       if (k === "chase" || k === "escape") { if (m.step === "runes") this.mineAwaken(); if (m.step === "awake") this.mineFight(); if (m.step === "fight") { const z = this.state.zombies.get(m.beast); if (z) this.mineFlee(z); } if (m.step === "flee") this.mineChase(); if (k === "escape" && m.step === "chase") this.mineEscape(); return; }
@@ -687,7 +708,7 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("settings", (client, data) => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || !data) return;
-      if (Number.isInteger(data.map) && data.map >= 0 && data.map < SITES.length && data.map !== this.state.mapSite) this.loadSite(data.map);
+      // (Nov 12) no map choice any more: every match starts at Ascension and follows the map order (CHAPTERS)
       if (DIFFICULTY[data.difficulty]) this.state.difficulty = data.difficulty;
       if (data.waveMode === "campaign" || data.waveMode === "ascension") this.state.waveMode = data.waveMode;
       if (typeof data.friendlyFire === "boolean") this.state.friendlyFire = data.friendlyFire;
@@ -812,14 +833,44 @@ export class SurvivalRoom extends Room {
     });
   }
 
+  travel(site) {   // (Nov 12) on to the next map in the order: what the team built and anything on the ground stay behind (an unclaimed Pyre Plate is handed out first)
+    const s = this.state; this.handOutPlates(); this.dismountAll();
+    s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.zombies.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = []; this.pBurn.clear();
+    this.loadSite(site); s.towerHp = s.towerMaxHp; s.generatorHp = s.generatorMaxHp;
+    for (const p of s.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.bleedout = 0; p.hp = Math.round(p.maxHp * .5); }   // the downed are carried along
+    const ch = chapterOf(s.stage + (s.phase === "cleared" ? 1 : 0)), n = CHAPTERS.indexOf(ch) + 1;
+    this.broadcast("travel", { site, n, standIn: !!ch.standIn }); this.log("info", "game", `the team moved on to map ${n} (site ${site})`);
+  }
+  dropPlates(z) {   // the Pyre Priest's armour falls around his body: one per survivor who hasn't got one (anything left unclaimed is handed out when the next wave starts)
+    const need = [...this.state.players.values()].filter(p => !p.armor); if (!need.length) return; this.platesOut = true;
+    need.forEach((p, i) => { const it = new LootState(), a = i / need.length * Math.PI * 2 + rand(-.3, .3); it.id = `l${++this.lootSequence}`; it.kind = "pyreplate"; it.amount = 1; it.rarity = "Legendary";
+      const P = clamp(z.x + Math.cos(a) * 70, 40, this.A.width - 40), Q = clamp(z.y + Math.sin(a) * 45, 40, this.A.height - 40); it.x = P; it.y = Q; this.state.loot.set(it.id, it); });
+    this.broadcast("plateDrop", { x: Math.round(z.x), y: Math.round(z.y), n: need.length });
+    this.state.message = "THE PYRE PLATE dropped! Grab one each, then equip it in your backpack (T).";
+  }
+  givePlate(p, found) {   // into the backpack (bots put it straight on)
+    if (p.armor) return; p.armor = 1; if (p.isBot) this.wearPlate(p, true);
+    if (found) { this.state.message = p.isBot ? `${p.name} put on the Pyre Plate.` : `${p.name} got the PYRE PLATE! Press T and double-click it to wear it.`; this.broadcast("plateGot", { id: p.sessionId }); }
+  }
+  wearPlate(p, on) {   // worn: -25% damage, +30 max HP, fireproof (for the rest of the run)
+    if (!p.armor || (p.armor === 2) === on) return; p.armor = on ? 2 : 1;
+    if (on) { p.maxHp += PLATE.hp; if (p.alive) p.hp = Math.min(p.maxHp, p.hp + PLATE.hp); this.pBurn.delete(p.sessionId); } else { p.maxHp = Math.max(1, p.maxHp - PLATE.hp); p.hp = Math.min(p.hp, p.maxHp); }
+  }
+  handOutPlates() {   // the next wave: whoever didn't pick theirs up still gets it (nobody misses out)
+    if (!this.platesOut) return; this.platesOut = false;
+    for (const it of [...this.state.loot.values()]) if (it.kind === "pyreplate") this.state.loot.delete(it.id);
+    for (const p of this.state.players.values()) if (!p.armor) this.givePlate(p, false);
+  }
   beginBreak() {   // the wave is over: every zombie left dies (no stragglers), the ground clears; nobody's ready yet. Survivors can walk around + build.
     this.inBreak = true; this.state.countdown = BREAK_SECONDS; for (const p of this.state.players.values()) p.ready = false;
+    const next = chapterOf(this.state.stage + 1); if (next.site !== this.state.mapSite && !this.mine && !this.fixedSite) { this.travel(next.site); this.state.message = `Boss down! Welcome to ${next.name}: wave ${this.state.stage + 1} starts here.`; }   // (Nov 12) the boss is down: on to the next map for the break
     this.state.zombies.clear(); this.state.puddles.clear(); this.spits = []; this.dots.clear(); this.taunt.clear(); this.sweepZombieMemory();
     this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn.clear();
   }
   startNextWave() {
     const s = this.state;
     this.inBreak = false; s.countdown = 0; for (const p of s.players.values()) p.ready = false;
+    this.handOutPlates();
     s.stage++;
     s.elapsed = 0;
     s.bossSpawned = false;
@@ -856,6 +907,7 @@ export class SurvivalRoom extends Room {
       applyClassBase(p);
     }
     if (this.mine || this.mineBack) this.endMine(false);
+    if (s.mapSite !== CHAPTERS[0].site) this.loadSite(CHAPTERS[0].site);   // a new match: back to Ascension
     s.phase = "lobby";
     s.message = "New match! Pick your survivors, then the host starts.";
   }
@@ -874,7 +926,8 @@ export class SurvivalRoom extends Room {
     this.state.waveType = this.state.stage % 4 === 0 || this.state.stage === 50 ? "boss" : "normal";
     this.state.bossPhase = ""; this.state.bossIntro = "";
     if (this.mine || this.mineBack) this.endMine(false);   // (a test jump out of the mission)
-    if (this.state.stage === DEEP.wave) { this.startMine(); return; }
+    const ch = chapterOf(this.state.stage); if (ch.site !== this.state.mapSite && !this.fixedSite) this.travel(ch.site);   // (fixedSite: tests that look at one map)   // a new map (or a test jump): go there first
+    if (ch.mission && this.state.stage % 4 === 0) { this.startMine(); return; }
     // Boss waves: first a horde (walkers on wave 4); once it's cleared, the boss intro card; when everyone is ready, the boss.
     if (this.state.waveType === "boss") { this.state.bossPhase = "horde"; this.state.message = `BOSS WAVE ${this.state.stage}: clear the horde... something big is coming.`; }
     else this.state.message = `Wave ${this.state.stage}/50 — survive for 90 seconds.` + (isHiveWave(this.state.stage) ? " Something is stirring..." : "");
@@ -886,7 +939,7 @@ export class SurvivalRoom extends Room {
     if (!this.solo) this.state.message = "Host skipped to the boss fight";
     this.state.zombies.clear(); this.state.elapsed = BOSS_WAVE.horde; this.state.bossPhase = "horde"; this.state.explore = false;
   }
-  bossKind() { return this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage / 4 - 1) % 12]; }
+  bossKind() { return this.state.stage === 50 ? "apocalypse" : chapterOf(this.state.stage).boss; }
   bossWaveTick(dt, now) {
     const s = this.state;
     if (s.bossPhase === "horde") {
@@ -910,7 +963,7 @@ export class SurvivalRoom extends Room {
   spawnBoss() {
     const s = this.state; s.bossPhase = "fight"; s.bossIntro = ""; s.bossSpawned = true; this.spawnClock = BOSS_WAVE.escortEvery;
     this.log("info", "boss", `boss fight started on wave ${s.stage}`);
-    this.spawnZombie(true);
+    if (this.bossKind() === "hivemind") this.spawnHivemind(true); else this.spawnZombie(true);
     const z = [...s.zombies.values()].find(q => q.boss), alive = [...s.players.values()].filter(p => p.alive);
     if (z && alive.length) {   // walk in from ~650px away from the team, not from the far side of the map
       const cx = alive.reduce((a, p) => a + p.x, 0) / alive.length, cy = alive.reduce((a, p) => a + p.y, 0) / alive.length, ang = Math.random() * Math.PI * 2;
@@ -920,7 +973,7 @@ export class SurvivalRoom extends Room {
     if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 330, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
     if (z && this.bossDoor) { z.x = this.bossDoor.x; z.y = this.bossDoor.y; z.aim = Math.PI / 2; this.solveZombie(z); this.broadcast("pyramid", { x: Math.round(z.x), y: Math.round(z.y) }); }
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
-    s.message = `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
+    s.message = z?.kind === "hivemind" ? "THE ALPHA HIVEMIND HAS ARRIVED!" : `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;
   }
 
   watchSocket(client) {   /* log WHY a socket closed (1001 page reloaded/closed, 1006 network cut, 1009 message too big, 4002 server error) */
@@ -974,6 +1027,7 @@ export class SurvivalRoom extends Room {
       const next = [...this.state.players.values()].find(p => !p.isBot);
       this.state.hostId = next ? next.sessionId : "";
       if (next) { next.isHost = true; next.ready = true; }
+      this.setPaused(false);   // the new host decides when to pause
     }
     if (![...this.state.players.values()].some(p => !p.isBot)) { this.state.players.clear(); this.botBrain.clear(); }
     if (this.state.players.size === 0) this.state.phase = "lobby";
@@ -993,7 +1047,7 @@ export class SurvivalRoom extends Room {
     // appear somewhere on a ring around the radio tower, out of the players' view
     const { x, y } = this.spawnPoint();
 
-    const kind = forceKind ? forceKind : boss ? (this.state.stage === 50 ? "apocalypse" : ["butcher","pyre","screamer","abomination","devourer","stalker","boneCrusher","hiveMother","executioner","colossus","reaper","undeadKing"][(this.state.stage/4-1)%12]) : pickKind(this.state.stage);
+    const kind = forceKind ? forceKind : boss ? this.bossKind() : pickKind(this.state.stage);
     const scale = 1 + (this.state.stage - 1) * 0.08;
     const base = { walker:38, runner:25, brute:105, spitter:42, mutant:140, butcher:2000, pyre:PYRE.hp, plagueBrute:1500, screamer:SCREAMER.hp, abomination:1700, devourer:1500, stalker:1000, boneCrusher:1800, hiveMother:1900, executioner:1600, colossus:2500, reaper:1800, undeadKing:2400, apocalypse:6500 }[kind] || 900;
     const z = new ZombieState();
@@ -1279,7 +1333,7 @@ export class SurvivalRoom extends Room {
         if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
       }
     }
-    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
   separateZombies() {   // keep the crowd from stacking: 64px buckets (integer keys), plain numbers read once per zombie
@@ -2385,22 +2439,29 @@ export class SurvivalRoom extends Room {
   }
   startAct(z, act, len, aim) { z.act = act; z.actLen = len; z.slam = len; if (aim !== undefined) z.aim = aim; }
   // ---------- The Hivemind (mini boss) ----------
-  spawnHivemind() {
-    this.log("info", "boss", `the Hivemind arrived on wave ${this.state.stage}`);
-    this.hiveSpawned = true; this.spawnZombie(false, "hivemind");
+  spawnHivemind(alpha = false) {
+    this.log("info", "boss", `the ${alpha ? "Alpha " : ""}Hivemind arrived on wave ${this.state.stage}`);
+    this.hiveSpawned = true; const was = this.state.explore; if (alpha) this.state.explore = false; this.spawnZombie(false, "hivemind"); this.state.explore = was;
     const z = [...this.state.zombies.values()].pop(); if (!z || z.kind !== "hivemind") return null;
-    const scale = 1 + (this.state.stage - 1) * 0.08, n = this.state.players.size;
+    const scale = 1 + (this.state.stage - 1) * 0.08, n = this.state.players.size, A = HIVE.alpha;
     z.maxHp = z.hp = HIVE.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, n - 1));
     z.speed = HIVE.speed; z.radius = HIVE.radius; z.damage = HIVE.dmg * scale; z.role = "hunter"; z.boss = false;
-    this.hiveMem.set(z.id, { biteReady: 0, slamReady: Date.now() + 2500, jumpReady: Date.now() + 3000, spawnAt: Date.now() + HIVE.spawn.first * 1000 });
-    this.state.message = "THE HIVEMIND HAS ARRIVED!";
-    this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y) });
+    if (alpha) { z.boss = true; z.maxHp = z.hp = z.maxHp * A.hp * (DIFFICULTY[this.state.difficulty] || DIFFICULTY.normal).hp; z.radius = Math.round(HIVE.radius * A.size); z.damage *= A.dmg; z.speed = HIVE.speed * A.speed; this.solveZombie(z); }
+    this.hiveMem.set(z.id, { biteReady: 0, slamReady: Date.now() + 2500, jumpReady: Date.now() + 3000, spawnAt: Date.now() + HIVE.spawn.first * 1000, brood: 0 });
+    this.state.message = alpha ? "THE ALPHA HIVEMIND HAS ARRIVED!" : "THE HIVEMIND HAS ARRIVED!";
+    this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: alpha ? 1 : 0 });
     return z;
   }
-  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
+  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
   hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
-    const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000 }; this.hiveMem.set(z.id, m);
+    const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000, brood: 0 }; this.hiveMem.set(z.id, m);
+    const sc = (z.radius || H.radius) / H.radius;   // the Alpha is bigger: its bite, slam and landing reach further
+    if (z.boss && (m.brood || 0) < H.alpha.brood.length && z.hp <= z.maxHp * H.alpha.brood[m.brood || 0] && z.act !== "jump") {   // THE BROOD: it tears a whole Hivemind out of its body
+      const k = H.alpha.broodN[m.brood || 0]; m.brood = (m.brood || 0) + 1;
+      for (let i = 0; i < k; i++) { const h = this.spawnHivemind(false); if (!h) continue; const a = Math.random() * Math.PI * 2; h.x = clamp(z.x + Math.cos(a) * (z.radius + 70), 60, this.A.width - 60); h.y = clamp(z.y + Math.sin(a) * (z.radius + 50), 60, this.A.height - 60); this.solveZombie(h); }
+      this.state.message = k > 1 ? "THE ALPHA TEARS OFF TWO MORE HIVEMINDS!" : "THE ALPHA TEARS OFF A HIVEMIND!"; this.broadcast("hive", { k: "brood", x: Math.round(z.x), y: Math.round(z.y) });
+    }
     if (now >= m.spawnAt && z.act !== "jump") {   // tears zombies out of its body
       const n = Math.min(H.spawn.max, 1 + Math.floor(this.state.stage / 8)), was = this.state.explore; this.state.explore = false;
       for (let i = 0; i < n; i++) {
@@ -2408,28 +2469,28 @@ export class SurvivalRoom extends Room {
         w.x = clamp(z.x + Math.cos(a) * (z.radius + 22), 20, this.A.width - 20); w.y = clamp(z.y + Math.sin(a) * (z.radius + 22) * .7, 20, this.A.height - 20); w.attackCooldown = 1.2; this.solveZombie(w);
         this.broadcast("hive", { k: "spawn", x: Math.round(w.x), y: Math.round(w.y) });
       }
-      this.state.explore = was; m.spawnAt = now + H.spawn.every * 1000;
+      this.state.explore = was; m.spawnAt = now + (z.boss ? H.alpha.spawnEvery : H.spawn.every) * 1000;
     }
     if (z.act) {
       const t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam;
       if (z.act === "bite" && t0 < H.bite.windup && t1 >= H.bite.windup) {
         for (const p of this.state.players.values()) {
-          if (!p.alive) continue; const d = distance(z, p); if (d > H.bite.reach + BODY_R) continue;
+          if (!p.alive) continue; const d = distance(z, p); if (d > H.bite.reach * sc + BODY_R) continue;
           let diff = Math.atan2(p.y - z.y, p.x - z.x) - z.aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
           if (Math.abs(diff) <= H.bite.arc || d < z.radius + 14) this.hiveHurt(p, z.damage * H.bite.mult);
         }
       }
       if (z.act === "slam" && t0 < H.slam.windup && t1 >= H.slam.windup) {
-        for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < H.slam.radius) { this.hiveHurt(p, z.damage * H.slam.mult); p.stunned = Math.max(p.stunned || 0, H.slam.stun); p.charging = false; }
-        this.broadcast("hive", { k: "slam", x: Math.round(z.x), y: Math.round(z.y), r: H.slam.radius });
+        for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < H.slam.radius * sc) { this.hiveHurt(p, z.damage * H.slam.mult); p.stunned = Math.max(p.stunned || 0, H.slam.stun); p.charging = false; }
+        this.broadcast("hive", { k: "slam", x: Math.round(z.x), y: Math.round(z.y), r: Math.round(H.slam.radius * sc) });
       }
       if (z.act === "jump") {
         const J = H.jump;
         if (t1 > J.up && t0 < J.land) { const k = Math.min(1, (t1 - J.up) / (J.land - J.up)); z.x = m.jx0 + (m.jx1 - m.jx0) * k; z.y = m.jy0 + (m.jy1 - m.jy0) * k; }
         if (t0 < J.land && t1 >= J.land) {
           this.solveZombie(z);
-          for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < J.radius) this.hiveHurt(p, z.damage * J.mult);
-          this.broadcast("hive", { k: "land", x: Math.round(z.x), y: Math.round(z.y), r: J.radius });
+          for (const p of this.state.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / H.slam.flat) < J.radius * sc) this.hiveHurt(p, z.damage * J.mult);
+          this.broadcast("hive", { k: "land", x: Math.round(z.x), y: Math.round(z.y), r: Math.round(J.radius * sc) });
         }
       }
       if (z.slam <= 0) z.act = "";
@@ -2443,7 +2504,7 @@ export class SurvivalRoom extends Room {
     const near = players.reduce((a, b) => distance(z, a) < distance(z, b) ? a : b), d = distance(z, near), a = Math.atan2(near.y - z.y, near.x - z.x);
     z.targetId = near.sessionId; z.aim = a;
     if (d < H.bite.range + z.radius && now >= m.biteReady) { this.startAct(z, "bite", H.bite.total, a); m.biteReady = now + H.bite.cd * 1000; return; }
-    if (d < H.slam.range && now >= m.slamReady) { this.startAct(z, "slam", H.slam.total, a); m.slamReady = now + H.slam.cd * 1000; return; }
+    if (d < H.slam.range * sc && now >= m.slamReady) { this.startAct(z, "slam", H.slam.total, a); m.slamReady = now + H.slam.cd * 1000; return; }
     if (d > H.jump.min && d < H.jump.max && now >= m.jumpReady) {   // leap at a survivor far away: lands just short of them
       const land = Math.max(0, d - z.radius - 30);
       m.jx0 = z.x; m.jy0 = z.y; m.jx1 = clamp(z.x + Math.cos(a) * land, 40, this.A.width - 40); m.jy1 = clamp(z.y + Math.sin(a) * land, 40, this.A.height - 40);
@@ -2723,7 +2784,7 @@ export class SurvivalRoom extends Room {
   ignite(p, z) {   // set a survivor on fire (or keep them burning)
     if (!p.alive || this.untouchable(p)) return;
     const was = this.pBurn.get(p.sessionId);
-    this.pBurn.set(p.sessionId, { until: Date.now() + PYRE.burn.len * 1000, dps: z.damage * PYRE.burn.dps });
+    if (p.armor !== 2) this.pBurn.set(p.sessionId, { until: Date.now() + PYRE.burn.len * 1000, dps: z.damage * PYRE.burn.dps });   // (the Pyre Plate can't catch fire)
     if (!was || was.until < Date.now()) this.broadcast("pyre", { k: "ignite", id: p.sessionId, len: PYRE.burn.len });
   }
   pyreHit(p, z, mult) { if (!p.alive || this.untouchable(p)) return false; this.hiveHurt(p, z.damage * mult); this.ignite(p, z); return true; }
@@ -2850,6 +2911,7 @@ export class SurvivalRoom extends Room {
       const p = this.state.players.get(sid);
       if (!p || !p.alive || now >= b.until) { this.pBurn.delete(sid); continue; }
       if (this.untouchable(p)) continue;
+      if (p.armor === 2) { this.pBurn.delete(sid); continue; }   // the Pyre Plate: fireproof
       const dealt = b.dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt;
       if (p.hp <= 0) { this.pBurn.delete(sid); this.downPlayer(p); }
     }
@@ -2958,7 +3020,7 @@ export class SurvivalRoom extends Room {
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
     const holding = () => { const stn = T.stations[C.next]; if (!C.held?.size || !(stn?.boss || stn?.shrine !== undefined)) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0 || (stn.boss && this.cordon && !(q.x > this.cordon.x && q.y > this.cordon.y))) C.held.delete(sid); else n++; } return n; };   // (the shield run's stop waits for its rider too)   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
-    if (C.wait > 0) { C.hold = holding(); const gate = this.mine ? this.mineGate(C) : 0; if (gate === 1) C.wait = Math.max(C.wait, DEEP.leave + dt); else if (gate === 2) C.wait = Math.min(C.wait, 2);   // the mine mission: 1 = the carts stay put, 2 = nothing to wait for
+    if (C.wait > 0) { C.hold = holding(); const gate = this.mine ? this.mineGate(C) : 0; if (gate === 1) C.wait = Math.max(C.wait, DEEP.leave + dt); else if (gate === 2) C.wait = Math.min(C.wait, 2); else if (gate === 3) C.wait = Math.min(C.wait, dt);   // 3 = go now (the shield run)   // the mine mission: 1 = the carts stay put, 2 = nothing to wait for
       C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { if (this.mine) this.mineDepart(C); C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; if (this.mine?.step === "chase" || C.express) C.next = T.stations.findIndex(q => q.boss); } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
     else { C.hold = 0; let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
       const step = Math.min(C.K.speed * (this.mine ? (this.mine.step === "chase" ? DEEP.chaseSpeed : DEEP.speed) * (C.express ? BEAST.shield.express : 1) : 1), Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // (the shield run's way back: express)   // slows into the station
@@ -2983,7 +3045,7 @@ export class SurvivalRoom extends Room {
     this.mine = { step: "runes", t: 0, fuel: 0, placed: 0, inserted: false, cartHp: DEEP.cartHp, gap: DEEP.gap0, runes: P.shrines.slice(0, 4).map(d => ({ st: 0, x: d.x, y: d.y + 34, by: "" })), shardClock: 0, zClock: 4, towerHp: s.towerHp, hpRef, beast: "" };
     s.waveType = "mission"; s.bossPhase = ""; s.bossIntro = ""; this.spawnClock = 1e9;
     for (let i = 0; i < 8; i++) this.mineShard();
-    s.message = "WAVE 20: THE DEEP MINE. Put four runes in the statue."; this.mineSync(); this.broadcast("deep", { k: "start" });
+    s.message = `WAVE ${s.stage}: THE DEEP MINE. Put four runes in the statue.`; this.mineSync(); this.broadcast("deep", { k: "start" });
   }
   endMine(won) {   // the mission is over (won, a test jump, or a new match): back to the map the team came from, their structures back in place
     const s = this.state, back = this.mineBack; this.mine = null; this.mineBack = null; s.mission = "";
@@ -3018,8 +3080,8 @@ export class SurvivalRoom extends Room {
   mineGate(C) {   // what the carts do while stopped: 1 = stay, 2 = nothing to wait for (leave soon), 0 = their normal wait
     const m = this.mine, boss = !!C.T.stations[C.next]?.boss, carried = [...C.riders.keys()].some(sid => m.runes.some(r => r.st === 1 && r.by === sid));
     const stn = C.T.stations[C.next];
-    if (m.step === "fight" && stn?.shrine !== undefined) return C.riders.size ? (m.shield ? 1 : 2) : C.held?.size ? 1 : 2;   // the shield run's stop: wait while the rider is off (or still aboard with the shield up); once they're back on (or gone), head back
-    if (m.step === "fight" && boss && m.shield && C.riders.size) return 2;   // ONE rider aboard at the boss stop: off to the shrine
+    if (m.step === "fight" && stn?.shrine !== undefined) return C.riders.size ? (m.shield ? 1 : 3) : C.held?.size ? 1 : 2;   // the shield run's stop: wait while the rider is off (or still aboard with the shield up); once they're back on (or gone), head back
+    if (m.step === "fight" && boss && m.shield && C.riders.size) return 3;   // ONE rider aboard at the boss stop: off to the shrine RIGHT AWAY (Nov 12: no waiting)
     if (m.step === "awake" || m.step === "fight" || m.step === "flee" || m.step === "escaped") return 1;
     if (m.step === "chase") return 2;
     if (!boss) return carried && m.fuel >= DEEP.fuelCost ? 0 : 1;   // the station: they leave once a rune is aboard and they're fuelled
@@ -3229,7 +3291,7 @@ export class SurvivalRoom extends Room {
     for (const z of this.state.zombies.values()) if (z.kind !== "minebeast" && inside(z)) { out(z); this.solveZombie(z); }
   }
   inCordon(e) { const K = this.cordon; return !!K && e.x > K.x + 25 && e.y > K.y + 10; }   // inside the mine's boss dungeon: nothing outside can reach you (and you can't be chased in)
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (this.inCordon(p) && !(this.mine && (this.mine.step === "fight" || this.mine.step === "flee"))) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && !this.bossUp) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (this.inCordon(p) && !(this.mine && (this.mine.step === "fight" || this.mine.step === "flee"))) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && (!this.bossUp || this.mine?.shield)) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -3718,9 +3780,10 @@ export class SurvivalRoom extends Room {
       this.state.bossDead = true; this.state.bossPhase = "";
       for (const p of this.state.players.values()) p.currency += 40;   // everyone gets paid for a boss
       this.broadcast("bossDead", { kind: z.kind, x: Math.round(z.x), y: Math.round(z.y) });
+      if (z.kind === "pyre") this.dropPlates(z);   // (Nov 12) his armour, one piece per survivor
       // let everyone watch it die for a few seconds before the wave ends
       this.bossOverAt = Date.now() + 4500;
-      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN!" : z.kind === "abomSpawn" ? "THE ABOMINATION IS DEAD!" : `${String(z.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()} IS DEAD!`;
+      this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN!" : z.kind === "abomSpawn" ? "THE ABOMINATION IS DEAD!" : z.kind === "hivemind" ? "THE ALPHA HIVEMIND IS DEAD!" : `${String(z.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()} IS DEAD!`;
     }
   }
 
@@ -3796,8 +3859,23 @@ export class SurvivalRoom extends Room {
       this.logPhase = ph; this.logStage = this.state.stage;
     }
   }
+  setPaused(on) {
+    const s = this.state; if (!!s.paused === on) return; const now = Date.now();
+    if (on) { s.paused = true; this.pausedAt = now; for (const p of s.players.values()) { p.charging = false; this.inQ?.get(p.sessionId) && (this.inQ.get(p.sessionId).list.length = 0); } this.log("info", "game", "paused by the host"); return; }
+    s.paused = false; const ms = now - (this.pausedAt || now); this.lastTick = now; this.shiftClock(ms); this.log("info", "game", `resumed after ${Math.round(ms / 1000)}s`);
+  }
+  shiftClock(ms) {   // after a pause: push the room's wall-clock timers (boss attack timers, falling-rock marks, burning patches, the intro card...) forward by how long it was paused
+    if (!(ms > 0)) return; const T = 1e12, seen = new Set();
+    const bump = (o, d = 0) => { if (!o || typeof o !== "object" || d > 3 || seen.has(o) || !(o.constructor === Object || Array.isArray(o) || o instanceof Map)) return; seen.add(o);
+      if (o instanceof Map) { for (const v of o.values()) bump(v, d + 1); return; }
+      if (Array.isArray(o)) { for (const v of o) bump(v, d + 1); return; }
+      for (const k in o) { const v = o[k]; if (typeof v === "number") { if (v > T) o[k] = v + ms; } else if (v && typeof v === "object" && (v.constructor === Object || Array.isArray(v) || v instanceof Map)) bump(v, d + 1); } };   // plain data only (never a synced schema object)
+    for (const k of ["introUntil", "bossOverAt"]) if (this[k] > T) this[k] += ms;
+    for (const o of [this.bossMem, this.unitMem, this.hiveMem, this.pyreFx, this.scrFx, this.abFx, this.mine?.haz, this.mine?.shield]) bump(o);
+  }
   tickInner() {
     const now = Date.now();
+    if (this.state.paused) { this.lastTick = now; return; }   // paused by the host: nothing moves, nothing hurts
     const dt = Math.min(0.1, (now - this.lastTick) / 1000);
     this.lastTick = now;
     this.drainInputs(dt);
@@ -3854,7 +3932,7 @@ export class SurvivalRoom extends Room {
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0&&!this.sheltered(p)){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);
         p.ammo+=30; this.unlockWeapon(p,found); const slotN=slot==="primary"?2:3; if(!had&&p.activeSlot!==slotN) p[slot]=found;

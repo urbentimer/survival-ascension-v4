@@ -358,7 +358,7 @@ body.in-match #ls{display:none}
 .pm button:disabled{opacity:.36;cursor:not-allowed;filter:none!important}
 .pm-card{--c:16px;--bw:2px;--bd:linear-gradient(180deg,#4a93c4,#1b3449 30%,#1b3449 70%,#2f6a92);--fill:linear-gradient(180deg,#0e1823,#090f16);padding:14px 18px 18px;filter:drop-shadow(0 0 9px rgba(40,165,235,.28)) drop-shadow(0 12px 26px rgba(0,0,0,.6))}
 .pm-left{width:330px;flex:none;display:flex;flex-direction:column;gap:12px;justify-content:space-between}
-.pm-dev{width:910px;max-width:100%;min-height:690px;display:flex;flex-direction:column;gap:12px}
+.pm-dev{width:910px;max-width:100%;min-height:740px;display:flex;flex-direction:column;gap:12px}
 .pm-ctl{width:720px;max-width:100%}
 .pm-title{display:flex;align-items:center;justify-content:center;gap:16px;margin:0;padding:4px 0 12px;border-bottom:2px solid #18293a;font:800 38px/1 var(--pm-f);letter-spacing:1.5px;color:#f4ecd8;text-shadow:0 2px 0 #000,0 0 10px rgba(255,235,200,.15)}
 .pm-sl{display:inline-block;width:24px;height:9px;flex:none;background:linear-gradient(90deg,var(--pm-gold) 0 38%,transparent 38% 62%,var(--pm-gold) 62%);transform:skewX(-38deg);filter:drop-shadow(0 0 4px rgba(255,190,40,.6))}
@@ -390,8 +390,8 @@ body.in-match #ls{display:none}
 .pm-tab{--c:11px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#102435,#0a1520);height:52px;color:#6fd6ff!important;font-size:27px!important;letter-spacing:1px!important;filter:drop-shadow(0 0 5px rgba(60,200,245,.35))}
 .pm-tab.on{--bd:#fff1a4;--fill:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 45%),linear-gradient(180deg,#ffe264,#ffc32a 55%,#eea014);color:#1a1004!important;filter:drop-shadow(0 0 10px rgba(255,190,40,.6))}
 .pm-pane{display:flex;flex-direction:column;gap:9px}
-.pm-boss{--c:9px;--bd:#1f3446;--fill:linear-gradient(180deg,#111d29,#0b141e);display:grid;grid-template-columns:100px minmax(0,1fr) auto;align-items:center;gap:16px;min-height:84px;padding:6px 14px 6px 6px}
-.pm-face{--c:7px;--bd:#2e465b;--fill:#000;display:block;width:100px;height:72px}.pm-face img{position:relative;display:block;width:96px;height:68px;margin:2px;object-fit:cover;object-position:50% 22%;clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)}
+.pm-boss{--c:9px;--bd:#1f3446;--fill:linear-gradient(180deg,#111d29,#0b141e);display:grid;grid-template-columns:100px minmax(0,1fr) auto;align-items:center;gap:16px;min-height:78px;padding:4px 14px 4px 6px}
+.pm-face{--c:7px;--bd:#2e465b;--fill:#000;display:block;width:100px;height:68px}.pm-face img{position:relative;display:block;width:96px;height:64px;margin:2px;object-fit:cover;object-position:50% 22%;clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)}
 .pm-bn{min-width:0}.pm-bn b{display:block;font:800 28px/1 var(--pm-f);color:#f4f7fa;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pm-bn em{display:block;margin-top:3px;font:800 normal 24px/1 var(--pm-f);color:#ffb81f}
 .pm-bb{display:flex;gap:12px;align-items:center;justify-content:flex-end}.pm-bb .pm-fill{width:104px}.pm-bb .pm-out{width:84px}.pm-bb .pm-wide2{width:auto;min-width:124px;font-size:18px!important}
 .pm-two{width:120px!important;height:52px!important;font-size:16px!important;line-height:1!important}
@@ -464,6 +464,32 @@ body.in-match #ls{display:none}
 /* the number box */
 .pm-jump input{background:linear-gradient(180deg,#020406,#0a0f14);box-shadow:0 0 7px rgba(255,190,40,.45),inset 0 2px 4px rgba(0,0,0,.6)}
 .pm-jump input:focus{outline:none;border-color:#ffe07a;box-shadow:0 0 12px rgba(255,205,70,.7),inset 0 2px 4px rgba(0,0,0,.6)}
+.pause-note{position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,6,10,.5);backdrop-filter:blur(2px);pointer-events:none}
+.pause-note.hidden{display:none!important}
+.pause-card{display:flex;align-items:center;gap:18px;padding:18px 34px;border:2px solid #f5b820;border-radius:6px;background:linear-gradient(180deg,rgba(20,24,30,.96),rgba(8,10,14,.96));box-shadow:0 0 22px rgba(255,190,40,.4),0 16px 40px rgba(0,0,0,.6);font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;text-align:center}
+.pause-card span{display:flex;flex-direction:column;gap:6px}
+.pause-card b{font:800 44px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:2px;color:#ffc531;text-shadow:0 2px 0 #000,0 0 14px rgba(255,190,40,.45)}
+.pause-card em{font:italic 700 24px/1.1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;color:#f4ecd8}
+.pause-card .pm-sl{display:inline-block;width:24px;height:9px;flex:none;background:linear-gradient(90deg,#ffc531 0 38%,transparent 38% 62%,#ffc531 62%);transform:skewX(-38deg)}
+@media (max-width:600px){.pause-card{padding:14px 18px;gap:10px}.pause-card b{font-size:32px}.pause-card em{font-size:18px}}
+.pm-bn em small{font:700 17px/1 var(--pm-f);color:#8fa3b3;margin-left:9px;letter-spacing:.6px}
+.ls-route{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
+.ls-route span{flex:1 1 30%;min-width:0;padding:4px 5px;border:1px solid #3c3430;border-radius:3px;background:#17130f;color:#9d8f84;font:700 10px/1.15 var(--cond,system-ui);letter-spacing:.04em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-route span i{font-style:normal;color:#f28b36;margin-right:3px}
+.ls-route span.on{border-color:#f28b36;color:#ffd2a8;background:#2a1c12}
+.map-card{position:fixed;left:50%;top:18%;z-index:50;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 40px 18px;transform:translateX(-50%);pointer-events:none;opacity:0;font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;text-align:center;
+  background:linear-gradient(90deg,transparent,rgba(6,9,13,.88) 18%,rgba(6,9,13,.88) 82%,transparent);border-top:2px solid rgba(255,197,49,.7);border-bottom:2px solid rgba(255,197,49,.7)}
+.map-card.show{animation:mapCard 5.2s ease forwards}
+.map-card small{font:800 18px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:4px;color:#ffc531}
+.map-card b{font:800 58px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:3px;color:#f4ecd8;text-shadow:0 3px 0 #000,0 0 18px rgba(255,220,160,.25);white-space:nowrap}
+.map-card span{font:italic 600 22px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;color:#c9d3da}
+.map-card em{margin-top:4px;font:700 18px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-style:normal;letter-spacing:1px;color:#ff8a6a}
+@keyframes mapCard{0%{opacity:0;transform:translate(-50%,-12px)}10%{opacity:1;transform:translate(-50%,0)}82%{opacity:1}100%{opacity:0;transform:translate(-50%,4px)}}
+@media (max-width:600px){.map-card{padding:12px 18px}.map-card b{font-size:38px}.map-card span{font-size:17px}}
+.plate-ic{width:30px;height:30px;object-fit:contain;image-rendering:auto}
+.bag-slot.legendary{border-color:#ffb347!important;background:linear-gradient(180deg,#3a2614,#1d140c)!important;box-shadow:0 0 10px rgba(255,160,50,.35) inset,0 0 8px rgba(255,160,50,.3)}
+.eq-row.plate-row{border-color:#ffb347;background:linear-gradient(90deg,rgba(255,150,40,.18),transparent);cursor:pointer}
+.eq-row.plate-row b{color:#ffd29a}
 @media (max-width:980px){.pm{align-items:flex-start}.pm-wrap{flex-direction:column;align-items:center;zoom:1}.pm-left{width:min(420px,100%)}.pm-dev,.pm-ctl{width:100%}.pm-boss{grid-template-columns:72px minmax(0,1fr)}.pm-face{width:72px;height:56px}.pm-face img{width:68px;height:52px}.pm-bb{grid-column:1/-1;flex-wrap:wrap;justify-content:flex-start}.pm-grid3,.pm-trow,.pm-t2,.pm-util{grid-template-columns:1fr 1fr}.pm-title{font-size:30px}.pm-tab{font-size:20px!important}}
 </style>
 </head>
@@ -531,7 +557,8 @@ body.in-match #ls{display:none}
   </section>
   <section class="ls-panel ls-mission">
    <div class="ls-ph"><svg viewBox="0 0 24 24" class="ic"><path d="M14.7 6.3a4 4 0 0 0 3 6.7l-8.4 8.4a2 2 0 0 1-2.8-2.8l8.4-8.4a4 4 0 0 1-.2-3.9Z"/></svg><b>MISSION SETTINGS</b><small id="lsHostNote">host only</small></div>
-   <div class="ls-map"><canvas id="lsMapThumb" width="320" height="112"></canvas><button class="ls-arrow l" id="mapPrev" aria-label="Previous map">‹</button><div class="ls-mapname"><b id="mapName">ASCENSION SITE 01</b><small id="mapSub">Research Outpost</small></div><button class="ls-arrow r" id="mapNext" aria-label="Next map">›</button></div>
+   <div class="ls-map"><canvas id="lsMapThumb" width="320" height="112"></canvas><button class="ls-arrow l hidden" id="mapPrev" aria-label="Previous map">‹</button><div class="ls-mapname"><b id="mapName">ASCENSION SITE 01</b><small id="mapSub">Research Outpost</small></div><button class="ls-arrow r hidden" id="mapNext" aria-label="Next map">›</button></div>
+   <div class="ls-route" id="lsRoute" title="The maps come in this order: 4 waves each, the boss on the 4th. Beat it and you move on."></div>
    <button class="ls-set" data-set="difficulty"><span>DIFFICULTY</span><b id="setDifficulty">NORMAL</b></button>
    <button class="ls-set" data-set="waveMode"><span>WAVE MODE</span><b id="setWaveMode">CAMPAIGN (50)</b></button>
    <button class="ls-set" data-set="friendlyFire"><span>FRIENDLY FIRE</span><b id="setFriendlyFire">OFF</b></button>
@@ -585,7 +612,7 @@ body.in-match #ls{display:none}
   <div class="hbar big"><span id="towerBar"></span></div>
   <div class="bar-label small"><b>GENERATOR</b><span id="genText">100% fuel</span></div>
   <div class="hbar thin"><span id="genBar"></span></div>
-  <div id="hiveWarn" class="hive-warn" aria-live="polite"><img src="assets/portraits/hivemind.webp" alt=""><div><small>MINI BOSS</small><b>THE HIVEMIND HAS ARRIVED</b><span>It bites, slams, leaps and spawns zombies. The wave won't end until it dies.</span></div></div>
+  <div id="hiveWarn" class="hive-warn" aria-live="polite"><img src="assets/portraits/hivemind.webp" alt=""><div><small id="hiveWarnK">MINI BOSS</small><b id="hiveWarnT">THE HIVEMIND HAS ARRIVED</b><span id="hiveWarnS">It bites, slams, leaps and spawns zombies. The wave won't end until it dies.</span></div></div>
   <div id="bossBox" class="boss hidden"><img id="bossFace" class="boss-face" alt="" hidden><div class="bar-label"><b id="bossName">BOSS</b><span id="bossText"></span></div><div class="hbar boss-bar"><span id="bossBar"></span><i class="enrage-mark" title="Enrages below 30%"></i></div></div>
  </div>
  <div class="hud hud-tr">
@@ -624,7 +651,7 @@ body.in-match #ls{display:none}
  <div id="menu" class="pm hidden" role="dialog" aria-label="Menu">
   <div class="pm-wrap">
    <section class="pm-card pm-left cf">
-    <h2 class="pm-title"><i class="pm-sl"></i>PAUSED<i class="pm-sl"></i></h2>
+    <h2 class="pm-title"><i class="pm-sl"></i><span id="pmTitle">PAUSED</span><i class="pm-sl"></i></h2>
     <button class="cf pm-resume" id="resume">RESUME</button>
     <button class="cf pm-row" id="musicToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg><span class="pm-rl">MUSIC</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
     <button class="cf pm-row" id="sfxToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="pm-rl">SOUND<br>EFFECTS</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
@@ -636,11 +663,12 @@ body.in-match #ls{display:none}
     <header class="pm-dh"><h2 class="pm-title"><i class="pm-sl"></i>DEVELOPER TOOLS<i class="pm-sl"></i></h2><span class="cf pm-host"><svg viewBox="0 0 24 24"><path d="M3 18l-1-11 6 4 4-7 4 7 6-4-1 11z" fill="currentColor"/></svg>HOST ONLY</span></header>
     <nav class="pm-tabs"><button class="cf pm-tab" data-tab="bosses">BOSSES</button><button class="cf pm-tab" data-tab="mine">DEEP MINE</button><button class="cf pm-tab" data-tab="testing">TESTING</button></nav>
     <div class="pm-pane" data-pane="bosses">
-     <div class="pm-boss cf" data-boss="butcher"><span class="pm-face cf"><img data-face="butcher" alt=""></span><span class="pm-bn"><b>THE BUTCHER</b><em>WAVE 4</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="4">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".33">33%</button><button class="cf pm-out pm-wide2" id="hookSpd"><span id="hookSpdT">HOOK SPEED</span></button></span></div>
-     <div class="pm-boss cf" data-boss="pyre"><span class="pm-face cf"><img data-face="pyre" alt=""></span><span class="pm-bn"><b>THE PYRE PRIEST</b><em>WAVE 8</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="8">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".33">33%</button></span></div>
-     <div class="pm-boss cf" data-boss="screamer"><span class="pm-face cf"><img data-face="screamer" alt=""></span><span class="pm-bn"><b>THE SCREAMER</b><em>WAVE 12</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="12">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".33">33%</button></span></div>
-     <div class="pm-boss cf" data-boss="abomination"><span class="pm-face cf"><img data-face="abomination" alt=""></span><span class="pm-bn"><b>THE ABOMINATION</b><em>WAVE 16</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="16">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".33">33%</button><button class="cf pm-out pm-two" id="skipMorph">SPLIT<br>INTO FIVE</button></span></div>
-     <div class="pm-boss pm-new cf" data-boss="minebeast"><span class="pm-face cf"><img data-face="minebeast" alt=""></span><span class="pm-bn"><b>THE MINE BEAST</b><em>WAVE 20</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="beast">FIGHT</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".66">66% · SHIELD</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".33">33% · SHIELD</button></span></div>
+     <div class="pm-boss cf" data-boss="butcher"><span class="pm-face cf"><img data-face="butcher" alt=""></span><span class="pm-bn"><b>THE BUTCHER</b><em>WAVE 4<small>ASCENSION</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="4">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".33">33%</button><button class="cf pm-out pm-wide2" id="hookSpd"><span id="hookSpdT">HOOK SPEED</span></button></span></div>
+     <div class="pm-boss cf" data-boss="hivemind"><span class="pm-face cf"><img data-face="hivemind" alt=""></span><span class="pm-bn"><b>THE ALPHA HIVEMIND</b><em>WAVE 8<small>FALLEN DYNASTY</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="8">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".33">33%</button></span></div>
+     <div class="pm-boss cf" data-boss="screamer"><span class="pm-face cf"><img data-face="screamer" alt=""></span><span class="pm-bn"><b>THE SCREAMER</b><em>WAVE 12<small>WHITEOUT STATION</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="12">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".33">33%</button></span></div>
+     <div class="pm-boss cf" data-boss="pyre"><span class="pm-face cf"><img data-face="pyre" alt=""></span><span class="pm-bn"><b>THE PYRE PRIEST</b><em>WAVE 16<small>SCORCHED REFINERY</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="16">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".33">33%</button></span></div>
+     <div class="pm-boss pm-new cf" data-boss="minebeast"><span class="pm-face cf"><img data-face="minebeast" alt=""></span><span class="pm-bn"><b>THE MINE BEAST</b><em>WAVE 20<small>THE DEEP MINE</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="beast">FIGHT</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".66">66% · SHIELD</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".33">33% · SHIELD</button></span></div>
+     <div class="pm-boss cf" data-boss="abomination"><span class="pm-face cf"><img data-face="abomination" alt=""></span><span class="pm-bn"><b>THE ABOMINATION</b><em>WAVE 24<small>THE CRUCIBLE</small></em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="24">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="24" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="24" data-pct=".33">33%</button><button class="cf pm-out pm-two" id="skipMorph">SPLIT<br>INTO FIVE</button></span></div>
      <div class="pm-util"><button class="cf pm-out" id="bossNow">BOSS INTRO NOW</button><button class="cf pm-out" id="bossEnrage">BOSS TO 25%</button><button class="cf pm-out" id="bossKill">KILL BOSS</button></div>
     </div>
     <div class="pm-pane pm-grid3" data-pane="mine">
@@ -665,6 +693,8 @@ body.in-match #ls{display:none}
   </div><button class="cf pm-out pm-full" id="pmCtlBack">BACK</button></section>
   </div>
  </div>
+ <div id="mapCard" class="map-card" aria-live="polite"><small id="mapCardN">MAP 1 OF 6</small><b id="mapCardName">ASCENSION</b><span id="mapCardSub">Research Outpost</span><em id="mapCardBoss">Boss on wave 4: THE BUTCHER</em></div>
+ <div id="pauseNote" class="pause-note hidden"><div class="pause-card"><i class="pm-sl"></i><span><b>GAME PAUSED</b><em>Game has been paused by the Game Master.</em></span><i class="pm-sl"></i></div></div>
  <div id="pmToast" class="pm-toast hidden"><i class="pm-sl"></i><span id="pmToastT"></span><i class="pm-sl"></i></div>
  <div id="bossIntro" class="boss-intro hidden" role="dialog" aria-modal="true" aria-labelledby="bossIntroName">
   <img id="bossIntroImg" class="bi-portrait" alt="">
@@ -681,5 +711,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261112i"></script>
+<script type="module" src="./client.js?v=20261112j"></script>
 </body></html>

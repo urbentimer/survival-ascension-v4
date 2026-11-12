@@ -7,7 +7,7 @@ const { SurvivalRoom } = await import(join(here, "dist/room-test.mjs"));
 process.env.SA_QUIET = "1";
 const room = new SurvivalRoom(); room.onCreate({}); room._onBroadcast = () => {};
 const H = { sessionId: "H" }; room.onJoin(H, { name: "Host" }); const send = (c, t, d) => room._handlers[t](c, d);
-send(H, "settings", { map: 6 }); send(H, "start", {}); const p = room.state.players.get("H");
+room.fixedSite = true; room.loadSite(6); send(H, "start", {});   /* (Nov 12: no map choice in the lobby any more) */ const p = room.state.players.get("H");
 let t = Date.now(); const tick = n => { for (let i = 0; i < n; i++) { t += 50; room.lastTick = t - 50; const real = Date.now; Date.now = () => t; try { room.tick(); } finally { Date.now = real; } p.hp = p.maxHp; p.alive = true; room.state.towerHp = 10000; room.spawnClock = 1e9; room.state.elapsed = 5; } };
 const W = 6000, HH = 4000, K = room.cordon, inDun = (x, y) => x > K.x - 30 && y > K.y - 45, problems = [];
 let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;

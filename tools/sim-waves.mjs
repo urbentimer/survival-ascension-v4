@@ -13,7 +13,7 @@ for (let i = 0; i < Number(process.env.SA_BOTS ?? 7); i++) send(H, "addBot");   
 const classes = ["engineer", "scout", "demolitionist", "assault", "juggernaut", "dispatcher", "operator", "sniper"]; let ci = 0;
 for (const p of room.state.players.values()) { p.characterClass = classes[ci++ % classes.length]; }
 const host = room.state.players.get("H"); host.isBot = true; room.botBrain.set("H", { strafe: 1, nextThink: 0 });
-if (process.env.SA_SITE) send(H, "settings", { map: Number(process.env.SA_SITE) });   // e.g. SA_SITE=3: Fallen Dynasty (painted map)
+if (process.env.SA_SITE) { room.fixedSite = true; room.loadSite(Number(process.env.SA_SITE)); }   /* (Nov 12) one map only; without SA_SITE the team follows the map order */   // e.g. SA_SITE=3: Fallen Dynasty (painted map)
 send(H, "start", {});
 const bad = [], inside = {};   // inside: survivors / zombies found standing inside a solid map piece
 function scan(tag) {
