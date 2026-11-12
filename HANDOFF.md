@@ -615,3 +615,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - The user asked to slow it down: the whole source track was time-stretched to 85% with ffmpeg `rubberband` (tempo=0.85, pitch and formants kept, crisp transients), then the same bars 40-112 loop re-cut from it (S, E, bar grid x 1/0.85; one-bar crossfade; starts at bar 80). 87.5 BPM, 200.166 s (8,827,320 samples). `MUSIC_LOOP.pyre.len = 8827320 / 44100`.
 - Stretch the SOURCE, not the finished loop: the file's wrap stays contiguous audio (stretching a tripled loop and cutting the middle gave a 0.43-correlated wrap).
 - Cache `20261113a`; next `20261113b`.
+
+## Nov 12 — Pyre Priest theme: back to the first track
+- The user re-sent the first track (byte-identical to Pyre_Priest_boss_theme.mp4) and asked for it at normal speed: restored the original game file (/home/claude/work/pyre/music_boss_pyre.mp3, same as commit b30824e) and `MUSIC_LOOP.pyre.len = 180.834`. The second track's work is kept in /home/claude/work/pyre2 if wanted again.
+- Cache `20261113b`; next `20261113c`.
