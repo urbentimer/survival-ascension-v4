@@ -602,7 +602,7 @@ export class SurvivalRoom extends Room {
     // Solo preview only: spawn 5 of one zombie type close to you (to look at new art).
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
-      if (!this.solo || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer", "abomination"].includes(kind)) return;
+      if (!(this.solo || client.sessionId === this.state.hostId) || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer", "abomination"].includes(kind)) return;
       if (kind === "abomination") { this.spawnZombie(true, "abomination"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Abomination"; return; }
       if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
       if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
@@ -620,7 +620,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("ult", (client, data) => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
       const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { p.aim = a; this.lastAimAt.set(client.sessionId, Date.now()); }
       this.useUlt(p, data); });
-    this.onMessage("debugUlt", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.ultKills = ULT_KILLS; this.state.message = "Test: ultimate unlocked (100 kills)"; } });
+    this.onMessage("debugUlt", client => { const p = this.state.players.get(client.sessionId); if ((this.solo || client.sessionId === this.state.hostId) && p) { p.ultKills = ULT_KILLS; this.state.message = "Test: ultimate unlocked (100 kills)"; } });
     this.onMessage("ackBoss", client => {
       const p = this.state.players.get(client.sessionId); if (!p || this.state.bossPhase !== "intro") return;
       this.introAcks.add(client.sessionId); this.state.introReady = this.introAcks.size;
@@ -635,19 +635,24 @@ export class SurvivalRoom extends Room {
     this.onMessage("deep", client => { const p = this.state.players.get(client.sessionId); if (this.mine && p?.alive && this.state.phase === "playing" && !(p.ride > 0)) this.mineUse(p); });   // F in the mine mission: take a rune / put it in the statue
     this.onMessage("debugMine", (client, data) => {   // test menu: start the mine mission (wave 20); {k: "rune"} = a rune goes straight in, {k: "fuel"} = full fuel
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
-      if (!this.mine) { this.jumpToWave(DEEP.wave); if (!this.solo) this.state.message = "Host skipped to the mine mission"; if (data?.k === "boss" && this.mine) this.mineAwaken(); return; }
-      if (data?.k === "boss") { if (this.mine.step === "runes") this.mineAwaken(); return; }
+      const k = data?.k, pct = Number(data?.pct) > 0 && Number(data?.pct) < 1 ? Number(data.pct) : 0;   // Nov 12 (the new Esc menu): {k: "boss", pct: .66 / .33} = the Beast at that HP (its shield run comes up); {k: "chase"} / {k: "escape"} = straight to the end of the mission
+      if (!this.mine) { this.jumpToWave(DEEP.wave); if (!this.solo) this.state.message = "Host skipped to the mine mission"; if (!this.mine || !["boss", "chase", "escape"].includes(k)) return; }
+      const m = this.mine;
+      if (k === "boss") { this.beastHpOnArrival = pct; if (m.step === "runes") this.mineAwaken(); else if (m.step === "fight" && pct) this.beastSetHp(pct); return; }
+      if (k === "chase" || k === "escape") { if (m.step === "runes") this.mineAwaken(); if (m.step === "awake") this.mineFight(); if (m.step === "fight") { const z = this.state.zombies.get(m.beast); if (z) this.mineFlee(z); } if (m.step === "flee") this.mineChase(); if (k === "escape" && m.step === "chase") this.mineEscape(); return; }
       if (data?.k === "fuel") this.mine.fuel = DEEP.fuelMax; else if (data?.k === "rune" && this.mine.step === "runes") { const r = this.mine.runes.find(q => q.st !== 3); if (r) this.mineInsert(r); }
     });
     this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
-      this.skipToBoss(Math.round(Number(data?.wave)));
+      const w = Math.round(Number(data?.wave)), pct = Number(data?.pct);   // Nov 12 (the new Esc menu): {pct: .66 / .33} = the boss arrives (or is set) at that much HP
+      const here = [...this.state.zombies.values()].find(q => q.boss); if (pct > 0 && pct < 1 && here && this.state.bossPhase === "fight" && this.state.stage === w) { here.hp = here.maxHp * pct; this.state.message = `Test: the boss at ${Math.round(pct * 100)}% HP`; return; }
+      this.bossHpOnArrival = pct > 0 && pct < 1 ? pct : 0; this.skipToBoss(w);
     });
 
     // Solo preview only: kill the boss (to watch it die) or knock it to 25% HP (to see it enrage).
     this.onMessage("debugBossHp", (client, data) => {
       const p = this.state.players.get(client.sessionId), z = [...this.state.zombies.values()].find(q => q.boss) || [...this.state.zombies.values()].find(q => q.kind === "hivemind");
-      if (!this.solo || !p || !z) return;
+      if (!(this.solo || client.sessionId === this.state.hostId) || !p || !z) return;
       if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
     });
     this.onMessage("clientError", (client, data) => {   // errors from players' browsers (drawing, UI, connection) -> the game log
@@ -655,7 +660,7 @@ export class SurvivalRoom extends Room {
       this.log(data?.lv === "warn" ? "warn" : "error", "client", String(data?.m || ""), client, { browser: String(data?.ua || "").slice(0, 80) });
     });
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked from the start (cooldowns still apply)" : "Test mode off: ultimates unlock at 100 kills"; });
-    this.onMessage("debugHookSpeed", () => { if (this.solo) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
+    this.onMessage("debugHookSpeed", client => { if (this.solo || client.sessionId === this.state.hostId) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
     // Test tool (preview, or the host online): exactly enough XP for one more level; the player still picks the upgrade
     this.onMessage("debugLevel", client => {
       const p = this.state.players.get(client.sessionId); if (!p || !(this.solo || client.sessionId === this.state.hostId) || this.state.phase === "lobby") return;
@@ -911,6 +916,7 @@ export class SurvivalRoom extends Room {
       const cx = alive.reduce((a, p) => a + p.x, 0) / alive.length, cy = alive.reduce((a, p) => a + p.y, 0) / alive.length, ang = Math.random() * Math.PI * 2;
       z.x = clamp(cx + Math.cos(ang) * 650, 60, this.A.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, this.A.height - 60); this.solveZombie(z);
     }
+    if (this.bossHpOnArrival && z) { z.hp = z.maxHp * this.bossHpOnArrival; this.bossHpOnArrival = 0; }   // (test menu: the boss arrives at 66% / 33%)
     if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 330, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
     if (z && this.bossDoor) { z.x = this.bossDoor.x; z.y = this.bossDoor.y; z.aim = Math.PI / 2; this.solveZombie(z); this.broadcast("pyramid", { x: Math.round(z.x), y: Math.round(z.y) }); }
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
@@ -3036,10 +3042,15 @@ export class SurvivalRoom extends Room {
     s.zombies.set(z.id, z); m.beast = z.id; m.step = "fight"; m.haz = []; m.crystals = BEAST.crystals.n; m.boulders = []; this.bossMem.delete(z.id);
     this.beastBoxes = mapBoxes([this.minePieces.statue, this.minePieces.portal].filter(Boolean));
     s.message = "THE MINE BEAST IS AWAKE!"; this.broadcast("deep", { k: "fight" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) }); this.mineSync();
+    if (this.beastHpOnArrival) { const pct = this.beastHpOnArrival; this.beastHpOnArrival = 0; this.beastSetHp(pct); }   // (test menu: straight to its 66% / 33% shield run)
   }
   mineFlee(z) {   // its bar is empty: it drops to a knee. Everyone gets to the carts (F at the boss stop); then it comes after them
     const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; m.boulders = []; m.shield = null; this.dropShieldStop(); z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
     this.state.message = "IT WON'T STAY DOWN: GET IN THE CARTS!"; this.broadcast("deep", { k: "flee", len: BEAST.fleeWait }); this.mineSync();
+  }
+  beastSetHp(pct) {   // (test menu) the Beast at 66% / 33%: the matching shield run comes up next
+    const m = this.mine, z = m && this.state.zombies.get(m.beast); if (!z || z.kind !== "minebeast" || m.step !== "fight") return;
+    if (m.shield) { m.shield = null; this.dropShieldStop(); } z.hp = z.maxHp * (pct - .001); m.shieldsDone = pct <= .34 ? 1 : 0; z.act = ""; z.slam = 0; const bm = this.bossMem.get(z.id); if (bm) bm.next = 0; this.mineSync();
   }
   mineChase() {   // everyone left in the dungeon is put in the carts (the downed are pulled aboard), and it comes after them
     const m = this.mine, s = this.state, C = this.coaster, ST = this.minePieces.statue;

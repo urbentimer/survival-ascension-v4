@@ -110,8 +110,6 @@ body.in-match main.wrap{display:none}
 button.bag-slot{border-style:solid;border-color:#7fa6b0;background:#1b2a31;cursor:pointer}button.bag-slot:hover,button.bag-slot:focus-visible{border-color:#f28b36;outline:none}
 .bag-slot small{display:block;color:#9aa8ad;font-size:9px;margin-top:2px}
 button.bag-slot.sel{border-color:#f28b36;background:#2c2219;box-shadow:inset 0 0 0 1px #f28b36}
-.menu{top:50%;transform:translate(-50%,-50%);width:min(560px,94vw)}
-.menu-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.menu-actions .button{flex:1}
 .controls{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px}.controls div{display:flex;justify-content:space-between;gap:8px;align-items:center}.controls span{color:#cdd6d3;text-align:right}
 @media(max-width:520px){.controls{grid-template-columns:1fr}}
 #gameArea .overlay{position:absolute;inset:0;z-index:8}.break-btns{display:flex;gap:8px;margin:12px 0 6px}.break-btns .button{flex:1}.button.is-ready{background:#2f6b45;border-color:#7fd39b}.break-bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:7;display:flex;gap:10px;align-items:center;background:#0d1418ee;border:1px solid #65737a;border-top:2px solid var(--orange);border-radius:4px;padding:7px 10px;font-size:13px;white-space:nowrap;max-width:calc(100% - 24px)}.break-bar b{letter-spacing:.08em;color:#ffd27a}.break-bar .button{padding:6px 10px;font-size:12px}
@@ -348,6 +346,68 @@ body.in-match #ls{display:none}
  .ls-stage{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ls-side{grid-column:1/-1}.ls-hero{min-height:240px}}
 @media (max-width:640px){.ls-stage{grid-template-columns:minmax(0,1fr)}.ls-bottom{grid-template-columns:minmax(0,1fr)}.ls-nav button{padding:10px 12px;font-size:15px}.ls-logo b{font-size:26px}.ls-filters{flex-wrap:wrap}}
 .ls canvas{background:transparent;border:0;border-radius:0}
+
+/* ===== ESC MENU (Nov 12: the user's ChatGPT design) ===== */
+.pm{--pm-f:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;--pm-gold:#ffc531;position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,6,10,.58);backdrop-filter:blur(3px);overflow:auto}
+.pm.hidden,.pm .hidden,.pm-toast.hidden{display:none!important}
+.pm-wrap{display:flex;gap:18px;align-items:stretch;justify-content:center;zoom:var(--pmz,1)}
+.cf{position:relative;isolation:isolate;--c:7px;--bw:2px;--bd:#2f4a60;--fill:#0d1823;background:none;border:0}
+.cf::before,.cf::after{content:"";position:absolute;pointer-events:none;clip-path:polygon(var(--c) 0,calc(100% - var(--c)) 0,100% var(--c),100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,var(--c) 100%,0 calc(100% - var(--c)),0 var(--c))}
+.cf::before{inset:0;z-index:-2;background:var(--bd)}.cf::after{inset:var(--bw);z-index:-1;background:var(--fill);--c:calc(var(--c) - 1px)}
+.pm button{cursor:pointer;color:#f2f6fa;font-family:var(--pm-f);font-weight:800;letter-spacing:.4px;padding:0;margin:0;line-height:1.05}
+.pm button:disabled{opacity:.36;cursor:not-allowed;filter:none!important}
+.pm-card{--c:16px;--bw:2px;--bd:linear-gradient(180deg,#4a93c4,#1b3449 30%,#1b3449 70%,#2f6a92);--fill:linear-gradient(180deg,#0e1823,#090f16);padding:14px 18px 18px;filter:drop-shadow(0 0 9px rgba(40,165,235,.28)) drop-shadow(0 12px 26px rgba(0,0,0,.6))}
+.pm-left{width:330px;flex:none;display:flex;flex-direction:column;gap:12px;justify-content:space-between}
+.pm-dev{width:910px;max-width:100%;min-height:690px;display:flex;flex-direction:column;gap:12px}
+.pm-ctl{width:720px;max-width:100%}
+.pm-title{display:flex;align-items:center;justify-content:center;gap:16px;margin:0;padding:4px 0 12px;border-bottom:2px solid #18293a;font:800 38px/1 var(--pm-f);letter-spacing:1.5px;color:#f4ecd8;text-shadow:0 2px 0 #000,0 0 10px rgba(255,235,200,.15)}
+.pm-sl{display:inline-block;width:24px;height:9px;flex:none;background:linear-gradient(90deg,var(--pm-gold) 0 38%,transparent 38% 62%,var(--pm-gold) 62%);transform:skewX(-38deg);filter:drop-shadow(0 0 4px rgba(255,190,40,.6))}
+.pm-resume{flex:none;--c:10px;--bd:linear-gradient(180deg,#fff6c0,#e9a417);--fill:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 42%),linear-gradient(118deg,transparent 0 7%,rgba(140,80,0,.28) 7% 7.6%,transparent 7.6% 10%,rgba(140,80,0,.2) 10% 10.5%,transparent 10.5% 89.5%,rgba(140,80,0,.2) 89.5% 90%,transparent 90% 92.4%,rgba(140,80,0,.28) 92.4% 93%,transparent 93%),linear-gradient(180deg,#ffe468,#ffc52b 52%,#ee9e12);height:84px;color:#1a1004!important;font:800 italic 46px/1 var(--pm-f)!important;letter-spacing:1px;filter:drop-shadow(0 0 12px rgba(255,190,40,.55))}
+.pm-resume:hover{filter:drop-shadow(0 0 18px rgba(255,200,60,.8))}
+.pm-row{--c:8px;--bd:#25394b;--fill:linear-gradient(180deg,#132030,#0d1620);display:flex;align-items:center;gap:12px;width:100%;height:70px;padding:0 12px 0 14px!important;text-align:left;font-size:22px!important}
+.pm-ico{width:30px;height:30px;flex:none;color:#eef2f6}
+.pm-rl{flex:1}
+.pm-sw{position:relative;width:96px;height:40px;flex:none;border-radius:22px;border:2px solid #3fd0ff;background:#061119;box-shadow:0 0 10px rgba(63,208,255,.55),inset 0 0 9px rgba(63,208,255,.22)}
+.pm-sw-t{position:absolute;left:15px;top:50%;transform:translateY(-50%);font:800 19px/1 var(--pm-f);color:#6fe0ff}.pm-sw-t::before{content:"ON"}
+.pm-sw-k{position:absolute;right:5px;top:50%;width:28px;height:28px;transform:translateY(-50%);border-radius:50%;background:radial-gradient(circle at 38% 32%,#f2fdff,#55dbff 52%,#119ad3);box-shadow:0 0 10px #3fd0ff}
+.off .pm-sw{border-color:#5a646e;background:#0a0e12;box-shadow:inset 0 0 7px rgba(0,0,0,.7)}.off .pm-sw-t{left:auto;right:14px;color:#98a2ab}.off .pm-sw-t::before{content:"OFF"}.off .pm-sw-k{right:auto;left:5px;background:radial-gradient(circle at 38% 32%,#e4e8ec,#8e979f 58%,#5d656c);box-shadow:none}
+.pm-code{--c:8px;--bd:#25394b;--fill:linear-gradient(180deg,#132030,#0d1620);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.pm-code label{font:800 19px/1 var(--pm-f);color:#ebeff3;letter-spacing:.5px}
+.pm-code-r{display:flex;gap:12px}
+#pmCode{--c:6px;--bd:#46535e;--fill:#060a0e;flex:1;display:flex;align-items:center;justify-content:center;height:54px;font:800 36px/1 var(--pm-f);letter-spacing:3px;color:#fff}
+.pm-out{--c:7px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#0f2131,#0a1520);height:46px;padding:0 14px!important;font-size:20px!important;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
+.pm-out:hover:not(:disabled){--fill:linear-gradient(180deg,#183551,#0f2335);filter:drop-shadow(0 0 9px rgba(80,215,255,.75))}
+.pm-cyan{color:#6fe0ff!important;width:96px;height:54px!important;font-size:22px!important}
+.pm-fill{--c:7px;--bd:#b6f6ff;--fill:linear-gradient(180deg,#8ef2ff,#36cbf6 55%,#14a8e2);height:46px;color:#04202e!important;font-size:22px!important;filter:drop-shadow(0 0 9px rgba(70,215,255,.7))}
+.pm-fill:hover:not(:disabled){filter:drop-shadow(0 0 14px rgba(110,230,255,.95))}
+.pm-full{width:100%;height:48px}
+.pm .pm-leave{margin-top:6px}.pm-leave{--c:8px;--bd:#ff3a3a;--fill:linear-gradient(180deg,#3f0d12,#250609);width:100%;height:62px;display:flex;align-items:center;justify-content:center;gap:12px;color:#ff4d4d!important;font-size:32px!important;letter-spacing:1px!important;text-shadow:0 0 9px rgba(255,60,60,.6);filter:drop-shadow(0 0 8px rgba(255,50,50,.55))}
+.pm-leave .pm-ico{color:currentColor;width:32px;height:32px}
+.pm-leave.sure{--bd:#ff9a9a;--fill:linear-gradient(180deg,#ff5050,#d81a1a);color:#2b0304!important;text-shadow:none;font-size:26px!important}.pm-leave.sure .pm-ico{display:none}
+.pm-dh{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #18293a}.pm-dh .pm-title{border:0;padding-left:8px}
+.pm-host{--c:7px;--bd:#f5b820;--fill:#110d03;display:flex;align-items:center;gap:8px;padding:7px 15px;margin:0 6px 8px 0;color:#ffc531;font:800 21px/1 var(--pm-f);letter-spacing:.5px;filter:drop-shadow(0 0 6px rgba(255,190,40,.45))}.pm-host svg{width:24px;height:24px}
+.pm-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pm-tab{--c:11px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#102435,#0a1520);height:52px;color:#6fd6ff!important;font-size:27px!important;letter-spacing:1px!important;filter:drop-shadow(0 0 5px rgba(60,200,245,.35))}
+.pm-tab.on{--bd:#fff1a4;--fill:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 45%),linear-gradient(180deg,#ffe264,#ffc32a 55%,#eea014);color:#1a1004!important;filter:drop-shadow(0 0 10px rgba(255,190,40,.6))}
+.pm-pane{display:flex;flex-direction:column;gap:9px}
+.pm-boss{--c:9px;--bd:#1f3446;--fill:linear-gradient(180deg,#111d29,#0b141e);display:grid;grid-template-columns:100px minmax(0,1fr) auto;align-items:center;gap:16px;min-height:84px;padding:6px 14px 6px 6px}
+.pm-face{--c:7px;--bd:#2e465b;--fill:#000;display:block;width:100px;height:72px}.pm-face img{position:relative;display:block;width:96px;height:68px;margin:2px;object-fit:cover;object-position:50% 22%;clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)}
+.pm-bn{min-width:0}.pm-bn b{display:block;font:800 28px/1 var(--pm-f);color:#f4f7fa;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pm-bn em{display:block;margin-top:3px;font:800 normal 24px/1 var(--pm-f);color:#ffb81f}
+.pm-bb{display:flex;gap:12px;align-items:center;justify-content:flex-end}.pm-bb .pm-fill{width:104px}.pm-bb .pm-out{width:84px}.pm-bb .pm-wide2{width:auto;min-width:124px;font-size:18px!important}
+.pm-two{width:120px!important;height:52px!important;font-size:16px!important;line-height:1!important}
+.pm-new{--bd:linear-gradient(90deg,#ffcf57,#ffae22);--fill:linear-gradient(180deg,#1e180b,#120e06);filter:drop-shadow(0 0 10px rgba(255,180,40,.55))}
+.pm-util{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}.pm-util .pm-out{height:52px;font-size:23px!important}
+.pm-grid3{display:grid!important;grid-template-columns:repeat(3,1fr);gap:16px;padding:6px 0}.pm-big{height:108px;font-size:24px!important;line-height:1.1!important}
+.pm-trow{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px}.pm-t2{grid-template-columns:1fr 1fr}
+.pm-jump{--c:8px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#0f2131,#0a1520);display:flex;align-items:center;gap:10px;height:68px;padding:0 12px;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
+.pm-jump label{flex:1;white-space:nowrap;font:800 21px/1 var(--pm-f);color:#f2f6fa}
+.pm-jump input{width:60px;height:46px;border:2px solid #f5b820;border-radius:3px;background:#05080b;color:#fff;text-align:center;font:800 28px/1 var(--pm-f);-moz-appearance:textfield;box-shadow:0 0 6px rgba(255,190,40,.4)}.pm-jump input::-webkit-inner-spin-button,.pm-jump input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pm-gold{--c:6px;--bd:#fff1a4;--fill:linear-gradient(180deg,#ffe264,#ffc32a 55%,#eea014);width:60px;height:46px;color:#1a1004!important;font-size:25px!important;filter:drop-shadow(0 0 7px rgba(255,190,40,.6))}
+.pm-trow-sw{--bd:#3cc8f5;height:68px;font-size:21px!important;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
+.pm-spawn{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px}.pm-spawn span{font:800 17px/1 var(--pm-f);color:#9fb3c2;margin-right:4px}.pm-spawn .pm-out{height:38px;font-size:16px!important;padding:0 11px!important}
+.pm-keys{margin:14px 4px 16px;gap:10px 22px!important;font-family:"Barlow",Inter,sans-serif;font-size:15px}.pm-keys div{justify-content:flex-start!important;gap:12px!important}.pm-keys span{color:#d6dde3;text-align:left!important}.pm-keys kbd{flex:none;min-width:34px;text-align:center;font:700 12px/1 ui-monospace,Menlo,monospace!important;padding:5px 7px!important;border:1px solid #3cc8f5!important;border-radius:3px;background:#0b1824!important;color:#bfefff!important}
+.pm-toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:14px;padding:9px 28px;border:2px solid #f5b820;border-radius:30px;background:rgba(7,9,12,.92);color:#fff;font:800 italic 23px/1 "Barlow Condensed",system-ui,sans-serif;box-shadow:0 0 14px rgba(255,190,40,.45);pointer-events:none;white-space:nowrap}
+@media (max-width:980px){.pm{align-items:flex-start}.pm-wrap{flex-direction:column;align-items:center;zoom:1}.pm-left{width:min(420px,100%)}.pm-dev,.pm-ctl{width:100%}.pm-boss{grid-template-columns:72px minmax(0,1fr)}.pm-face{width:72px;height:56px}.pm-face img{width:68px;height:52px}.pm-bb{grid-column:1/-1;flex-wrap:wrap;justify-content:flex-start}.pm-grid3,.pm-trow,.pm-t2,.pm-util{grid-template-columns:1fr 1fr}.pm-title{font-size:30px}.pm-tab{font-size:20px!important}}
 </style>
 </head>
 <body><main class="wrap">
@@ -504,10 +564,39 @@ body.in-match #ls{display:none}
   <div class="panel-head"><b>EQUIPMENT</b><span>T or Esc to close</span></div>
   <div class="equip-body"><div id="equipped" class="equipped"></div><div><div class="equip-sub">BACKPACK <span id="bagCount">0 / 20</span></div><div id="bag" class="bag"></div><div id="bagInfo" class="muted panel-hint">Double-click an item to equip it.</div></div></div>
  </div>
- <div id="menu" class="panel menu hidden" role="dialog" aria-label="Menu">
-  <div class="panel-head"><b>MENU</b><span>Esc to close</span></div>
-  <div class="menu-actions"><button class="button primary" id="resume">Resume</button><button class="button hidden" id="exploreToggle">Explore mode: OFF</button><button class="button hidden" id="skipButcher">Skip to Butcher fight (host)</button><button class="button hidden" id="skipPyre">Skip to Pyre Priest fight (host)</button><button class="button hidden" id="skipScreamer">Skip to Screamer fight (host)</button><button class="button hidden" id="skipAbom">Skip to Abomination fight (host)</button><button class="button hidden" id="skipMorph">Abomination: skip to the split into Five (host)</button><button class="button hidden" id="skipMine">Start the Deep Mine mission · wave 20 (host)</button><button class="button hidden" id="skipBeast">Skip to the Mine Beast fight (host)</button><button class="button hidden" id="mineFuel">Mine mission: full fuel (host)</button><button class="button hidden" id="mineRune">Mine mission: put the next rune in (host)</button><button class="button hidden" id="noCdToggle">Test: ultimates unlocked from the start</button><div id="waveJump" class="wave-jump hidden"><label for="waveJumpN">Skip to wave (host)</label><input id="waveJumpN" type="number" min="1" max="50" value="4" inputmode="numeric"><button class="button" id="waveJumpGo">Go</button><small>or press [ and ] in game</small><button class="button" id="levelPlus" title="Test: enough XP for one more level (you still pick the upgrade)">Level +1</button><span class="spawn-row"><button class="button" id="bossNow">Boss intro now</button><button class="button" id="bossEnrage">Boss to 25%</button><button class="button" id="bossKill">Kill boss</button><button class="button" id="hookSpd">Hook speed</button><button class="button" id="ultNow">Unlock ultimate</button></span><span class="spawn-row">Spawn 5 near you: <button class="button" data-spawn="walker">Walker</button><button class="button" data-spawn="runner">Runner</button><button class="button" data-spawn="brute">Brute</button><button class="button" data-spawn="spitter">Spitter</button><button class="button" data-spawn="mutant">Mutant</button><button class="button" data-spawn="pyre">Pyre Priest</button><button class="button" data-spawn="screamer">Screamer</button><button class="button" data-spawn="abomination">Abomination</button><button type="button" class="button" data-spawn="hivemind">Hivemind</button></span></div><button class="button" id="musicToggle">Music: ON</button><button class="button" id="sfxToggle">Sound effects: ON</button><button class="button" id="leave">Leave room</button></div>
-  <div class="controls">
+ <div id="menu" class="pm hidden" role="dialog" aria-label="Menu">
+  <div class="pm-wrap">
+   <section class="pm-card pm-left cf">
+    <h2 class="pm-title"><i class="pm-sl"></i>PAUSED<i class="pm-sl"></i></h2>
+    <button class="cf pm-resume" id="resume">RESUME</button>
+    <button class="cf pm-row" id="musicToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg><span class="pm-rl">MUSIC</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
+    <button class="cf pm-row" id="sfxToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="pm-rl">SOUND<br>EFFECTS</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
+    <div class="cf pm-code"><label>ROOM CODE</label><div class="pm-code-r"><output class="cf" id="pmCode">····</output><button class="cf pm-out pm-cyan" id="pmCopy">COPY</button></div></div>
+    <button class="cf pm-out pm-full" id="pmControls">CONTROLS</button>
+    <button class="cf pm-leave" id="leave"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M10 4H5v16h5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 12h11M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="leaveTxt">LEAVE ROOM</span></button>
+   </section>
+   <section class="pm-card pm-dev cf hidden" id="pmDev">
+    <header class="pm-dh"><h2 class="pm-title"><i class="pm-sl"></i>DEVELOPER TOOLS<i class="pm-sl"></i></h2><span class="cf pm-host"><svg viewBox="0 0 24 24"><path d="M3 18l-1-11 6 4 4-7 4 7 6-4-1 11z" fill="currentColor"/></svg>HOST ONLY</span></header>
+    <nav class="pm-tabs"><button class="cf pm-tab" data-tab="bosses">BOSSES</button><button class="cf pm-tab" data-tab="mine">DEEP MINE</button><button class="cf pm-tab" data-tab="testing">TESTING</button></nav>
+    <div class="pm-pane" data-pane="bosses">
+     <div class="pm-boss cf" data-boss="butcher"><span class="pm-face cf"><img data-face="butcher" alt=""></span><span class="pm-bn"><b>THE BUTCHER</b><em>WAVE 4</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="4">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="4" data-pct=".33">33%</button><button class="cf pm-out pm-wide2" id="hookSpd">HOOK SPEED</button></span></div>
+     <div class="pm-boss cf" data-boss="pyre"><span class="pm-face cf"><img data-face="pyre" alt=""></span><span class="pm-bn"><b>THE PYRE PRIEST</b><em>WAVE 8</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="8">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="8" data-pct=".33">33%</button></span></div>
+     <div class="pm-boss cf" data-boss="screamer"><span class="pm-face cf"><img data-face="screamer" alt=""></span><span class="pm-bn"><b>THE SCREAMER</b><em>WAVE 12</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="12">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="12" data-pct=".33">33%</button></span></div>
+     <div class="pm-boss cf" data-boss="abomination"><span class="pm-face cf"><img data-face="abomination" alt=""></span><span class="pm-bn"><b>THE ABOMINATION</b><em>WAVE 16</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="boss" data-wave="16">FIGHT</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".66">66%</button><button class="cf pm-out" data-act="boss" data-wave="16" data-pct=".33">33%</button><button class="cf pm-out pm-two" id="skipMorph">SPLIT<br>INTO FIVE</button></span></div>
+     <div class="pm-boss pm-new cf" data-boss="minebeast"><span class="pm-face cf"><img data-face="minebeast" alt=""></span><span class="pm-bn"><b>THE MINE BEAST</b><em>WAVE 20</em></span><span class="pm-bb"><button class="cf pm-fill" data-act="beast">FIGHT</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".66">66% · SHIELD</button><button class="cf pm-out pm-wide2" data-act="beast" data-pct=".33">33% · SHIELD</button></span></div>
+     <div class="pm-util"><button class="cf pm-out" id="bossNow">BOSS INTRO NOW</button><button class="cf pm-out" id="bossEnrage">BOSS TO 25%</button><button class="cf pm-out" id="bossKill">KILL BOSS</button></div>
+    </div>
+    <div class="pm-pane pm-grid3" data-pane="mine">
+     <button class="cf pm-out pm-big" id="skipMine">START MISSION<br>(WAVE 20)</button><button class="cf pm-out pm-big" id="mineFuel">FULL FUEL</button><button class="cf pm-out pm-big" id="mineRune">PUT NEXT<br>RUNE IN</button>
+     <button class="cf pm-out pm-big" id="skipBeast">SKIP TO<br>MINE BEAST</button><button class="cf pm-out pm-big" id="mineChase">SKIP TO<br>THE CHASE</button><button class="cf pm-out pm-big" id="mineEscape">SKIP TO<br>THE ESCAPE</button>
+    </div>
+    <div class="pm-pane" data-pane="testing">
+     <div class="pm-trow"><div class="cf pm-jump" id="waveJump"><label for="waveJumpN">JUMP TO WAVE</label><input id="waveJumpN" type="number" min="1" max="50" value="4" inputmode="numeric"><button class="cf pm-gold" id="waveJumpGo">GO</button></div><button class="cf pm-out pm-big" id="levelPlus" title="Enough XP for one more level (you still pick the upgrade)">LEVEL +1</button><button class="cf pm-out pm-big" id="ultNow">UNLOCK<br>ULTIMATE</button></div>
+     <div class="pm-trow pm-t2"><button class="cf pm-row pm-trow-sw" id="noCdToggle"><span class="pm-rl">ULTIMATES FROM<br>THE START</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button><button class="cf pm-row pm-trow-sw" id="exploreToggle"><span class="pm-rl">EXPLORE<br>MODE</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button></div>
+     <div class="pm-spawn" id="pmSpawn"><span>SPAWN NEAR YOU</span><button class="cf pm-out" data-spawn="walker">WALKER ×5</button><button class="cf pm-out" data-spawn="runner">RUNNER ×5</button><button class="cf pm-out" data-spawn="brute">BRUTE ×5</button><button class="cf pm-out" data-spawn="spitter">SPITTER ×5</button><button class="cf pm-out" data-spawn="mutant">MUTANT ×5</button><button class="cf pm-out" data-spawn="hivemind">HIVEMIND</button></div>
+    </div>
+   </section>
+   <section class="pm-card pm-ctl cf hidden" id="pmCtl"><h2 class="pm-title"><i class="pm-sl"></i>CONTROLS<i class="pm-sl"></i></h2><div class="controls pm-keys">
    <div><kbd>W A S D</kbd><span>Walk</span></div><div><kbd>Left click</kbd><span>Use what's in your hand (hold: rifle/SMG)</span></div>
    <div><kbd>1</kbd><span>Melee (press again to switch)</span></div><div><kbd>2</kbd><span>Primary gun (press again to switch)</span></div>
    <div><kbd>3</kbd><span>Secondary gun</span></div><div><kbd>E</kbd><span>Class skill (Viktor: hold to pick robots)</span></div><div><kbd>Q</kbd><span>Ultimate</span></div>
@@ -516,8 +605,10 @@ body.in-match #ls{display:none}
    <div><kbd>T</kbd><span>Equipment</span></div><div><kbd>Hold right-click</kbd><span>Build wheel (release on an option)</span></div>
    <div><kbd>U</kbd><span>Level-up picker</span></div><div><kbd>Space</kbd><span>Dash</span></div>
    <div><kbd>Tab</kbd><span>Scoreboard</span></div><div><kbd>Esc</kbd><span>This menu</span></div>
+  </div><button class="cf pm-out pm-full" id="pmCtlBack">BACK</button></section>
   </div>
  </div>
+ <div id="pmToast" class="pm-toast hidden"><i class="pm-sl"></i><span id="pmToastT"></span><i class="pm-sl"></i></div>
  <div id="bossIntro" class="boss-intro hidden" role="dialog" aria-modal="true" aria-labelledby="bossIntroName">
   <img id="bossIntroImg" class="bi-portrait" alt="">
   <div class="bi-card">
@@ -533,5 +624,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261112g"></script>
+<script type="module" src="./client.js?v=20261112h"></script>
 </body></html>

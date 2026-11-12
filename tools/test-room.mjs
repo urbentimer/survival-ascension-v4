@@ -1569,4 +1569,27 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (let i = 0; i < 10; i++) build(A, a, "mine", i); ok(own("A", "mine").length === 8, "mines cap at 8");
   for (let i = 0; i < 6; i++) { build(A, a, "fence", i); build(A, a, "flameTrap", i + 6); } ok(own("A", "fence").length === 4 && own("A", "flameTrap").length === 4, "fences and flame traps cap at 4");
   ok([...s.structures.values()].length > 20, `no team-wide 20 cap any more (${s.structures.size} out)`); room._dispose(); }
+// 63. (Nov 12) the new Esc menu's developer tools: the host (not just the solo preview) skips to any boss at 66% / 33%, the Mine Beast at its shield runs, the chase, the escape
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); for (const o of [p, q]) { o.hp = o.maxHp; if (!o.alive) { o.alive = true; o.bledOut = false; o.bleedout = 0; } } } };
+  const boss = () => [...room.state.zombies.values()].find(z => z.boss);
+  room.state.stage = 2; room.beginWave(); room.state.elapsed = 20;
+  send(B, "debugBoss", { wave: 8, pct: .66 }); ok(room.state.stage === 2, "a non-host can't use the boss skips");
+  send(A, "debugBoss", { wave: 8, pct: .66 }); ok(room.state.stage === 8 && room.state.bossPhase === "horde", "the host skips to the Pyre Priest (wave 8)");
+  room.spawnBoss(); const z8 = boss(); ok(z8 && Math.abs(z8.hp / z8.maxHp - .66) < .01, `...and he arrives at 66% HP (${Math.round(z8.hp / z8.maxHp * 100)}%)`);
+  send(A, "debugBoss", { wave: 8, pct: .33 }); ok(boss() === z8 && Math.abs(z8.hp / z8.maxHp - .33) < .01, "33% while he's already here: his HP is just set (no restart)");
+  send(B, "debugUlt"); ok(q.ultKills === 0 || q.ultKills === undefined || q.ultKills < 100, "a non-host can't unlock their ultimate");
+  send(A, "debugUlt"); ok(p.ultKills >= 100, "the host can");
+  room.state.zombies.clear(); room.state.bossPhase = ""; room.state.phase = "playing";
+  send(A, "debugMine", { k: "boss", pct: .66 }); const m = room.mine;
+  ok(m && m.step === "awake", "SKIP TO MINE BEAST 66%: the mission starts and the Beast wakes up");
+  tick(Math.ceil(7 / .05) + 8); const z = [...room.state.zombies.values()].find(o => o.kind === "minebeast");
+  ok(m.step === "fight" && z && z.hp < z.maxHp * .66, `...it starts the fight just under 66% (${Math.round(z?.hp / z?.maxHp * 100)}%)`);
+  for (let i = 0; i < 60 && !m.shield; i++) tick(1); ok(!!m.shield, "...so its first shield run comes straight up");
+  send(A, "debugMine", { k: "boss", pct: .33 }); ok(!m.shield && z.hp < z.maxHp * .33 && m.shieldsDone === 1, "33% during the fight: the old shield is cleared, HP set just under 33%");
+  for (let i = 0; i < 60 && !m.shield; i++) tick(1); ok(!!m.shield && m.shieldsDone === 2, "...and the second shield run comes up");
+  send(A, "debugMine", { k: "chase" }); ok(m.step === "chase" || m.step === "escaped", `SKIP TO THE CHASE (${m.step})`);
+  send(A, "debugMine", { k: "escape" }); ok(m.step === "escaped", "SKIP TO THE ESCAPE: through the portal");
+  room._dispose(); }
+{ const { room, A, send } = makeRoom(); room.state.stage = 3; room.beginWave(); room.state.elapsed = 20;
+  send(A, "debugMine", { k: "escape" }); ok(room.mine && room.mine.step === "escaped", "SKIP TO THE ESCAPE from an ordinary wave: the mission starts and goes straight to the portal"); room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

@@ -258,24 +258,60 @@ function renderBossIntro() {
 }
 function ackBoss() { if (!introAcked && state?.bossPhase === "intro") { introAcked = true; room?.send("ackBoss"); renderBossIntro(); } }
 $("bossAck").onclick = ackBoss;
-$("bossNow").onclick = () => { room?.send("debugBoss"); closePanels(); };
-$("bossEnrage").onclick = () => { room?.send("debugBossHp", {}); closePanels(); };
-$("hookSpd").onclick = () => room?.send("debugHookSpeed");
-$("ultNow").onclick = () => { room?.send("debugUlt"); closePanels(); };
-$("levelPlus").onclick = () => room?.send("debugLevel");   // test: XP for one more level (the level-up menu then opens as usual)
-$("bossKill").onclick = () => { room?.send("debugBossHp", { kill: true }); closePanels(); };
-$("exploreToggle").onclick = () => room?.send("explore", { on: !state?.explore });
-$("skipButcher").onclick = () => { room?.send("debugBoss", { wave: 4 }); closePanels(); };
-$("skipPyre").onclick = () => { room?.send("debugBoss", { wave: 8 }); closePanels(); };
-$("skipScreamer").onclick = () => { room?.send("debugBoss", { wave: 12 }); closePanels(); };
-$("skipAbom").onclick = () => { room?.send("debugBoss", { wave: 16 }); closePanels(); };
-$("skipMorph").onclick = () => { room?.send("debugMorph"); closePanels(); };
-$("skipMine").onclick = () => { room?.send("debugMine"); closePanels(); }; $("mineFuel").onclick = () => { room?.send("debugMine", { k: "fuel" }); closePanels(); }; $("mineRune").onclick = () => { room?.send("debugMine", { k: "rune" }); closePanels(); }; $("skipBeast").onclick = () => { room?.send("debugMine", { k: "boss" }); closePanels(); };
-$("noCdToggle").onclick = () => room?.send("testNoCd");
-function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) { room?.send("debugWave", { n }); closePanels(); } }
+// ===== ESC MENU (Nov 12: the user's design): PAUSED on the left; DEVELOPER TOOLS (any host) on the right: BOSSES / DEEP MINE / TESTING =====
+const BOSS_NAMES = { 4: "The Butcher", 8: "The Pyre Priest", 12: "The Screamer", 16: "The Abomination", 20: "The Mine Beast" };
+let pmToastAt = 0;
+function pmToast(text) { const el = $("pmToast"); if (!el) return; txt("pmToastT", text); el.classList.remove("hidden"); pmToastAt = Date.now(); setTimeout(() => { if (Date.now() - pmToastAt >= 2350) el.classList.add("hidden"); }, 2400); }
+function pmDo(msg, data, text, close = true) { room?.send(msg, data); if (text) pmToast(text); if (close) closePanels(); }
+let pmTabNow = "bosses"; try { pmTabNow = localStorage.getItem("sa-pmTab") || "bosses"; } catch {}
+function pmTab(t) { pmTabNow = t; try { localStorage.setItem("sa-pmTab", t); } catch {} for (const b of document.querySelectorAll(".pm-tab")) b.classList.toggle("on", b.dataset.tab === t); for (const p of document.querySelectorAll(".pm-pane")) p.classList.toggle("hidden", p.dataset.pane !== t); }
+for (const b of document.querySelectorAll(".pm-tab")) b.onclick = () => pmTab(b.dataset.tab);
+pmTab(pmTabNow);
+const PM_FACES = { butcher: "assets/portraits/butcher.webp", pyre: "assets/portraits/pyre.webp", screamer: "assets/portraits/screamer.webp", abomination: "assets/portraits/abomination.webp", minebeast: "assets/portraits/minebeast.webp" };   // (whole strings: the preview build inlines them)
+for (const img of document.querySelectorAll("img[data-face]")) img.src = PM_FACES[img.dataset.face];   // the bosses' real portraits
+document.querySelector("#pmDev").addEventListener("click", e => { const b = e.target.closest("button[data-act]"); if (!b || b.disabled) return; const pct = Number(b.dataset.pct) || 0, w = Number(b.dataset.wave) || 20, at = pct ? ` at ${Math.round(pct * 100)}%` : "";
+  if (b.dataset.act === "boss") pmDo("debugBoss", pct ? { wave: w, pct } : { wave: w }, `Skipped to ${BOSS_NAMES[w]}${at}`);
+  else if (b.dataset.act === "beast") pmDo("debugMine", pct ? { k: "boss", pct } : { k: "boss" }, `Skipped to The Mine Beast${at}`); });
+$("bossNow").onclick = () => pmDo("debugBoss", undefined, "Boss intro now");
+$("bossEnrage").onclick = () => pmDo("debugBossHp", {}, "The boss is down to 25%");
+$("bossKill").onclick = () => pmDo("debugBossHp", { kill: true }, "Boss killed");
+$("hookSpd").onclick = () => pmDo("debugHookSpeed", undefined, "Butcher hook speed switched", false);
+$("ultNow").onclick = () => pmDo("debugUlt", undefined, "Ultimate unlocked");
+$("levelPlus").onclick = () => pmDo("debugLevel", undefined, "XP for one more level", false);   // (the level-up menu then opens as usual)
+$("exploreToggle").onclick = () => pmDo("explore", { on: !state?.explore }, state?.explore ? "Explore mode off: the waves are back" : "Explore mode on: no waves", false);
+$("noCdToggle").onclick = () => pmDo("testNoCd", undefined, state?.noCd ? "Ultimates unlock at 100 kills again" : "Ultimates unlocked from the start", false);
+$("skipMorph").onclick = () => pmDo("debugMorph", undefined, "Skipped to the Abomination's split");
+$("skipMine").onclick = () => pmDo("debugMine", undefined, "Started the Deep Mine mission");
+$("mineFuel").onclick = () => pmDo("debugMine", { k: "fuel" }, "Mine carts: full fuel");
+$("mineRune").onclick = () => pmDo("debugMine", { k: "rune" }, "Next rune put in");
+$("skipBeast").onclick = () => pmDo("debugMine", { k: "boss" }, "Skipped to The Mine Beast");
+$("mineChase").onclick = () => pmDo("debugMine", { k: "chase" }, "Skipped to the chase");
+$("mineEscape").onclick = () => pmDo("debugMine", { k: "escape" }, "Skipped to the escape");
+function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) pmDo("debugWave", { n }, `Skipped to wave ${n}`); }
 $("waveJumpGo").onclick = jumpToWave;
-$("waveJump").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) { const w = { pyre: 8, screamer: 12, abomination: 16 }[b.dataset.spawn]; if (w) room?.send("debugBoss", { wave: w }); else room?.send("debugSpawn", { kind: b.dataset.spawn }); closePanels(); } });   // bosses: their real fight, boss card first
+$("pmSpawn").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) pmDo("debugSpawn", { kind: b.dataset.spawn }, `Spawned: ${b.textContent.trim().toLowerCase()}`); });
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
+$("pmCopy").onclick = () => { const code = room?.roomId || ""; if (code) copyText(code, "Room code copied"); pmToast("Room code copied"); };
+$("pmControls").onclick = () => { $("pmCtl").classList.remove("hidden"); $("pmDev").classList.add("hidden"); };
+$("pmCtlBack").onclick = () => { $("pmCtl").classList.add("hidden"); pmRender(true); };
+let leaveSure = 0;
+function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") ? 370 : 1290, h = 760, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
+addEventListener("resize", pmFit);
+$("menu").addEventListener("click", e => { if (e.target === $("menu")) closePanels(); });   // a click on the dimmed backdrop closes it
+function pmRender(force) {   // who sees what, which buttons work right now
+  if (!state || !room) return; const host = SOLO_PREVIEW || state.hostId === myId, ph = state.phase, play = ph === "playing" || ph === "cleared", M = state.mission || "", ctl = !$("pmCtl").classList.contains("hidden");
+  $("pmDev").classList.toggle("hidden", !host || ph === "lobby" || ctl); txt("pmCode", SOLO_PREVIEW ? "SOLO" : room.roomId || "····");
+  for (const b of document.querySelectorAll("#pmDev [data-act], #skipMorph, #bossNow, #skipMine, #skipBeast, #mineChase, #mineEscape")) b.disabled = !play;
+  const boss = [...state.zombies.values()].some(z => z.boss || z.kind === "hivemind"); $("bossEnrage").disabled = $("bossKill").disabled = !boss;
+  $("skipMine").disabled = !play || !!M; $("mineFuel").disabled = $("mineRune").disabled = ph !== "playing" || !M.startsWith("runes"); $("skipBeast").disabled = !play || (!!M && !M.startsWith("runes"));
+  $("mineChase").disabled = $("mineEscape").disabled = !play || /^(chase|escaped)/.test(M);
+  for (const b of document.querySelectorAll(".pm-boss [data-act='beast']")) b.disabled = !play || (!!M && !/^(runes|fight)/.test(M));
+  $("exploreToggle").disabled = ph !== "playing"; $("exploreToggle").classList.toggle("off", !state.explore); $("noCdToggle").classList.toggle("off", !state.noCd);
+  $("waveJumpGo").disabled = $("levelPlus").disabled = $("ultNow").disabled = ph === "lobby"; for (const b of document.querySelectorAll("#pmSpawn button")) b.disabled = ph !== "playing";
+  txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "HOOK SPEED" : "HOOK: SLOW");
+  if (Date.now() > leaveSure && $("leave").classList.contains("sure")) { $("leave").classList.remove("sure"); txt("leaveTxt", "LEAVE ROOM"); }
+  if (force) pmFit();
+}
 $("nextStage").onclick = () => room?.send("nextStage");
 // BETWEEN WAVES (Nov 9): the break lasts until everyone's READY (60s max). The shop window can be minimized to a bar so you can move and build.
 let breakMin = false;
@@ -283,7 +319,7 @@ const toggleBreakReady = () => { const me = me_(); room?.send("breakReady", { on
 $("breakReady").onclick = toggleBreakReady; $("bbReady").onclick = toggleBreakReady;
 $("breakMin").onclick = () => { breakMin = true; }; $("bbShop").onclick = () => { breakMin = false; }; $("restartGame").onclick = () => room?.send("restart");
 $("resume").onclick = () => closePanels();
-$("leave").onclick = () => { closePanels(); room?.leave(); };
+$("leave").onclick = () => { if (Date.now() < leaveSure) { leaveSure = 0; $("leave").classList.remove("sure"); txt("leaveTxt", "LEAVE ROOM"); closePanels(); room?.leave(); return; } leaveSure = Date.now() + 3000; $("leave").classList.add("sure"); txt("leaveTxt", "SURE? CLICK AGAIN"); setTimeout(() => pmRender(), 3050); };   // two clicks: no leaving by accident
 $("lvlBadge").onclick = () => togglePanel("levelUp");
 
 // ===================== RENDER (runs on every server update, ~20x a second) =====================
@@ -297,19 +333,7 @@ function renderState() {
   if (me?.characterClass && me.characterClass !== selectedClass) setSelectedClass(me.characterClass, false);
   if (state.phase === "lobby" || lastPhaseSeen !== state.phase) renderLobbyRoom();   // the lobby page is hidden mid-match: no point rebuilding it on every patch
   lastPhaseSeen = state.phase;
-  $("exploreToggle").classList.toggle("hidden", !host || state.phase !== "playing");
-  $("waveJump").classList.toggle("hidden", !(SOLO_PREVIEW || state.hostId === myId) || state.phase === "lobby");   // the host can skip to any wave
-  for (const el of $("waveJump").querySelectorAll(".spawn-row")) el.classList.toggle("hidden", !SOLO_PREVIEW);   // spawn / boss test buttons: preview only
-  $("skipButcher").classList.toggle("hidden", SOLO_PREVIEW || !host || !["playing", "cleared"].includes(state.phase));
-  $("skipPyre").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("skipScreamer").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("skipAbom").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("skipMorph").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase));
-  $("skipMine").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase) || !!state.mission); for (const id of ["mineFuel", "mineRune"]) $(id).classList.toggle("hidden", !(SOLO_PREVIEW || host) || state.phase !== "playing" || !state.mission);
-  $("skipBeast").classList.toggle("hidden", !(SOLO_PREVIEW || host) || !["playing", "cleared"].includes(state.phase) || (!!state.mission && !state.mission.startsWith("runes")));
-  $("noCdToggle").classList.toggle("hidden", !host || state.phase === "lobby"); txt("noCdToggle", `Test: ultimates unlocked from the start: ${state.noCd ? "ON" : "OFF"}`);
-  if (SOLO_PREVIEW) txt("hookSpd", (state.hookSpeed || 2100) >= 2100 ? "Hook speed: FAST (real)" : "Hook speed: SLOW (practice)");
-  txt("exploreToggle", state.explore ? "Explore mode: ON · click to start the waves" : "Explore mode: OFF · click to stop the waves");
+  if (!$("menu").classList.contains("hidden")) pmRender();
   // switch between lobby page and full-screen game
   const playingNow = state.phase !== "lobby";
   document.body.classList.toggle("in-match", playingNow);
@@ -495,6 +519,7 @@ function togglePanel(id) {
   $(id).classList.remove("hidden"); firing = false;
   if (id === "equip") { equipKey = ""; renderEquip(state?.players.get(myId)); }
   if (id === "levelUp") renderLevelUp(state?.players.get(myId));
+  if (id === "menu") { $("pmCtl").classList.add("hidden"); pmTab(pmTabNow); pmRender(true); }
 }
 function anyPanelOpen() { return PANELS.some(id => !$(id).classList.contains("hidden")); }
 
@@ -669,8 +694,8 @@ function updateMusic() {   // called every frame: crossfades to the scene's trac
   gain.gain.value = 0; gain.gain.setTargetAtTime(MUSIC_VOL, ac.currentTime, MUSIC_FADE / 3); src.connect(gain); gain.connect(musicBus); src.start(0, .03);
   music.cur = { name: want, src, gain };
 }
-function setMusicOn(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .2); $("musicToggle").textContent = "Music: " + (on ? "ON" : "OFF"); $("setAmbient").checked = on; savePrefs(); }
-function setSfxOn(on) { sfxOn = on; if (sfxBus) sfxBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .05); $("sfxToggle").textContent = "Sound effects: " + (on ? "ON" : "OFF"); $("setSfx").checked = on; savePrefs(); }
+function setMusicOn(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .2); $("musicToggle").classList.toggle("off", !on); $("setAmbient").checked = on; savePrefs(); }
+function setSfxOn(on) { sfxOn = on; if (sfxBus) sfxBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .05); $("sfxToggle").classList.toggle("off", !on); $("setSfx").checked = on; savePrefs(); }
 $("musicToggle").onclick = () => setMusicOn(!musicOn);
 $("sfxToggle").onclick = () => setSfxOn(!sfxOn);
 // Game-state changes -> sounds (wave start / cleared / defeat, night, tower repairs and alarm, revives, pickups, building, brutes)
@@ -4954,7 +4979,7 @@ $("setAmbient").onchange = () => setMusicOn($("setAmbient").checked);
 document.addEventListener("click", e => { if (!inMatch() && e.target.closest?.("button, [data-class], [data-hero], .ls-hero, .ls-card")) { sfxContext(); playSfx("select"); } });   // lobby clicks
 $("setMotion").onchange = () => { lsAnimOn = $("setMotion").checked; $("ls").classList.toggle("still", !lsAnimOn); savePrefs(); };
 function savePrefs() { try { localStorage.setItem("sa-prefs", JSON.stringify({ sfx: sfxOn, music: musicOn, motion: lsAnimOn })); } catch {} }
-try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; $("sfxToggle").textContent = "Sound effects: OFF"; } if (pr.music === false) { musicOn = false; $("setAmbient").checked = false; $("musicToggle").textContent = "Music: OFF"; } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
+try { const pr = JSON.parse(localStorage.getItem("sa-prefs") || "{}"); if (pr.sfx === false) { sfxOn = false; $("setSfx").checked = false; $("sfxToggle").classList.add("off"); } if (pr.music === false) { musicOn = false; $("setAmbient").checked = false; $("musicToggle").classList.add("off"); } if (pr.motion === false) { lsAnimOn = false; $("setMotion").checked = false; $("ls").classList.add("still"); } } catch {}
 { const q = new URLSearchParams(location.search).get("room"); if (q) { $("roomCode").value = q; toast("Type your name and press JOIN to enter your friend's room."); } }   // invite links
 setSelectedClass(selectedClass, false); renderLobbyRoom(); drawMapThumb();
 rejoinAfterRefresh();
