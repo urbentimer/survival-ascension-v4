@@ -675,9 +675,10 @@ const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/mus
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12, v2) the Pyre Priest's own theme: the user's second track, bars 40-112 (73 bars at 103 BPM, 2:50), one-bar crossfade from the final climax back into the section entry; starts a bar before the big section
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit
   butcher: "assets/audio/music_boss_butcher.mp3",   // (Nov 12) the Butcher's own theme: the user's 2:11 song (its 1-bar silence cut) with its build + big peak played twice: an 87-bar 3:10 loop at 110 BPM, starting a bar before the peak
+  hive: "assets/audio/music_boss_hive.mp3",   // (Nov 12) the Hivemind's own theme (mini-boss waves + the Alpha): the user's 7:22 song, one pass of its repeating 66-bar section (95 BPM, 2:47), one-bar crossfade; starts a bar before the big build
   mine: "assets/audio/music_boss_mine.mp3",   // (Nov 12) the Mine Beast's own theme: the user's 3:30 song with its 30s breakdown cut out (a 3:00 loop, 2-beat crossfade at 1:58), starting a bar before its big entry
   scream: "assets/audio/music_boss_scream.mp3" };   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
-const MUSIC_LOOP = { pyre: { pad: .5, len: 7502967 / 44100 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+const MUSIC_LOOP = { pyre: { pad: .5, len: 7502967 / 44100 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 }, hive: { pad: .5, len: 7353141 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -727,8 +728,8 @@ function musicScene() {   // which music fits right now
   if ([...state.zombies.values()].some(z => z.kind === "screamer" && z.boss) || (state.waveType === "boss" && state.bossIntro === "screamer")) return "scream";   // the Screamer's own theme (card + fight)
   if ([...state.zombies.values()].some(z => z.kind === "butcher" && z.boss) || (state.waveType === "boss" && state.bossIntro === "butcher")) return "butcher";   // the Butcher's own theme (card + fight)
   { const D = state.mission && deepState(); if (D && (D.step === "awake" || D.step === "fight" || D.step === "flee" || D.step === "chase")) return "mine"; }   // the Mine Beast: from the moment it wakes until you're through the portal
-  const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
-  if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
+  if ([...state.zombies.values()].some(z => z.kind === "hivemind") || (state.waveType === "boss" && state.bossIntro === "hivemind")) return "hive";   // (Nov 12) the Hivemind's own theme: the mini boss and the Alpha
+  if (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight")) return "boss";
   return state.isNight ? "night" : "day";
 }
 function updateMusic() {   // called every frame: crossfades to the scene's track
