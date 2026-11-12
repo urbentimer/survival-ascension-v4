@@ -410,8 +410,8 @@ export function buildCarnivalLayout(WW, WH, start = 5150) {
 // past the boss dungeon in the bottom-right corner (the portal, four seal crystals, the spot where the Mine Beast's statue will stand).
 // Designed on a 6000 x 4000 map; every position below is in those units and scales with the map.
 export const MN_SIZE = {mShaft: [520, 520], mLift: [470, 471], mStation: [600, 296], mCrusher: [450, 439], mShack: [400, 388], mCrystal: [380, 374], mCollapsed: [420, 409], mWrecks: [400, 258], mArch: [420, 273], mPortal: [560, 546], mSeal1: [149, 229], mSeal2: [148, 228], mSeal3: [150, 228], mSeal4: [149, 228], mRock1: [221, 181], mRock2: [221, 180], mRock3: [223, 180], mRock4: [215, 204], mRock5: [219, 215], mRock6: [218, 210], mRock7: [222, 201], mRock8: [159, 209], mRock9: [215, 217], mRock10: [218, 207], mRock11: [221, 189], mRock12: [221, 203], mRock13: [219, 191], mRock14: [218, 194], mRock15: [224, 197], mRock16: [226, 198], mLanternPost: [124, 143], mLanternPost2: [128, 142], mSkullSign: [132, 148], mSignpost: [132, 144], mCrystalCrate: [134, 141], mOreCart: [137, 139], mBarrel: [134, 134], mTnt: [137, 138], mToolRack: [144, 127], mWinch: [144, 128], mRopeCoil: [130, 112], mTimber: [145, 119], mOrePile: [148, 112], mCrystalSmall: [141, 137], mFloodlight: [130, 142], mBanner: [148, 137], mDrill: [223, 205], mExcavator: [221, 215], mCrystalCart: [207, 187], mLoco: [232, 209], mConveyor: [219, 216], mGenerator: [221, 207], mFan: [216, 200], mPump: [215, 192], mScaffold: [221, 217], mWinchFrame: [218, 216], mFurnace: [223, 220], mCrane: [229, 212], mTrommel: [221, 200], mSilos: [215, 213], mFuelTank: [214, 164], mCrawler: [221, 197], mPillar: [94, 180], mPillarBroken: [138, 166], mBrazier: [126, 118], mCandles: [101, 186], mGate: [177, 169], mChains: [167, 132], mCage: [161, 175], mAltar: [184, 111], mMiner: [139, 181], mMinerBroken: [153, 148], mTotem: [115, 184], mCoffin: [174, 151], mBones: [167, 115], mRuneStone: [166, 144], mOffering: [171, 133], mClawWall: [181, 156], mStones: [158, 140], mPuddles: [157, 135], mDirt: [156, 144], mShards: [156, 142], mGoldVein: [156, 136], mBlueCrack: [155, 130], mStain: [157, 135], mPlanks: [155, 151], mRopeM: [144, 138], mRocksM: [152, 136], mCrystalRocks: [157, 144], mHatch: [158, 138], mChevron: [156, 139], mGrate: [156, 141], mStripes: [156, 138],
-  mChasm: [660, 250], mChasmV: [250, 620], mRuneCircle: [560, 360],   // (drawn in code: chasms, the rune circle under the statue)
-  mStatue: [380, 383], mWardH: [2140, 50], mWardV: [50, 1320], mWardGate: [160, 140],
+  mChasm: [660, 250], mChasmV: [250, 620], mRuneCircle: [896, 576],   // (drawn in code: chasms, the rune circle under the statue)
+  mStatue: [608, 613], mWardH: [2140, 50], mWardV: [50, 1320], mWardGate: [160, 140],
   mRune1: [74, 97], mRune2: [74, 100], mRune3: [74, 98], mRune4: [74, 101], mShrine: [190, 249], mStop: [300, 90] };   // the four rune stones (carried, drawn floating), their shrines; the boss stop's platform (drawn in code)   // the Mine Beast asleep in stone; the cordon round the dungeon (invisible walls) and the rune-ward the carts pass through (drawn in code)
 export const MN_KINDS = Object.keys(MN_SIZE);
 MAP_KINDS.push(...MN_KINDS);   // (appended after every older kind: their indexes never change)
@@ -431,7 +431,7 @@ Object.assign(MAP_SOLID, {
   mSeal1: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal2: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal3: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal4: { ox: 0, oy: -30, hw: 50, hh: 26 },
   mLanternPost: { ox: -10, oy: -12, hw: 16, hh: 9 }, mLanternPost2: { ox: 0, oy: -12, hw: 18, hh: 9 }, mSkullSign: { ox: 0, oy: -12, hw: 48, hh: 9 }, mSignpost: { ox: 0, oy: -12, hw: 18, hh: 9 }, mFloodlight: { ox: 0, oy: -14, hw: 34, hh: 12 }, mBanner: { ox: 0, oy: -12, hw: 58, hh: 9 },
   mPillar: { ox: 0, oy: -22, hw: 34, hh: 18 }, mCandles: { ox: 0, oy: -10, hw: 20, hh: 8 }, mTotem: { ox: 0, oy: -12, hw: 18, hh: 9 }, mBones: mnBox("mBones", .38, .45),
-  mStatue: { ox: 0, oy: -95, hw: 178, hh: 88 },   // its plinth (stays after the Beast breaks out). The stone body is STATUE_BODY: solid only while the statue stands
+  mStatue: { ox: 0, oy: -152, hw: 285, hh: 141 },   // (Nov 13: 1.6x, with the Beast) its plinth (stays after the Beast breaks out). The stone body is STATUE_BODY: solid only while the statue stands
   mShrine: { ox: 0, oy: -34, hw: 70, hh: 30 }, mRune1: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune2: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune3: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune4: { ox: 0, oy: -6, hw: 4, hh: 4 },
   mWardH: { ox: 0, oy: -25, hw: 1075, hh: 25 }, mWardV: { ox: 0, oy: 0, hw: 25, hh: 660 },   // the cordon: nobody walks into the boss dungeon; only the carts go in
   mChasm: [{ ox: 0, oy: 0, hw: 300, hh: 62 }, { ox: 0, oy: 0, hw: 220, hh: 100 }], mChasmV: [{ ox: 0, oy: 0, hw: 62, hh: 285 }, { ox: 0, oy: 0, hw: 100, hh: 205 }] });   // a chasm: centre-placed, the track crosses it on a bridge
@@ -487,7 +487,7 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1; return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
   const inMap = q => q.x0 >= 30 && q.x1 <= WW - 30 && q.y1 <= WH - 20 && q.y0 >= 40;
   const [shx, shy] = S(MN_SPOT.shaft), [ptx, pty] = S(MN_SPOT.portal), [stx, sty] = S(MN_SPOT.statue);
-  const keep = [[tx - 430, ty - 320, tx + 430, ty + 300], [st0.x - 230, st0.y + 150, st0.x + 230, st0.y + 420], [shx - 190, shy - 140, shx + 190, shy + 300], [stx - 330, sty - 470, stx + 330, sty + 150], [ptx - 170, pty - 10, ptx + 170, pty + 260]];   // the tower's yard, in front of the station's steps, the boss's way out of the shaft, the statue's spot, the portal's steps
+  const keep = [[tx - 430, ty - 320, tx + 430, ty + 300], [st0.x - 230, st0.y + 150, st0.x + 230, st0.y + 420], [shx - 190, shy - 140, shx + 190, shy + 300], [stx - 360, sty - 520, stx + 360, sty + 330], [ptx - 170, pty - 10, ptx + 170, pty + 260]];   // the tower's yard, in front of the station's steps, the boss's way out of the shaft, the statue's spot, the portal's steps
   const offKeep = q => !keep.some(([x0, y0, x1, y1], i) => q.x0 < x1 && q.x1 > x0 && q.y0 - (i === 0 ? q.ov || 0 : 0) < y1 && q.y1 > y0);
   const offTrack = q => !TP.some(p => Math.max(q.x0 - p.x, p.x - q.x1, 0) < 62 && p.y > q.y0 - (q.ov || 0) - 50 && p.y < q.y1 + 64);
   const inDungeon = q => q.x1 > dx0 && q.y1 > dy0;
@@ -516,11 +516,12 @@ export function buildMineLayout(WW, WH, start = 6060) {
   const wy = dy0 + 110, wx = dx0 + 60, cross = (f) => { let best = null; for (let i = 0; i < T.pts.length; i++) { const a = T.pts[i], b = T.pts[(i + 1) % T.pts.length], c = f(a, b); if (c && (!best || c.d < best.d)) best = c; } return best; };
   const gN = cross((a, b) => (a.y - wy) * (b.y - wy) <= 0 && a.x > dx0 + 100 ? { x: a.x + (b.x - a.x) * ((wy - a.y) / ((b.y - a.y) || 1)), y: wy, d: 0 } : null);
   const gW = cross((a, b) => (a.x - wx) * (b.x - wx) <= 0 && a.y > dy0 + 100 ? { x: wx, y: a.y + (b.y - a.y) * ((wx - a.x) / ((b.x - a.x) || 1)), d: 0 } : null);
-  out.push({ kind: "mRuneCircle", x: Math.round(stx), y: Math.round(sty + 30), flip: false });
-  fixed("mStatue", stx, sty + 70); fixed("mPortal", ptx, pty); MN_SPOT.seals.forEach((q, i) => fixed("mSeal" + (i + 1), ...S(q)));
-  for (const [x, y] of [[stx - 255, sty + 110], [stx + 255, sty + 110], [ptx + 330, pty + 70]]) fixed("mBrazier", x, y);
-  for (const [x, y, f] of [[stx - 300, sty + 360, false], [stx - 110, sty + 420, false], [stx + 110, sty + 420, true], [stx + 300, sty + 360, true]]) fixed(rnd() < .25 ? "mMinerBroken" : "mMiner", x, y, f);
-  for (const [x, y] of [[stx - 150, sty + 200], [stx + 150, sty + 200], [ptx - 230, pty + 230], [ptx + 230, pty + 230]]) fixed("mCandles", x, y);
+  out.push({ kind: "mRuneCircle", x: Math.round(stx), y: Math.round(sty + 66), flip: false });
+  fixed("mStatue", stx, sty + 130);   // (Nov 13) 1.6x bigger, so it stands 60 lower: its head level with the portal's top
+   fixed("mPortal", ptx, pty); MN_SPOT.seals.forEach((q, i) => fixed("mSeal" + (i + 1), ...S(q)));
+  for (const [x, y] of [[stx - 330, sty + 250], [stx + 310, sty + 250], [ptx + 330, pty + 70]]) fixed("mBrazier", x, y);
+  for (const [x, y, f] of [[stx - 330, sty + 450, false], [stx - 120, sty + 520, false], [stx + 120, sty + 520, true], [stx + 330, sty + 450, true]]) fixed(rnd() < .25 ? "mMinerBroken" : "mMiner", x, y, f);
+  for (const [x, y] of [[stx - 200, sty + 290], [stx + 200, sty + 290], [ptx - 230, pty + 230], [ptx + 230, pty + 230]]) fixed("mCandles", x, y);
   let wi = 0; for (let x = dx0 + 20; x < WW + 40; x += 136, wi++) { if (gN && Math.abs(x - gN.x) < 250) continue; fixed(wi % 2 ? (rnd() < .25 ? "mPillarBroken" : "mPillar") : "mClawWall", x, wy); }   // the north wall
   for (let y = wy + 140, j = 0; y < WH + 60; y += 132, j++) { if (gW && Math.abs(y - gW.y) < 150) continue; fixed(j % 2 ? "mClawWall" : rnd() < .25 ? "mPillarBroken" : "mPillar", wx, y); }   // the west wall
   if (gN) { fixed("mArch", gN.x, wy + 34); out.push({ kind: "mWardGate", x: Math.round(gN.x), y: wy + 6, flip: false }); }
@@ -729,7 +730,8 @@ export const paintedOf = site => site?.painted ? PAINTED[site.painted] : null;
 export const paintedLayout = P => P.boxes.map(([x0, y0, x1, y1]) => ({ kind: "box", x: (x0 + x1) / 2, y: (y0 + y1) / 2, hw: (x1 - x0) / 2, hh: (y1 - y0) / 2 }));
 
 // Solid boxes {x, y, hw, hh} (centre + half sizes) for the pieces that block movement.
-export const STATUE_BODY = { ox: 0, oy: -302, hw: 178, hh: 119 };   // the statue's body + the strip behind it up to the dungeon wall (nobody gets stuck out of sight behind it). Nov 12: only while it stands: once the Beast bursts out (fight step on) you can walk there
+export const STATUE_BODY = { ox: 0, oy: -400, hw: 285, hh: 107 };   // (Nov 13: 1.6x; from the plinth's top up to the wall, 500 above its base)
+//   // the statue's body + the strip behind it up to the dungeon wall (nobody gets stuck out of sight behind it). Nov 12: only while it stands: once the Beast bursts out (fight step on) you can walk there
 export const statueBodyBoxes = layout => layout.filter(d => d.kind === "mStatue").map(d => ({ x: d.x + STATUE_BODY.ox, y: d.y + STATUE_BODY.oy, hw: STATUE_BODY.hw, hh: STATUE_BODY.hh }));
 export function mapBoxes(layout) {
   const boxes = [];

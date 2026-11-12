@@ -75,8 +75,8 @@ def unpink(a):   # the station's art has magenta-ish roof sheets and pink halos 
     q = a.astype(float); r, g, b = q[..., 0], q[..., 1], q[..., 2]; pk = (r > g + 45) & (b > g + 22) & (b > 80); lum = .35 * r + .4 * g + .25 * b
     q[..., 0] = np.where(pk, np.clip(lum * 1.45, 0, 255), r); q[..., 1] = np.where(pk, lum * .72, g); q[..., 2] = np.where(pk, lum * .5, b); return q.astype(np.uint8)
 for f, k, w, nl, nb in BIG: save(k, unpink(load(f + '.png')) if k == 'mStation' else load(f + '.png'), w, lights=nl, blue=nb, loose=k in ('mStation', 'mShack', 'mShaft', 'mCollapsed'))
-save('mStatue', load('statue.png'), 380, blue=0)   # the Mine Beast asleep in stone (the 4 runes on its plinth light up in code)
-pieces['mStatue']['runes'] = [[-84, -58], [-27, -58], [29, -58], [84, -58]]   # the plinth's four rune carvings (one lights up per rune put in)
+save('mStatue', load('statue.png'), 608, blue=0)   # (Nov 13, user: 1.6x bigger, with the Beast; was 380) the Mine Beast asleep in stone (the 4 runes on its plinth light up in code)
+pieces['mStatue']['runes'] = [[-134, -93], [-43, -93], [46, -93], [134, -93]]   # (x1.6 of [[-84, -58], [-27, -58], [29, -58], [84, -58]])   # the plinth's four rune carvings (one lights up per rune put in)
 a = save('mPortal', load('portal.png'), 560, blue=6)
 blk = (a[..., :3].max(2) < 16) & (a[..., 3] > 0); lab, n = ndimage.label(blk); sz = ndimage.sum(blk, lab, range(1, n + 1)); ys, xs = np.where(lab == 1 + int(np.argmax(sz)))
 pieces['mPortal']['door'] = [round((xs.min() + xs.max()) / 2 - a.shape[1] / 2), int(ys.min() - a.shape[0]), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)]   # centre x, top y (from the bottom centre), width, height

@@ -406,20 +406,20 @@ const distance = (a, b) => hyp(a.x - b.x, a.y - b.y);
 // into the dungeon and everyone is pulled through the portal: wave cleared.
 const LAYOUTS = new Map();   // a site's layout is always the same: built once per server (the mine takes ~250ms), so loading a map mid-game (the wave 20 mission) doesn't stall a tick
 function siteLayout(i) { let L = LAYOUTS.get(i); if (!L) { const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height; L = S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : S.style === "mine" ? buildMineLayout(W, H, S.seed) : S.style === "crucible" ? buildCrucibleLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed); LAYOUTS.set(i, L); } return L; }
-const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5, chaseSpeed: 1.12, awake: 7, gap0: 520, gapMax: 640, catchGap: 140, bounce: 420, gain: 45, stagger: 110, cartHp: 5,
-  shardEvery: 4, shardCap: 16, drop: .4, takeR: 130, insertR: 210, zEvery: 1.3, zCap: [10, 5], flash: 3.2 };   // gain: px/s the Beast closes in; zCap: [base, per player] zombies alive at once
+const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5, chaseSpeed: 1.12, awake: 7, gap0: 520, gapMax: 640, catchGap: 185, bounce: 420, gain: 45, stagger: 110, cartHp: 5,
+  shardEvery: 4, shardCap: 16, drop: .4, takeR: 130, insertR: 290, zEvery: 1.3, zCap: [10, 5], flash: 3.2 };   // gain: px/s the Beast closes in; zCap: [base, per player] zombies alive at once
 // THE MINE BEAST (the mission's boss): fought on foot inside the dungeon once the fourth rune wakes it. It can't be killed: empty its bar and it
 // drops to a knee ("flee": get in the carts), then it chases them for a lap. Skills: DRILL STRIKE (two jabs), CRYSTAL SPINES (a fan of crystals that
 // stick in the floor and shatter), CAVE-IN (rocks fall on marked circles, the lights go out), BURROW (dives, tunnels after someone, erupts under a
 // marked circle), DRILL CHARGE (winds up, then charges down a marked lane: enough damage during the wind-up staggers it instead).
 const PLATE = { dr: .25, hp: 30 };   // (Nov 12) THE PYRE PLATE: the Pyre Priest's armour. Drops when he dies, one per survivor; equip it in the backpack (T). For the rest of the run:
                                      // 25% less damage from everything (on top of Body Armour), +30 max HP, and you can't be set on fire. p.armor: 0 none, 1 in the backpack, 2 worn.
-const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
-  strike: { range: 185, len: 1.15, hits: [.42, .7], reach: 225, half: 85, mult: [.9, 1.15], push: 150, cd: 1.2 },
+const BEAST = { hp: 3300, speed: 92, radius: 99, dmg: 22, gap: 2.4,   // (Nov 13, user) 1.6x bigger: radius 62 -> 99, its reach, lane and burrow grown with it
+  strike: { range: 265, len: 1.15, hits: [.42, .7], reach: 320, half: 118, mult: [.9, 1.15], push: 150, cd: 1.2 },
   spines: { first: 5, cd: 10, len: 1.25, at: .6, n: 5, fan: 1.0, min: 220, max: 560, fly: .5, fuse: 1.5, r: 85, mult: 1 },
   cavein: { first: 10, cd: 17, len: 1.9, at: .5, delay: 1.35, r: 95, mult: 1.2, perPlayer: 2, extra: 3, dark: 5 },
-  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 204, warn: .9, r: 150, mult: 1.6, emerge: 1.0 },
-  charge: { first: 24, cd: 16, wind: 1.8, speed: 512, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
+  burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 204, warn: .9, r: 205, mult: 1.6, emerge: 1.0 },
+  charge: { first: 24, cd: 16, wind: 1.8, speed: 512, len: 950, half: 130, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
   stagger: 3.2, staggerMult: 1.5, fleeWait: 10,
   crystals: { n: 4, hpPct: .045, mult: 2, back: 2.0, stagger: 5.5 },   // Nov 12: the crystals on its back: hits from BEHIND (attacker > 115 deg off its facing) do x2 and chip them; all 4 broken = a long stagger
   phase2: { at: .5, speed: 1.15, cd: .75, extraRocks: 2 },   // Nov 12: below 50% HP: enraged (red crystals, which grow back), faster, shorter cooldowns, more rocks, chained attacks
@@ -3109,13 +3109,13 @@ export class SurvivalRoom extends Room {
     for (const r of m.runes) { r.st = 3; r.by = ""; } m.placed = 4; m.inserted = true; m.step = "awake"; m.t = DEEP.awake; m.haz = [];
     for (const z of [...s.zombies.values()]) s.zombies.delete(z.id); this.sweepZombieMemory(); for (const item of [...s.loot.values()]) if (item.kind === "shard") s.loot.delete(item.id);
     for (const sid of C.riders.keys()) { const p = s.players.get(sid); if (p) p.ride = 0; } C.riders.clear(); C.held?.clear(); C.queue.clear(); C.cd.clear(); C.s = C.T.stations[bi].s; C.next = bi; C.wait = DEEP.leave; C.hold = 0;
-    const ps = [...s.players.values()]; ps.forEach((p, i) => { p.x = ST.x + (i - (ps.length - 1) / 2) * 76 + rand(-8, 8); p.y = ST.y + 250 + (i % 2) * 44 + rand(0, 10); p.rideCd = 0; this.shadowDash?.delete(p.sessionId); this.solveCollisions(p); if (p.alive) p.hp = p.maxHp; });
+    const ps = [...s.players.values()]; ps.forEach((p, i) => { p.x = ST.x + (i - (ps.length - 1) / 2) * 76 + rand(-8, 8); p.y = ST.y + 340 + (i % 2) * 44 + rand(0, 10); p.rideCd = 0; this.shadowDash?.delete(p.sessionId); this.solveCollisions(p); if (p.alive) p.hp = p.maxHp; });
     s.message = "THE MINE BEAST IS BREAKING ITS CHAINS!"; this.broadcast("deep", { k: "awake", len: DEEP.awake }); this.mineSync();
   }
   mineFight() {   // the stone has burst off: the fight, on foot, inside the dungeon
     this.statueBroken = true; this.refreshMapBoxes();   // the stone shell is gone: only the plinth still blocks
     const m = this.mine, s = this.state, ST = this.minePieces.statue, D = DIFFICULTY[s.difficulty] || DIFFICULTY.normal, scale = 1 + (s.stage - 1) * .08;
-    const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 110; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
+    const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 176; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
     z.maxHp = BEAST.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, s.players.size - 1)) * D.hp; z.hp = z.maxHp; z.damage = BEAST.dmg * scale * D.dmg;
     s.zombies.set(z.id, z); m.beast = z.id; m.step = "fight"; m.haz = []; m.crystals = BEAST.crystals.n; m.boulders = []; this.bossMem.delete(z.id);
     this.beastBoxes = mapBoxes([this.minePieces.statue, this.minePieces.portal].filter(Boolean));
@@ -3135,13 +3135,13 @@ export class SurvivalRoom extends Room {
     for (const p of s.players.values()) { if (!p.alive && !p.bledOut && this.inCordon(p)) { p.alive = true; p.hp = Math.max(1, p.maxHp * .3); p.bleedout = 0; } if (p.alive && !(p.ride > 0) && (this.inCordon(p) || C.held?.has(p.sessionId))) this.coasterBoard(p.sessionId); }
     if (!C.riders.size) { this.mineEscape(); return; }   // (nobody left in there: nothing to chase)
     let z = s.zombies.get(m.beast); if (!z) { z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 40; z.attackCooldown = 0; z.targetId = ""; z.role = "mine"; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2; s.zombies.set(z.id, z); }
-    z.maxHp = 1e8; z.hp = 1e8; z.speed = 0; z.damage = 0; z.radius = 70; z.boss = false; z.slam = 0; z.act = ""; m.haz = [];
+    z.maxHp = 1e8; z.hp = 1e8; z.speed = 0; z.damage = 0; z.radius = 110; z.boss = false; z.slam = 0; z.act = ""; m.haz = [];
     m.beast = z.id; m.step = "chase"; m.gap = DEEP.gap0; m.t = 0; C.wait = Math.min(C.wait, .1); C.held?.clear();
     s.message = "IT'S COMING AFTER THE CARTS: SHOOT IT TO HOLD IT BACK!"; this.broadcast("deep", { k: "chase" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) });
   }
   // ---------- the Mine Beast's fight (see BEAST) ----------
   beastMove(z, dx, dy) {   // it walks over the dungeon's small things (braziers, candles, statues of miners); only the walls, its plinth and the portal stop it
-    const K = this.cordon, x0 = z.x, y0 = z.y; z.x = clamp(z.x + dx, K.x + 25 + 85, this.A.width - 90); z.y = clamp(z.y + dy, K.y + 10 + 150, this.A.height - 75);
+    const K = this.cordon, x0 = z.x, y0 = z.y; z.x = clamp(z.x + dx, K.x + 25 + 130, this.A.width - 130); z.y = clamp(z.y + dy, K.y + 10 + 220, this.A.height - 90);   // (Nov 13: margins for its 1.6x body)
     this.pushOut(z, this.beastBoxes || [], BEAST.radius); return hyp(z.x - x0, z.y - y0);
   }
   beastHazards(now) {   // planted crystals shattering, rocks landing (the stray cave-in rocks stay as boulders)
@@ -3209,7 +3209,7 @@ export class SurvivalRoom extends Room {
       const act = z.act, t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, at = x => t0 < x && t1 >= x, ca = Math.cos(z.aim), sa = Math.sin(z.aim);
       if (act === "strike") B.strike.hits.forEach((h, i) => { if (!at(h * B.strike.len)) return;   // a jab: a short lane in front
         for (const p of s.players.values()) { const dx = p.x - z.x, dy = p.y - z.y, al = dx * ca + dy * sa, pe = -dx * sa + dy * ca; if (!p.alive || al < -30 || al > B.strike.reach || Math.abs(pe) > B.strike.half) continue; this.hiveHurt(p, z.damage * B.strike.mult[i]); if (i === 1 && p.alive) this.moveWithCollision(p, ca * B.strike.push, sa * B.strike.push); }
-        this.broadcast("deep", { k: "jab", i, x: Math.round(z.x + ca * 150), y: Math.round(z.y + sa * 110) }); });
+        this.broadcast("deep", { k: "jab", i, x: Math.round(z.x + ca * 230), y: Math.round(z.y + sa * 170) }); });   // (Nov 13: at its 1.6x drill tip)
       else if (act === "throw" && at(B.spines.at * B.spines.len)) {   // a fan of crystals: they stick in the floor, then shatter
         const prey = bm.prey?.alive ? bm.prey : near(), a = prey ? Math.atan2(prey.y - z.y, prey.x - z.x) : z.aim, d0 = clamp(prey ? hyp(prey.x - z.x, prey.y - z.y) : 300, B.spines.min, B.spines.max), K = this.cordon, pts = [];
         for (let i = 0; i < B.spines.n; i++) { const ga = a + (i - (B.spines.n - 1) / 2) * B.spines.fan / (B.spines.n - 1), d = d0 + rand(-50, 50), x = clamp(z.x + Math.cos(ga) * d, K.x + 70, this.A.width - 60), y = clamp(z.y + Math.sin(ga) * d, K.y + 90, this.A.height - 50);
@@ -3226,7 +3226,7 @@ export class SurvivalRoom extends Room {
         if (z.slam <= 0) { this.startAct(z, "charge", B.charge.len / B.charge.speed); bm.hit = new Set(); return; }
       } else if (act === "charge") {
         const want = B.charge.speed * (E ? E.speed : 1) * dt, moved = this.beastMove(z, ca * want, sa * want);
-        const hitB = (m.boulders || []).find(b => hyp(b.x - (z.x + ca * 70), (b.y - (z.y + sa * 40)) / .8) < B.boulder.r + 60);
+        const hitB = (m.boulders || []).find(b => hyp(b.x - (z.x + ca * 110), (b.y - (z.y + sa * 64)) / .8) < B.boulder.r + 95);   // (Nov 13: its 1.6x front)
         if (hitB) { m.boulders = m.boulders.filter(b => b !== hitB); this.broadcast("deep", { k: "bsmash", id: hitB.id, x: hitB.x, y: hitB.y }); this.startAct(z, "stagger", B.boulder.stun); bm.next = now + (B.boulder.stun + 1) * 1000; s.message = "IT SMASHED INTO A BOULDER: THE BEAST IS STUNNED!"; return; }
         for (const p of s.players.values()) if (p.alive && !bm.hit.has(p.sessionId) && hyp(p.x - z.x, p.y - z.y) < B.charge.half + BODY_R) { bm.hit.add(p.sessionId); this.hiveHurt(p, z.damage * B.charge.mult); const side = (-(p.x - z.x) * sa + (p.y - z.y) * ca) >= 0 ? 1 : -1; if (p.alive) this.moveWithCollision(p, -sa * side * B.charge.push, ca * side * B.charge.push); }
         if (z.slam <= 0 || moved < want * .4) { this.startAct(z, "skid", B.charge.skid); return; }
