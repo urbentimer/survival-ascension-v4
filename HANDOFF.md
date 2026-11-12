@@ -626,3 +626,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Cache `20261113c`; next `20261113d`.
 - Render check (Nov 12, 18:2x): survival-ascension-sg (server, Singapore) and survival-ascension-web (static, publishes /client) both auto-deploy main of urbentimer/survival-ascension-v4. Both went live on 935c96d; the server log shows "server started (version 935c96d)". The repo was diffed against /home/claude/sa: identical except 4 unused leftovers (old Butcher PNGs, mnBeast.webp), removed in 7473cfb. NOTE: the tar copy never deletes files, so after removing/renaming assets in sa also `git rm` them in v4.
 - (The old services survival-ascension-v4 / -v3.2 / -v3 / -v2 / survival-ascension in Virginia still exist; v4 also auto-deploys this repo. Not used by the play link.)
+
+## Nov 12 — Alpha Hivemind sharpened
+- The Alpha (radius 68 = 1.545x the mini Hivemind) used the mini's sheets scaled 1.545x with smoothing OFF = blocky. It now has its own sheets cut at its size: `dir8/hivemind-alpha.webp` (crawl, 325x232 cells, feet 226; SHARPEN=85 extract-zombie-dirs, command in the extract-hivemind.py header) and `dir8/hivemind-alpha-act.webp` (bite / slam / jump, 402x355 cells, feet 349; `ALPHA_ONLY=1 python3 tools/extract-hivemind.py`: premultiplied Lanczos + soft alpha + unsharp). drawHivemind uses them 1:1 when sc > 1.05 (its aura still drawn in the scaled space); its crawl stride scales with it. The mini Hivemind is unchanged.
+- hiveFx (slam ring / dust / slime / tearing free) now smooths when drawn bigger than 1.05x (was blocky).
+- Running the full extract-hivemind.py also rewrites hivemind-act.png / hivemind-fx.png as bigger un-quantized PNGs (same art): use ALPHA_ONLY=1, or git checkout those two after.
+- Cache `20261113d`; next `20261113e`.

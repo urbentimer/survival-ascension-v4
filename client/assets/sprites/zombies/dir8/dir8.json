@@ -287,5 +287,22 @@
    "downLeft"
   ],
   "frames": 6
+ },
+ "hivemind-alpha": {
+  "cellW": 325,
+  "cellH": 232,
+  "anchorX": 162,
+  "feetY": 226,
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "frames": 6
  }
 }

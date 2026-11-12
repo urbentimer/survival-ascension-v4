@@ -3,6 +3,8 @@
 #   fx/hivemind-fx.png             4 rows x 5 (200x150 cells): slam crack ring, landing dust, green slime splash, zombie tearing free
 #   portraits/hivemind.webp
 #   python3 tools/extract-zombie-dirs.py hivemind tools/art/hive-crawl.png rows=D,DR,R,UR,U,UL,L,DL cols=6 pitch=219 height=105 cellw=210 cellh=150
+# (Nov 12) THE ALPHA (1.545x) has its own sharp sheets, cut at its size: zombies/dir8/hivemind-alpha-act.webp (ALPHA_ONLY=1 python3 tools/extract-hivemind.py) and its crawl:
+#   SHARPEN=85 python3 tools/extract-zombie-dirs.py hivemind tools/art/hive-crawl.png rows=D,DR,R,UR,U,UL,L,DL cols=6 pitch=219 height=162 cellw=325 cellh=232 name=hivemind-alpha   (then saved as .webp q90)
 import os, importlib.util
 import numpy as np
 from PIL import Image
@@ -36,23 +38,41 @@ def frame_masks(src, n):
 
 atlas = Image.open(os.path.join(C, 'sprites', 'zombies', 'dir8', 'hivemind.png'))
 H0 = atlas.crop((0, 0, 210, 150)).getbbox(); H0 = H0[3] - H0[1]        # crawl, facing down, frame 1: the size to match
-CW, CH = 260, 230
-S = Image.new('RGBA', (CW * 6, CH * 3))
 W0 = atlas.crop((0, 0, 210, 150)).getbbox(); W0 = W0[2] - W0[0]       # ...matched by width (poses differ in height)
-for ri, (name, n) in enumerate([('bite', 5), ('slam', 6), ('jump', 6)]):
-    src = load('hive-' + name); masks = frame_masks(src, n); full = cut(src)
-    ground = max(np.where(m.any(1))[0].max() for m in masks) + 1
-    def piece(m):
-        a = full.copy(); a[..., 3] = np.where(m, a[..., 3], 0); ys, xs = np.where(m); return a[:ground + 2, xs.min():xs.max() + 1], ys.min()
-    p0, _ = piece(masks[0]); w0 = p0.shape[1]; k = W0 / w0
-    for ci, m in enumerate(masks):
-        a, top = piece(m); a = a[top:]                                   # keep the gap to the ground (jump frames float)
-        img = Image.fromarray(a); img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
-        arr = np.array(img); arr[..., 3] = (arr[..., 3] > 110) * 255; img = Image.fromarray(arr)
-        img = img.crop((0, max(0, img.height - CH), min(img.width, CW), img.height))
-        S.alpha_composite(img, (ci * CW + max(0, (CW - img.width) // 2), ri * CH + CH - img.height))
-    print(name, n, 'frames, scale', round(k, 3))
-S.save(os.path.join(C, 'sprites', 'zombies', 'dir8', 'hivemind-act.png'))
+def sharp_resize(a, k):   # (Nov 12, the Alpha) premultiplied Lanczos, soft antialiased edge, unsharp mask on the colour
+    from PIL import ImageFilter
+    al0 = a[..., 3:4].astype(np.float32) / 255; pm = np.clip(a[..., :3].astype(np.float32) * al0, 0, 255).astype(np.uint8)
+    w, h = max(1, round(a.shape[1] * k)), max(1, round(a.shape[0] * k))
+    up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)
+    A = np.clip(np.dstack([up(pm[..., i]) for i in range(3)]), 0, 255); al = np.clip(up(a[..., 3]), 0, 255) / 255
+    rgb = np.where(al[..., None] > .02, A / np.maximum(al[..., None], .02), 0)
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.3 * max(1, k), percent=70, threshold=2))
+    return Image.fromarray(np.dstack([np.array(img), (np.clip((al - .18) / .64, 0, 1) * 255).astype(np.uint8)]))
+def act_sheet(F, path, sharp):   # F = how much bigger than the mini boss (the Alpha: 68 / 44)
+    CW, CH = round(260 * F), round(230 * F); S = Image.new('RGBA', (CW * 6, CH * 3))
+    for ri, (name, n) in enumerate([('bite', 5), ('slam', 6), ('jump', 6)]):
+        src = load('hive-' + name); masks = frame_masks(src, n); full = cut(src)
+        ground = max(np.where(m.any(1))[0].max() for m in masks) + 1
+        def piece(m):
+            a = full.copy(); a[..., 3] = np.where(m, a[..., 3], 0); ys, xs = np.where(m); return a[:ground + 2, xs.min():xs.max() + 1], ys.min()
+        p0, _ = piece(masks[0]); w0 = p0.shape[1]; k = W0 / w0 * F
+        for ci, m in enumerate(masks):
+            a, top = piece(m); a = a[top:]                                   # keep the gap to the ground (jump frames float)
+            if sharp: img = sharp_resize(a, k)
+            else:
+                img = Image.fromarray(a); img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
+                arr = np.array(img); arr[..., 3] = (arr[..., 3] > 110) * 255; img = Image.fromarray(arr)
+            img = img.crop((0, max(0, img.height - CH), min(img.width, CW), img.height))
+            S.alpha_composite(img, (ci * CW + max(0, (CW - img.width) // 2), ri * CH + CH - img.height))
+        print(name, n, 'frames, scale', round(k, 3))
+    if path.endswith('.webp'): S.save(path, quality=90, alpha_quality=92, method=6)
+    else: S.save(path)
+    print(os.path.basename(path), S.size)
+ALPHA = 68 / 44   # the Alpha Hivemind's size (server: round(HIVE.radius 44 * alpha.size 1.55) = 68)
+if os.environ.get('ALPHA_ONLY'):   # python3 tools/extract-hivemind.py with ALPHA_ONLY=1: just the Alpha's own sharp sheet (its crawl: see the header)
+    act_sheet(ALPHA, os.path.join(C, 'sprites', 'zombies', 'dir8', 'hivemind-alpha-act.webp'), True); raise SystemExit
+act_sheet(1, os.path.join(C, 'sprites', 'zombies', 'dir8', 'hivemind-act.png'), False)   # (the committed file was palette-compressed afterwards: re-running gives the same art, a bigger file)
+act_sheet(ALPHA, os.path.join(C, 'sprites', 'zombies', 'dir8', 'hivemind-alpha-act.webp'), True)
 # effects
 src = load('hive-fx'); fg = xd.foreground(src)
 r, g, b = src[..., 0], src[..., 1], src[..., 2]; ink = fg | ((r - g > 25) & (b - g > 25) & ~((r > 205) & (b > 205) & (g < 95)))

@@ -1749,11 +1749,12 @@ function pyreLights(now) {   // night: the priest, his fire patches and pillars 
 }
 // ---------- THE HIVEMIND (mini boss on waves 2, 6, 10...) ----------
 const hImgs = {};
-for (const [k, url] of Object.entries({ crawl: "assets/sprites/zombies/dir8/hivemind.png", act: "assets/sprites/zombies/dir8/hivemind-act.png", fx: "assets/sprites/fx/hivemind-fx.png" })) { const im = new Image(); im.src = url; hImgs[k] = im; }
+for (const [k, url] of Object.entries({ crawl: "assets/sprites/zombies/dir8/hivemind.png", act: "assets/sprites/zombies/dir8/hivemind-act.png", fx: "assets/sprites/fx/hivemind-fx.png",
+  aCrawl: "assets/sprites/zombies/dir8/hivemind-alpha.webp", aAct: "assets/sprites/zombies/dir8/hivemind-alpha-act.webp" })) { const im = new Image(); im.src = url; hImgs[k] = im; }
 const HV = { slamWind: .55, slamR: 210, flat: .62, jumpUp: .3, jumpLand: .9 };   // matches the server
 const hiveMove = new Map();
 function hiveFx(row, col, x, y, alpha = 1, scale = 1) {   // 200x150 cells, bottom-centre at (x, y)
-  const im = hImgs.fx; if (!im?.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.scale(scale, scale);
+  const im = hImgs.fx; if (!im?.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = scale > 1.05; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = alpha;   // (Nov 12) scaled up for the Alpha: smooth, not blocky ctx.translate(x, y); ctx.scale(scale, scale);
   ctx.drawImage(im, col * 200, row * 150, 200, 150, -100, -146, 200, 150); ctx.restore();
 }
 function drawHivemind(z) {
@@ -1768,16 +1769,19 @@ function drawHivemind(z) {
     const k = Math.min(1, t / HV.slamWind); ctx.save(); ctx.fillStyle = `rgba(255,70,55,${.08 + .16 * k})`; ctx.strokeStyle = `rgba(255,70,55,${.4 + .5 * k})`; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, HV.slamR * sc, HV.slamR * sc * HV.flat, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
   }
-  const act = hImgs.act, crawl = hImgs.crawl, flip = Math.cos(z.aim || 0) < -.2;
+  const big = sc > 1.05 && hImgs.aAct?.naturalWidth && hImgs.aCrawl?.naturalWidth;   // (Nov 12) the Alpha has its own sheets, cut sharp at its size (no 1.55x pixel stretch)
+  const act = big ? hImgs.aAct : hImgs.act, crawl = big ? hImgs.aCrawl : hImgs.crawl, flip = Math.cos(z.aim || 0) < -.2;
+  const AC = big ? { w: 402, h: 355, ax: 201, fy: 349 } : { w: 260, h: 230, ax: 130, fy: 226 }, CC = big ? { w: 325, h: 232, ax: 162, fy: 226 } : { w: 210, h: 150, ax: 105, fy: 144 };
   let row = -1, col = 0;
   if (z.act === "bite") { row = 0; col = Math.min(4, Math.floor(t / (.95 / 5))); }
   else if (z.act === "slam") { row = 1; col = t < .2 ? 0 : t < HV.slamWind ? 1 : t < HV.slamWind + .12 ? 2 : t < HV.slamWind + .35 ? 3 : t < 1.1 ? 4 : 5; }
   else if (z.act === "jump") { row = 2; col = t < HV.jumpUp ? 0 : t < .5 ? 1 : t < .7 ? 2 : t < HV.jumpLand ? 3 : t < 1.05 ? 4 : 5; }
-  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift))); if (sc > 1.05) { ctx.scale(sc, sc); if (z.boss) alphaAura(z, now); }
-  if (row >= 0 && act?.naturalWidth) { if (flip) ctx.scale(-1, 1); flashDraw(flashing, () => ctx.drawImage(act, col * 260, row * 230, 260, 230, -130, -226, 260, 230)); }
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(z.x), Math.round(z.y + feet - (row === 2 ? 0 : lift)));
+  if (sc > 1.05) { if (z.boss) { ctx.save(); ctx.scale(sc, sc); alphaAura(z, now); ctx.restore(); } if (!big) ctx.scale(sc, sc); else ctx.imageSmoothingEnabled = true; }   // its own sheets are drawn 1:1
+  if (row >= 0 && act?.naturalWidth) { if (flip) ctx.scale(-1, 1); flashDraw(flashing, () => ctx.drawImage(act, col * AC.w, row * AC.h, AC.w, AC.h, -AC.ax, -AC.fy, AC.w, AC.h)); }
   else if (crawl?.naturalWidth) {
-    const r8 = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8], c = now - mv.at < 200 ? Math.floor(mv.dist / 14) % 6 : 0;
-    flashDraw(flashing, () => ctx.drawImage(crawl, c * 210, r8 * 150, 210, 150, -105, -144, 210, 150));
+    const r8 = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8], c = now - mv.at < 200 ? Math.floor(mv.dist / (14 * (big ? sc : 1))) % 6 : 0;
+    flashDraw(flashing, () => ctx.drawImage(crawl, c * CC.w, r8 * CC.h, CC.w, CC.h, -CC.ax, -CC.fy, CC.w, CC.h));
   }
   ctx.restore();
 }

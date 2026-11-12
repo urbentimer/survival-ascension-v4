@@ -63,7 +63,7 @@ const webpOf = rel => join(WEBP_DIR, rel.replace(/[\/]/g, "__") + ".q60.webp");
 const inlineAssets = (text) => text.replace(ASSET_RE, (rel) => {
   if (!process.env.SA_MUSIC && (rel.includes("audio/music_") || rel.includes("audio/fire_loop"))) return rel;   // (Nov 12) music + the fire crackle stay plain paths: the mp3s are published NEXT to the page (Artifact files "assets/audio/..."), so they don't count toward its 16 MB. SA_MUSIC=1 inlines them (a local file:// test build, where fetch can't read files)
   const ext = rel.split(".").pop();
-  if ((ext === "png" || ext === "webp") && !/\/abom|dir8\/(pyre|screamer|butcher|mb)-/.test(rel)) { const w = readFileSync(webpOf(rel)), p = readFileSync(join(root, "client", rel)); if (w.length < p.length) return "data:image/webp;base64," + w.toString("base64"); }   // (Nov 12) the sharpened boss sheets (Abomination, Pyre Priest, Screamer, Butcher, Mine Beast) go in as they are (no q60 re-encode)
+  if ((ext === "png" || ext === "webp") && !/\/abom|dir8\/(pyre|screamer|butcher|mb|hivemind-alpha)/.test(rel)) { const w = readFileSync(webpOf(rel)), p = readFileSync(join(root, "client", rel)); if (w.length < p.length) return "data:image/webp;base64," + w.toString("base64"); }   // (Nov 12) the sharpened boss sheets (Abomination, Pyre Priest, Screamer, Butcher, Mine Beast, Alpha Hivemind) go in as they are (no q60 re-encode)
   const mime = ext === "jpg" ? "image/jpeg" : ext === "mp3" ? "audio/mpeg" : "image/" + ext;
   return `data:${mime};base64,` + readFileSync(join(root, "client", rel)).toString("base64");
 });
