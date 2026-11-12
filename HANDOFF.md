@@ -632,3 +632,4 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - hiveFx (slam ring / dust / slime / tearing free) now smooths when drawn bigger than 1.05x (was blocky).
 - Running the full extract-hivemind.py also rewrites hivemind-act.png / hivemind-fx.png as bigger un-quantized PNGs (same art): use ALPHA_ONLY=1, or git checkout those two after.
 - Cache `20261113d`; next `20261113e`.
+- Nov 12 19:1x: Beta Mode also protects the RADIO TOWER: every tower hit goes through `towerHit(d)` (zombies at the tower, the Butcher's chop, the escort), 1/100 in beta. The generator only loses HP when out of fuel (unchanged); the mine carts' 4 hits (chase) are unchanged. Cache `20261113e`; next `20261113f`.

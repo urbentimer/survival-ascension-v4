@@ -298,7 +298,7 @@ $("hookSpd").onclick = () => pmDo("debugHookSpeed", undefined, "Butcher hook spe
 $("ultNow").onclick = () => pmDo("debugUlt", undefined, "Ultimate unlocked");
 $("levelPlus").onclick = () => pmDo("debugLevel", undefined, "XP for one more level", false);   // (the level-up menu then opens as usual)
 $("exploreToggle").onclick = () => pmDo("explore", { on: !state?.explore }, state?.explore ? "Explore mode off: the waves are back" : "Explore mode on: no waves", false);
-$("betaToggle").onclick = () => pmDo("betaMode", undefined, state?.beta ? "Beta mode off: normal health" : "Beta mode on: everyone has 100× health", false);   // (Nov 12) host only
+$("betaToggle").onclick = () => pmDo("betaMode", undefined, state?.beta ? "Beta mode off: normal health" : "Beta mode on: everyone and the radio tower have 100× health", false);   // (Nov 12) host only
 $("noCdToggle").onclick = () => pmDo("testNoCd", undefined, state?.noCd ? "Ultimates unlock at 100 kills again" : "Ultimates unlocked from the start", false);
 $("skipMorph").onclick = () => pmDo("debugMorph", undefined, "Skipped to the Abomination's split");
 $("skipMine").onclick = () => pmDo("debugMine", undefined, "Started the Deep Mine mission");

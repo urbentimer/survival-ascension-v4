@@ -1672,6 +1672,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(Math.abs(lost - .4) < .01, `a 40 hit during a tick only takes 1/100 (${lost.toFixed(2)} HP)`);
   room.state.zombies.clear(); p.hp = 5; room.downPlayer(p); ok(p.alive && p.hp >= 1, "a hit that would down you doesn't");
   let big = 0; room._bhp = 0; p._bhp = p.hp = p.maxHp; p.hp -= 5000; room.downPlayer(p); big = p.maxHp - p.hp; ok(p.alive && big > 40 && big < 60, `a 5000 hit counts as 50 (${Math.round(big)})`);
+  const t0 = room.state.towerHp = room.state.towerMaxHp; room.towerHit(500); ok(Math.abs(t0 - room.state.towerHp - 5) < .01, "the radio tower takes 1/100 too (500 -> 5)");
   send(A, "betaMode"); ok(!room.state.beta, "the host turns it off"); p.hp = 5; room.downPlayer(p); ok(!p.alive, "...and downs work again");
+  room.towerHit(500); ok(Math.abs(t0 - 5 - 500 - room.state.towerHp) < .01, "...and the tower takes full damage again");
   room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
