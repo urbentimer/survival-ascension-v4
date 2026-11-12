@@ -1667,9 +1667,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = () => { room.lastTick = Date.now() - 50; room.tick(); };
   send(B, "betaMode"); ok(!room.state.beta, "only the host can turn on beta mode");
   q.hp = 0; q.alive = false; send(A, "betaMode"); ok(room.state.beta && q.alive && q.hp === q.maxHp, "the host turns it on: anyone who was down gets back up");
-  const z = placeZombie(room, p.x + 20, p.y, 500); z.damage = 50; z.attackCooldown = 0; p.hp = p.maxHp; const h0 = p.hp;
-  for (let i = 0; i < 40 && p.hp === h0; i++) tick(); const lost = h0 - p.hp;
-  ok(lost > 0 && lost < 1.5, `a zombie bite only takes 1/100 (${lost.toFixed(2)} HP)`);
+  const inner = room.tickInner; room.tickInner = function () { inner.call(this); p.hp -= 40; };   // something hits you for 40 during a tick
+  p.hp = p.maxHp; const h0 = p.hp; tick(); room.tickInner = inner; const lost = h0 - p.hp;
+  ok(Math.abs(lost - .4) < .01, `a 40 hit during a tick only takes 1/100 (${lost.toFixed(2)} HP)`);
   room.state.zombies.clear(); p.hp = 5; room.downPlayer(p); ok(p.alive && p.hp >= 1, "a hit that would down you doesn't");
   let big = 0; room._bhp = 0; p._bhp = p.hp = p.maxHp; p.hp -= 5000; room.downPlayer(p); big = p.maxHp - p.hp; ok(p.alive && big > 40 && big < 60, `a 5000 hit counts as 50 (${Math.round(big)})`);
   send(A, "betaMode"); ok(!room.state.beta, "the host turns it off"); p.hp = 5; room.downPlayer(p); ok(!p.alive, "...and downs work again");
