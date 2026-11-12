@@ -80,8 +80,8 @@ const PYRE = {
 //   CALL OF THE HORDE     at 66% and 33% HP: runners pour in from the map edges (4 + 2 per survivor), +30% speed for 10s, and they hunt survivors.
 //   Enraged below 35%: faster, cooldowns x0.75, 5 rings per cast.
 const SCREAMER = {
-  hp: 2300, speed: 150, radius: 36, dmg: 24, keep: [180, 320], enrageAt: .35, enrageSpeed: 1.15, enrageCd: .75,
-  shriek: { trigger: 300, windup: .45, hit: .5, total: .95, r: 300, arc: .52, mult: 1, push: 120, cd: 2.6, crowd: 3, crowdR: 95, allR: 170 },
+  hp: 2300, speed: 150, radius: 68, dmg: 24, keep: [220, 360], enrageAt: .35, enrageSpeed: 1.15, enrageCd: .75,   // (Nov 12) drawn 2x: radius 36 -> 68, keeps a little further back
+  shriek: { trigger: 340, windup: .45, hit: .5, total: .95, r: 340, arc: .52, mult: 1, push: 120, cd: 2.6, crowd: 3, crowdR: 95, allR: 230 },   // r / trigger 300 -> 340, allR 170 -> 230 (Nov 12, with his size)
   rings:  { first: 6, cd: 10, n: 3, enrN: 5, gap: .6, speed: 380, max: 520, w: 30, mult: .6, slow: 1.2 },
   mark:   { first: 10, cd: 14, n: 2, delay: 3, r: 140, mult: 1.1, cast: .7 },
   wail:   { first: 15, cd: 22, wind: 2.5, total: 3.6, mult: 1.4, stun: 1.5, choke: .08, chokeLen: 2, throat: 2, maxD: 1400 },
@@ -626,7 +626,7 @@ export class SurvivalRoom extends Room {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
       if (!(this.solo || client.sessionId === this.state.hostId) || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer", "abomination"].includes(kind)) return;
       if (kind === "abomination") { this.spawnZombie(true, "abomination"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 520, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Abomination"; return; }
-      if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
+      if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 520, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
       if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
       if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
       const was = this.state.explore; this.state.explore = false;

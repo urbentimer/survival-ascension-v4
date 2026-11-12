@@ -587,3 +587,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - tools/extract-pyre.py cuts the walk / swing / sermon / death sheets at R = 1.65 (= the size he is drawn; 0.99x the source art): cells 495x305, feet (248, 261), premultiplied Lanczos, soft alpha, light UnsharpMask, webp q90. (The fx / portrait part is unchanged; only the sheets were re-run.)
 - Client PY: `r: 1.65`, cw/ch/ax/fy in sheet pixels, draws scale by sc / r. Walk frames use abCrisp. build-preview skips the q60 re-encode for `dir8/pyre-` sheets too.
 - Cache `20261112v`; next `20261112w`.
+
+## Nov 12 — Screamer 2x bigger + sharpened
+- tools/extract-screamer.py: R = 2 (cells 600x480, feet (300, 430), standing ~330px), premultiplied Lanczos, soft alpha, UnsharpMask, webp q90 (only the sheets re-run; fx/portrait unchanged).
+- Client SCR: `r: 2, sc: 2`, cell numbers in sheet pixels; draws scale sc / r. Shadow, throat glow, enrage halo, label, wail wind-up rings, choke sparks, death (feet y + 54), night light all scaled. Walk uses abCrisp.
+- Server SCREAMER: radius 36 -> 68, keep [220, 360], shriek r/trigger 300 -> 340, allR 170 -> 230. Test spawn +520.
+- Sim W12 (3 bots, level 8): killed in 66s. build-preview skips q60 for `dir8/screamer-` too. Cache `20261112w`; next `20261112x`.

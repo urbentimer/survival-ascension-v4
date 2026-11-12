@@ -1381,7 +1381,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/screa
   ring: "assets/sprites/fx/screamer-ring.webp", ring2: "assets/sprites/fx/screamer-ring2.webp", mark: "assets/sprites/fx/screamer-mark.webp",
   burst: "assets/sprites/fx/screamer-burst.webp", blast: "assets/sprites/fx/screamer-wail.webp" })) { const im = new Image(); im.src = url; scrImgs[k] = im; }
 // per effect: half width of its ring in the art (to scale it to the real hit area) and where its ground line sits (0 top .. 1 bottom)
-const SCR = { cw: 300, ch: 240, ax: 150, fy: 215, step: 26, wind: .45, wail: 2.5, wailLen: 3.6, ringW: 30,
+const SCR = { cw: 600, ch: 480, ax: 300, fy: 430, r: 2, sc: 2, step: 26,   /* (Nov 12) sc: drawn 2x; cw..fy are sheet pixels (cut at r = 2x), so draws scale by sc / r = 1 */ wind: .45, wail: 2.5, wailLen: 3.6, ringW: 30,
   fx: { ring: [104, .51], ring2: [118, .59], mark: [103, .6], burst: [105, .79], blast: [120, .72] } };
 const scrMove = new Map(), scrWail = new Map(), scrShriek = new Map(), scrMarks = new Map();   // per boss: walk cycle / wail wind-up / last shriek; per player: resonance mark
 let deafF = null, deafUntil = 0;
@@ -1429,10 +1429,10 @@ function onScreamer(m) {
   else if (m.k === "call") { shake(8, 500); playSfx("roar", undefined, undefined, .8); }
 }
 function drawScreamer(z) {
-  const now = gnow(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet, en = z.enraged ? 1 : 0;
+  const now = gnow(), feet = z.radius * .8, t = actTime(z), gy = z.y + feet, en = z.enraged ? 1 : 0, S = SCR.sc;
   let mv = scrMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; scrMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 60) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.42)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 48, 13, 0, 0, 7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.42)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 48 * S, 13 * S, 0, 0, 7); ctx.fill(); ctx.restore();
   // telegraphs on the ground
   if (z.act === "shriek" && t < SCR.wind + .05) {   // the shriek's cone (or a full circle when you crowd him)
     const sh = scrShriek.get(z.id), k = Math.min(1, t / SCR.wind), R = sh?.r || 300, arc = sh?.arc ?? .52, a = sh?.a ?? z.aim;
@@ -1443,7 +1443,7 @@ function drawScreamer(z) {
   if (winding) {   // the wail is coming: sound pressure building up round him + his throat is the weak spot
     const k = Math.min(1, t / SCR.wail), pulse = .5 + .5 * Math.sin(now / (110 - 60 * k));
     ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 3;
-    for (let i = 0; i < 3; i++) { const u = ((now / 900 + i / 3) % 1), R = 90 + u * 520; ctx.strokeStyle = `rgba(61,242,255,${(.35 + .4 * k) * (1 - u)})`; ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * .6, 0, 0, 7); ctx.stroke(); }
+    for (let i = 0; i < 3; i++) { const u = ((now / 900 + i / 3) % 1), R = 150 + u * 520; ctx.strokeStyle = `rgba(61,242,255,${(.35 + .4 * k) * (1 - u)})`; ctx.beginPath(); ctx.ellipse(z.x, gy, R, R * .6, 0, 0, 7); ctx.stroke(); }
     ctx.restore();
   }
   // frame
@@ -1456,19 +1456,19 @@ function drawScreamer(z) {
     if (t < W * .2) { f = 0; f2 = 1; k = t / (W * .2); } else if (t < W * .55) { f = 1; f2 = 2; k = (t - W * .2) / (W * .35); } else if (t < W) { f = f2 = 2; shakeX = (Math.random() - .5) * 3 * (t / W); }
     else if (t < T - .35) { f = f2 = Math.floor(now / 85) % 2 ? 4 : 3; shakeX = (Math.random() - .5) * 4; } else { f = 5; f2 = 5; }
   } else if (z.act === "choke") { sheet = "choke"; single = true; const u = Math.min(3.99, t / 2 * 4); f = Math.floor(u); f2 = Math.min(3, f + 1); k = u - f; }
-  else if (now - mv.at < 160) { const u = mv.dist / SCR.step; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  else if (now - mv.at < 160) { const u = mv.dist / (SCR.step * S); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = abCrisp(u - Math.floor(u)); }
   const [row, flip] = single ? [0, false] : pyRow(face), im = scrImgs[sheet]?.naturalWidth ? scrImgs[sheet] : scrImgs.walk;
   // his glowing throat (brighter while he winds up the wail), plus a red halo when enraged
   const beat = .5 + .5 * Math.sin(now / 260), th = winding ? Math.min(1, t / SCR.wail) : 0;
-  bossGlow(z.x + (flip ? -1 : 1) * (row === 2 ? 14 : 0), gy - 118, "61,242,255", 46 + 60 * th + 8 * beat, .35 + .25 * beat + .4 * th);
-  if (en) bossGlow(z.x, gy - 85, "255,40,40", 110, .35 + .15 * Math.sin(now / 90));
+  bossGlow(z.x + (flip ? -1 : 1) * (row === 2 ? 14 * S : 0), gy - 118 * S, "61,242,255", (46 + 60 * th + 8 * beat) * S * .8, .35 + .25 * beat + .4 * th);
+  if (en) bossGlow(z.x, gy - 85 * S, "255,40,40", 110 * S, .35 + .15 * Math.sin(now / 90));
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.translate(Math.round(z.x + shakeX), Math.round(gy)); if (flip) ctx.scale(-1, 1);
+  ctx.translate(Math.round(z.x + shakeX * S), Math.round(gy)); ctx.scale(S / SCR.r, S / SCR.r); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * SCR.ch, SCR.cw, SCR.ch, f, f2, k, -SCR.ax, -SCR.fy));
   ctx.restore();
   if (winding) {   // over his head: the throat is the weak spot right now
-    const pulse = .5 + .5 * Math.sin(now / 90), lx = z.x, ly = gy - 205;
+    const pulse = .5 + .5 * Math.sin(now / 90), lx = z.x, ly = gy - 175 * S - 30;
     ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#04161a"; ctx.fillStyle = `rgba(160,250,255,${.7 + .3 * pulse})`;
     ctx.strokeText("▼ THROAT ×2 ▼", lx, ly); ctx.fillText("▼ THROAT ×2 ▼", lx, ly); ctx.restore();
   }
@@ -1509,19 +1509,19 @@ function drawScreamerFx(f, age) {   // false when finished
     ctx.restore(); return true;
   }
   if (f.k === "burst") { if (s > .8) return false; sFx("burst", s / .8 * 8, f.x, f.y + 14, sFit("burst", f.r)); return true; }
-  if (f.k === "wail") { if (s > 1.2) return false; sFx("blast", s / 1.2 * 8, f.x, f.y + 30, sFit("blast", 260)); return true; }
+  if (f.k === "wail") { if (s > 1.2) return false; sFx("blast", s / 1.2 * 8, f.x, f.y + 54, sFit("blast", 300)); return true; }
   if (f.k === "choke") {   // cyan sparks spitting out of his throat
     if (s > 1.4) return false; const zr = state?.zombies?.get(f.id), z = zr ? (V(zr) || zr) : null; if (!z) return false;
     ctx.save(); ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < 14; i++) { const ph = (s * 1.6 + i * .071) % 1, sd = Math.sin(i * 77.1) * 999, r = sd - Math.floor(sd), x = z.x + (r - .5) * 50 * ph, y = z.y - 70 + ph * 70; ctx.fillStyle = `rgba(150,250,255,${.9 * (1 - ph)})`; ctx.fillRect(x, y, 2.5, 2.5); }
+    for (let i = 0; i < 14; i++) { const ph = (s * 1.6 + i * .071) % 1, sd = Math.sin(i * 77.1) * 999, r = sd - Math.floor(sd), x = z.x + (r - .5) * 100 * ph, y = z.y - 150 + ph * 140; ctx.fillStyle = `rgba(150,250,255,${.9 * (1 - ph)})`; ctx.fillRect(x, y, 4, 4); }   // (2x: from his throat)
     ctx.restore(); return true;
   }
   if (f.k === "death") {   // the throat bursts, he staggers and collapses, the glow fades out
     if (s > 4) return false; const im = scrImgs.death; if (!im?.naturalWidth) return true;
     const u = Math.min(5, s / .3), fr = Math.floor(u), a = s > 2.8 ? 1 - (s - 2.8) / 1.2 : 1;
-    if (s < .4) bossGlow(f.x, f.y - 60, "61,242,255", 140, 1 - s / .4);
-    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high";
-    blendCells(im, 0, 0, SCR.cw, SCR.ch, fr, Math.min(5, fr + 1), u - fr, Math.round(f.x) - SCR.ax, Math.round(f.y + 29) - SCR.fy); ctx.restore(); return true;
+    if (s < .4) bossGlow(f.x, f.y - 120, "61,242,255", 240, 1 - s / .4);
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(f.x), Math.round(f.y + 54)); ctx.scale(SCR.sc / SCR.r, SCR.sc / SCR.r);   // feet at y + radius(68) * .8
+    blendCells(im, 0, 0, SCR.cw, SCR.ch, fr, Math.min(5, fr + 1), u - fr, -SCR.ax, -SCR.fy); ctx.restore(); return true;
   }
   return false;
 }
@@ -1549,7 +1549,7 @@ function drawScreamerScreen() {   // screen space: TAKE COVER banner + whether Y
 }
 function screamerLights(now) {   // night: his throat glows, and the rings and bursts light the dark
   if (!state?.zombies) return;
-  for (const z of state.zombies.values()) if (z.kind === "screamer" && inView(z.x, z.y, 200)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 80 - cam.y, 150 + Math.sin(now / 260) * 10, .8); }
+  for (const z of state.zombies.values()) if (z.kind === "screamer" && inView(z.x, z.y, 360)) { const v = V(z) || z; lightHole(v.x - cam.x, v.y - 150 - cam.y, 260 + Math.sin(now / 260) * 14, .8); }   // (2x)
   for (const f of fx) if (f.type === "scream") {
     const s = (now - f.t) / 1000;
     if (f.k === "ring") { const R = s * f.sp; if (R < f.max) lightHole(f.x - cam.x, f.y - cam.y, Math.min(260, R + 40), .35); }

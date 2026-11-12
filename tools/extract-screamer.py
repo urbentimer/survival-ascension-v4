@@ -4,7 +4,7 @@
 #   portrait.png               black background (boss intro card)
 #   fx-*.png                   8 frames in a row on pure black (drawn additive in game: black = invisible); frames found by gaps
 # Writes (python3 tools/extract-screamer.py):
-#   client/assets/sprites/zombies/dir8/screamer-<walk|shriek>.webp   4 cols x 5 rows, cells CW x CH, feet at (AX, FY)
+#   client/assets/sprites/zombies/dir8/screamer-<walk|shriek>.webp   4 cols x 5 rows, cells CW x CH, feet at (AX, FY) (600 x 480, (300, 430) since Nov 12: 2x)
 #   client/assets/sprites/zombies/dir8/screamer-<wail|choke|death>.webp   1 row, same cells, scaled to match the walk
 #   client/assets/sprites/fx/screamer-<ring|ring2|mark|burst|wail>.webp     8 frames in a row, black background
 #   client/assets/portraits/screamer.webp
@@ -16,7 +16,8 @@ from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'screamer')
 spec = importlib.util.spec_from_file_location('xd', os.path.join(here, 'extract-directions.py')); xd = importlib.util.module_from_spec(spec); spec.loader.exec_module(xd)
 C = os.path.join(here, '..', 'client', 'assets'); D8 = os.path.join(C, 'sprites', 'zombies', 'dir8'); FX = os.path.join(C, 'sprites', 'fx')
-SCALE, CW, CH, AX, FY = 0.64, 300, 240, 150, 215   # the walk's DOWN frame ends up ~170px tall (Pyre ~140): he's the tall one
+R = 2   # (Nov 12) he is drawn 2x in game: the sheets are cut at that size straight from the source art (no browser stretch / blur); client SCR.r
+SCALE, CW, CH, AX, FY = 0.64 * R, 300 * R, 240 * R, 150 * R, 215 * R   # the walk's DOWN frame ends up ~340px tall (170 before Nov 12); cells 600 x 480, feet (300, 430)
 
 def load(n): return np.array(Image.open(os.path.join(ART, n + '.png')).convert('RGB')).astype(int)
 
@@ -53,10 +54,19 @@ def anchor(m):
     band = (ys > top + h * .35) & (ys < top + h * .75)
     return float(np.median(xs[band])), bot
 
+def resize_sharp(rgba, sc):   # (Nov 12) premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
+    from PIL import ImageFilter
+    a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
+    w, h = max(1, round(rgba.shape[1] * sc)), max(1, round(rgba.shape[0] * sc))
+    up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)
+    A = np.clip(np.dstack([up(pm[..., i]) for i in range(3)]), 0, 255); al = np.clip(up(rgba[..., 3]), 0, 255) / 255
+    rgb = np.where(al[..., None] > .02, A / np.maximum(al[..., None], .02), 0)
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.4 * max(1, sc), percent=65, threshold=2))
+    return Image.fromarray(np.dstack([np.array(img), (np.clip((al - .18) / .64, 0, 1) * 255).astype(np.uint8)]))
+
 def place(rgba, m, sc):
     hx, fy = anchor(m)
-    im = Image.fromarray(np.ascontiguousarray(rgba)); im = im.resize((round(im.width * sc), round(im.height * sc)), Image.LANCZOS)
-    q = np.array(im); q[..., 3] = np.where(q[..., 3] > 110, 255, 0); im = Image.fromarray(q)
+    im = resize_sharp(np.ascontiguousarray(rgba), sc)
     cell = Image.new('RGBA', (CW, CH)); ox, oy = round(AX - hx * sc), round(FY - fy * sc)
     if ox < 0 or oy < 0 or ox + im.width > CW or oy + im.height > CH: print('   clipped', ox, oy, im.size)
     cell.paste(im, (ox, oy), im); return cell
@@ -72,7 +82,7 @@ def sheet(name, rows=5, cols=4):
                 if name != 'walk': sc = SCALE * HEIGHT['walk'] / HEIGHT[name]   # single-row sheets were drawn bigger: match the walk
                 print(name, 'first frame', HEIGHT[name], 'px tall -> scale', round(sc, 3), '->', round(HEIGHT[name] * sc), 'px')
             atlas.alpha_composite(place(rgba[y0:y1, x0:x1], m, sc), (c * CW, r * CH))
-    out = os.path.join(D8, f'screamer-{name}.webp'); atlas.save(out, quality=82, alpha_quality=88, method=6)
+    out = os.path.join(D8, f'screamer-{name}.webp'); atlas.save(out, quality=90, alpha_quality=92, method=6)
     print(' ', name, atlas.size, '->', os.path.getsize(out) // 1024, 'KB')
 
 sheet('walk'); sheet('shriek')
