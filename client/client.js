@@ -674,8 +674,9 @@ function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOI
 const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit
+  mine: "assets/audio/music_boss_mine.mp3",   // (Nov 12) the Mine Beast's own theme: the user's 3:30 song with its 30s breakdown cut out (a 3:00 loop, 2-beat crossfade at 1:58), starting a bar before its big entry
   scream: "assets/audio/music_boss_scream.mp3" };   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
-const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -723,6 +724,7 @@ function musicScene() {   // which music fits right now
   if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)
   if ([...state.zombies.values()].some(z => (z.kind === "abomination" || z.kind === "abomSpawn") && z.boss) || (state.waveType === "boss" && state.bossIntro === "abomination")) return "abom";   // the Abomination (and the Five)
   if ([...state.zombies.values()].some(z => z.kind === "screamer" && z.boss) || (state.waveType === "boss" && state.bossIntro === "screamer")) return "scream";   // the Screamer's own theme (card + fight)
+  { const D = state.mission && deepState(); if (D && (D.step === "awake" || D.step === "fight" || D.step === "flee" || D.step === "chase")) return "mine"; }   // the Mine Beast: from the moment it wakes until you're through the portal
   const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
   if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
   return state.isNight ? "night" : "day";

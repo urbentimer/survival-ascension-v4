@@ -564,3 +564,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Walls now block it (lineClear; lava rivers don't, they're low), and no puddles land past the first wall.
 - Client: aFx got a height squash `sy`; the stream is drawn at sy .62 so it is twice as long, not twice as fat; side strands ±.09.
 - Tests: 5 puddles; new "jet doesn't go through walls / reaches 650px in the open". Cache `20261112r`; next `20261112s`.
+
+## Nov 12 — Mine Beast theme
+- The user's Mine video (63 min) is one 210.376 s song repeated (period 9,277,598 samples at 44.1 kHz; 71 BPM, beat 0.845 s).
+- Loop = the song with its breakdown cut out: play from 2:49.2 to the next pass's 2:18.7 (36 beats / 30.4 s removed), 2-beat equal-power crossfade. Length 179.95 s (7,935,820 samples). File rotated to start at song 0:20.3 (one bar before the big entry); the cut sits at 1:58.4 in the file.
+- `client/assets/audio/music_boss_mine.mp3` (padded 0.5 s, 128k, -16.5 LUFS). `MUSIC_LOOP.mine = { pad: .5, len: 7935820 / 44100 }`.
+- `musicScene()` returns "mine" while the mission step is awake / fight / flee / chase (from the statue waking until the portal). Work dir `/home/claude/work/mine` (render3.py).
+- Cache `20261112s`; next `20261112t`.
