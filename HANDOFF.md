@@ -610,3 +610,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - The user's Hivemind video is one 442.108 s song (175 bars at 95 BPM, bar 2.5264 s) repeated; inside it a 66-bar section repeats almost exactly (mel .98, chroma .93-.95). Loop = song bars 30-95 (one pass of that section), 166.74 s (7,353,141 samples), one-bar equal-power crossfade; file starts at song bar 40 (a bar before the big build). -16.5 LUFS.
 - `music_boss_hive.mp3`, `MUSIC_LOOP.hive`; musicScene → "hive" whenever a hivemind is out (the mini-boss waves and the Alpha) or bossIntro === "hivemind". The generic "boss" track is now only for bosses without their own theme (W50 Apocalypse). Work dir /home/claude/work/hive (render.py).
 - Cache `20261112z`; next `20261113a`.
+
+## Nov 12 — Pyre Priest theme slowed
+- The user asked to slow it down: the whole source track was time-stretched to 85% with ffmpeg `rubberband` (tempo=0.85, pitch and formants kept, crisp transients), then the same bars 40-112 loop re-cut from it (S, E, bar grid x 1/0.85; one-bar crossfade; starts at bar 80). 87.5 BPM, 200.166 s (8,827,320 samples). `MUSIC_LOOP.pyre.len = 8827320 / 44100`.
+- Stretch the SOURCE, not the finished loop: the file's wrap stays contiguous audio (stretching a tripled loop and cutting the middle gave a 0.43-correlated wrap).
+- Cache `20261113a`; next `20261113b`.
