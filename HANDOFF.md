@@ -601,3 +601,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server BUTCHER.radius 60 (was 40), chop trigger 185 / offset 80 / rings [105, 205, 300], spin radius 150; client BT mirrors.
 - Tried EDSR (cv2 dnn_superres, models cloned from github.com/Saafke/edsr_tensorflow to /home/claude/saafke/): softer than Lanczos + unsharp on this art, not used. Higgsfield has 0 credits.
 - Sim W4 (3 bots): killed in 70s. Preview now 4 asset chunks. Cache `20261112x`; next `20261112y`.
+
+## Nov 12 — Pyre Priest theme v2
+- The user sent a new Pyre track (4:39, one through-composed piece, 103 BPM, bar 2.3307 s). Loop = bars 40-112 (song 1:32.7 → 4:22.8, 73 bars, 170.135 s = 7,502,967 samples), one-bar equal-power crossfade from the final climax into the bar-40 section entry; file starts at bar 80 (a bar before the big section). -16.5 LUFS.
+- Replaced client/assets/audio/music_boss_pyre.mp3; `MUSIC_LOOP.pyre = { pad: .5, len: 7502967 / 44100 }`. Work dir /home/claude/work/pyre2 (render.py). Cache `20261112y`; next `20261112z`.
