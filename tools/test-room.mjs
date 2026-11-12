@@ -882,9 +882,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     const M = room.mine; ev.length = 0; z.aim = 0; p.x = z.x + 300; p.y = z.y; let h0 = z.hp; room.hitZombie(z, p, 100); const front = h0 - z.hp; p.x = z.x - 300; h0 = z.hp; room.hitZombie(z, p, 100); const back = h0 - z.hp;
     ok(Math.abs(front - 100) < 1 && Math.abs(back - 200) < 1, `CRYSTALS: a hit from behind lands on the crystals on its back for double damage (${front} front, ${back} back)`);
     for (let i = 0; i < 600 && M.crystals > 0; i++) { z.act = ""; room.hitZombie(z, p, 40); }
-    ok(M.crystals === 0 && z.act === "stagger" && Math.abs(z.slam - 5.5) < .01 && ev.filter(k => k === "crystal").length === 4 && room.state.mission.endsWith("|0"), "break all 4 crystals and it reels for 5.5s (and the count reaches the HUD)");
+    ok(M.crystals === 0 && z.act === "stagger" && Math.abs(z.slam - 5.5) < .01 && ev.filter(k => k === "crystal").length === 4 && room.state.mission.split("|")[7] === "0", "break all 4 crystals and it reels for 5.5s (and the count reaches the HUD)");
     idle(); h0 = z.hp; room.hitZombie(z, p, 100); ok(Math.abs(h0 - z.hp - 100) < 1, "with its crystals gone, hits from behind are normal again");
-    idle(); z.hp = z.maxHp * .49; tick(1); ok(z.enraged && z.act === "roar" && M.crystals === 4 && ev.includes("phase2") && z.speed > 100, `PHASE 2 below 50%: it roars, enrages, its crystals grow back and it's faster (speed ${Math.round(z.speed)})`);
+    idle(); z.hp = z.maxHp * .49; tick(1); ok(z.enraged && z.act === "roar" && M.crystals === 4 && ev.includes("phase2") && z.speed > 100, `PHASE 2 below 50%: it roars, enrages, its crystals grow back and it's faster (speed ${Math.round(z.speed)})`); M.shieldsDone = 9;   /* (the shield run is tested on its own below) */
     idle(); z.act = "skid"; z.actLen = .55; z.slam = .01; tick(1); ok(z.act === "roar" && ev.includes("chain"), "phase 2: a charge goes straight into a cave-in roar");
     idle(); z.act = "emerge"; z.actLen = 1; z.slam = .01; p.x = z.x + 300; p.y = z.y + 200; tick(1); ok(z.act === "throw", "phase 2: bursting out of the floor goes straight into a crystal throw");
     idle(); M.boulders = []; ev.length = 0; bm().next = 0; bm().caveReady = 0; bm().spinesReady = bm().burrowReady = bm().chargeReady = 1e15; for (let i = 0; i < 70 && !ev.includes("cavein"); i++) tick(1); for (const h of M.haz) h.at = 0; tick(1);   /* (hazards land on real time: make them land now) */
@@ -892,6 +892,21 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     M.boulders = [{ id: 999, x: Math.round(z.x - 210), y: Math.round(z.y), until: Date.now() + 1e6 }]; ev.length = 0; room.startAct(z, "charge", 2, Math.PI); bm().hit = new Set(); for (let i = 0; i < 20 && z.act === "charge"; i++) tick(1);
     ok(z.act === "stagger" && z.slam > 2.4 && ev.includes("bsmash") && !M.boulders.length, `its charge smashes into a boulder: it's stunned for 3s (${z.act} ${z.slam?.toFixed(2)})`);
     const hB = z.hp; z.aim = Math.atan2(p.y - z.y, p.x - z.x); M.crystals = 0; room.hitZombie(z, p, 100); ok(Math.abs(hB - z.hp - 150) < 1, "...and takes 50% more while stunned"); M.crystals = 4; idle(); }
+  { /* Nov 12: the CRYSTAL SHIELD run: at 66% / 33% it's shielded (immune, heals), fed by one shrine; ONE rider takes the cart there (it waits until they're back on), overloads it (F, 3s): the shield shatters, 6s stun; express back */
+    const M = room.mine, BS = () => T.stations.find(q => q.boss), SS = () => T.stations.find(q => q.shrine !== undefined); ev.length = 0; M.shieldsDone = 0; idle(); z.hp = z.maxHp * .6; tick(1);
+    ok(z.act === "plunge" && M.shield && ev.includes("shield") && SS() && T.stations.length === 3, `SHIELD at 66%: it plunges its drills in, a shield goes up, and a cart stop appears by the glowing shrine (${T.stations.length} stops)`);
+    idle(); let h1 = z.hp; room.hitZombie(z, p, 500); ok(z.hp >= h1, "shielded: it can't be hurt"); h1 = z.hp; tick(20); ok(z.hp > h1, `...and it slowly heals (${Math.round(z.hp - h1)} HP in 1s)`);
+    idle(); h1 = z.hp; M.shield.t = 59.99; tick(1); ok(z.hp - h1 > z.maxHp * .09 && ev.includes("shieldPulse"), "60s with the shield up: it heals 10%");
+    for (let i = 0; i < 200 && !(C.wait > 0 && T.stations[C.next]?.boss); i++) tick(1); idle(); const st = BS(); p.x = st.x; p.y = st.y - 150; q.x = st.x + 60; q.y = st.y - 150; send(A, "coaster"); send(B, "coaster");
+    ok(p.ride > 0 && !(q.ride > 0), "ONE rider: the first one in rides, the second can't");
+    let arrived = false; for (let i = 0; i < 900 && !arrived; i++) { idle(); tick(1); arrived = !(p.ride > 0); } const sh = room.shieldShrine(M.shield.i), stop = SS();
+    ok(arrived && C.wait > 0 && T.stations[C.next] === stop && Math.hypot(p.x - sh.x, p.y - sh.y) < 420, `the cart takes them to the shrine's stop and lets them off (${Math.round(Math.hypot(p.x - sh.x, p.y - sh.y))}px from the shrine)`);
+    const sS = C.s; for (let i = 0; i < 300; i++) { idle(); tick(1); } ok(C.s === sS && C.wait > 0, "the cart waits there until the rider is back on");
+    p.x = sh.x; p.y = sh.y; send(A, "deep"); ok(M.shield?.by === "A", "F at the glowing shrine: overloading (stay close)");
+    for (let i = 0; i < 70 && M.shield; i++) { p.x = sh.x; p.y = sh.y; tick(1); } ok(!M.shield && z.act === "stagger" && z.slam > 5 && ev.includes("shieldBreak"), `3s later THE SHIELD SHATTERS: it's stunned for 6s (${z.act} ${z.slam?.toFixed(1)})`);
+    p.x = stop.x; p.y = stop.y + 40; send(A, "coaster"); ok(p.ride > 0, "back on the cart at the shrine stop");
+    let home = false; for (let i = 0; i < 1500 && !home; i++) { idle(); tick(1); home = !(p.ride > 0); } ok(home && room.inCordon(p) && T.stations.length === 2 && !C.express, "express back to the boss stop: off you get, and the extra stop is gone");
+    M.shieldsDone = 9; idle(); }
   room.hitZombie(z, p, 1e9); tick(1); ok(m.step === "flee" && room.state.zombies.has(z.id) && !z.boss, "its bar is empty: it can't be killed, it drops to a knee (get in the carts)");
   p.x = T.stations[1].x; p.y = T.stations[1].y - 150; send(A, "coaster"); const rode = p.ride > 0; tick(Math.ceil(10 / .05) + 10);
   ok(rode && m.step === "chase" && q.ride > 0, "F at the boss stop gets you aboard; when the time is up everyone left is put in the carts and it comes after them");

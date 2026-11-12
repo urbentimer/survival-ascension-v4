@@ -444,6 +444,7 @@ export const mineCordon = (WW, WH) => ({ x: (MN_SPOT.dungeon[0] + 60) * WW / 600
 // The boss dungeon's small things (user, Nov 11: "I keep getting stuck at the back and in between things"): they keep their footprints for PLACING
 // (nothing lands on top of them) but nobody collides with them: you walk past candles, braziers, kneeling miners, bones... The fight needs the floor.
 export const MAP_PASS = { mCandles: 1, mBrazier: 1, mMiner: 1, mMinerBroken: 1, mBones: 1, mOffering: 1, mCoffin: 1, mCage: 1, mRuneStone: 1, mAltar: 1, mGate: 1, mTotem: 1 };
+export function trackNearest(T, x, y) { let b = null, bd = 1e18; for (const q of T.pts) { const d = (q.x - x) ** 2 + (q.y - y) ** 2; if (d < bd) { bd = d; b = q; } } return b; }   // the rail point closest to (x, y): the Mine Beast's shield run stops the carts there (Nov 12)
 export function mineTrack(WW, WH) {   // one closed loop, points 24px apart: {x, y (the rails, on the ground), s}; ONE station (the cart station, top left)
   const sx = WW / 6000, sy = WH / 4000, P = MN_WAY.map(([x, y]) => [x * sx, y * sy]), n = P.length, raw = [];
   for (let i = 0; i < n; i++) { const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];

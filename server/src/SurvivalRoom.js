@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, trackNearest, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -408,7 +408,8 @@ const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
   stagger: 3.2, staggerMult: 1.5, fleeWait: 10,
   crystals: { n: 4, hpPct: .045, mult: 2, back: 2.0, stagger: 5.5 },   // Nov 12: the crystals on its back: hits from BEHIND (attacker > 115 deg off its facing) do x2 and chip them; all 4 broken = a long stagger
   phase2: { at: .5, speed: 1.15, cd: .75, extraRocks: 2 },   // Nov 12: below 50% HP: enraged (red crystals, which grow back), faster, shorter cooldowns, more rocks, chained attacks
-  boulder: { r: 58, life: 16, cap: 5, stun: 3 } };   // Nov 12: the cave-in rocks that miss leave boulders; charging into one stuns it (3s, it takes +50%)
+  boulder: { r: 58, life: 16, cap: 5, stun: 3 },
+  shield: { at: [.66, .33], plunge: 1.3, regen: .0015, pressure: 60, punish: .1, ovR: 150, ov: 3, stun: 6, express: 2.4, zEvery: 2.2, zCap: 6 } };   // Nov 12 (user): CRYSTAL SHIELD at 66% / 33%: it can't be hurt and slowly heals, fed by ONE rune shrine out in the mine. One survivor rides the cart there (the cart waits at that stop until they're back on), overloads it (F, stay 3s) and the shield shatters: 6s stun (+50%). Every 60s it's up: +10% HP.   // Nov 12: the cave-in rocks that miss leave boulders; charging into one stuns it (3s, it takes +50%)
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export function warmLayouts() { for (let i = 0; i < SITES.length; i++) if (!paintedOf(SITES[i])) siteLayout(i); }   // build every map once at boot, before anyone joins (the free Render server has 0.15 CPU: building them inside the first room stalled it for seconds)
 export class SurvivalRoom extends Room {
@@ -537,7 +538,8 @@ export class SurvivalRoom extends Room {
     // Midnight Carnival: F at a station while the train is stopped = get on (or off). One lap per ride, then COASTER.cd seconds before the next.
     this.onMessage("coaster", client => {
       const C = this.coaster, sid = client.sessionId, p = this.state.players.get(sid); if (!C || !p || !p.alive || !["playing", "cleared"].includes(this.state.phase)) return;
-      if (this.mine && (this.mine.step === "awake" || this.mine.step === "fight")) return;   // (the Mine Beast fight is on foot: no hiding in the carts)
+      if (this.mine && (this.mine.step === "awake" || (this.mine.step === "fight" && !this.mine.shield && !(p.ride > 0) && !C.T.stations.some(q => q.shrine !== undefined)))) return;   // (the Mine Beast fight is on foot: no hiding in the carts... except ONE rider on a shield run)
+      if (this.mine?.step === "fight" && !(p.ride > 0) && C.riders.size) { this.state.message = "Only ONE rider: the rest of you hold the Beast off!"; return; }
       if (p.ride > 0) { if (C.wait > 0) this.coasterOff(sid); return; }
       if (this.state.vehicles.has(sid) || C.cd.has(sid)) return;
       const si = C.T.stations.findIndex(st => Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR); if (si < 0) return;
@@ -2940,22 +2942,23 @@ export class SurvivalRoom extends Room {
   }
   coasterOff(sid) {   // off the train: onto the ground in front of the station it's stopped at (or under the track if they were knocked off), and the cooldown starts
     const C = this.coaster, p = this.state.players.get(sid); if (!C || !C.riders.has(sid)) return; C.riders.delete(sid);
-    const atBoss = C.wait > 0 && C.T.stations[C.next]?.boss; if (atBoss) (C.held ||= new Set()).add(sid); else if (!this.mine) C.cd.set(sid, Date.now() + C.K.cd * 1000);   // the boss stop (the mine): no cooldown, and the carts wait there until you're back on
+    const atBoss = C.wait > 0 && (C.T.stations[C.next]?.boss || C.T.stations[C.next]?.shrine !== undefined); if (atBoss) (C.held ||= new Set()).add(sid); else if (!this.mine) C.cd.set(sid, Date.now() + C.K.cd * 1000);   // the boss stop (the mine): no cooldown, and the carts wait there until you're back on
     if (!p) return; p.ride = 0;
     const [dx0, dy0] = MN_SPOT.dungeon, cord = c => C.K.along && c.x > dx0 * this.A.width / 6000 - 40 && c.y > dy0 * this.A.height / 4000 - 40;   // (the mine: knocked off inside the cordoned dungeon = back on the station deck)
-    if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = (st.off || 1) < 0 ? st.y - 160 + rand(0, 14) : st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
+    if (C.wait > 0 && C.T.stations[C.next]?.shrine !== undefined) { const st = C.T.stations[C.next], sh = this.shieldShrine(st.shrine) || st; p.x = st.x + (sh.x - st.x) * .4 + rand(-20, 20); p.y = st.y + (sh.y - st.y) * .4 + rand(-10, 10); }   // the shield run's stop: off toward the shrine
+    else if (C.wait > 0 || cord(coasterAt(C.T, C.s))) { const st = C.T.stations[C.wait > 0 ? C.next : 0]; if (C.K.along) { p.x = st.x + rand(-110, 150); p.y = (st.off || 1) < 0 ? st.y - 160 + rand(0, 14) : st.y + 42 + rand(0, 10); } else { p.x = st.x + rand(-70, 150); p.y = st.y - 44 + rand(0, 10); } }   // the mine: onto the station's deck, in front of the carts   // onto the platform; they walk down the steps else { const c = coasterAt(C.T, C.s); p.x = c.x; p.y = c.y + 34; }
     this.solveCollisions(p); this.broadcast("coaster", { k: "off", id: sid });
   }
   updateCoaster(dt) {
     const C = this.coaster, T = C.T, now = Date.now();
-    const holding = () => { if (!C.held?.size || !T.stations[C.next]?.boss) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0 || (this.cordon && !(q.x > this.cordon.x && q.y > this.cordon.y))) C.held.delete(sid); else n++; } return n; };   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
+    const holding = () => { const stn = T.stations[C.next]; if (!C.held?.size || !(stn?.boss || stn?.shrine !== undefined)) return 0; let n = 0; for (const sid of [...C.held]) { const q = this.state.players.get(sid); if (!q || !q.alive || q.ride > 0 || (stn.boss && this.cordon && !(q.x > this.cordon.x && q.y > this.cordon.y))) C.held.delete(sid); else n++; } return n; };   // (the shield run's stop waits for its rider too)   // who got off at the boss stop and isn't back yet (downed / gone = not waited for)
     if (C.wait > 0) { C.hold = holding(); const gate = this.mine ? this.mineGate(C) : 0; if (gate === 1) C.wait = Math.max(C.wait, DEEP.leave + dt); else if (gate === 2) C.wait = Math.min(C.wait, 2);   // the mine mission: 1 = the carts stay put, 2 = nothing to wait for
-      C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { if (this.mine) this.mineDepart(C); C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; if (this.mine?.step === "chase") C.next = T.stations.findIndex(q => q.boss); } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
+      C.wait -= dt; if (C.wait <= 0) { if (C.hold) C.wait = .25; else { if (this.mine) this.mineDepart(C); C.wait = 0; C.next = (C.next + 1) % T.stations.length; C.s = (C.s + 2) % T.L; if (this.mine?.step === "chase" || C.express) C.next = T.stations.findIndex(q => q.boss); } } }   // leaving: just past the platform, so with ONE station the next stop is a whole lap away
     else { C.hold = 0; let left = (((T.stations[C.next].s - C.s) % T.L) + T.L) % T.L; 
-      const step = Math.min(C.K.speed * (this.mine ? (this.mine.step === "chase" ? DEEP.chaseSpeed : DEEP.speed) : 1), Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // slows into the station
+      const step = Math.min(C.K.speed * (this.mine ? (this.mine.step === "chase" ? DEEP.chaseSpeed : DEEP.speed) * (C.express ? BEAST.shield.express : 1) : 1), Math.max(70, left * 1.6)) * dt, go = Math.min(step, left);   // (the shield run's way back: express)   // slows into the station
       for (const r of C.riders.values()) r.done += go;
       if (step >= left && this.mine?.step === "chase") { C.s = T.stations[C.next].s; C.wait = 99; this.mineEscape(); }   // the chase lap is done: back in the dungeon, through the portal
-      else if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; for (const [sid, r] of [...C.riders]) if (!T.stations[C.next].boss && (r.done >= T.L - 40 || T.stations[r.from]?.boss)) this.coasterOff(sid);
+      else if (step >= left) { C.s = T.stations[C.next].s; C.wait = C.K.wait; if (T.stations[C.next].boss && C.express) { C.express = false; for (const sid of [...C.riders.keys()]) this.coasterOff(sid); C.held?.clear(); if (!this.mine?.shield) this.dropShieldStop(); }   /* back from the shield run: off you get */ for (const [sid, r] of [...C.riders]) if (!T.stations[C.next].boss && (r.done >= T.L - 40 || T.stations[r.from]?.boss)) this.coasterOff(sid);
         const st = T.stations[C.next]; for (const [sid, si] of [...C.queue]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.queue.delete(sid); continue; } if (si === C.next && Math.hypot(p.x - st.x, p.y - (st.y + 40)) < COASTER_NEAR + 60) this.coasterBoard(sid); } }   // whoever was waiting here gets on   // one lap: off you get
       else C.s = (C.s + step) % T.L; }
     for (const [sid, r] of [...C.riders]) { const p = this.state.players.get(sid); if (!p || !p.alive) { C.riders.delete(sid); if (p) p.ride = 0; continue; } const q = coasterSeat(T, C.s, r.seat); p.x = q.x; p.y = q.y; }
@@ -2985,7 +2988,7 @@ export class SurvivalRoom extends Room {
     else if (SITES[s.mapSite].style === "mine") this.loadSite(s.mapSite);
     if (s.waveType === "mission") s.waveType = "normal";
   }
-  mineSync() { const m = this.mine, str = !m ? "" : [m.step, m.fuel, m.placed, m.cartHp, Math.round(m.gap / 10) * 10, m.inserted ? 1 : 0, m.runes.map(r => `${r.st}.${Math.round(r.x)}.${Math.round(r.y)}.${r.by}`).join(","), m.crystals ?? BEAST.crystals.n].join("|"); if (this.state.mission !== str) this.state.mission = str; }
+  mineSync() { const m = this.mine, str = !m ? "" : [m.step, m.fuel, m.placed, m.cartHp, Math.round(m.gap / 10) * 10, m.inserted ? 1 : 0, m.runes.map(r => `${r.st}.${Math.round(r.x)}.${Math.round(r.y)}.${r.by}`).join(","), m.crystals ?? BEAST.crystals.n, m.shield ? `${m.shield.i}.${Math.round(m.shield.ov / BEAST.shield.ov * 100)}.${Math.ceil(BEAST.shield.pressure - m.shield.t)}.${m.shield.by}` : "", (this.coaster?.T.stations.find(q => q.shrine !== undefined)?.shrine) ?? ""].join("|"); if (this.state.mission !== str) this.state.mission = str; }
   mineShard(x, y) {   // a crystal shard (cart fuel): where a zombie fell, or lying near one of the mine's crystals
     const s = this.state; if ([...s.loot.values()].filter(q => q.kind === "shard").length >= DEEP.shardCap) return;
     if (x === undefined) { const cr = this.minePieces.crystals; for (let t = 0; t < 12; t++) { const c = cr[Math.floor(Math.random() * cr.length)], a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 90; x = c.x + Math.cos(a) * d; y = c.y - 20 + Math.sin(a) * d * .7; if (!this.blockedByMap(x, y, 16) && !this.inCordon({ x, y })) break; x = undefined; } if (x === undefined) return; }
@@ -2993,7 +2996,9 @@ export class SurvivalRoom extends Room {
     const item = new LootState(); item.id = `l${++this.lootSequence}`; item.kind = "shard"; item.amount = 1; item.rarity = "Rare"; item.x = x + rand(-14, 14); item.y = y + rand(-10, 10); s.loot.set(item.id, item);
   }
   mineUse(p) {   // F: put the rune you carry into the statue (inside the dungeon, at its plinth), or take a rune from a shrine / off the ground
-    const m = this.mine; if (m.step !== "runes") return; const mine = m.runes.find(r => r.st === 1 && r.by === p.sessionId), ST = this.minePieces.statue;
+    const m = this.mine;
+    if (m.step === "fight" && m.shield) { const sh = this.shieldShrine(m.shield.i); if (sh && hyp(p.x - sh.x, p.y - sh.y) < BEAST.shield.ovR && m.shield.by !== p.sessionId) { m.shield.by = p.sessionId; m.shield.ov = 0; this.state.message = `${p.name} is overloading the shrine: stay close!`; this.broadcast("deep", { k: "overload", id: p.sessionId }); this.mineSync(); } return; }   // the shield run: F at the glowing shrine, then stay close for 3s
+    if (m.step !== "runes") return; const mine = m.runes.find(r => r.st === 1 && r.by === p.sessionId), ST = this.minePieces.statue;
     if (mine) { if (!m.inserted && this.inCordon(p) && hyp(p.x - ST.x, p.y - (ST.y + 20)) < DEEP.insertR) this.mineInsert(mine); return; }
     let best = null, bd = DEEP.takeR; for (const r of m.runes) if (r.st === 0 || r.st === 2) { const d = hyp(p.x - r.x, p.y - r.y); if (d < bd) { bd = d; best = r; } }
     if (best) { best.st = 1; best.by = p.sessionId; this.broadcast("deep", { k: "take", id: p.sessionId }); this.state.message = `${p.name} has a rune! Get it to the cart station.`; this.mineSync(); }
@@ -3006,12 +3011,15 @@ export class SurvivalRoom extends Room {
   }
   mineGate(C) {   // what the carts do while stopped: 1 = stay, 2 = nothing to wait for (leave soon), 0 = their normal wait
     const m = this.mine, boss = !!C.T.stations[C.next]?.boss, carried = [...C.riders.keys()].some(sid => m.runes.some(r => r.st === 1 && r.by === sid));
+    const stn = C.T.stations[C.next];
+    if (m.step === "fight" && stn?.shrine !== undefined) return C.riders.size ? (m.shield ? 1 : 2) : C.held?.size ? 1 : 2;   // the shield run's stop: wait while the rider is off (or still aboard with the shield up); once they're back on (or gone), head back
+    if (m.step === "fight" && boss && m.shield && C.riders.size) return 2;   // ONE rider aboard at the boss stop: off to the shrine
     if (m.step === "awake" || m.step === "fight" || m.step === "flee" || m.step === "escaped") return 1;
     if (m.step === "chase") return 2;
     if (!boss) return carried && m.fuel >= DEEP.fuelCost ? 0 : 1;   // the station: they leave once a rune is aboard and they're fuelled
     return carried && !m.inserted ? 1 : C.riders.size ? 2 : 1;   // the boss stop: wait for the rune to go in (and for whoever hopped off: C.hold), then go
   }
-  mineDepart(C) { const m = this.mine; if (m.step === "runes" && !C.T.stations[C.next]?.boss) { m.fuel = Math.max(0, m.fuel - DEEP.fuelCost); m.inserted = false; this.state.message = "The carts are rolling: next stop, the boss dungeon."; } }
+  mineDepart(C) { const m = this.mine; if (C.T.stations[C.next]?.shrine !== undefined) C.express = true; if (m.step === "runes" && !C.T.stations[C.next]?.boss) { m.fuel = Math.max(0, m.fuel - DEEP.fuelCost); m.inserted = false; this.state.message = "The carts are rolling: next stop, the boss dungeon."; } }
   mineAwaken() {   // the fourth rune is in (or the test button): EVERYONE is pulled into the dungeon in front of the statue while it breaks its chains
     const m = this.mine, s = this.state, C = this.coaster, ST = this.minePieces.statue, bi = C.T.stations.findIndex(q => q.boss); this.dismountAll();
     for (const r of m.runes) { r.st = 3; r.by = ""; } m.placed = 4; m.inserted = true; m.step = "awake"; m.t = DEEP.awake; m.haz = [];
@@ -3030,7 +3038,7 @@ export class SurvivalRoom extends Room {
     s.message = "THE MINE BEAST IS AWAKE!"; this.broadcast("deep", { k: "fight" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) }); this.mineSync();
   }
   mineFlee(z) {   // its bar is empty: it drops to a knee. Everyone gets to the carts (F at the boss stop); then it comes after them
-    const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; m.boulders = []; z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
+    const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; m.boulders = []; m.shield = null; this.dropShieldStop(); z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
     this.state.message = "IT WON'T STAY DOWN: GET IN THE CARTS!"; this.broadcast("deep", { k: "flee", len: BEAST.fleeWait }); this.mineSync();
   }
   mineChase() {   // everyone left in the dungeon is put in the carts (the downed are pulled aboard), and it comes after them
@@ -3070,12 +3078,43 @@ export class SurvivalRoom extends Room {
       else this.state.message = `A CRYSTAL SHATTERED! ${m.crystals} left on its back.`; }
     return dmg;
   }
+  shieldShrine(i) { const P = this.minePieces.shrines[i]; return P ? { x: P.x, y: P.y + 34 } : null; }   // (where you stand to overload it)
+  shieldStop(i) {   // the cart stop next to that shrine: added to the track while the shield run is on (the carts wait there until the rider is back on)
+    const C = this.coaster, T = C.T, sh = this.shieldShrine(i); if (!sh) return -1; let k = T.stations.findIndex(q => q.shrine !== undefined);
+    if (k >= 0 && T.stations[k].shrine === i) return k; if (k >= 0) T.stations.splice(k, 1);
+    const q = trackNearest(T, sh.x, sh.y), cur = T.stations[C.next]; T.stations.push({ s: q.s, x: Math.round(q.x), y: Math.round(q.y), off: 1, shrine: i }); T.stations.sort((a, b) => a.s - b.s); C.next = Math.max(0, T.stations.indexOf(cur));   // (indices shift: keep pointing at the same stop)
+    return T.stations.findIndex(st => st.shrine === i);
+  }
+  dropShieldStop() { const C = this.coaster; if (!C) return; const T = C.T, k = T.stations.findIndex(q => q.shrine !== undefined); if (k < 0) return; const cur = T.stations[C.next]; T.stations.splice(k, 1); C.next = Math.max(0, T.stations.indexOf(cur)); if (C.next < 0 || !T.stations[C.next]) C.next = T.stations.findIndex(st => st.boss); C.express = false; }
+  startShield(z, bm, now) {   // it drives its drills into the floor: a crystal shield, fed by one rune shrine out in the mine
+    const B = BEAST.shield, m = this.mine, s = this.state, C = this.coaster;
+    if (!m.shieldPick) { const bs = C.T.stations.find(q => q.boss).s, L = C.T.L; m.shieldPick = this.minePieces.shrines.map((d, i) => ({ i, f: ((trackNearest(C.T, d.x, d.y + 34).s - bs) % L + L) % L })).sort((a, b) => a.f - b.f).slice(0, 2).map(o => o.i); }   // the two shrines nearest the boss stop down the line
+    const i = m.shieldPick[(m.shieldsDone || 0) % m.shieldPick.length]; m.shieldsDone = (m.shieldsDone || 0) + 1; m.shield = { i, t: 0, by: "", ov: 0 }; this.shieldStop(i);
+    this.startAct(z, "plunge", B.plunge); bm.next = now + (B.plunge + BEAST.gap) * 1000; const sh = this.shieldShrine(i);
+    s.message = "IT'S SHIELDED! ONE survivor: ride the cart (F at the boss stop) to the glowing shrine and overload it. The rest: hold it off!";
+    this.broadcast("deep", { k: "shield", x: Math.round(z.x), y: Math.round(z.y), sx: Math.round(sh.x), sy: Math.round(sh.y) }); this.mineSync();
+  }
+  shieldTick(z, dt, now) {
+    const B = BEAST.shield, m = this.mine, S = m.shield, s = this.state; z.hp = Math.min(z.maxHp, z.hp + z.maxHp * B.regen * dt); S.t += dt;
+    if (S.t >= B.pressure) { S.t = 0; z.hp = Math.min(z.maxHp, z.hp + z.maxHp * B.punish); s.message = "Too slow: the shield grows stronger, it HEALED! Overload the shrine!"; this.broadcast("deep", { k: "shieldPulse", x: Math.round(z.x), y: Math.round(z.y) }); }
+    if (S.by) { const p = s.players.get(S.by), sh = this.shieldShrine(S.i);
+      if (!p || !p.alive || p.ride > 0 || !sh || hyp(p.x - sh.x, p.y - sh.y) > B.ovR + 30) { S.by = ""; S.ov = 0; }
+      else { S.ov += dt; if (S.ov >= B.ov) { this.breakShield(z, p); return; } } }
+    this.mineSync();
+  }
+  breakShield(z, p) {
+    const B = BEAST.shield, m = this.mine, sh = this.shieldShrine(m.shield.i), bm = this.bossMem.get(z.id); m.shield = null;
+    this.startAct(z, "stagger", B.stun); if (bm) bm.next = Date.now() + (B.stun + 1) * 1000;
+    this.state.message = `${p?.name || "Someone"} overloaded the shrine: THE SHIELD SHATTERED! Hit it now!`;
+    this.broadcast("deep", { k: "shieldBreak", x: Math.round(z.x), y: Math.round(z.y), sx: Math.round(sh?.x || 0), sy: Math.round(sh?.y || 0) }); this.mineSync();
+  }
   beastThink(z, dt, now) {
     const B = BEAST, s = this.state, m = this.mine; this.beastHazards(now);
     if (z.hp <= 1) { this.mineFlee(z); return; }
     if (m.boulders?.length) m.boulders = m.boulders.filter(b => { if (now < b.until) return true; this.broadcast("deep", { k: "boulderGone", id: b.id }); return false; });
     const E = z.enraged ? B.phase2 : null, cdk = E ? E.cd : 1;   // phase 2: shorter cooldowns
     let bm = this.bossMem.get(z.id); if (!bm) { bm = { next: now + 2500, strikeReady: 0, spinesReady: now + B.spines.first * 1000, caveReady: now + B.cavein.first * 1000, burrowReady: now + B.burrow.first * 1000, chargeReady: now + B.charge.first * 1000, prey: null, windDmg: 0 }; this.bossMem.set(z.id, bm); }
+    if (m.shield) this.shieldTick(z, dt, now);
     const targets = [...s.players.values()].filter(p => p.alive && !(p.shadow > 0) && this.inCordon(p)), near = () => { let best = null, bd = 1e9; for (const p of targets) { const d = hyp(p.x - z.x, p.y - z.y); if (d < bd) { bd = d; best = p; } } return best; };
     if (z.act) {
       const act = z.act, t0 = z.actLen - z.slam; z.slam = Math.max(0, z.slam - dt); const t1 = z.actLen - z.slam, at = x => t0 < x && t1 >= x, ca = Math.cos(z.aim), sa = Math.sin(z.aim);
@@ -3121,6 +3160,7 @@ export class SurvivalRoom extends Room {
       bm.caveReady = now + (B.cavein.len + B.cavein.cd * B.phase2.cd) * 1000; bm.next = now + (B.cavein.len + B.gap) * 1000; this.startAct(z, "roar", B.cavein.len, Math.PI / 2);
       s.message = "THE MINE BEAST IS ENRAGED! Its crystals grew back: shoot its BACK."; this.broadcast("deep", { k: "phase2", x: Math.round(z.x), y: Math.round(z.y) }); return;
     }
+    if (!m.shield && (m.shieldsDone || 0) < B.shield.at.length && z.hp <= z.maxHp * B.shield.at[m.shieldsDone || 0]) { this.startShield(z, bm, now); return; }   // CRYSTAL SHIELD
     const prey = near(); if (!prey) return; const d = hyp(prey.x - z.x, prey.y - z.y), a = Math.atan2(prey.y - z.y, prey.x - z.x); z.aim = a; z.targetId = prey.sessionId;
     const pick = () => targets[Math.floor(Math.random() * targets.length)], skill = (key, act, len, cd, extra) => { bm[key] = now + (len + cd * cdk) * 1000; bm.next = now + (len + B.gap) * 1000; this.startAct(z, act, len); if (extra) extra(); };
     if (now >= bm.next) {
@@ -3131,6 +3171,12 @@ export class SurvivalRoom extends Room {
     }
     if (d < B.strike.range && now >= bm.strikeReady) { bm.strikeReady = now + (B.strike.len + B.strike.cd) * 1000; this.startAct(z, "strike", B.strike.len); return; }
     if (d > 120) this.beastMove(z, Math.cos(a) * z.speed * dt, Math.sin(a) * z.speed * dt);
+  }
+  mineHunter(prey) {   // one zombie out of the dark, 640-860px from someone on foot outside the dungeon
+    const s = this.state; const before = this.zombieSequence; this.spawnZombie(); const z = this.zombieSequence !== before ? s.zombies.get(`z${this.zombieSequence}`) : null;
+        if (z) { const p = prey[Math.floor(Math.random() * prey.length)]; z.role = "hunter"; let ok = false;
+          for (let t = 0; t < 14 && !ok; t++) { const a = Math.random() * Math.PI * 2, d = 640 + Math.random() * 220, x = clamp(p.x + Math.cos(a) * d, 30, this.A.width - 30), y = clamp(p.y + Math.sin(a) * d, 30, this.A.height - 30); if (!this.blockedByMap(x, y, 24) && !this.inCordon({ x: x + 40, y: y + 40 })) { z.x = x; z.y = y; ok = true; } }
+          if (!ok) s.zombies.delete(z.id); }
   }
   mineEscape() { const m = this.mine; if (m.step === "escaped") return; m.step = "escaped"; m.t = DEEP.flash; this.state.message = "THROUGH THE PORTAL!"; this.broadcast("deep", { k: "escaped" }); this.mineSync(); }
   mineTick(dt, now) {
@@ -3146,11 +3192,11 @@ export class SurvivalRoom extends Room {
       m.shardClock -= dt; if (m.shardClock <= 0) { m.shardClock = DEEP.shardEvery; this.mineShard(); }
       m.zClock -= dt; const prey = [...s.players.values()].filter(p => p.alive && !(p.ride > 0) && !this.inCordon(p));
       if (m.zClock <= 0 && prey.length && s.zombies.size < DEEP.zCap[0] + DEEP.zCap[1] * s.players.size) {   // the horde comes out of the dark around whoever is on foot
-        m.zClock = DEEP.zEvery / this.spawnScale(); const before = this.zombieSequence; this.spawnZombie(); const z = this.zombieSequence !== before ? s.zombies.get(`z${this.zombieSequence}`) : null;
-        if (z) { const p = prey[Math.floor(Math.random() * prey.length)]; z.role = "hunter"; let ok = false;
-          for (let t = 0; t < 14 && !ok; t++) { const a = Math.random() * Math.PI * 2, d = 640 + Math.random() * 220, x = clamp(p.x + Math.cos(a) * d, 30, this.A.width - 30), y = clamp(p.y + Math.sin(a) * d, 30, this.A.height - 30); if (!this.blockedByMap(x, y, 24) && !this.inCordon({ x: x + 40, y: y + 40 })) { z.x = x; z.y = y; ok = true; } }
-          if (!ok) s.zombies.delete(z.id); }
+        m.zClock = DEEP.zEvery / this.spawnScale(); this.mineHunter(prey);
       } else if (m.zClock <= 0) m.zClock = .5;
+    } else if (m.step === "fight" && m.shield) {   // the shield run: the dark comes for the rider out in the mine
+      m.zClock = (m.zClock || 0) - dt; const prey = [...s.players.values()].filter(p => p.alive && !(p.ride > 0) && !this.inCordon(p)), out = [...s.zombies.values()].filter(z => z.kind !== "minebeast").length;
+      if (m.zClock <= 0 && prey.length && out < BEAST.shield.zCap) { m.zClock = BEAST.shield.zEvery / this.spawnScale(); this.mineHunter(prey); } else if (m.zClock <= 0) m.zClock = .5;
     } else if (m.step === "awake") { m.t -= dt; if (m.t <= 0) this.mineFight(); }
     else if (m.step === "flee") { m.t -= dt; const alive = [...s.players.values()].filter(p => p.alive); if (m.t <= 0 || (alive.length && alive.every(p => p.ride > 0))) this.mineChase(); }
     else if (m.step === "chase") {
@@ -3557,7 +3603,7 @@ export class SurvivalRoom extends Room {
   hitZombie(z, p, dmg) {
     if (!this.state.zombies.has(z.id)) return;
     if (p?.sessionId) dmg *= this.supportBuff(p) * this.cryBuff(p);
-    if (z.kind === "minebeast") { const bm = this.bossMem.get(z.id); if (z.act === "under") return; if (z.act === "stagger") dmg *= BEAST.staggerMult; dmg = this.beastCrystalHit(z, p, dmg, bm); if (bm && z.act === "wind") bm.windDmg = (bm.windDmg || 0) + dmg; }   // underground: can't be hurt; staggered: takes more; winding up a charge: the damage counts toward breaking it
+    if (z.kind === "minebeast") { const bm = this.bossMem.get(z.id); if (z.act === "under") return; if (this.mine?.shield) { const t = Date.now(); if (bm && t - (bm.shHit || 0) > 160) { bm.shHit = t; this.broadcast("deep", { k: "shieldHit", x: Math.round(z.x), y: Math.round(z.y) }); } return; }   /* shielded: nothing gets through */ if (z.act === "stagger") dmg *= BEAST.staggerMult; dmg = this.beastCrystalHit(z, p, dmg, bm); if (bm && z.act === "wind") bm.windDmg = (bm.windDmg || 0) + dmg; }   // underground: can't be hurt; staggered: takes more; winding up a charge: the damage counts toward breaking it
     if (z.kind === "abomination") {
       if (z.act === "sunder") return;   // tearing apart: can't be hurt
       if (z.act === "daze") dmg *= ABOM.roll.dazeMult;
