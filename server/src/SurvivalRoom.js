@@ -405,7 +405,10 @@ const BEAST = { hp: 3300, speed: 92, radius: 62, dmg: 22, gap: 2.4,
   cavein: { first: 10, cd: 17, len: 1.9, at: .5, delay: 1.35, r: 95, mult: 1.2, perPlayer: 2, extra: 3, dark: 5 },
   burrow: { first: 16, cd: 19, dive: 1.0, under: 3.4, speed: 204, warn: .9, r: 150, mult: 1.6, emerge: 1.0 },
   charge: { first: 24, cd: 16, wind: 1.8, speed: 512, len: 950, half: 95, mult: 1.7, push: 170, skid: .55, breakPct: .04 },
-  stagger: 3.2, staggerMult: 1.5, fleeWait: 10 };
+  stagger: 3.2, staggerMult: 1.5, fleeWait: 10,
+  crystals: { n: 4, hpPct: .045, mult: 2, back: 2.0, stagger: 5.5 },   // Nov 12: the crystals on its back: hits from BEHIND (attacker > 115 deg off its facing) do x2 and chip them; all 4 broken = a long stagger
+  phase2: { at: .5, speed: 1.15, cd: .75, extraRocks: 2 },   // Nov 12: below 50% HP: enraged (red crystals, which grow back), faster, shorter cooldowns, more rocks, chained attacks
+  boulder: { r: 58, life: 16, cap: 5, stun: 3 } };   // Nov 12: the cave-in rocks that miss leave boulders; charging into one stuns it (3s, it takes +50%)
 const COASTER_NEAR = 300;   // how close to a coaster station (its platform / steps) you must be to board or queue
 export function warmLayouts() { for (let i = 0; i < SITES.length; i++) if (!paintedOf(SITES[i])) siteLayout(i); }   // build every map once at boot, before anyone joins (the free Render server has 0.15 CPU: building them inside the first room stalled it for seconds)
 export class SurvivalRoom extends Room {
@@ -2982,7 +2985,7 @@ export class SurvivalRoom extends Room {
     else if (SITES[s.mapSite].style === "mine") this.loadSite(s.mapSite);
     if (s.waveType === "mission") s.waveType = "normal";
   }
-  mineSync() { const m = this.mine, str = !m ? "" : [m.step, m.fuel, m.placed, m.cartHp, Math.round(m.gap / 10) * 10, m.inserted ? 1 : 0, m.runes.map(r => `${r.st}.${Math.round(r.x)}.${Math.round(r.y)}.${r.by}`).join(",")].join("|"); if (this.state.mission !== str) this.state.mission = str; }
+  mineSync() { const m = this.mine, str = !m ? "" : [m.step, m.fuel, m.placed, m.cartHp, Math.round(m.gap / 10) * 10, m.inserted ? 1 : 0, m.runes.map(r => `${r.st}.${Math.round(r.x)}.${Math.round(r.y)}.${r.by}`).join(","), m.crystals ?? BEAST.crystals.n].join("|"); if (this.state.mission !== str) this.state.mission = str; }
   mineShard(x, y) {   // a crystal shard (cart fuel): where a zombie fell, or lying near one of the mine's crystals
     const s = this.state; if ([...s.loot.values()].filter(q => q.kind === "shard").length >= DEEP.shardCap) return;
     if (x === undefined) { const cr = this.minePieces.crystals; for (let t = 0; t < 12; t++) { const c = cr[Math.floor(Math.random() * cr.length)], a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 90; x = c.x + Math.cos(a) * d; y = c.y - 20 + Math.sin(a) * d * .7; if (!this.blockedByMap(x, y, 16) && !this.inCordon({ x, y })) break; x = undefined; } if (x === undefined) return; }
@@ -3022,12 +3025,12 @@ export class SurvivalRoom extends Room {
     const m = this.mine, s = this.state, ST = this.minePieces.statue, D = DIFFICULTY[s.difficulty] || DIFFICULTY.normal, scale = 1 + (s.stage - 1) * .08;
     const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 110; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
     z.maxHp = BEAST.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, s.players.size - 1)) * D.hp; z.hp = z.maxHp; z.damage = BEAST.dmg * scale * D.dmg;
-    s.zombies.set(z.id, z); m.beast = z.id; m.step = "fight"; m.haz = []; this.bossMem.delete(z.id);
+    s.zombies.set(z.id, z); m.beast = z.id; m.step = "fight"; m.haz = []; m.crystals = BEAST.crystals.n; m.boulders = []; this.bossMem.delete(z.id);
     this.beastBoxes = mapBoxes([this.minePieces.statue, this.minePieces.portal].filter(Boolean));
     s.message = "THE MINE BEAST IS AWAKE!"; this.broadcast("deep", { k: "fight" }); this.broadcast("roar", { x: Math.round(z.x), y: Math.round(z.y) }); this.mineSync();
   }
   mineFlee(z) {   // its bar is empty: it drops to a knee. Everyone gets to the carts (F at the boss stop); then it comes after them
-    const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
+    const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; m.boulders = []; z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
     this.state.message = "IT WON'T STAY DOWN: GET IN THE CARTS!"; this.broadcast("deep", { k: "flee", len: BEAST.fleeWait }); this.mineSync();
   }
   mineChase() {   // everyone left in the dungeon is put in the carts (the downed are pulled aboard), and it comes after them
@@ -3044,13 +3047,34 @@ export class SurvivalRoom extends Room {
     const K = this.cordon, x0 = z.x, y0 = z.y; z.x = clamp(z.x + dx, K.x + 25 + 85, this.A.width - 90); z.y = clamp(z.y + dy, K.y + 10 + 150, this.A.height - 75);
     this.pushOut(z, this.beastBoxes || [], BEAST.radius); return hyp(z.x - x0, z.y - y0);
   }
-  beastHazards(now) {   // planted crystals shattering, rocks landing
+  beastHazards(now) {   // planted crystals shattering, rocks landing (the stray cave-in rocks stay as boulders)
     const m = this.mine; if (!m.haz?.length) return;
-    m.haz = m.haz.filter(h => { if (now < h.at) return true; for (const p of this.state.players.values()) if (p.alive && hyp(p.x - h.x, (p.y - h.y) / .75) < h.r + BODY_R) this.hiveHurt(p, h.dmg); return false; });
+    m.haz = m.haz.filter(h => { if (now < h.at) return true; for (const p of this.state.players.values()) if (p.alive && hyp(p.x - h.x, (p.y - h.y) / .75) < h.r + BODY_R) this.hiveHurt(p, h.dmg); if (h.boulder && this.mine?.step === "fight") this.addBoulder(h.x, h.y, now); return false; });
+  }
+  addBoulder(x, y, now) {   // a fallen rock that stays a while: harmless to walk past, but the Beast's charge smashes into it and stuns itself
+    const m = this.mine, B = BEAST.boulder; m.boulders ||= []; m.bSeq = (m.bSeq || 0) + 1;
+    if (m.boulders.some(b => hyp(b.x - x, b.y - y) < B.r * 1.6) || this.blockedByMap(x, y, 30)) return;
+    const b = { id: m.bSeq, x: Math.round(x), y: Math.round(y), until: now + B.life * 1000 }; m.boulders.push(b); this.broadcast("deep", { k: "boulder", id: b.id, x: b.x, y: b.y, life: B.life });
+    while (m.boulders.length > B.cap) { const o = m.boulders.shift(); this.broadcast("deep", { k: "boulderGone", id: o.id }); }
+  }
+  beastCrystals(z) { const m = this.mine; return m ? (m.crystals ?? BEAST.crystals.n) : 0; }
+  beastCrystalHit(z, p, dmg, bm) {   // hits from behind land on the crystals on its back: double damage; break all of them and it reels for a long time
+    const C = BEAST.crystals, m = this.mine; if (!m || m.step !== "fight" || !p || !Number.isFinite(p.x) || !bm) return dmg;
+    if ((m.crystals ?? C.n) <= 0 || z.act === "under" || z.act === "dive" || z.act === "erupt") return dmg;
+    let off = Math.abs(Math.atan2(p.y - z.y, p.x - z.x) - (z.aim || 0)) % (Math.PI * 2); if (off > Math.PI) off = Math.PI * 2 - off;
+    if (off < C.back) return dmg;
+    dmg *= C.mult; m.crystals ??= C.n; bm.crHp ??= z.maxHp * C.hpPct; bm.crHp -= dmg; const now = Date.now();
+    if (now - (bm.critAt || 0) > 140) { bm.critAt = now; this.broadcast("deep", { k: "crit", x: Math.round(z.x), y: Math.round(z.y) }); }
+    if (bm.crHp <= 0) { m.crystals--; bm.crHp = z.maxHp * C.hpPct; this.broadcast("deep", { k: "crystal", left: m.crystals, x: Math.round(z.x), y: Math.round(z.y), red: z.enraged ? 1 : 0 }); this.mineSync();
+      if (m.crystals <= 0) { this.startAct(z, "stagger", C.stagger); bm.next = Date.now() + (C.stagger + 1) * 1000; this.state.message = "ALL ITS CRYSTALS ARE BROKEN: THE BEAST IS REELING!"; this.broadcast("deep", { k: "broke" }); }
+      else this.state.message = `A CRYSTAL SHATTERED! ${m.crystals} left on its back.`; }
+    return dmg;
   }
   beastThink(z, dt, now) {
-    const B = BEAST, s = this.state; this.beastHazards(now);
+    const B = BEAST, s = this.state, m = this.mine; this.beastHazards(now);
     if (z.hp <= 1) { this.mineFlee(z); return; }
+    if (m.boulders?.length) m.boulders = m.boulders.filter(b => { if (now < b.until) return true; this.broadcast("deep", { k: "boulderGone", id: b.id }); return false; });
+    const E = z.enraged ? B.phase2 : null, cdk = E ? E.cd : 1;   // phase 2: shorter cooldowns
     let bm = this.bossMem.get(z.id); if (!bm) { bm = { next: now + 2500, strikeReady: 0, spinesReady: now + B.spines.first * 1000, caveReady: now + B.cavein.first * 1000, burrowReady: now + B.burrow.first * 1000, chargeReady: now + B.charge.first * 1000, prey: null, windDmg: 0 }; this.bossMem.set(z.id, bm); }
     const targets = [...s.players.values()].filter(p => p.alive && !(p.shadow > 0) && this.inCordon(p)), near = () => { let best = null, bd = 1e9; for (const p of targets) { const d = hyp(p.x - z.x, p.y - z.y); if (d < bd) { bd = d; best = p; } } return best; };
     if (z.act) {
@@ -3066,28 +3090,39 @@ export class SurvivalRoom extends Room {
       } else if (act === "roar" && at(B.cavein.at * B.cavein.len)) {   // the roof comes down: a rock on every survivor, more around them
         const K = this.cordon, pts = [], put = (x, y) => { x = clamp(x, K.x + 70, this.A.width - 60); y = clamp(y, K.y + 90, this.A.height - 50); pts.push([Math.round(x), Math.round(y)]); this.mine.haz.push({ x, y, r: B.cavein.r, dmg: z.damage * B.cavein.mult, at: now + B.cavein.delay * 1000 }); };
         for (const p of targets) { put(p.x, p.y); for (let i = 1; i < B.cavein.perPlayer; i++) { const a = Math.random() * 7, d = 150 + Math.random() * 170; put(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * .8); } }
-        for (let i = 0; i < B.cavein.extra; i++) { const a = Math.random() * 7, d = 200 + Math.random() * 380; put(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d * .8); }
+        for (let i = 0; i < B.cavein.extra + (E ? E.extraRocks : 0); i++) { const a = Math.random() * 7, d = 200 + Math.random() * 380; put(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d * .8); this.mine.haz[this.mine.haz.length - 1].boulder = true; }   // the stray rocks stay as boulders
         this.broadcast("deep", { k: "cavein", x: Math.round(z.x), y: Math.round(z.y), pts, delay: B.cavein.delay, r: B.cavein.r, dark: B.cavein.dark });
       } else if (act === "wind") {   // winding up the charge: enough damage now breaks it
         if (bm.windDmg >= z.maxHp * B.charge.breakPct) { this.startAct(z, "stagger", B.stagger); bm.next = now + (B.stagger + 1) * 1000; s.message = "CHARGE BROKEN: THE BEAST IS STAGGERED!"; this.broadcast("deep", { k: "broke" }); return; }
         if (z.slam > .45 && bm.prey?.alive) z.aim = Math.atan2(bm.prey.y - z.y, bm.prey.x - z.x);
         if (z.slam <= 0) { this.startAct(z, "charge", B.charge.len / B.charge.speed); bm.hit = new Set(); return; }
       } else if (act === "charge") {
-        const want = B.charge.speed * dt, moved = this.beastMove(z, ca * want, sa * want);
+        const want = B.charge.speed * (E ? E.speed : 1) * dt, moved = this.beastMove(z, ca * want, sa * want);
+        const hitB = (m.boulders || []).find(b => hyp(b.x - (z.x + ca * 70), (b.y - (z.y + sa * 40)) / .8) < B.boulder.r + 60);
+        if (hitB) { m.boulders = m.boulders.filter(b => b !== hitB); this.broadcast("deep", { k: "bsmash", id: hitB.id, x: hitB.x, y: hitB.y }); this.startAct(z, "stagger", B.boulder.stun); bm.next = now + (B.boulder.stun + 1) * 1000; s.message = "IT SMASHED INTO A BOULDER: THE BEAST IS STUNNED!"; return; }
         for (const p of s.players.values()) if (p.alive && !bm.hit.has(p.sessionId) && hyp(p.x - z.x, p.y - z.y) < B.charge.half + BODY_R) { bm.hit.add(p.sessionId); this.hiveHurt(p, z.damage * B.charge.mult); const side = (-(p.x - z.x) * sa + (p.y - z.y) * ca) >= 0 ? 1 : -1; if (p.alive) this.moveWithCollision(p, -sa * side * B.charge.push, ca * side * B.charge.push); }
         if (z.slam <= 0 || moved < want * .4) { this.startAct(z, "skid", B.charge.skid); return; }
       } else if (act === "dive") { if (z.slam <= 0) { this.startAct(z, "under", B.burrow.under); return; } }
       else if (act === "under") {   // tunnelling after its prey
-        const p = bm.prey?.alive ? bm.prey : near(), d = p ? hyp(p.x - z.x, p.y - z.y) : 0; if (p && d > 1) { const st = Math.min(d, B.burrow.speed * dt); this.beastMove(z, (p.x - z.x) / d * st, (p.y - z.y) / d * st); z.aim = Math.atan2(p.y - z.y, p.x - z.x); }
+        const p = bm.prey?.alive ? bm.prey : near(), d = p ? hyp(p.x - z.x, p.y - z.y) : 0; if (p && d > 1) { const st = Math.min(d, B.burrow.speed * (E ? E.speed : 1) * dt); this.beastMove(z, (p.x - z.x) / d * st, (p.y - z.y) / d * st); z.aim = Math.atan2(p.y - z.y, p.x - z.x); }
         if (z.slam <= 0 || (p && d < 46)) { this.startAct(z, "erupt", B.burrow.warn); this.broadcast("deep", { k: "erupt", x: Math.round(z.x), y: Math.round(z.y), r: B.burrow.r, warn: B.burrow.warn }); return; }
       } else if (act === "erupt") { if (z.slam <= 0) {
         for (const p of s.players.values()) if (p.alive && hyp(p.x - z.x, (p.y - z.y) / .75) < B.burrow.r + BODY_R) { this.hiveHurt(p, z.damage * B.burrow.mult); const a = Math.atan2(p.y - z.y, p.x - z.x); if (p.alive) this.moveWithCollision(p, Math.cos(a) * 120, Math.sin(a) * 120); }
         this.startAct(z, "emerge", B.burrow.emerge, Math.PI / 2); this.broadcast("deep", { k: "burst", x: Math.round(z.x), y: Math.round(z.y) }); return; } }
-      if (z.slam <= 0 && z.act === act) z.act = "";
+      if (z.slam <= 0 && z.act === act) {
+        z.act = "";
+        if (E && act === "skid") { bm.caveReady = now + (B.cavein.len + B.cavein.cd * cdk) * 1000; bm.next = now + (B.cavein.len + B.gap * .6) * 1000; this.startAct(z, "roar", B.cavein.len, Math.PI / 2); this.broadcast("deep", { k: "chain" }); }   // phase 2: the charge goes straight into a cave-in roar
+        else if (E && act === "emerge") { const q = near(); if (q) { bm.prey = q; bm.spinesReady = now + (B.spines.len + B.spines.cd * cdk) * 1000; bm.next = now + (B.spines.len + B.gap * .6) * 1000; this.startAct(z, "throw", B.spines.len, Math.atan2(q.y - z.y, q.x - z.x)); this.broadcast("deep", { k: "chain" }); } }   // ...and bursting out of the floor goes into a crystal throw
+      }
       return;
     }
+    if (!z.enraged && z.hp <= z.maxHp * B.phase2.at) {   // PHASE 2: it roars, its crystals grow back blood red, and it gets faster and meaner
+      z.enraged = true; z.speed = B.speed * B.phase2.speed; m.crystals = B.crystals.n; bm.crHp = z.maxHp * B.crystals.hpPct; this.mineSync();
+      bm.caveReady = now + (B.cavein.len + B.cavein.cd * B.phase2.cd) * 1000; bm.next = now + (B.cavein.len + B.gap) * 1000; this.startAct(z, "roar", B.cavein.len, Math.PI / 2);
+      s.message = "THE MINE BEAST IS ENRAGED! Its crystals grew back: shoot its BACK."; this.broadcast("deep", { k: "phase2", x: Math.round(z.x), y: Math.round(z.y) }); return;
+    }
     const prey = near(); if (!prey) return; const d = hyp(prey.x - z.x, prey.y - z.y), a = Math.atan2(prey.y - z.y, prey.x - z.x); z.aim = a; z.targetId = prey.sessionId;
-    const pick = () => targets[Math.floor(Math.random() * targets.length)], skill = (key, act, len, cd, extra) => { bm[key] = now + (len + cd) * 1000; bm.next = now + (len + B.gap) * 1000; this.startAct(z, act, len); if (extra) extra(); };
+    const pick = () => targets[Math.floor(Math.random() * targets.length)], skill = (key, act, len, cd, extra) => { bm[key] = now + (len + cd * cdk) * 1000; bm.next = now + (len + B.gap) * 1000; this.startAct(z, act, len); if (extra) extra(); };
     if (now >= bm.next) {
       if (now >= bm.chargeReady && d > 240) return skill("chargeReady", "wind", B.charge.wind, B.charge.cd, () => { bm.prey = prey; bm.windDmg = 0; this.broadcast("deep", { k: "wind", len: B.charge.wind, reach: B.charge.len, half: B.charge.half }); });
       if (now >= bm.burrowReady) return skill("burrowReady", "dive", B.burrow.dive, B.burrow.cd + B.burrow.under, () => { bm.prey = pick(); z.aim = Math.PI / 2; });
@@ -3522,7 +3557,7 @@ export class SurvivalRoom extends Room {
   hitZombie(z, p, dmg) {
     if (!this.state.zombies.has(z.id)) return;
     if (p?.sessionId) dmg *= this.supportBuff(p) * this.cryBuff(p);
-    if (z.kind === "minebeast") { const bm = this.bossMem.get(z.id); if (z.act === "under") return; if (z.act === "stagger") dmg *= BEAST.staggerMult; if (bm && z.act === "wind") bm.windDmg = (bm.windDmg || 0) + dmg; }   // underground: can't be hurt; staggered: takes more; winding up a charge: the damage counts toward breaking it
+    if (z.kind === "minebeast") { const bm = this.bossMem.get(z.id); if (z.act === "under") return; if (z.act === "stagger") dmg *= BEAST.staggerMult; dmg = this.beastCrystalHit(z, p, dmg, bm); if (bm && z.act === "wind") bm.windDmg = (bm.windDmg || 0) + dmg; }   // underground: can't be hurt; staggered: takes more; winding up a charge: the damage counts toward breaking it
     if (z.kind === "abomination") {
       if (z.act === "sunder") return;   // tearing apart: can't be hurt
       if (z.act === "daze") dmg *= ABOM.roll.dazeMult;
