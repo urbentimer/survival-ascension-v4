@@ -571,3 +571,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `client/assets/audio/music_boss_mine.mp3` (padded 0.5 s, 128k, -16.5 LUFS). `MUSIC_LOOP.mine = { pad: .5, len: 7935820 / 44100 }`.
 - `musicScene()` returns "mine" while the mission step is awake / fight / flee / chase (from the statue waking until the portal). Work dir `/home/claude/work/mine` (render3.py).
 - Cache `20261112s`; next `20261112t`.
+
+## Nov 12 — Music in the published preview
+- build-preview no longer drops music: `assets/audio/music_*.mp3` and `fire_loop.mp3` stay plain relative paths, and the 9 mp3s are published as Artifact files at those same paths (they don't count toward the 16 MB page). SA_MUSIC=1 still inlines them for file:// Playwright tests.
+- Artifact publish `files` now = the 3 preview-assets-N.js + `assets/audio/{fire_loop, music_boss_abom, music_boss_battle, music_boss_mine, music_boss_pyre, music_boss_scream, music_day_exploration, music_main_menu, music_night_wave}.mp3` (sources in client/assets/audio). Files left out of a publish are kept, so the mp3s only need re-sending when they change.
+- Checked over http: menu/day, mine (awake → chase), pyre, abom, scream, butcher all switch. Cache `20261112t`; next `20261112u`.

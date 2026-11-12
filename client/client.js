@@ -670,7 +670,7 @@ const SFX = {
 // Voice lines: class -> skill key -> SFX name. Played when the skill starts (your own at full volume, others by distance).
 const VOICE = { dispatcher: { Q: "vAstraQ", E: "vAstraE" } };
 function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
-// Music loops (empty in the solo preview: it has to stay under 16 MB). Crossfade 1s between scenes.
+// Music loops (the published preview fetches them as files next to the page). Crossfade 1s between scenes.
 const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit
