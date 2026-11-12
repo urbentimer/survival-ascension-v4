@@ -619,3 +619,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 12 — Pyre Priest theme: back to the first track
 - The user re-sent the first track (byte-identical to Pyre_Priest_boss_theme.mp4) and asked for it at normal speed: restored the original game file (/home/claude/work/pyre/music_boss_pyre.mp3, same as commit b30824e) and `MUSIC_LOOP.pyre.len = 180.834`. The second track's work is kept in /home/claude/work/pyre2 if wanted again.
 - Cache `20261113b`; next `20261113c`.
+
+## Nov 12 — Beta Mode + Mine Beast sharpened
+- BETA MODE (Esc menu, left card, under SOUND EFFECTS; host only, others see it greyed "HOST ONLY"): `GameState.beta` (schema now 47 fields), message "betaMode" toggles it. tick() saves every player's hp at the start (p._bhp) and at the end scales any loss by 1/BETA_HP (100); downPlayer() in beta mode takes 1/100 of the would-be loss instead of downing (min 1 HP). Turning it on gets anyone who was down back up. Bots count as players (they get it too). The radio tower / generator are NOT protected. HUD: a gold "BETA ×100" tag next to HEALTH. Test 70.
+- Mine Beast: tools/extract-minebeast.py now cuts every sheet at SC = 1.128 (= the old browser stretch), premultiplied Lanczos + soft alpha + UnsharpMask, webp q90; mineBeastArt.js k = 1 (cells 1.128x). FX / portrait unchanged. build-preview skips q60 for `dir8/mb-` too.
+- Cache `20261113c`; next `20261113d`.

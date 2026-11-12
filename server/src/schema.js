@@ -62,7 +62,7 @@ defineTypes(GameState, {
   explosives: "number", fuel: "number", isNight: "boolean",
   generatorHp: "number", generatorMaxHp: "number", generatorFuel: "number",
   waveType: "string", countdown: "number", worldW: "number", worldH: "number", towerX: "number", towerY: "number", explore: "boolean", mapLayout: "string",
-  bossPhase: "string", bossIntro: "string", introNeed: "number", introReady: "number", hookSpeed: "number", noCd: "boolean",
+  bossPhase: "string", bossIntro: "string", introNeed: "number", introReady: "number", hookSpeed: "number", noCd: "boolean", beta: "boolean",
   paused: "boolean",   // (Nov 12) the host has the Esc menu open: the whole game is frozen
   mission: "string",   // the Deep Mine mission (wave 20), packed: step|fuel|placed|cartHp|gap|inserted|rune,rune,rune,rune (each: state.x.y.carrier); "" = no mission
   coasterS: "number", coasterWait: "number",   // the coaster train: how far round the loop its middle is; seconds left at a station (0 = moving)

@@ -122,6 +122,7 @@ const ROBOT = {
   hunter:  { hp: 90, speed: 155, range: 650, rate: 2.2, dmg: 7, pierce: 1, cone: 180 },   // range = laser length; targets come only from its circle
 };
 const ROBOT_R = 13;
+const BETA_HP = 100;                                 // BETA MODE (Esc menu, host): every player takes 1/100 of all damage and can't be downed
 const BOSS_HP_PER_PLAYER = 0.6;                      // boss health +60% for every survivor after the first (bots count)
 const BOSS_WAVE = { horde: 45, introWait: 25, escortEvery: 3.2, escortMax: 14, straggleGrace: 15, straggleMax: 3 };   // straggle: 15s after the horde ends, 3 or fewer left -> they vanish and the boss comes anyway
 const ringZone = (dx, dy) => hyp(dx, dy / 0.55);   // distance on the flat ground ellipse the shockwaves are drawn as
@@ -680,6 +681,11 @@ export class SurvivalRoom extends Room {
     this.onMessage("clientError", (client, data) => {   // errors from players' browsers (drawing, UI, connection) -> the game log
       const n = (this.errCount = (this.errCount || 0) + 1); if (n > 300) return;
       this.log(data?.lv === "warn" ? "warn" : "error", "client", String(data?.m || ""), client, { browser: String(data?.ua || "").slice(0, 80) });
+    });
+    this.onMessage("betaMode", client => {   // (Nov 12) host: BETA MODE on/off. Everyone (bots too) gets 100x health so the team can cruise the maps, fight bosses and test the objectives
+      if (client.sessionId !== this.state.hostId && !this.solo) return; const on = this.state.beta = !this.state.beta;
+      if (on) for (const p of this.state.players.values()) if (!p.alive && this.state.phase !== "lobby") { this.downHp?.delete(p.sessionId); p.alive = true; p.bledOut = false; p.bleedout = 0; p.hp = p.maxHp; }   // anyone who was down gets back up
+      this.state.message = on ? "BETA MODE ON: everyone has 100x health" : "Beta mode off: normal health"; this.log("info", "game", `beta mode ${on ? "on" : "off"}`);
     });
     this.onMessage("testNoCd", client => { if (client.sessionId !== this.state.hostId && !this.solo) return; this.state.noCd = !this.state.noCd; this.state.message = this.state.noCd ? "TEST MODE: ultimates unlocked from the start (cooldowns still apply)" : "Test mode off: ultimates unlock at 100 kills"; });
     this.onMessage("debugHookSpeed", client => { if (this.solo || client.sessionId === this.state.hostId) this.state.hookSpeed = this.state.hookSpeed === BUTCHER.hook.speed ? HOOK_SPEED_TEST : BUTCHER.hook.speed; });
@@ -3665,6 +3671,7 @@ export class SurvivalRoom extends Room {
   // A player drops: shorter bleed-out each time they go down in the same wave (30s, 25s ... min 10s).
   downPlayer(target) {
     if (!target.alive) { target.hp = 0; return; }
+    if (this.state.beta) { const before = target._bhp > 0 ? target._bhp : target.maxHp; target.hp = Math.max(1, before - Math.max(0, before - target.hp) / BETA_HP); return; }   // BETA MODE: a hit that would down you takes 1/100 of it instead
     if (target.ride > 0) this.coasterOff(target.sessionId);   // knocked off the coaster   // already down (several zombies bit them in the same tick): one down, not five shorter bleed-outs
     this.log("info", "player", `${target.name} went down (wave ${this.state.stage})`, target.sessionId);
     this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
@@ -3852,7 +3859,9 @@ export class SurvivalRoom extends Room {
     if (dx) p.facing = dx > 0 ? 1 : -1;
   }
   tick() {
+    const beta = this.state.beta; if (beta) for (const p of this.state.players.values()) p._bhp = p.alive ? p.hp : 0;   // BETA MODE (Nov 12): health at the start of the tick
     try { this.tickInner(); } catch (e) { this.logErr("game tick", e); }   // a bug skips one tick instead of freezing the room
+    if (beta) for (const p of this.state.players.values()) if (p.alive && p._bhp > 0 && p.hp < p._bhp) p.hp = p._bhp - (p._bhp - p.hp) / BETA_HP;   // everything that hurt you this tick counts 1/100: 100x health
     for (const p of this.state.players.values()) { const v = `${Math.round(p.bossDamage || 0)}|${p.revives || 0}|${Math.round(p.towerRepairs || 0)}|${p.structuresBuilt || 0}|${Math.round(p.damageDealt || 0)}|${Math.round(p.damageTaken || 0)}`; if (p.stats !== v) p.stats = v; }   // the scoreboard numbers, packed into one synced field (PlayerState is at the 64-field limit)
     if (this.state.phase !== this.logPhase || (this.state.phase === "playing" && this.state.stage !== this.logStage)) {   // wave start / cleared / defeat / victory
       const ph = this.state.phase, alive = [...this.state.players.values()].filter(p => p.alive).length;

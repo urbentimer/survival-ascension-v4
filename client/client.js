@@ -298,6 +298,7 @@ $("hookSpd").onclick = () => pmDo("debugHookSpeed", undefined, "Butcher hook spe
 $("ultNow").onclick = () => pmDo("debugUlt", undefined, "Ultimate unlocked");
 $("levelPlus").onclick = () => pmDo("debugLevel", undefined, "XP for one more level", false);   // (the level-up menu then opens as usual)
 $("exploreToggle").onclick = () => pmDo("explore", { on: !state?.explore }, state?.explore ? "Explore mode off: the waves are back" : "Explore mode on: no waves", false);
+$("betaToggle").onclick = () => pmDo("betaMode", undefined, state?.beta ? "Beta mode off: normal health" : "Beta mode on: everyone has 100× health", false);   // (Nov 12) host only
 $("noCdToggle").onclick = () => pmDo("testNoCd", undefined, state?.noCd ? "Ultimates unlock at 100 kills again" : "Ultimates unlocked from the start", false);
 $("skipMorph").onclick = () => pmDo("debugMorph", undefined, "Skipped to the Abomination's split");
 $("skipMine").onclick = () => pmDo("debugMine", undefined, "Started the Deep Mine mission");
@@ -338,6 +339,7 @@ function pmRender(force) {   // who sees what, which buttons work right now
   $("skipMine").disabled = !play || !!M; $("mineFuel").disabled = $("mineRune").disabled = ph !== "playing" || !M.startsWith("runes"); $("skipBeast").disabled = !play || (!!M && !M.startsWith("runes"));
   $("mineChase").disabled = $("mineEscape").disabled = !play || /^(chase|escaped)/.test(M);
   for (const b of document.querySelectorAll(".pm-boss [data-act='beast']")) b.disabled = !play || (!!M && !/^(runes|fight)/.test(M));
+  $("betaToggle").classList.toggle("off", !state.beta); $("betaToggle").disabled = !host; txt("betaSub", host ? "100× HEALTH" : "HOST ONLY");   // (Nov 12)
   $("exploreToggle").disabled = ph !== "playing"; $("exploreToggle").classList.toggle("off", !state.explore); $("noCdToggle").classList.toggle("off", !state.noCd);
   $("waveJumpGo").disabled = $("levelPlus").disabled = $("ultNow").disabled = ph === "lobby"; for (const b of document.querySelectorAll("#pmSpawn button")) b.disabled = ph !== "playing";
   txt("hookSpdT", (state.hookSpeed || 2100) >= 2100 ? "HOOK SPEED" : "HOOK: SLOW");
@@ -443,6 +445,7 @@ function renderHud(me, players) {
   if (!me) return;
   // bottom left: you
   txt("hpText", Math.ceil(me.hp) + " / " + me.maxHp); sty("hpBar", "width", pct(me.hp, me.maxHp));
+  { const bt = $("betaTag"); if (bt && bt.classList.contains("hidden") === !!state.beta) bt.classList.toggle("hidden", !state.beta); }   // BETA MODE: 100x health badge
   const maxLv = me.level >= MAX_LEVEL; txt("hudLevel", "LV " + me.level); txt("xpText", maxLv ? "MAX LEVEL" : me.xp + " / " + me.xpNext + " XP"); sty("xpBar", "width", maxLv ? "100%" : pct(me.xp, me.xpNext));
   html("hudGold", icon("gold") + (me.currency || 0) + "g"); txt("hudDef", "DEF " + (me.defence || 0)); txt("hudClass", String(me.characterClass).toUpperCase());
   const pc = "hud-portrait p-" + me.characterClass; if ($("hudPortrait").className !== pc) $("hudPortrait").className = pc;

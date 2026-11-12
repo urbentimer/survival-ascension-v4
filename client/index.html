@@ -367,6 +367,12 @@ body.in-match #ls{display:none}
 .pm-row{--c:8px;--bd:#25394b;--fill:linear-gradient(180deg,#132030,#0d1620);display:flex;align-items:center;gap:12px;width:100%;height:70px;padding:0 12px 0 14px!important;text-align:left;font-size:22px!important}
 .pm-ico{width:30px;height:30px;flex:none;color:#eef2f6}
 .pm-rl{flex:1}
+.pm-rl small{display:block;margin-top:5px;font:700 11px/1 var(--pm-f);letter-spacing:.12em;color:#8fa6b8;white-space:nowrap}   /* (Nov 12) BETA MODE */
+.pm-beta .pm-rl{white-space:nowrap;font-size:20px;line-height:1}
+.pm-beta:not(.off) .pm-rl{color:#ffd36b;text-shadow:0 0 12px rgba(255,190,60,.45)}.pm-beta:not(.off) .pm-rl small{color:#e8c47a}
+.pm-beta:not(.off) .pm-sw{border-color:#ffc24a;box-shadow:0 0 10px rgba(255,194,74,.6),inset 0 0 9px rgba(255,194,74,.22)}.pm-beta:not(.off) .pm-sw-t{color:#ffd36b}
+.pm-beta:not(.off) .pm-sw-k{background:radial-gradient(circle at 38% 32%,#fffbe8,#ffd25a 52%,#d08a10);box-shadow:0 0 10px #ffc24a,inset 0 -3px 4px rgba(110,60,0,.45),inset 0 1px 1px rgba(255,255,255,.9)}
+.beta-tag{margin-left:8px;padding:1px 6px;border-radius:3px;font:800 10px/1.4 inherit;font-style:normal;letter-spacing:.12em;color:#1a1204;background:linear-gradient(180deg,#ffe08a,#f2a922);box-shadow:0 0 8px rgba(255,190,60,.55);vertical-align:1px}
 .pm-sw{position:relative;width:96px;height:40px;flex:none;border-radius:22px;border:2px solid #3fd0ff;background:#061119;box-shadow:0 0 10px rgba(63,208,255,.55),inset 0 0 9px rgba(63,208,255,.22)}
 .pm-sw-t{position:absolute;left:15px;top:50%;transform:translateY(-50%);font:800 19px/1 var(--pm-f);color:#6fe0ff}.pm-sw-t::before{content:"ON"}
 .pm-sw-k{position:absolute;right:5px;top:50%;width:28px;height:28px;transform:translateY(-50%);border-radius:50%;background:radial-gradient(circle at 38% 32%,#f2fdff,#55dbff 52%,#119ad3);box-shadow:0 0 10px #3fd0ff}
@@ -623,7 +629,7 @@ body.in-match #ls{display:none}
  <div class="hud hud-bl">
   <button id="lvlBadge" class="lvl-badge hidden" type="button">▲ LEVEL UP · press U</button>
   <div class="hud-me"><div id="hudPortrait" class="hud-portrait p-assault" role="img" aria-label="Your survivor"></div><div class="hud-me-stats">
-  <div class="bar-label"><b>HEALTH</b><span id="hpText">100 / 100</span></div>
+  <div class="bar-label"><b>HEALTH<em id="betaTag" class="beta-tag hidden">BETA ×100</em></b><span id="hpText">100 / 100</span></div>
   <div class="hbar hp"><span id="hpBar"></span></div>
   <div class="bar-label small"><b id="hudLevel">LV 1</b><span id="xpText">0 / 30 XP</span></div>
   <div class="hbar thin xp"><span id="xpBar"></span></div>
@@ -655,6 +661,7 @@ body.in-match #ls{display:none}
     <button class="cf pm-resume" id="resume">RESUME</button>
     <button class="cf pm-row" id="musicToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg><span class="pm-rl">MUSIC</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
     <button class="cf pm-row" id="sfxToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="pm-rl">SOUND<br>EFFECTS</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
+    <button class="cf pm-row pm-beta off" id="betaToggle" title="Host: everyone (bots too) gets 100x health, to cruise the maps, fight the bosses and test the objectives"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span class="pm-rl">BETA MODE<small id="betaSub">100× HEALTH</small></span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
     <div class="cf pm-code"><label>ROOM CODE</label><div class="pm-code-r"><output class="cf" id="pmCode">····</output><button class="cf pm-out pm-cyan" id="pmCopy">COPY</button></div></div>
     <button class="cf pm-out pm-full" id="pmControls">CONTROLS</button>
     <button class="cf pm-leave" id="leave"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M10 4H5v16h5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 12h11M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="leaveTxt">LEAVE ROOM</span></button>
@@ -711,5 +718,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261113b"></script>
+<script type="module" src="./client.js?v=20261113c"></script>
 </body></html>

@@ -10,7 +10,8 @@ from PIL import Image
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'minebeast')
 C = os.path.join(here, '..', 'client', 'assets'); D8 = os.path.join(C, 'sprites', 'zombies', 'dir8'); FX = os.path.join(C, 'sprites', 'fx')
-GAME_H = 300   # his standing height in the game (px); the files keep the art's own size and are drawn scaled up (META.k)
+GAME_H = 300   # his standing height in the game (px)
+SC = 1.128     # (Nov 12) the sheets are cut at the size he is drawn (was: the art's own size, stretched 1.128x by the browser = soft); META.k is now 1
 meta = {}
 
 def load(n): return np.array(Image.open(os.path.join(ART, n + '.png')).convert('RGB')).astype(int)
@@ -25,17 +26,26 @@ def keyed(a):
 def torso_x(m):
     ys, xs = np.where(m); top, bot = ys.min(), ys.max(); h = bot - top; band = (ys > top + h * .35) & (ys < top + h * .75)
     return float(np.median(xs[band])) if band.any() else float(np.median(xs))
-def place(rgba, cw, ch, ax, fy, hx, base, flip=False):
-    q = rgba.copy(); q[..., 3] = np.where(q[..., 3] > 110, 255, 0); im = Image.fromarray(np.ascontiguousarray(q))
+def resize_sharp(rgba, sc):   # (Nov 12) premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
+    from PIL import ImageFilter
+    a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
+    w, h = max(1, round(rgba.shape[1] * sc)), max(1, round(rgba.shape[0] * sc))
+    up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)
+    A = np.clip(np.dstack([up(pm[..., i]) for i in range(3)]), 0, 255); al = np.clip(up(rgba[..., 3]), 0, 255) / 255
+    rgb = np.where(al[..., None] > .02, A / np.maximum(al[..., None], .02), 0)
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.3 * max(1, sc), percent=65, threshold=2))
+    return Image.fromarray(np.dstack([np.array(img), (np.clip((al - .18) / .64, 0, 1) * 255).astype(np.uint8)]))
+def place(rgba, cw, ch, ax, fy, hx, base, flip=False, s=SC):   # hx / base in source pixels; the frame is scaled by s into a cell of the drawn size
+    q = rgba.copy(); q[..., 3] = np.where(q[..., 3] > 110, 255, 0); im = resize_sharp(q, s); hx, base = hx * s, base * s
     if flip: im = im.transpose(Image.FLIP_LEFT_RIGHT); hx = im.width - 1 - hx
     cell = Image.new('RGBA', (cw, ch)); ox, oy = round(ax - hx), round(fy - base)
     if ox < 0 or oy < 0 or ox + im.width > cw or oy + im.height > ch: print('   clipped', ox, oy, im.size, 'in', cw, ch)
     cell.paste(im, (ox, oy), im); return cell
-def save(atlas, out, q=78):
-    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=q, alpha_quality=85, method=6); print(out, atlas.size, '->', os.path.getsize(path) // 1024, 'KB')
+def save(atlas, out, q=90):
+    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=q, alpha_quality=92, method=6); print(out, atlas.size, '->', os.path.getsize(path) // 1024, 'KB')
 
 def grid(name, cw, ch, main_only=False, flips=()):   # 5 rows x 4: every frame sits on its ROW's ground line, anchored on its torso
-    fg, rgba = keyed(load(name)); H, W = fg.shape; ax, fy = cw // 2, ch - 8
+    fg, rgba = keyed(load(name)); H, W = fg.shape; cw, ch = round(cw * SC), round(ch * SC); ax, fy = cw // 2, ch - round(8 * SC)
     lab, n = ndimage.label(ndimage.binary_dilation(fg, iterations=2)); lab = np.where(fg, lab, 0); sizes = ndimage.sum(fg, lab, range(1, n + 1)); cen = ndimage.center_of_mass(fg, lab, range(1, n + 1)); owner = np.zeros(n + 1, int)
     for i, (cy, cx) in enumerate(cen): owner[i + 1] = 1 + min(4, int(cy / (H / 5))) * 4 + min(3, int(cx / (W / 4)))
     if main_only:   # only each frame's body (the art's own flying crystals / chips are dropped: the game draws those)
@@ -63,13 +73,12 @@ def strip(name, n, cw, ch, sc=1.0, centre=True):
         x += 1
     runs = [r for r in runs if r[1] - r[0] > 6]
     while len(runs) > n: gaps = [runs[i + 1][0] - runs[i][1] for i in range(len(runs) - 1)]; i = int(np.argmin(gaps)); runs[i][1] = runs[i + 1][1]; del runs[i + 1]
-    assert len(runs) == n, (name, runs); ax, fy = cw // 2, ch - 8; atlas = Image.new('RGBA', (cw * n, ch))
+    assert len(runs) == n, (name, runs); cw, ch = round(cw * SC), round(ch * SC); ax, fy = cw // 2, ch - round(8 * SC); atlas = Image.new('RGBA', (cw * n, ch))
     base = max(np.where(fg[y0:y1, a:b].any(1))[0].max() for a, b in runs)
     for i, (a, b) in enumerate(runs):
         m = fg[y0:y1, a:b]; q = rgba[y0:y1, a:b]
-        if sc != 1: im = Image.fromarray(np.ascontiguousarray(q)).resize((round(q.shape[1] * sc), round(q.shape[0] * sc)), Image.LANCZOS); q = np.array(im); m = q[..., 3] > 110
         xs = np.where(m.any(0))[0]; hx = (xs.min() + xs.max()) / 2 if centre else torso_x(m)
-        atlas.alpha_composite(place(q, cw, ch, ax, fy, hx, round(base * sc)), (i * cw, 0))
+        atlas.alpha_composite(place(q, cw, ch, ax, fy, hx, base, s=sc * SC), (i * cw, 0))   # (Nov 12) one resize, straight from the source
     save(atlas, 'mb-' + name); meta[name] = {'url': f'assets/sprites/zombies/dir8/mb-{name}.webp', 'w': cw, 'h': ch, 'ax': ax, 'fy': fy, 'n': n}
 
 h0 = grid('walk', 260, 300); grid('run', 290, 300); grid('strike', 300, 300); grid('throw', 290, 320, main_only=True, flips=((2, 2),))
@@ -98,5 +107,5 @@ def fx(name, sets, size, solid=False):   # sets of 8 on black -> one row of 8 * 
     meta['fx_' + name] = {'url': f'assets/sprites/fx/mb-{name}.webp', 'w': size, 'h': img.height, 'n': len(out)}
 fx('rubble', 3, 220, solid=True); fx('erupt', 3, 240); fx('rock', 3, 230, solid=True); fx('shock', 2, 250)
 im = Image.open(os.path.join(ART, 'portrait.png')).convert('RGB').resize((256, 256), Image.LANCZOS); pp = os.path.join(C, 'portraits', 'minebeast.webp'); im.save(pp, quality=82, method=6); print('portrait', os.path.getsize(pp) // 1024, 'KB')   # Nov 12: for the boss bar
-meta['k'] = round(K, 3)
+meta['k'] = 1; print('draw scale baked in: SC', SC, 'vs measured', round(K, 3))   # (Nov 12) the sheets are cut at the drawn size
 open(os.path.join(here, '..', 'client', 'mineBeastArt.js'), 'w').write('// GENERATED by tools/extract-minebeast.py: the Mine Beast sheets (cell w / h, anchor ax / fy, n frames) and effects; k = draw scale\nexport const MB = ' + json.dumps(meta, separators=(',', ':')) + ';\n')

@@ -1663,4 +1663,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (let h = 0; h < q.length; h++) { const c = q[h], i = c % g.GW, j = (c - i) / g.GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= g.GW || b >= g.GH) continue; const n = b * g.GW + a; if (!seen[n] && !g.blocked[n]) { seen[n] = 1; q.push(n); } } }
   ok(seen[cell(700, 2400)] && seen[cell(5300, 2400)], "a boss-sized body gets from the tower to both outer strips (over the bridges)");
   room._dispose(); }
+// 70. (Nov 12) BETA MODE (Esc menu, host): everyone takes 1/100 of all damage and can't be downed; the downed get back up
+{ const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = () => { room.lastTick = Date.now() - 50; room.tick(); };
+  send(B, "betaMode"); ok(!room.state.beta, "only the host can turn on beta mode");
+  q.hp = 0; q.alive = false; send(A, "betaMode"); ok(room.state.beta && q.alive && q.hp === q.maxHp, "the host turns it on: anyone who was down gets back up");
+  const z = placeZombie(room, p.x + 20, p.y, 500); z.damage = 50; z.attackCooldown = 0; p.hp = p.maxHp; const h0 = p.hp;
+  for (let i = 0; i < 40 && p.hp === h0; i++) tick(); const lost = h0 - p.hp;
+  ok(lost > 0 && lost < 1.5, `a zombie bite only takes 1/100 (${lost.toFixed(2)} HP)`);
+  room.state.zombies.clear(); p.hp = 5; room.downPlayer(p); ok(p.alive && p.hp >= 1, "a hit that would down you doesn't");
+  let big = 0; room._bhp = 0; p._bhp = p.hp = p.maxHp; p.hp -= 5000; room.downPlayer(p); big = p.maxHp - p.hp; ok(p.alive && big > 40 && big < 60, `a 5000 hit counts as 50 (${Math.round(big)})`);
+  send(A, "betaMode"); ok(!room.state.beta, "the host turns it off"); p.hp = 5; room.downPlayer(p); ok(!p.alive, "...and downs work again");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
