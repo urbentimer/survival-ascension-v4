@@ -633,3 +633,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Running the full extract-hivemind.py also rewrites hivemind-act.png / hivemind-fx.png as bigger un-quantized PNGs (same art): use ALPHA_ONLY=1, or git checkout those two after.
 - Cache `20261113d`; next `20261113e`.
 - Nov 12 19:1x: Beta Mode also protects the RADIO TOWER: every tower hit goes through `towerHit(d)` (zombies at the tower, the Butcher's chop, the escort), 1/100 in beta. The generator only loses HP when out of fuel (unchanged); the mine carts' 4 hits (chase) are unchanged. Cache `20261113e`; next `20261113f`.
+
+## Nov 12 — REPORT BUG (for the playtests)
+- Esc menu, left card: CONTROLS | REPORT BUG. The panel (#pmBug, like CONTROLS) has tag chips (boss / map / objective / character / visual / sound / lag), a 600-char note, SEND. The client adds its context (map, wave, phase, wave type, boss phase, x/y, hp, alive, class, bosses out, night, screen size, cache version).
+- Server message "bugReport" → `this.log("warn", "bug", note, client, { tags, map, site, x, y, alive, bosses (kind, HP %, act, position), mission step, beta, players, client: ctx JSON })` → printed as a "[log] {...}" line, so Render's log search keeps it.
+- TO READ THE REPORTS: Render MCP list_logs, resource srv-dbkkpufb9u1s73fmj99g (workspace tea-dbjk0fk9v7es73ab4tp0), text ["*\"kind\":\"bug\"*"], startTime = the playtest day (logs are kept up to 30 days). Or the /logs page on the server with ?key=LOG_KEY. Max 40 reports per player per room. Test in "game log" block.
+- Cache `20261113f`; next `20261113g`.

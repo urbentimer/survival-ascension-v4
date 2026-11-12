@@ -952,6 +952,9 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(!threw && logged.some(([lv, k, m]) => lv === "error" && /game tick: Error: test boom/.test(m)), "a crash in the game tick is logged (with its stack) instead of killing the room");
   room.tickInner = inner; room.tick(); ok(room.state.phase === "playing", "...and the next tick runs normally");
   send(A, "clientError", { m: "frame: x is not a function" }); ok(logged.some(([lv, k, m]) => k === "client" && /x is not a function/.test(m)), "errors from a player's browser go into the log");
+  send(A, "bugReport", { text: "  the boss got   stuck  ", tags: ["boss", "<b>"], ctx: { wave: 4 } }); const bug = logged.find(([lv, k]) => k === "bug");
+  ok(bug && bug[0] === "warn" && bug[2] === "the boss got stuck" && /boss/.test(JSON.stringify(bug)), "REPORT BUG: the note lands in the game log (kind bug) with its tags and context");
+  send(A, "bugReport", { text: "x" }); ok(logged.filter(([, k]) => k === "bug").length === 1, "...an empty one is ignored");
   room._dispose(); }
 // 36. BRIGGS (juggernaut): shotgun, Iron Bastion (E: 15s dome, can't be hurt), War Cry (Q: taunt, half damage, team buff, impact)
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };

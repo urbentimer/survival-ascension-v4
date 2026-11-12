@@ -360,6 +360,12 @@ body.in-match #ls{display:none}
 .pm-left{width:330px;flex:none;display:flex;flex-direction:column;gap:12px;justify-content:space-between}
 .pm-dev{width:910px;max-width:100%;min-height:740px;display:flex;flex-direction:column;gap:12px}
 .pm-ctl{width:720px;max-width:100%}
+.pm-pair{display:flex;gap:10px}.pm-pair>button{flex:1;min-width:0;height:48px;font-size:17px!important}   /* (Nov 12) CONTROLS + REPORT BUG */
+.pm-bug{display:flex;flex-direction:column;gap:14px;align-self:flex-start}.pm-bug-hint,.pm-bug-note{margin:0;font:500 15px/1.45 "Barlow",Inter,sans-serif;color:#b9c6d0}.pm-bug-note{font-size:13px;color:#8fa6b8}
+.pm-bug-tags{display:flex;flex-wrap:wrap;gap:8px}.pm-tag{--c:5px;--bd:#2f5168;--fill:linear-gradient(180deg,#112130,#0b1620);height:34px;padding:0 12px!important;font-size:14px!important;color:#9fc7dd!important}
+.pm-tag.on{--bd:#ffc24a;--fill:linear-gradient(180deg,#3a2a08,#24190a);color:#ffd36b!important}
+#pmBugText{width:100%;min-height:130px;resize:vertical;box-sizing:border-box;padding:12px 14px;border:2px solid #2f5168;border-radius:6px;background:#071018;color:#e6eef3;font:500 16px/1.45 "Barlow",Inter,sans-serif}#pmBugText:focus{outline:none;border-color:#3fd0ff;box-shadow:0 0 10px rgba(63,208,255,.35)}
+.pm-send{--bd:#ffc24a!important;color:#ffd36b!important}
 .pm-title{display:flex;align-items:center;justify-content:center;gap:16px;margin:0;padding:4px 0 12px;border-bottom:2px solid #18293a;font:800 38px/1 var(--pm-f);letter-spacing:1.5px;color:#f4ecd8;text-shadow:0 2px 0 #000,0 0 10px rgba(255,235,200,.15)}
 .pm-sl{display:inline-block;width:24px;height:9px;flex:none;background:linear-gradient(90deg,var(--pm-gold) 0 38%,transparent 38% 62%,var(--pm-gold) 62%);transform:skewX(-38deg);filter:drop-shadow(0 0 4px rgba(255,190,40,.6))}
 .pm-resume{flex:none;--c:10px;--bd:linear-gradient(180deg,#fff6c0,#e9a417);--fill:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 42%),linear-gradient(118deg,transparent 0 7%,rgba(140,80,0,.28) 7% 7.6%,transparent 7.6% 10%,rgba(140,80,0,.2) 10% 10.5%,transparent 10.5% 89.5%,rgba(140,80,0,.2) 89.5% 90%,transparent 90% 92.4%,rgba(140,80,0,.28) 92.4% 93%,transparent 93%),linear-gradient(180deg,#ffe468,#ffc52b 52%,#ee9e12);height:84px;color:#1a1004!important;font:800 italic 46px/1 var(--pm-f)!important;letter-spacing:1px;filter:drop-shadow(0 0 12px rgba(255,190,40,.55))}
@@ -663,7 +669,7 @@ body.in-match #ls{display:none}
     <button class="cf pm-row" id="sfxToggle"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="pm-rl">SOUND<br>EFFECTS</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
     <button class="cf pm-row pm-beta off" id="betaToggle" title="Host: everyone (bots too) and the radio tower get 100x health, to cruise the maps, fight the bosses and test the objectives"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span class="pm-rl">BETA MODE<small id="betaSub">100× HEALTH</small></span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button>
     <div class="cf pm-code"><label>ROOM CODE</label><div class="pm-code-r"><output class="cf" id="pmCode">····</output><button class="cf pm-out pm-cyan" id="pmCopy">COPY</button></div></div>
-    <button class="cf pm-out pm-full" id="pmControls">CONTROLS</button>
+    <div class="pm-pair"><button class="cf pm-out" id="pmControls">CONTROLS</button><button class="cf pm-out pm-bugbtn" id="pmBugBtn" title="Tell the developer what went wrong (the game adds the map, wave and where you are)">REPORT BUG</button></div>
     <button class="cf pm-leave" id="leave"><svg class="pm-ico" viewBox="0 0 24 24"><path d="M10 4H5v16h5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 12h11M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="leaveTxt">LEAVE ROOM</span></button>
    </section>
    <section class="pm-card pm-dev cf hidden" id="pmDev">
@@ -698,6 +704,12 @@ body.in-match #ls{display:none}
    <div><kbd>U</kbd><span>Level-up picker</span></div><div><kbd>Space</kbd><span>Dash</span></div>
    <div><kbd>Tab</kbd><span>Scoreboard</span></div><div><kbd>Esc</kbd><span>This menu</span></div>
   </div><button class="cf pm-out pm-full" id="pmCtlBack">BACK</button></section>
+   <section class="pm-card pm-ctl pm-bug cf hidden" id="pmBug"><h2 class="pm-title"><i class="pm-sl"></i>REPORT A BUG<i class="pm-sl"></i></h2>
+    <p class="pm-bug-hint">What went wrong? The game adds the map, the wave, the boss and where you're standing for you.</p>
+    <div class="pm-bug-tags" id="pmBugTags"><button class="cf pm-tag" data-tag="boss">BOSS</button><button class="cf pm-tag" data-tag="map">MAP</button><button class="cf pm-tag" data-tag="objective">OBJECTIVE</button><button class="cf pm-tag" data-tag="character">CHARACTER</button><button class="cf pm-tag" data-tag="visual">LOOKS WRONG</button><button class="cf pm-tag" data-tag="sound">SOUND</button><button class="cf pm-tag" data-tag="lag">LAG</button></div>
+    <textarea id="pmBugText" maxlength="600" rows="5" placeholder="e.g. The Screamer got stuck behind a container and stopped attacking"></textarea>
+    <div class="pm-pair"><button class="cf pm-out" id="pmBugBack">BACK</button><button class="cf pm-out pm-send" id="pmBugSend">SEND</button></div>
+    <p class="pm-bug-note" id="pmBugNote">Each report goes straight to the game's log.</p></section>
   </div>
  </div>
  <div id="mapCard" class="map-card" aria-live="polite"><small id="mapCardN">MAP 1 OF 6</small><b id="mapCardName">ASCENSION</b><span id="mapCardSub">Research Outpost</span><em id="mapCardBoss">Boss on wave 4: THE BUTCHER</em></div>
@@ -718,5 +730,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261113e"></script>
+<script type="module" src="./client.js?v=20261113f"></script>
 </body></html>

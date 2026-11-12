@@ -312,7 +312,22 @@ $("waveJumpGo").onclick = jumpToWave;
 $("pmSpawn").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) pmDo("debugSpawn", { kind: b.dataset.spawn }, `Spawned: ${b.textContent.trim().toLowerCase()}`); });
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
 $("pmCopy").onclick = () => { const code = room?.roomId || ""; if (code) copyText(code, "Room code copied"); pmToast("Room code copied"); };
-$("pmControls").onclick = () => { $("pmCtl").classList.remove("hidden"); $("pmDev").classList.add("hidden"); };
+$("pmControls").onclick = () => { $("pmCtl").classList.remove("hidden"); $("pmBug").classList.add("hidden"); $("pmDev").classList.add("hidden"); pmFit(); };
+// REPORT A BUG (Nov 12, for the playtests): a short note + the game's own context (map, wave, boss, position...) -> the server's game log ("bug")
+let bugSent = 0;
+$("pmBugBtn").onclick = () => { $("pmBug").classList.remove("hidden"); $("pmCtl").classList.add("hidden"); $("pmDev").classList.add("hidden"); pmFit(); setTimeout(() => $("pmBugText").focus(), 60); };
+$("pmBugBack").onclick = () => { $("pmBug").classList.add("hidden"); pmRender(true); };
+$("pmBugTags").addEventListener("click", e => { const b = e.target.closest(".pm-tag"); if (b) b.classList.toggle("on"); });
+$("pmBugSend").onclick = () => {
+  const text = $("pmBugText").value.trim(); if (text.length < 3) { pmToast("Write what happened first"); $("pmBugText").focus(); return; }
+  const me = me_(), bosses = state ? [...state.zombies.values()].filter(z => z.boss || z.kind === "hivemind").map(z => z.kind) : [];
+  const ctx = { map: MAP_ORDER[Math.floor((Math.max(1, state?.stage || 1) - 1) / 4) % MAP_ORDER.length]?.name, wave: state?.stage, phase: state?.phase, type: state?.waveType, bossPhase: state?.bossPhase,
+    x: me && Math.round(me.x), y: me && Math.round(me.y), hp: me && Math.round(me.hp), alive: me?.alive, cls: me?.characterClass, bosses: bosses.join(","), night: state?.isNight, screen: innerWidth + "x" + innerHeight, ver: (document.querySelector('script[src*="client.js"]')?.src.split("v=")[1] || "") };
+  const tags = [...document.querySelectorAll("#pmBugTags .pm-tag.on")].map(b => b.dataset.tag);
+  room?.send("bugReport", { text, tags, ctx }); bugSent++;
+  $("pmBugText").value = ""; for (const b of document.querySelectorAll("#pmBugTags .pm-tag.on")) b.classList.remove("on");
+  txt("pmBugNote", `Sent. Thanks! (${bugSent} from you this game)`); pmToast("Bug report sent. Thanks!");
+};
 $("pmCtlBack").onclick = () => { $("pmCtl").classList.add("hidden"); pmRender(true); };
 let leaveSure = 0;
 for (const b of document.querySelectorAll("#menu button.cf")) b.insertAdjacentHTML("beforeend", '<i class="pm-gl" aria-hidden="true"></i>');   // the shine layer: gloss line, bevel, the light sweep on hover
@@ -328,11 +343,11 @@ function uiSound(k) {   // the menu's own little sounds, made in code (through t
 }
 $("menu").addEventListener("pointerover", e => { const b = e.target.closest?.("button.cf"); if (b === uiHover) return; uiHover = b; if (b && !b.disabled) uiSound("hover"); });
 $("menu").addEventListener("pointerdown", e => { const b = e.target.closest?.("button.cf"); if (b && !b.disabled) uiSound(b.matches(".pm-resume,.pm-gold,.pm-tab,.pm-fill") ? "gold" : "click"); });
-function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") ? 370 : 1290, h = 810, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
+function pmFit() { const w = $("pmDev").classList.contains("hidden") && $("pmCtl").classList.contains("hidden") && $("pmBug").classList.contains("hidden") ? 370 : 1290, h = 810, z = Math.min(1, (innerWidth - 24) / w, (innerHeight - 24) / h); document.querySelector(".pm-wrap").style.setProperty("--pmz", Math.max(.55, z).toFixed(3)); }
 addEventListener("resize", pmFit);
 $("menu").addEventListener("click", e => { if (e.target === $("menu")) closePanels(); });   // a click on the dimmed backdrop closes it
 function pmRender(force) {   // who sees what, which buttons work right now
-  if (!state || !room) return; const host = SOLO_PREVIEW || state.hostId === myId, ph = state.phase, play = ph === "playing" || ph === "cleared", M = state.mission || "", ctl = !$("pmCtl").classList.contains("hidden");
+  if (!state || !room) return; const host = SOLO_PREVIEW || state.hostId === myId, ph = state.phase, play = ph === "playing" || ph === "cleared", M = state.mission || "", ctl = !$("pmCtl").classList.contains("hidden") || !$("pmBug").classList.contains("hidden");
   $("pmDev").classList.toggle("hidden", !host || ph === "lobby" || ctl); txt("pmCode", SOLO_PREVIEW ? "SOLO" : room.roomId || "····");
   for (const b of document.querySelectorAll("#pmDev [data-act], #skipMorph, #bossNow, #skipMine, #skipBeast, #mineChase, #mineEscape")) b.disabled = !play;
   const boss = [...state.zombies.values()].some(z => z.boss || z.kind === "hivemind"); $("bossEnrage").disabled = $("bossKill").disabled = !boss;
@@ -555,7 +570,7 @@ function togglePanel(id) {
   $(id).classList.remove("hidden"); firing = false;
   if (id === "equip") { equipKey = ""; renderEquip(state?.players.get(myId)); }
   if (id === "levelUp") renderLevelUp(state?.players.get(myId));
-  if (id === "menu") { $("pmCtl").classList.add("hidden"); pmTab(pmTabNow); pmRender(true); }
+  if (id === "menu") { $("pmCtl").classList.add("hidden"); $("pmBug").classList.add("hidden"); pmTab(pmTabNow); pmRender(true); }
 }
 function anyPanelOpen() { return PANELS.some(id => !$(id).classList.contains("hidden")); }
 

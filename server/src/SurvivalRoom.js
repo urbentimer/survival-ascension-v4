@@ -682,6 +682,15 @@ export class SurvivalRoom extends Room {
       const n = (this.errCount = (this.errCount || 0) + 1); if (n > 300) return;
       this.log(data?.lv === "warn" ? "warn" : "error", "client", String(data?.m || ""), client, { browser: String(data?.ua || "").slice(0, 80) });
     });
+    this.onMessage("bugReport", (client, data) => {   // (Nov 12) Esc menu > REPORT BUG: a player's note + the game's context -> the game log (kind "bug"; Render keeps it in its log search)
+      const p = this.state.players.get(client.sessionId); this.bugN = this.bugN || new Map(); const n = (this.bugN.get(client.sessionId) || 0) + 1; this.bugN.set(client.sessionId, n); if (n > 40) return;
+      const text = String(data?.text || "").replace(/\s+/g, " ").trim().slice(0, 600); if (text.length < 3) return;
+      const tags = (Array.isArray(data?.tags) ? data.tags : []).slice(0, 7).map(t => String(t).replace(/[^a-z]/gi, "").slice(0, 12)).join(",");
+      const bosses = [...this.state.zombies.values()].filter(z => z.boss || z.kind === "hivemind").slice(0, 4).map(z => `${z.kind} ${Math.round(100 * z.hp / (z.maxHp || 1))}%${z.act ? " " + z.act : ""} at ${Math.round(z.x)},${Math.round(z.y)}`).join("; ");
+      const c = data?.ctx && typeof data.ctx === "object" ? data.ctx : {};
+      this.log("warn", "bug", text, client, { tags, map: chapterOf(this.state.stage)?.name, site: this.state.mapSite, x: Math.round(p?.x || 0), y: Math.round(p?.y || 0), alive: p?.alive, bosses, mission: String(this.state.mission || "").split("|")[0], beta: !!this.state.beta, players: this.state.players.size, client: JSON.stringify(c).slice(0, 200) });
+      this.state.message = `${p?.name || "Someone"} sent a bug report`;
+    });
     this.onMessage("betaMode", client => {   // (Nov 12) host: BETA MODE on/off. Everyone (bots too) gets 100x health so the team can cruise the maps, fight bosses and test the objectives
       if (client.sessionId !== this.state.hostId && !this.solo) return; const on = this.state.beta = !this.state.beta;
       if (on) for (const p of this.state.players.values()) if (!p.alive && this.state.phase !== "lobby") { this.downHp?.delete(p.sessionId); p.alive = true; p.bledOut = false; p.bleedout = 0; p.hp = p.maxHp; }   // anyone who was down gets back up
