@@ -16,10 +16,12 @@ from PIL import Image
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'abomination')
 C = os.path.join(here, '..', 'client', 'assets'); D8 = os.path.join(C, 'sprites', 'zombies', 'dir8'); FX = os.path.join(C, 'sprites', 'fx')
-BW, BH, BAX, BFY = 340, 260, 170, 236     # boss cells
-MW = 460                                   # morph cells (five bodies side by side)
-SW, SH, SAX, SFY = 240, 210, 120, 182     # spawn cells
-BOSS_H, SPAWN_H = 172, 118                # standing heights in game (px): Screamer ~170
+RB, RS = 2, 1.5                           # (Nov 12) atlas resolution: he is drawn 2x in game, the Five 1.5x, so the sheets are cut at that size
+                                           # straight from the source art (no 172px shrink + 2x browser stretch = no blur); client ABM.r / ABM.sr
+BW, BH, BAX, BFY = 340 * RB, 260 * RB, 170 * RB, 236 * RB     # boss cells (680 x 520, feet 340, 472)
+MW = 460 * RB                              # morph cells (five bodies side by side)
+SW, SH, SAX, SFY = round(240 * RS), round(210 * RS), round(120 * RS), round(182 * RS)     # spawn cells (360 x 315, feet 180, 273)
+BOSS_H, SPAWN_H = 172 * RB, 118 * RS      # standing heights in the atlas (in game: 344 / 177 px)
 
 def load(n): return np.array(Image.open(os.path.join(ART, n + '.png')).convert('RGB')).astype(int)
 
@@ -50,9 +52,20 @@ def torso_x(m):
     ys, xs = np.where(m); top, bot = ys.min(), ys.max(); h = bot - top; band = (ys > top + h * .4) & (ys < top + h * .8)
     return float(np.median(xs[band])) if band.any() else float(np.median(xs))
 
+def resize_sharp(rgba, sc):   # (Nov 12) premultiplied Lanczos (no magenta fringe), soft antialiased edge, then an unsharp mask on the colour
+    a = rgba[..., 3:4].astype(np.float32) / 255; pm = rgba[..., :3].astype(np.float32) * a
+    w, h = max(1, round(rgba.shape[1] * sc)), max(1, round(rgba.shape[0] * sc))
+    up = lambda x: np.array(Image.fromarray(x).resize((w, h), Image.LANCZOS)).astype(np.float32)
+    A = np.clip(np.dstack([up(np.ascontiguousarray(np.clip(pm[..., i], 0, 255).astype(np.uint8))) for i in range(3)]), 0, 255)
+    al = np.clip(up(np.ascontiguousarray(rgba[..., 3])), 0, 255) / 255
+    rgb = np.where(al[..., None] > .02, A / np.maximum(al[..., None], .02), 0)
+    from PIL import ImageFilter
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.4 * max(1, sc), percent=70, threshold=2))
+    alpha = np.clip((al - .18) / .64, 0, 1)   # a crisp but antialiased edge (was a hard 0/255 cut)
+    return Image.fromarray(np.dstack([np.array(img), (alpha * 255).astype(np.uint8)]))
+
 def place(rgba, m, sc, cw, ch, ax, fy, hx, base):
-    im = Image.fromarray(np.ascontiguousarray(rgba)); im = im.resize((max(1, round(im.width * sc)), max(1, round(im.height * sc))), Image.LANCZOS)
-    q = np.array(im); q[..., 3] = np.where(q[..., 3] > 110, 255, 0); im = Image.fromarray(q)
+    im = resize_sharp(np.ascontiguousarray(rgba), sc)
     cell = Image.new('RGBA', (cw, ch)); ox, oy = round(ax - hx * sc), round(fy - base * sc)
     if ox < 0 or oy < 0 or ox + im.width > cw or oy + im.height > ch: print('   clipped', ox, oy, im.size, 'in', cw, ch)
     cell.paste(im, (ox, oy), im); return cell
@@ -75,7 +88,7 @@ def grid(name, out, cw, ch, ax, fy, target_h, ref=(0, 0), sc0=None):   # 5 rows 
         got = [cell(r, c) for c in range(4)]; ground = max(got[0][2], got[3][2])   # the row's ground line = the feet of its grounded frames
         for c, (m, q, y1) in enumerate(got):
             atlas.alpha_composite(place(q, m, sc, cw, ch, ax, fy, torso_x(m), m.shape[0] - 1 + (ground - y1)), (c * cw, r * ch))
-    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=80, alpha_quality=88, method=6)
+    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=90, alpha_quality=92, method=6)
     print(out, atlas.size, 'scale', round(sc, 3), '->', os.path.getsize(path) // 1024, 'KB'); return sc
 
 def strip(name, n, cw, ch, ax, fy, sc=None, target_h=None, ref=0, centre=False, frames_out=None):
@@ -93,7 +106,7 @@ def strip(name, n, cw, ch, ax, fy, sc=None, target_h=None, ref=0, centre=False, 
 def save_strip(cells, out):
     atlas = Image.new('RGBA', (cells[0].width * len(cells), cells[0].height))
     for i, c in enumerate(cells): atlas.alpha_composite(c, (i * c.width, 0))
-    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=80, alpha_quality=88, method=6); print(out, atlas.size, '->', os.path.getsize(path) // 1024, 'KB')
+    path = os.path.join(D8, out + '.webp'); atlas.save(path, quality=90, alpha_quality=92, method=6); print(out, atlas.size, '->', os.path.getsize(path) // 1024, 'KB')
 
 grid('slam', 'abom-slam', BW, BH, BAX, BFY, BOSS_H); grid('spew', 'abom-spew', BW, BH, BAX, BFY, BOSS_H); grid('walk', 'abom-walk', BW, BH, BAX, BFY, BOSS_H)
 c, _ = strip('roll', 6, BW, BH, BAX, BFY, target_h=BOSS_H, ref=5); save_strip(c, 'abom-roll')
@@ -101,7 +114,7 @@ c, _ = strip('dazed', 4, BW, BH, BAX, BFY, target_h=BOSS_H * .98, ref=3); save_s
 m1, sc = strip('morph1', 6, MW, BH, MW // 2, BFY, target_h=BOSS_H * .98, ref=0, centre=True)   # Nov 10: the user's single 6-frame strip is the whole transformation (morph2 dropped)
 save_strip(m1, 'abom-morph')
 ssc = grid('spawn-run', 'abomspawn-run', SW, SH, SAX, SFY, SPAWN_H); grid('spawn-lunge', 'abomspawn-lunge', SW, SH, SAX, SFY, 0, sc0=ssc)   # same sheet size as the run: same scale
-c, _ = strip('spawn-dead', 5, SW + 40, SH, (SW + 40) // 2, SFY, target_h=SPAWN_H, ref=0, centre=True); save_strip(c, 'abomspawn-dead')
+c, _ = strip('spawn-dead', 5, SW + round(40 * RS), SH, (SW + round(40 * RS)) // 2, SFY, target_h=SPAWN_H, ref=0, centre=True); save_strip(c, 'abomspawn-dead')
 
 def fx(names, out, size, cone=False):   # 3 sets of 8 on black -> 24 equal cells in one row
     frames = []
@@ -116,8 +129,8 @@ def fx(names, out, size, cone=False):   # 3 sets of 8 on black -> 24 equal cells
         yy = np.abs(np.arange(h) - h / 2)[:, None] / (h / 2); half = .3 + .7 * (np.arange(w) / w)[None, :] ** .8; mask = mask * np.clip((half - yy) / .22, 0, 1)
     img = Image.fromarray(np.concatenate([f[y0:y1, :w] * mask[..., None] for f in frames], 1).astype(np.uint8)); k = size / w
     if k < 1: img = img.resize((round(w * k) * 24, round(img.height * k)), Image.LANCZOS)
-    path = os.path.join(FX, out + '.webp'); img.save(path, quality=80, method=6); print(out, img.size, 'frame', img.width // 24, 'x', img.height, '->', os.path.getsize(path) // 1024, 'KB')
-for n in ('lava', 'slam', 'ember'): fx([f'fx-{n}{i}' for i in (1, 2, 3)], 'abom-' + n, 200, cone=n == 'lava')
+    path = os.path.join(FX, out + '.webp'); img.save(path, quality=88, method=6); print(out, img.size, 'frame', img.width // 24, 'x', img.height, '->', os.path.getsize(path) // 1024, 'KB')
+for n in ('lava', 'slam', 'ember'): fx([f'fx-{n}{i}' for i in (1, 2, 3)], 'abom-' + n, 10 ** 6, cone=n == 'lava')   # (Nov 12) full source resolution (was shrunk to 200px frames, then drawn up to 4x): the client's aFx sizes them as if 200px wide
 
 fg, rgba = keyed(load('portrait')); im = Image.fromarray(rgba); im = im.crop(im.getbbox()); im.thumbnail((560, 560), Image.LANCZOS)
 im.save(os.path.join(C, 'portraits', 'abomination.webp'), quality=84, alpha_quality=90, method=6); print('portrait', im.size)

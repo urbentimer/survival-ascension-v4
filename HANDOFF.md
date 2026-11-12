@@ -576,3 +576,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - build-preview no longer drops music: `assets/audio/music_*.mp3` and `fire_loop.mp3` stay plain relative paths, and the 9 mp3s are published as Artifact files at those same paths (they don't count toward the 16 MB page). SA_MUSIC=1 still inlines them for file:// Playwright tests.
 - Artifact publish `files` now = the 3 preview-assets-N.js + `assets/audio/{fire_loop, music_boss_abom, music_boss_battle, music_boss_mine, music_boss_pyre, music_boss_scream, music_day_exploration, music_main_menu, music_night_wave}.mp3` (sources in client/assets/audio). Files left out of a publish are kept, so the mp3s only need re-sending when they change.
 - Checked over http: menu/day, mine (awake → chase), pyre, abom, scream, butcher all switch. Cache `20261112t`; next `20261112u`.
+
+## Nov 12 — Abomination art sharpened
+- He was drawn 2x from 340x260 cells (art shrunk to 172px, then stretched 2x by the browser) + the preview re-encoded at webp q60 + slow 50/50 frame blends = blurry.
+- tools/extract-abomination.py now cuts at RB = 2 (boss cells 680x520, feet 340/472, BOSS_H 344) and RS = 1.5 (spawn cells 360x315, feet 180/273): straight from the source art, premultiplied Lanczos (no magenta fringe), soft antialiased alpha (was a hard cut), UnsharpMask, webp q90. FX strips kept at full source res (271px frames); client aFx scales by 200/fw so callers are unchanged.
+- Client ABM: cell numbers are sheet pixels, `r: 2, sr: 1.5`; draws scale by sc / r and ssc / sr (= 1). `abCrisp` makes walk/roll frames hold, then cross-fade quickly.
+- build-preview skips the q60 re-encode for `/abom` sheets. Cache `20261112u`; next `20261112v`.

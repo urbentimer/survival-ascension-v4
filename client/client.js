@@ -1567,11 +1567,11 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/abom-
   dazed: "assets/sprites/zombies/dir8/abom-dazed.webp", morph: "assets/sprites/zombies/dir8/abom-morph.webp", srun: "assets/sprites/zombies/dir8/abomspawn-run.webp",
   slunge: "assets/sprites/zombies/dir8/abomspawn-lunge.webp", sdead: "assets/sprites/zombies/dir8/abomspawn-dead.webp",
   fxLava: "assets/sprites/fx/abom-lava.webp", fxSlam: "assets/sprites/fx/abom-slam.webp", fxEmber: "assets/sprites/fx/abom-ember.webp" })) { const im = new Image(); im.src = url; abImgs[k] = im; }
-const ABM = { bw: 340, bh: 260, bax: 170, bfy: 236, mw: 460, sw: 240, sh: 210, sax: 120, sfy: 182, lava: "255,90,31", sc: 2, ssc: 1.5 };   // (Nov 12) sc: he is drawn 2x (he looked small on The Crucible), ssc: the Five 1.5x (the Sundering shrinks 2x -> 1.5x as he parts, so the hand-over still lines up)
+const ABM = { bw: 680, bh: 520, bax: 340, bfy: 472, mw: 920, sw: 360, sh: 315, sax: 180, sfy: 273, r: 2, sr: 1.5, lava: "255,90,31", sc: 2, ssc: 1.5 };   // (Nov 12) the sheets are cut at r / sr x (= the size they are drawn): cell numbers are in sheet pixels, so draws scale by sc / r (= 1)   // (Nov 12) sc: he is drawn 2x (he looked small on The Crucible), ssc: the Five 1.5x (the Sundering shrinks 2x -> 1.5x as he parts, so the hand-over still lines up)
 const abFlames = [];   // this frame's ground fires [x, y, scale, loop, phase, alpha] (lava puddles, slam scorch lines): drawn by drawAbomFlames
 const abMove = new Map(), abTele = new Map(), abPuddles = [];   // walk cycles; latest telegraph per boss / spawn; lava puddles
 function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false, sy = 1) {   // one additive frame of a 24-frame strip; (x, y) = its centre (or its left-middle with `left`); sy squashes its height
-  const im = abImgs[key]; if (!im?.naturalWidth) return; const fw = im.naturalWidth / 24, fh = im.naturalHeight, f = Math.max(0, Math.min(23, frame)), f0 = Math.floor(f);
+  const im = abImgs[key]; if (!im?.naturalWidth) return; const fw = im.naturalWidth / 24, fh = im.naturalHeight, f = Math.max(0, Math.min(23, frame)), f0 = Math.floor(f); scale *= 200 / fw;   // (Nov 12) the strips are full resolution now: `scale` stays "x a 200px-wide frame"
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, Math.min(1, alpha)); ctx.translate(x, y); if (rot) ctx.rotate(rot);
   blendCells(im, 0, 0, fw, fh, f0, Math.min(23, f0 + 1), f - f0, left ? 0 : -fw * scale / 2, -fh * scale * sy / 2, fw * scale, fh * scale * sy); ctx.restore();
 }
@@ -1587,6 +1587,7 @@ function onAbom(m) {
   else if (m.k === "split") { shake(7, 350); playSfx("roar", m.x, m.y, .9); }   // no burst here: the morph already ends on the five live sprites, so the hand-over is seamless
   else if (m.k === "land") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 16, sc: .9, from: 8, t }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 300) shake(4, 160); playSfx("stomp", m.x, m.y, .5); }
 }
+const abCrisp = k => { k = Math.max(0, Math.min(1, (k - .55) / .45)); return k * k * (3 - 2 * k); };   // (Nov 12) walk cycles: each frame holds, then a quick cross-fade (a slow 50/50 blend read as a blurry double image)
 function drawAbomination(z) {
   const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), S = ABM.sc;
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
@@ -1607,14 +1608,14 @@ function drawAbomination(z) {
   else if (z.act === "roll" || z.act === "unroll") { sheet = "roll"; single = true; n = 6;
     if (z.act === "unroll") { f = 4; f2 = 5; k = Math.min(1, t / .35); }
     else if (t < .5) { f = 0; f2 = 1; k = t / .5; } else if (t < 1) { f = 1; f2 = 2; k = (t - .5) / .5; }
-    else { const u = mv.dist / (46 * S); f = 2 + Math.floor(u) % 3; f2 = 2 + (Math.floor(u) + 1) % 3; k = u - Math.floor(u); lift = Math.abs(Math.sin(mv.dist / (60 * S))) * 7 * S; } }
+    else { const u = mv.dist / (46 * S); f = 2 + Math.floor(u) % 3; f2 = 2 + (Math.floor(u) + 1) % 3; k = abCrisp(u - Math.floor(u)); lift = Math.abs(Math.sin(mv.dist / (60 * S))) * 7 * S; } }
   else if (z.act === "daze") { sheet = "dazed"; single = true; const L = z.actLen || 3; if (t < .35) f = f2 = 0; else if (t > L - .5) { f = 2; f2 = 3; k = Math.min(1, (t - (L - .5)) / .4); } else { f = f2 = Math.floor(t / .45) % 2 ? 2 : 1; } }
-  else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / (26 * S); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); } }
+  else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / (26 * S); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = abCrisp(u - Math.floor(u)); } }
   const [row, flip] = single ? [0, false] : pyRow(z.aim || 0), im = abImgs[sheet];
   const beat = .5 + .5 * Math.sin(now / 300), sund = 0;
   bossGlow(z.x, gy - 85 * S, ABM.lava, (80 + 70 * sund + 8 * beat) * S, .3 + .2 * beat + .4 * sund);
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x + sx), Math.round(gy - lift)); ctx.scale(S, S); if (flip) ctx.scale(-1, 1);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x + sx), Math.round(gy - lift)); ctx.scale(S / ABM.r, S / ABM.r); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * ABM.bh, cw, ABM.bh, f, f2, k, -ax, -ABM.bfy)); ctx.restore();
   const label = z.act === "daze" ? "DAZED · ×1.5 DAMAGE" : "";
   if (label) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = z.act === "daze" ? "#ffe08a" : "#ff9d6b"; ctx.strokeText(label, z.x, gy - 175 * S - 30); ctx.fillText(label, z.x, gy - 175 * S - 30); ctx.restore(); }
@@ -1637,11 +1638,11 @@ function drawAbomSunder(z, t, gy, now, tele) {
   const keys = [[0, 0], [.55, 1], [1.15, 2], [1.7, 3], [2.25, 4], [2.85, 5], [99, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
   const span = keys[a + 1][0] - keys[a][0], k = sm((t - keys[a][0] - span * .25) / (span * .75)), settled = sm((t - 1.6) / .5);   // each frame holds for a beat, then eases into the next
   const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled) * M, pulse = M + M * .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash * M;
-  if (im.naturalWidth && hand < 1) { ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = 1 - hand; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(pulse, pulse);
+  if (im.naturalWidth && hand < 1) { ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = 1 - hand; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(pulse / ABM.r, pulse / ABM.r);
     const draw = () => blendCells(im, 0, 0, ABM.mw, ABM.bh, keys[a][1], keys[a + 1][1], k, -ABM.mw / 2, -ABM.bfy); draw();
     if (flash > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = (1 - hand) * flash * .8; draw(); } ctx.restore(); }   // one hot pass: bright, but the figures stay readable
   if (hand > 0 && run.naturalWidth) for (const [ox, oy] of [...ABM_FAN].sort((u, v) => u[1] - v[1])) {   // the live sprites fade in on their own spots, back row first
-    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = hand; ctx.translate(Math.round(z.x + ox), Math.round(z.y + oy + 24)); ctx.scale(ABM.ssc, ABM.ssc); ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, -ABM.sax, -ABM.sfy, ABM.sw, ABM.sh); ctx.restore(); }   // feet at y + radius(30) * .8, like drawAbomSpawn
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = hand; ctx.translate(Math.round(z.x + ox), Math.round(z.y + oy + 24)); ctx.scale(ABM.ssc / ABM.sr, ABM.ssc / ABM.sr); ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, -ABM.sax, -ABM.sfy, ABM.sw, ABM.sh); ctx.restore(); }   // feet at y + radius(30) * .8, like drawAbomSpawn
   ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - hand; ctx.strokeText("CAN'T BE HURT", z.x, gy - 175 * M - 30); ctx.fillText("CAN'T BE HURT", z.x, gy - 175 * M - 30); ctx.restore();
 }
 function drawAbomSpawn(z) {
@@ -1650,7 +1651,7 @@ function drawAbomSpawn(z) {
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   let sheet = "srun", f = 0, f2 = 0, k = 0, lift = 0;
   if (z.act === "lunge") { sheet = "slunge"; if (t < L.wind) { f = f2 = 0; } else if (t < L.wind + L.leap) { const u = (t - L.wind) / L.leap; f = u < .5 ? 1 : 2; f2 = f; lift = Math.sin(Math.PI * u) * 30 * F; } else { f = f2 = 3; } }
-  else if (now - mv.at < 160) { const u = mv.dist / (24 * F); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  else if (now - mv.at < 160) { const u = mv.dist / (24 * F); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = abCrisp(u - Math.floor(u)); }
   ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, gy, (30 - lift / F * .3) * F, (9 - lift / F * .08) * F, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.act === "lunge" && tele?.k === "lunge" && t < L.wind + L.leap) {   // where it will land
     const lx = tele.x + Math.cos(tele.a) * tele.dist, ly = tele.y + Math.sin(tele.a) * tele.dist, kk = Math.min(1, t / (L.wind + L.leap));
@@ -1658,7 +1659,7 @@ function drawAbomSpawn(z) {
   const [row, flip] = pyRow(z.aim || 0), im = abImgs[sheet];
   bossGlow(z.x, gy - 55 * F, z.enraged ? "255,40,30" : ABM.lava, (z.enraged ? 62 : 44) * F, z.enraged ? .6 + .2 * Math.sin(now / 80) : .3);
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x), Math.round(gy - lift)); ctx.scale(F, F); if (flip) ctx.scale(-1, 1);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x), Math.round(gy - lift)); ctx.scale(F / ABM.sr, F / ABM.sr); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * ABM.sh, ABM.sw, ABM.sh, f, f2, k, -ABM.sax, -ABM.sfy)); ctx.restore();
   // each of the Five has its own health bar
   const w = 60, hb = gy - 125 * F - 10 - lift, hk = Math.max(0, Math.min(1, z.hp / z.maxHp)); ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(z.x - w / 2 - 1, hb, w + 2, 6); ctx.fillStyle = z.enraged ? "#ff3b30" : "#ff8a3d"; ctx.fillRect(z.x - w / 2, hb + 1, w * hk, 4);
@@ -1698,7 +1699,7 @@ function drawAbomFx(f, age) {   // false when finished
   }
   if (f.k === "sdead") {   // a Spawn crumbles into cooling rock
     if (s > 5) return false; const im = abImgs.sdead; if (!im?.naturalWidth) return true; const u = Math.min(4, s / .22), fr = Math.floor(u), a = s > 3.8 ? 1 - (s - 3.8) / 1.2 : 1, cw = im.naturalWidth / 5;
-    ctx.save(); ctx.globalAlpha = a; ctx.translate(Math.round(f.x), Math.round(f.y + 24)); ctx.scale(ABM.ssc, ABM.ssc); blendCells(im, 0, 0, cw, ABM.sh, fr, Math.min(4, fr + 1), u - fr, -cw / 2, -ABM.sfy); ctx.restore(); return true;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(Math.round(f.x), Math.round(f.y + 24)); ctx.scale(ABM.ssc / ABM.sr, ABM.ssc / ABM.sr); blendCells(im, 0, 0, cw, ABM.sh, fr, Math.min(4, fr + 1), u - fr, -cw / 2, -ABM.sfy); ctx.restore(); return true;
   }
   return false;
 }
