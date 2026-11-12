@@ -457,7 +457,7 @@ export class SurvivalRoom extends Room {
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
     this.state.puddles = new MapSchema(); this.spits = []; this.puddleSeq = 0;
     // the city: buildings, wrecks, trees... (solid) — same layout every match, sent to every player
-    this.state.mapSite = 0; this.state.difficulty = "normal"; this.state.waveMode = "campaign"; this.state.friendlyFire = false; this.state.extraLoot = false;
+    this.state.mapSite = 0; this.state.difficulty = "normal"; this.state.waveMode = "campaign"; this.state.friendlyFire = false; this.state.extraLoot = false; this.state.startWave = 1;
     const site = Number.isInteger(options?.site) && options.site >= 0 && options.site < SITES.length ? options.site : DEFAULT_SITE;   // (tests pass site: 0 = a city)
     this.loadSite(site); siteLayout(DEEP.site);   // (the mission's map is built now, not mid-game)
     this.onCreateRest(options);
@@ -526,8 +526,10 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
       this.state.elapsed = 0;
+      const w0 = this.state.startWave || 1; this.state.stage = w0;   // (Nov 13) the start wave the host picked (its map is already loaded; beginWave travels if not)
       this.state.message = "Wave 1/50: protect the radio tower!";
       this.beginWave();
+      if (w0 > 1) this.log("info", "game", `the match started at wave ${w0}`);
       if (this.state.explore) this.state.message = "EXPLORE MODE: no zombies. Walk around freely. Host: Esc menu to start the waves.";
     });
 
@@ -724,7 +726,8 @@ export class SurvivalRoom extends Room {
     });
     this.onMessage("settings", (client, data) => {
       if (client.sessionId !== this.state.hostId || this.state.phase !== "lobby" || !data) return;
-      // (Nov 12) no map choice any more: every match starts at Ascension and follows the map order (CHAPTERS)
+      // (Nov 12) no map choice any more: the maps follow the order (CHAPTERS). (Nov 13) The host picks the START WAVE instead: its map is loaded now (so the lobby shows it)
+      if (Number.isInteger(data.startWave) && data.startWave >= 1 && data.startWave <= 50) { this.state.startWave = data.startWave; const site = chapterOf(data.startWave).site; if (site !== this.state.mapSite && !this.fixedSite) this.loadSite(site); }
       if (DIFFICULTY[data.difficulty]) this.state.difficulty = data.difficulty;
       if (data.waveMode === "campaign" || data.waveMode === "ascension") this.state.waveMode = data.waveMode;
       if (typeof data.friendlyFire === "boolean") this.state.friendlyFire = data.friendlyFire;
@@ -923,7 +926,7 @@ export class SurvivalRoom extends Room {
       applyClassBase(p);
     }
     if (this.mine || this.mineBack) this.endMine(false);
-    if (s.mapSite !== CHAPTERS[0].site) this.loadSite(CHAPTERS[0].site);   // a new match: back to Ascension
+    s.stage = 1; { const site = chapterOf(s.startWave || 1).site; if (s.mapSite !== site) this.loadSite(site); }   // a new match: back to the start wave's map (Ascension unless the host picked a later START WAVE)
     s.phase = "lobby";
     s.message = "New match! Pick your survivors, then the host starts.";
   }

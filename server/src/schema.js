@@ -66,5 +66,6 @@ defineTypes(GameState, {
   paused: "boolean",   // (Nov 12) the host has the Esc menu open: the whole game is frozen
   mission: "string",   // the Deep Mine mission (wave 20), packed: step|fuel|placed|cartHp|gap|inserted|rune,rune,rune,rune (each: state.x.y.carrier); "" = no mission
   coasterS: "number", coasterWait: "number",   // the coaster train: how far round the loop its middle is; seconds left at a station (0 = moving)
-  mapSite: "number", difficulty: "string", waveMode: "string", friendlyFire: "boolean", extraLoot: "boolean"   // lobby mission settings (host)
+  mapSite: "number", difficulty: "string", waveMode: "string", friendlyFire: "boolean", extraLoot: "boolean",   // lobby mission settings (host)
+  startWave: "number"   // (Nov 13) the host picks the wave the match starts on (1-50); its map is loaded in the lobby
 });

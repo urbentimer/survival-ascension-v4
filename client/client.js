@@ -307,7 +307,12 @@ $("mineRune").onclick = () => pmDo("debugMine", { k: "rune" }, "Next rune put in
 $("skipBeast").onclick = () => pmDo("debugMine", { k: "boss" }, "Skipped to The Mine Beast");
 $("mineChase").onclick = () => pmDo("debugMine", { k: "chase" }, "Skipped to the chase");
 $("mineEscape").onclick = () => pmDo("debugMine", { k: "escape" }, "Skipped to the escape");
-function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) pmDo("debugWave", { n }, `Skipped to wave ${n}`); }
+// Where a wave is: 4 waves per map, the boss on the 4th (the maps go round again after the last one)
+const waveMap = n => MAP_ORDER[Math.floor((Math.max(1, n) - 1) / 4) % MAP_ORDER.length];
+const waveWhere = n => { const c = waveMap(n); return n === 50 ? `${c.short} · FINAL BOSS` : n % 4 === 0 ? `${c.short} · BOSS` : `${c.short} · WAVE ${(n - 1) % 4 + 1} OF 4`; };
+const waveJumpHint = () => { const n = Math.round(Number($("waveJumpN").value)); txt("waveJumpTo", n >= 1 && n <= 50 ? waveWhere(n) : "WAVES 1-50"); };
+$("waveJumpN").addEventListener("input", waveJumpHint);
+function jumpToWave() { const n = Math.round(Number($("waveJumpN").value)); if (n >= 1 && n <= 50) pmDo("debugWave", { n }, `Skipped to wave ${n}: ${waveMap(n).name}`); }
 $("waveJumpGo").onclick = jumpToWave;
 $("pmSpawn").addEventListener("click", e => { const b = e.target.closest("[data-spawn]"); if (b) pmDo("debugSpawn", { kind: b.dataset.spawn }, `Spawned: ${b.textContent.trim().toLowerCase()}`); });
 $("waveJumpN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); jumpToWave(); } });
@@ -695,8 +700,9 @@ const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/mus
   butcher: "assets/audio/music_boss_butcher.mp3",   // (Nov 12) the Butcher's own theme: the user's 2:11 song (its 1-bar silence cut) with its build + big peak played twice: an 87-bar 3:10 loop at 110 BPM, starting a bar before the peak
   hive: "assets/audio/music_boss_hive.mp3",   // (Nov 12) the Hivemind's own theme (mini-boss waves + the Alpha): the user's 7:22 song, one pass of its repeating 66-bar section (95 BPM, 2:47), one-bar crossfade; starts a bar before the big build
   mine: "assets/audio/music_boss_mine.mp3",   // (Nov 12) the Mine Beast's own theme: the user's 3:30 song with its 30s breakdown cut out (a 3:00 loop, 2-beat crossfade at 1:58), starting a bar before its big entry
-  scream: "assets/audio/music_boss_scream.mp3" };   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
-const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 }, hive: { pad: .5, len: 7353141 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+  scream: "assets/audio/music_boss_scream.mp3",   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
+  refinery: "assets/audio/music_map_refinery.mp3" };   // (Nov 13) the Scorched Refinery's own music (its waves, the breaks and the boss wave's horde; the Pyre Priest has his theme): the user's 2:31 song (130 BPM, 82 bars) with two 8-bar grooves played twice = 98 bars, 3:00.9; starts a bar before the beat comes in
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 }, hive: { pad: .5, len: 7353141 / 44100 }, refinery: { pad: .5, len: 7978682 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -748,6 +754,7 @@ function musicScene() {   // which music fits right now
   { const D = state.mission && deepState(); if (D && (D.step === "awake" || D.step === "fight" || D.step === "flee" || D.step === "chase")) return "mine"; }   // the Mine Beast: from the moment it wakes until you're through the portal
   if ([...state.zombies.values()].some(z => z.kind === "hivemind") || (state.waveType === "boss" && state.bossIntro === "hivemind")) return "hive";   // (Nov 12) the Hivemind's own theme: the mini boss and the Alpha
   if (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight")) return "boss";
+  if (state.mapSite === 5) return "refinery";   // (Nov 13) the Scorched Refinery has its own music until the Pyre Priest comes out
   return state.isNight ? "night" : "day";
 }
 function updateMusic() {   // called every frame: crossfades to the scene's track
@@ -5075,8 +5082,10 @@ function renderLobbyRoom() {
     if (host) { txt("readyLabel", all ? "START MISSION" : "START ANYWAY"); txt("readySub", `${readyN} / ${humans.length} READY`); }
     else { txt("readyLabel", me?.ready ? "READY!" : "READY UP"); txt("readySub", me?.ready ? "click to cancel · waiting for the host" : `${readyN} / ${humans.length} READY`); }
     // mission settings
-    const site = state.mapSite || 0; txt("mapName", "MAP 1 · " + MAP_ORDER[0].name); txt("mapSub", "Fixed route: beat each map's boss to move on");
-    setHtml("lsRoute", MAP_ORDER.map((c, i) => `<span class="${c.site === site ? "on" : ""}"><i>${i + 1}</i>${c.short}</span>`).join(""));
+    const sw = Math.max(1, Math.min(50, state.startWave || 1)), mi = Math.floor((sw - 1) / 4) % MAP_ORDER.length, mc = MAP_ORDER[mi];   // (Nov 13) the host's START AT WAVE picks the map
+    txt("mapName", `MAP ${mi + 1} · ${mc.name}`); txt("mapSub", sw === 1 ? "Fixed route: beat each map's boss to move on" : sw % 4 === 0 ? `Starts on the boss wave (${sw}): ${mc.boss}` : `Starts at wave ${sw} · ${mc.boss} on wave ${Math.ceil(sw / 4) * 4}`);
+    setHtml("lsRoute", MAP_ORDER.map((c, i) => `<span data-w="${i * 4 + 1}" class="${i === mi ? "on" : ""}"><i>${i + 1}</i>${c.short}</span>`).join(""));
+    if (document.activeElement !== $("setStartWave")) $("setStartWave").value = sw;
     txt("setDifficulty", (state.difficulty || "normal").toUpperCase());
     txt("setWaveMode", state.waveMode === "ascension" ? "ASCENSION (∞)" : "CAMPAIGN (50)");
     txt("setFriendlyFire", state.friendlyFire ? "ON" : "OFF"); txt("setExtraLoot", state.extraLoot ? "ON" : "OFF");
@@ -5182,7 +5191,14 @@ $("lsRename").onclick = () => {
 const sendSettings = d => { if (room && state?.hostId === myId) room.send("settings", d); };
 $("mapPrev").onclick = () => sendSettings({ map: ((state?.mapSite || 0) + SITE_NAMES.length - 1) % SITE_NAMES.length });
 $("mapNext").onclick = () => sendSettings({ map: ((state?.mapSite || 0) + 1) % SITE_NAMES.length });
-document.querySelectorAll(".ls-set").forEach(b => b.onclick = () => {
+// (Nov 13) START AT WAVE: the arrows (Shift: a whole map, 4 waves), typing a number, or clicking a map in the route
+const setStartWave = n => { if (!room) return toast("Create a room first."); if (state?.hostId !== myId) return toast("Only the host can change the mission settings."); n = Math.max(1, Math.min(50, Math.round(n) || 1)); sendSettings({ startWave: n }); toast(`The match starts at wave ${n}: ${waveMap(n).name}` + (n % 4 === 0 ? " (boss wave)" : "")); };
+$("startWaveDn").onclick = e => setStartWave((state?.startWave || 1) - (e.shiftKey ? 4 : 1));
+$("startWaveUp").onclick = e => setStartWave((state?.startWave || 1) + (e.shiftKey ? 4 : 1));
+$("setStartWave").addEventListener("change", e => setStartWave(Number(e.target.value)));
+$("setStartWave").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+$("lsRoute").addEventListener("click", e => { const c = e.target.closest("[data-w]"); if (c) setStartWave(Number(c.dataset.w)); });
+document.querySelectorAll(".ls-set[data-set]").forEach(b => b.onclick = () => {
   if (!room) return toast("Create a room first."); if (state?.hostId !== myId) return toast("Only the host can change the mission settings.");
   const k = b.dataset.set;
   if (SETTING_OPTS[k]) { const o = SETTING_OPTS[k], cur = state[k] || o[0]; sendSettings({ [k]: o[(o.indexOf(cur) + 1) % o.length] }); }

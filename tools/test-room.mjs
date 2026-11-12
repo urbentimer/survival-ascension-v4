@@ -1680,4 +1680,18 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "betaMode"); ok(!room.state.beta, "the host turns it off"); p.hp = 5; room.downPlayer(p); ok(!p.alive, "...and downs work again");
   room.towerHit(500); ok(Math.abs(t0 - 5 - 500 - room.state.towerHp) < .01, "...and the tower takes full damage again");
   room._dispose(); }
+// 71. (Nov 13) START AT WAVE (lobby, host): it picks the map (loaded in the lobby), the match starts on that wave, a new match goes back there
+{ const room = new SurvivalRoom(); room.onCreate({ site: 0 }); room._onBroadcast = () => {};
+  const A = { sessionId: "A" }, B = { sessionId: "B" }; room.onJoin(A, { name: "Host" }); room.onJoin(B, { name: "Friend" });
+  const send = (c, t, d) => room._handlers[t](c, d);
+  ok(room.state.startWave === 1 && room.state.mapSite === 0, "a new room starts at wave 1 on Ascension");
+  send(B, "settings", { startWave: 13 }); ok(room.state.startWave === 1 && room.state.mapSite === 0, "only the host can pick the start wave");
+  send(A, "settings", { startWave: 13 }); ok(room.state.startWave === 13 && room.state.mapSite === 5, `wave 13 -> the Scorched Refinery is loaded in the lobby (site ${room.state.mapSite})`);
+  send(A, "settings", { startWave: 0 }); send(A, "settings", { startWave: 51 }); send(A, "settings", { startWave: 7.5 }); ok(room.state.startWave === 13, "...bad values are ignored");
+  send(A, "settings", { startWave: 8 }); ok(room.state.mapSite === 3, "wave 8 -> Fallen Dynasty");
+  send(A, "start", {}); ok(room.state.phase === "playing" && room.state.stage === 8 && room.state.waveType === "boss" && room.state.mapSite === 3, `the match starts on wave 8, the boss wave (${room.state.stage} ${room.state.waveType})`);
+  room.state.phase = "defeat"; send(A, "restart"); ok(room.state.phase === "lobby" && room.state.stage === 1 && room.state.mapSite === 3 && room.state.startWave === 8, "a new match keeps the start wave and its map");
+  send(A, "settings", { startWave: 20 }); send(A, "start", {}); ok(room.state.stage === 20 && room.state.mapSite === 6 && !!room.state.mission, "wave 20 starts the Deep Mine mission");
+  room.state.phase = "victory"; send(A, "restart"); send(A, "settings", { startWave: 1 }); send(A, "start", {}); ok(room.state.stage === 1 && room.state.mapSite === 0 && !room.state.mission, "back to wave 1: Ascension, normal start");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

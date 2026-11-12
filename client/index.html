@@ -412,8 +412,8 @@ body.in-match #ls{display:none}
 .pm-grid3{display:grid!important;grid-template-columns:repeat(3,1fr);gap:16px;padding:6px 0}.pm-big{height:108px;font-size:24px!important;line-height:1.1!important}.pm-trow .pm-big{height:68px;font-size:22px!important}
 .pm-trow{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px}.pm-t2{grid-template-columns:1fr 1fr}
 .pm-jump{--c:8px;--bd:#3cc8f5;--fill:linear-gradient(180deg,#0f2131,#0a1520);display:flex;align-items:center;gap:10px;height:68px;padding:0 12px;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
-.pm-jump label{flex:1;white-space:nowrap;font:800 21px/1 var(--pm-f);color:#f2f6fa}
-.pm-jump input{width:60px;height:46px;border:2px solid #f5b820;border-radius:3px;background:#05080b;color:#fff;text-align:center;font:800 28px/1 var(--pm-f);-moz-appearance:textfield;box-shadow:0 0 6px rgba(255,190,40,.4)}.pm-jump input::-webkit-inner-spin-button,.pm-jump input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pm-jump label{flex:1;white-space:nowrap;font:800 21px/1 var(--pm-f);color:#f2f6fa}.pm-jump label small{display:block;margin-top:5px;font:700 12px/1 var(--pm-f);letter-spacing:.05em;color:#8fd8f5}
+.pm-jump input{width:74px;padding:0;height:46px;border:2px solid #f5b820;border-radius:3px;background:#05080b;color:#fff;text-align:center;font:800 28px/1 var(--pm-f);-moz-appearance:textfield;box-shadow:0 0 6px rgba(255,190,40,.4)}.pm-jump input::-webkit-inner-spin-button,.pm-jump input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .pm-gold{--c:6px;--bd:#fff1a4;--fill:linear-gradient(180deg,#ffe264,#ffc32a 55%,#eea014);width:60px;height:46px;color:#1a1004!important;font-size:25px!important;filter:drop-shadow(0 0 7px rgba(255,190,40,.6))}
 .pm-trow-sw{--bd:#3cc8f5;height:68px;font-size:21px!important;filter:drop-shadow(0 0 5px rgba(60,200,245,.45))}
 .pm-spawn{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px}.pm-spawn span{font:800 17px/1 var(--pm-f);color:#9fb3c2;margin-right:4px}.pm-spawn .pm-out{height:38px;font-size:16px!important;padding:0 11px!important}
@@ -489,6 +489,11 @@ body.in-match #ls{display:none}
 .ls-route span{flex:1 1 30%;min-width:0;padding:4px 5px;border:1px solid #3c3430;border-radius:3px;background:#17130f;color:#9d8f84;font:700 10px/1.15 var(--cond,system-ui);letter-spacing:.04em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ls-route span i{font-style:normal;color:#f28b36;margin-right:3px}
 .ls-route span.on{border-color:#f28b36;color:#ffd2a8;background:#2a1c12}
+.ls:not(.guest) .ls-route span{cursor:pointer}.ls:not(.guest) .ls-route span:hover{border-color:#a8653a;color:#e9c3a0}
+.ls-wave{cursor:default}.ls-wave:hover{background:none}.ls-step{display:flex;align-items:center;gap:6px}
+.ls-step button{width:30px;height:30px;border:1px solid #f28b36;border-radius:3px;background:#2a1c12;color:#ffd2a8;font:700 20px/1 var(--cond,system-ui);cursor:pointer;padding:0}.ls-step button:hover{background:#3d2615}
+.ls-step input{width:54px;height:30px;border:1px solid #3c3430;border-radius:3px;background:#0f0c0a;color:#7fe08f;text-align:center;font:700 17px/1 var(--cond,system-ui);-moz-appearance:textfield}.ls-step input::-webkit-inner-spin-button,.ls-step input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.ls-step input:focus{outline:none;border-color:#f28b36}
+.ls.guest .ls-step input{pointer-events:none;border-color:transparent;background:none}
 .map-card{position:fixed;left:50%;top:18%;z-index:50;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 40px 18px;transform:translateX(-50%);pointer-events:none;opacity:0;font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;text-align:center;
   background:linear-gradient(90deg,transparent,rgba(6,9,13,.88) 18%,rgba(6,9,13,.88) 82%,transparent);border-top:2px solid rgba(255,197,49,.7);border-bottom:2px solid rgba(255,197,49,.7)}
 .map-card.show{animation:mapCard 5.2s ease forwards}
@@ -570,7 +575,8 @@ body.in-match #ls{display:none}
   <section class="ls-panel ls-mission">
    <div class="ls-ph"><svg viewBox="0 0 24 24" class="ic"><path d="M14.7 6.3a4 4 0 0 0 3 6.7l-8.4 8.4a2 2 0 0 1-2.8-2.8l8.4-8.4a4 4 0 0 1-.2-3.9Z"/></svg><b>MISSION SETTINGS</b><small id="lsHostNote">host only</small></div>
    <div class="ls-map"><canvas id="lsMapThumb" width="320" height="112"></canvas><button class="ls-arrow l hidden" id="mapPrev" aria-label="Previous map">‹</button><div class="ls-mapname"><b id="mapName">ASCENSION SITE 01</b><small id="mapSub">Research Outpost</small></div><button class="ls-arrow r hidden" id="mapNext" aria-label="Next map">›</button></div>
-   <div class="ls-route" id="lsRoute" title="The maps come in this order: 4 waves each, the boss on the 4th. Beat it and you move on."></div>
+   <div class="ls-route" id="lsRoute" title="The maps come in this order: 4 waves each, the boss on the 4th. Beat it and you move on. Host: click a map to start there."></div>
+   <div class="ls-set ls-wave" id="lsWave" title="Host: the wave the match starts on. Every map has 4 waves (the boss on the 4th), so this picks the map too."><span>START AT WAVE</span><span class="ls-step"><button class="host-only" id="startWaveDn" aria-label="Earlier wave">‹</button><input id="setStartWave" type="number" min="1" max="50" value="1" inputmode="numeric" aria-label="Start wave"><button class="host-only" id="startWaveUp" aria-label="Later wave">›</button></span></div>
    <button class="ls-set" data-set="difficulty"><span>DIFFICULTY</span><b id="setDifficulty">NORMAL</b></button>
    <button class="ls-set" data-set="waveMode"><span>WAVE MODE</span><b id="setWaveMode">CAMPAIGN (50)</b></button>
    <button class="ls-set" data-set="friendlyFire"><span>FRIENDLY FIRE</span><b id="setFriendlyFire">OFF</b></button>
@@ -689,7 +695,7 @@ body.in-match #ls{display:none}
      <button class="cf pm-out pm-big" id="skipBeast">SKIP TO<br>MINE BEAST</button><button class="cf pm-out pm-big" id="mineChase">SKIP TO<br>THE CHASE</button><button class="cf pm-out pm-big" id="mineEscape">SKIP TO<br>THE ESCAPE</button>
     </div>
     <div class="pm-pane" data-pane="testing">
-     <div class="pm-trow"><div class="cf pm-jump" id="waveJump"><label for="waveJumpN">JUMP TO WAVE</label><input id="waveJumpN" type="number" min="1" max="50" value="4" inputmode="numeric"><button class="cf pm-gold" id="waveJumpGo">GO</button></div><button class="cf pm-out pm-big" id="levelPlus" title="Enough XP for one more level (you still pick the upgrade)">LEVEL +1</button><button class="cf pm-out pm-big" id="ultNow">UNLOCK<br>ULTIMATE</button></div>
+     <div class="pm-trow"><div class="cf pm-jump" id="waveJump"><label for="waveJumpN">JUMP TO WAVE<small id="waveJumpTo">ASCENSION · BOSS</small></label><input id="waveJumpN" type="number" min="1" max="50" value="4" inputmode="numeric"><button class="cf pm-gold" id="waveJumpGo">GO</button></div><button class="cf pm-out pm-big" id="levelPlus" title="Enough XP for one more level (you still pick the upgrade)">LEVEL +1</button><button class="cf pm-out pm-big" id="ultNow">UNLOCK<br>ULTIMATE</button></div>
      <div class="pm-trow pm-t2"><button class="cf pm-row pm-trow-sw" id="noCdToggle"><span class="pm-rl">ULTIMATES FROM<br>THE START</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button><button class="cf pm-row pm-trow-sw" id="exploreToggle"><span class="pm-rl">EXPLORE<br>MODE</span><span class="pm-sw"><b class="pm-sw-t"></b><i class="pm-sw-k"></i></span></button></div>
      <div class="pm-spawn" id="pmSpawn"><span>SPAWN NEAR YOU</span><button class="cf pm-out" data-spawn="walker">WALKER ×5</button><button class="cf pm-out" data-spawn="runner">RUNNER ×5</button><button class="cf pm-out" data-spawn="brute">BRUTE ×5</button><button class="cf pm-out" data-spawn="spitter">SPITTER ×5</button><button class="cf pm-out" data-spawn="mutant">MUTANT ×5</button><button class="cf pm-out" data-spawn="hivemind">HIVEMIND</button></div>
     </div>
@@ -730,5 +736,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261113g"></script>
+<script type="module" src="./client.js?v=20261113h"></script>
 </body></html>
