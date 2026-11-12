@@ -674,9 +674,10 @@ function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOI
 const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit
+  butcher: "assets/audio/music_boss_butcher.mp3",   // (Nov 12) the Butcher's own theme: the user's 2:11 song (its 1-bar silence cut) with its build + big peak played twice: an 87-bar 3:10 loop at 110 BPM, starting a bar before the peak
   mine: "assets/audio/music_boss_mine.mp3",   // (Nov 12) the Mine Beast's own theme: the user's 3:30 song with its 30s breakdown cut out (a 3:00 loop, 2-beat crossfade at 1:58), starting a bar before its big entry
   scream: "assets/audio/music_boss_scream.mp3" };   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
-const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -724,6 +725,7 @@ function musicScene() {   // which music fits right now
   if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)
   if ([...state.zombies.values()].some(z => (z.kind === "abomination" || z.kind === "abomSpawn") && z.boss) || (state.waveType === "boss" && state.bossIntro === "abomination")) return "abom";   // the Abomination (and the Five)
   if ([...state.zombies.values()].some(z => z.kind === "screamer" && z.boss) || (state.waveType === "boss" && state.bossIntro === "screamer")) return "scream";   // the Screamer's own theme (card + fight)
+  if ([...state.zombies.values()].some(z => z.kind === "butcher" && z.boss) || (state.waveType === "boss" && state.bossIntro === "butcher")) return "butcher";   // the Butcher's own theme (card + fight)
   { const D = state.mission && deepState(); if (D && (D.step === "awake" || D.step === "fight" || D.step === "flee" || D.step === "chase")) return "mine"; }   // the Mine Beast: from the moment it wakes until you're through the portal
   const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
   if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
@@ -2468,12 +2470,12 @@ function drawSquadWheel() {
 // ---------- THE BUTCHER (boss art: tools/extract-zombie-dirs.py + tools/extract-butcher.py) ----------
 const butcherImgs = {};
 for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/butcher-walk.webp", chop: "assets/sprites/zombies/dir8/butcher-chop.webp", hook: "assets/sprites/zombies/dir8/butcher-hook.webp",
-  spin: "assets/sprites/zombies/dir8/butcher-spin.png", stagger: "assets/sprites/zombies/dir8/butcher-stagger.png",
-  hookBreak: "assets/sprites/fx/hook-break.png", burst: "assets/sprites/fx/deflect-burst.png", deflected: "assets/sprites/fx/deflected.png", death: "assets/sprites/zombies/dir8/butcher-death.png", hookFx: "assets/sprites/fx/butcher-hook.png",
+  spin: "assets/sprites/zombies/dir8/butcher-spin.webp", stagger: "assets/sprites/zombies/dir8/butcher-stagger.webp",
+  hookBreak: "assets/sprites/fx/hook-break.png", burst: "assets/sprites/fx/deflect-burst.png", deflected: "assets/sprites/fx/deflected.png", death: "assets/sprites/zombies/dir8/butcher-death.webp", hookFx: "assets/sprites/fx/butcher-hook.png",
   chain: "assets/sprites/fx/butcher-chain.png", shock: "assets/sprites/fx/butcher-shock.png" })) { const im = new Image(); im.src = url; butcherImgs[k] = im; }
-const BCELL = { walk: { w: 230, h: 185, ax: 115, fy: 179 }, chop: { w: 320, h: 250, ax: 160, fy: 244 }, hook: { w: 420, h: 250, ax: 210, fy: 244 }, spin: { w: 330, h: 230, ax: 165, fy: 224 }, stagger: { w: 260, h: 200, ax: 130, fy: 194 } };
+const BCELL = { walk: { w: 345, h: 278, ax: 172, fy: 272 }, chop: { w: 480, h: 375, ax: 240, fy: 369 }, hook: { w: 630, h: 375, ax: 315, fy: 369 }, spin: { w: 495, h: 345, ax: 247, fy: 339 }, stagger: { w: 390, h: 300, ax: 195, fy: 294 } };   // (Nov 12) 1.5x bigger, cut at that size (tools/extract-butcher.py header)
 const SHOCK = { w: 300, h: 180, cy: 111, widths: [238, 273, 263, 271] };
-const BT = { hookAim: .5, get hookSpeed() { return state?.hookSpeed || 2600; }, hookRange: 480, chopAfter: .65, rings: [95, 185, 275], offset: 55 };   // match BUTCHER on the server
+const BT = { hookAim: .5, get hookSpeed() { return state?.hookSpeed || 2600; }, hookRange: 480, chopAfter: .65, rings: [105, 205, 300], offset: 80 };   // match BUTCHER on the server
 const bossCorpses = [];
 const bossMove = new Map(), stompDust = [];   // boss walk tracking + dust puffs from his footsteps
 function drawStompDust() {
@@ -2481,7 +2483,7 @@ function drawStompDust() {
   for (let i = stompDust.length - 1; i >= 0; i--) {
     const d = stompDust[i], k = (now - d.t) / 450; if (k >= 1) { stompDust.splice(i, 1); continue; }
     ctx.save(); ctx.globalAlpha = .45 * (1 - k); ctx.fillStyle = "#8a8378";
-    for (let j = 0; j < 4; j++) { const a = j * 1.6 + d.x; ctx.beginPath(); ctx.ellipse(d.x + Math.cos(a) * (6 + 16 * k), d.y + Math.sin(a) * (2 + 5 * k), 5 + 4 * k, 3 + 2 * k, 0, 0, 7); ctx.fill(); }
+    for (let j = 0; j < 4; j++) { const a = j * 1.6 + d.x; ctx.beginPath(); ctx.ellipse(d.x + Math.cos(a) * (9 + 24 * k), d.y + Math.sin(a) * (3 + 7.5 * k), 7.5 + 6 * k, 4.5 + 3 * k, 0, 0, 7); ctx.fill(); }   // (1.5x with the Butcher)
     ctx.restore();
   }
 }
@@ -2506,9 +2508,9 @@ function drawChain(x0, y0, x1, y1, withHook = true) {
 function drawButcher(z) {
   const now = gnow(), t = actTime(z), feet = z.radius * .8, row = ROW_OF_OCT[((Math.round((z.aim || 0) / (Math.PI / 4)) % 8) + 8) % 8];
   const flashAt = feel.flash.get(z.id), flash = flashAt && now - flashAt < 90, filter = flash;   // bFrame(..., flash): additive flash, no ctx.filter
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, 46, 12, 0, 0, 7); ctx.fill(); ctx.restore();
-  if (z.enraged) bossGlow(z.x, z.y - 40, "255,30,30", 110, .5 + .2 * Math.sin(now / 90));   // enraged: red halo behind him
-  const handX = z.x + Math.cos(z.aim || 0) * 34, handY = z.y - 52 + Math.sin(z.aim || 0) * 18;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + feet, 69, 18, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (z.enraged) bossGlow(z.x, z.y - 60, "255,30,30", 165, .5 + .2 * Math.sin(now / 90));   // enraged: red halo behind him
+  const handX = z.x + Math.cos(z.aim || 0) * 51, handY = z.y - 78 + Math.sin(z.aim || 0) * 27;   // (1.5x)
   if (z.act === "chop") {
     const W = Math.max(.2, (z.actLen || 1.35) - BT.chopAfter);
     if (t < W + .05) {   // the three danger zones light up on the ground during the wind-up
@@ -2534,13 +2536,13 @@ function drawButcher(z) {
     else f = 4;
     bFrame("hook", f, row, z.x, z.y, feet, filter);
     if (z.act === "pull") { const v = V(state.players.get(z.hookId)); if (v) drawChain(handX, handY, v.x, v.y - 22); }
-    else if (d > 10) drawChain(handX, handY, z.x + Math.cos(z.aim) * d, z.y - 30 + Math.sin(z.aim) * d);
+    else if (d > 10) drawChain(handX, handY, z.x + Math.cos(z.aim) * d, z.y - 45 + Math.sin(z.aim) * d);
   } else if (z.act === "stagger") {   // knocked back by a deflect
     const L = z.actLen || 1.5, f = t < .12 ? 1 : t < L - .35 ? 2 : 3;
-    const wob = t < L - .35 ? Math.sin(now / 60) * 3 : 0;
+    const wob = t < L - .35 ? Math.sin(now / 60) * 4.5 : 0;
     bFrame("stagger", f, row, z.x + wob, z.y, feet, filter);
     if (t < L - .2) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#ffe27a"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
-      for (let i = 0; i < 3; i++) { const a = now / 220 + i * 2.1; ctx.fillText("✦", z.x + Math.cos(a) * 26, z.y - 150 + Math.sin(a) * 6); } ctx.restore(); }
+      for (let i = 0; i < 3; i++) { const a = now / 220 + i * 2.1; ctx.fillText("✦", z.x + Math.cos(a) * 39, z.y - 215 + Math.sin(a) * 9); } ctx.restore(); }
   } else if (z.act === "spin") {
     const f = t < .15 ? 1 : t < .3 ? 2 : 3 + Math.floor(t * 16) % 5;
     bFrame("spin", f, 0, z.x, z.y, feet, filter);
@@ -2550,9 +2552,9 @@ function drawButcher(z) {
     if (step > .3) { st.movedAt = now; st.dist += step; st.x = z.x; st.y = z.y; }
     const moving = now - st.movedAt < 180;
     // frames follow the distance walked (feet don't slide), one full 6-frame cycle per ~90px; heavy stomp: body dips + sways on each footfall
-    const cyc = st.dist / 90, frame = moving ? Math.floor(cyc * 6) % 6 : 0, ph = cyc * Math.PI * 2;
-    const dip = moving ? Math.abs(Math.sin(ph)) * 4 : 0, sway = moving ? Math.sin(ph) * 2 : 0;
-    if (moving && Math.floor(cyc * 2) !== st.lastFoot) { st.lastFoot = Math.floor(cyc * 2); stompDust.push({ x: z.x + (st.lastFoot % 2 ? 16 : -16), y: z.y + feet, t: now }); }
+    const cyc = st.dist / 135, frame = moving ? Math.floor(cyc * 6) % 6 : 0, ph = cyc * Math.PI * 2;   // (1.5x: a longer stride)
+    const dip = moving ? Math.abs(Math.sin(ph)) * 6 : 0, sway = moving ? Math.sin(ph) * 3 : 0;
+    if (moving && Math.floor(cyc * 2) !== st.lastFoot) { st.lastFoot = Math.floor(cyc * 2); stompDust.push({ x: z.x + (st.lastFoot % 2 ? 24 : -24), y: z.y + feet, t: now }); }
     bFrame("walk", frame, row, z.x + sway, z.y + dip, feet, filter);
   }
 }
@@ -2582,7 +2584,7 @@ function drawBossCorpse(c) {
   if (c.kind !== "butcher" || !im?.naturalWidth) return;
   const f = Math.min(5, Math.floor(age / .2));
   ctx.save(); ctx.globalAlpha = age > 11 ? 1 - (age - 11) / 3 : 1; ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(im, f * C.w, 0, C.w, C.h, c.x - C.ax, c.y + 32 - C.fy, C.w, C.h); ctx.restore();
+  ctx.drawImage(im, f * C.w, 0, C.w, C.h, c.x - C.ax, c.y + 48 - C.fy, C.w, C.h); ctx.restore();   // feet at y + radius(60) * .8
 }
 // Cleaver Quake on the ground: the crack, then the red, yellow and blue shockwaves one after another.
 // Raven's katana slash (sprites/fx/raven-slash.webp, tools/extract-raven-slash.py, the user's violet crescent): 24 frames

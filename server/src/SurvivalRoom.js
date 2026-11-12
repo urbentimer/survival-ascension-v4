@@ -24,10 +24,10 @@ const ACID = { minRange: 140, maxRange: 430, hold: 380, backOff: 170, speed: 330
 // HOOK: every 10-15s throws a meat hook at the furthest survivor in range; a hit drags them in, holds them 0.5s and he chops.
 // ENRAGED (<30% HP): faster, hooks every 8-10s, and a whirlwind spin every ~8s.
 const BUTCHER = {
-  speed: 130, armour: 0.5, armourArc: 1.05,
-  chop: { trigger: 150, windup: .7, comboWindup: .38, after: .65, cd: 2.6, offset: 55, rings: [95, 185, 275], ringDelay: .12, stun: 1.0, slow: 2.0 },
+  speed: 130, armour: 0.5, armourArc: 1.05, radius: 60,   // (Nov 12) drawn 1.5x bigger: radius 40 -> 60, his cleaver lands further out (offset 55 -> 80, rings +10%)
+  chop: { trigger: 185, windup: .7, comboWindup: .38, after: .65, cd: 2.6, offset: 80, rings: [105, 205, 300], ringDelay: .12, stun: 1.0, slow: 2.0 },
   hook: { range: 480, minRange: 170, aim: .5, lock: .08, speed: 2100, cd: [10, 15], enragedCd: [8, 10], first: 5, hitR: 34, pullSpeed: 640, hold: .55, dmg: 8 },
-  spin: { every: 8, dur: 3, radius: 115, tick: .35, dmgMult: .35, speedMult: .8 },   // slower while spinning so you can run from it
+  spin: { every: 8, dur: 3, radius: 150, tick: .35, dmgMult: .35, speedMult: .8 },   // slower while spinning so you can run from it
   enrageAt: .3, enrageSpeed: 1.05,
 };
 // DEFLECT: only the FIRE AXE. Swing it toward the incoming hook as it arrives (tip within `reach` of you),
@@ -1061,7 +1061,7 @@ export class SurvivalRoom extends Room {
     this.solveZombie(z);   // don't appear inside a building
     z.targetId = ""; z.boss = boss;
     z.role = boss || TOWER_KINDS[kind] ? "tower" : "hunter"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false;
-    if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = 40; }
+    if (kind === "butcher") { z.speed = BUTCHER.speed * (this.state.isNight ? 1.1 : 1); z.radius = BUTCHER.radius; }
     if (kind === "pyre") { z.speed = PYRE.speed; z.radius = PYRE.radius; z.damage = PYRE.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }   // hunts survivors only
     if (kind === "screamer") { z.speed = SCREAMER.speed; z.radius = SCREAMER.radius; z.damage = SCREAMER.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }
     if (kind === "abomination") { z.maxHp *= ABOM.hp / 1700; z.hp = z.maxHp; z.speed = ABOM.speed; z.radius = ABOM.radius; z.damage = ABOM.dmg * scale * (this.state.isNight ? 1.2 : 1) * D.dmg; z.role = "hunter"; }
@@ -2932,7 +2932,7 @@ export class SurvivalRoom extends Room {
     if (!players.length) {   // nobody he can reach (Sofea flying, Raven hidden, everyone in a safehouse): he goes for the radio tower instead of standing still
       const tw = { x: this.A.cx, y: this.A.cy }, ta = Math.atan2(tw.y - z.y, tw.x - z.x), td = distance(z, tw); z.aim = ta; z.targetId = "";
       if (td > z.radius + TOWER_HALF + 20) this.bossMove(z, tw, z.speed * dt);
-      else if (now >= m.chopReady) { m.chopReady = now + BUTCHER.chop.cd * 1000; this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2); this.broadcast("chop", { x: Math.round(z.x + Math.cos(ta) * 55), y: Math.round(z.y + Math.sin(ta) * 55), r: BUTCHER.chop.rings, d: BUTCHER.chop.ringDelay });
+      else if (now >= m.chopReady) { m.chopReady = now + BUTCHER.chop.cd * 1000; this.state.towerHp = Math.max(0, this.state.towerHp - z.damage * 2); this.broadcast("chop", { x: Math.round(z.x + Math.cos(ta) * BUTCHER.chop.offset), y: Math.round(z.y + Math.sin(ta) * BUTCHER.chop.offset), r: BUTCHER.chop.rings, d: BUTCHER.chop.ringDelay });
         if (this.state.towerHp <= 0) { this.state.phase = "defeat"; this.state.message = "THE RADIO TOWER HAS BEEN DESTROYED — TEAM DEFEATED."; } }
       return;
     }

@@ -6,6 +6,12 @@
 #   fx/butcher-shock.png     4 rows x 6: crack, red (damage) ring, yellow (stun) ring, blue (slow) ring
 #   portraits/butcher.webp   front view for the boss intro card
 # Usage: python3 tools/extract-butcher.py   (reads tools/art/butcher-*.png)
+# (Nov 12) He is 1.5x bigger and sharpened. The walk / chop / hook / stagger sheets (then saved as .webp q90, alpha 92):
+#   SHARPEN=85 python3 tools/extract-zombie-dirs.py butcher tools/art/butcher-walk.png#150,0,1536,1024 height=192 cellw=345 cellh=278 name=butcher-walk
+#   SHARPEN=85 python3 tools/extract-zombie-dirs.py butcher tools/art/butcher-chop.png#150,0,1536,1024 height=185 cellw=480 cellh=375 name=butcher-chop
+#   SHARPEN=85 python3 tools/extract-zombie-dirs.py butcher tools/art/butcher-hook.png#90,0,1206,1024 height=189 cellw=630 cellh=375 pitch=186 name=butcher-hook
+#   SHARPEN=85 python3 tools/extract-zombie-dirs.py butcher tools/art/butcher-stagger.png#140,0,1199,1312 height=197 cellw=390 cellh=300 cols=4 name=butcher-stagger
+#   (before: height 128 / 123 / 126 / 131, cells 230x185, 320x250, 420x250, 260x200)
 import os, json, importlib.util
 import numpy as np
 from PIL import Image
@@ -33,9 +39,13 @@ def piece(src, keep_small=20, outline=True, tint=(0.85, 0.3, 0.3)):
     rgba = np.zeros(sub.shape + (4,), np.uint8); rgba[..., :3] = np.clip(rgb, 0, 255); rgba[..., 3] = sub * 255
     return Image.fromarray(rgba)
 
-def shrink(img, k):
+def shrink(img, k):   # (Nov 12) + an unsharp mask that only blurs the figure's own pixels
     img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
-    a = np.array(img); a[..., 3] = (a[..., 3] > 100) * 255; return Image.fromarray(a)
+    a = np.array(img); al = a[..., 3] > 100; a[..., 3] = al * 255
+    f = al.astype(np.float32); rgb = a[..., :3].astype(np.float32); sig = max(1.0, k) * .9
+    bl = np.dstack([ndimage.gaussian_filter(rgb[..., i] * f, sig) for i in range(3)]) / np.maximum(ndimage.gaussian_filter(f, sig), 1e-3)[..., None]
+    d = rgb - bl; d = np.where(np.abs(d) > 2, d, 0); a[..., :3] = np.where(al[..., None], np.clip(rgb + d * .85, 0, 255), rgb).astype(np.uint8)
+    return Image.fromarray(a)
 
 # --- hook + chain (right panel of the hook sheet) ---
 hk = A('hook')
@@ -58,10 +68,10 @@ def strip(y0, y1, n, cell, name, scale, pitch=None, x0=0):
         out.alpha_composite(img, (i * cell[0] + (cell[0] - img.width) // 2, cell[1] - 6 - img.height))
     out.save(os.path.join(D8, name)); return out
 body_h = rows[0][1] - rows[0][0]
-k = 145 / body_h            # standing frame ~145px tall in game (same as the walk sheet incl. the cleaver)
-strip(*rows[0], 8, (330, 230), 'butcher-spin.png', k, pitch='body')
-strip(*rows[1], 6, (330, 230), 'butcher-death.png', k)
-meta['spin'] = meta['death'] = {'cellW': 330, 'cellH': 230, 'feetY': 224}
+k = 145 * 1.5 / body_h      # standing frame ~218px tall in game (1.5x since Nov 12; same as the walk sheet incl. the cleaver)
+strip(*rows[0], 8, (495, 345), 'butcher-spin.png', k, pitch='body')   # (saved as .webp for the game)
+strip(*rows[1], 6, (495, 345), 'butcher-death.png', k)
+meta['spin'] = meta['death'] = {'cellW': 495, 'cellH': 345, 'feetY': 339}
 
 # --- shockwave rings: 4 rows x 6 (kept at sheet scale; the game scales each ring to its zone) ---
 sh = A('shockwave'); fg = xd.foreground(sh)

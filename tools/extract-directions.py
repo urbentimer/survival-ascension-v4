@@ -20,6 +20,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 COLS = 6
 TARGET_H = int(os.environ.get('SPRITE_H', 54))   # body height in game pixels (SPRITE_H=60 for a slim, tall character)
 ENHANCE = os.environ.get('ENHANCE', '')
+SHARPEN = float(os.environ.get('SHARPEN', 0) or 0)   # (Nov 12) e.g. SHARPEN=80: crisper detail when a sheet is cut bigger than before
 CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside a cell (room below for slash arcs)
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
 TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
@@ -159,6 +160,12 @@ def place(sheet, img, bc, feet, scale, row, col, flip=False):
     sw, sh = max(1, round(img.width * scale)), max(1, round(img.height * scale))
     small = img.resize((sw, sh), Image.LANCZOS)
     arr = np.array(small); al = arr[..., 3] > 110; arr[..., 3] = al * 255
+    if SHARPEN:   # (Nov 12) SHARPEN=<percent>: unsharp mask after the resize, blurring only the figure's own pixels (no magenta / halo pulled in at the edge)
+        from scipy.ndimage import gaussian_filter
+        f = al.astype(np.float32); rgb = arr[..., :3].astype(np.float32); sig = max(1.0, scale) * .9
+        bl = np.dstack([gaussian_filter(rgb[..., i] * f, sig) for i in range(3)]) / np.maximum(gaussian_filter(f, sig), 1e-3)[..., None]
+        d = rgb - bl; d = np.where(np.abs(d) > 2, d, 0)
+        arr[..., :3] = np.where(al[..., None], np.clip(rgb + d * SHARPEN / 100, 0, 255), rgb).astype(np.uint8)
     ring = np.zeros_like(al); ring[1:] |= al[:-1]; ring[:-1] |= al[1:]; ring[:, 1:] |= al[:, :-1]; ring[:, :-1] |= al[:, 1:]; ring &= ~al
     arr[ring] = (14, 10, 12, 255)
     small = Image.fromarray(arr)

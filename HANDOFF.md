@@ -593,3 +593,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client SCR: `r: 2, sc: 2`, cell numbers in sheet pixels; draws scale sc / r. Shadow, throat glow, enrage halo, label, wail wind-up rings, choke sparks, death (feet y + 54), night light all scaled. Walk uses abCrisp.
 - Server SCREAMER: radius 36 -> 68, keep [220, 360], shriek r/trigger 300 -> 340, allR 170 -> 230. Test spawn +520.
 - Sim W12 (3 bots, level 8): killed in 66s. build-preview skips q60 for `dir8/screamer-` too. Cache `20261112w`; next `20261112x`.
+
+## Nov 12 — Butcher: own theme + 1.5x bigger, sharpened
+- Music: the user's video is one 130.909 s song (60 bars at 110 BPM; bar 59 is ~2 s of silence). Loop = song bars 0-58 with bars 12.6-40.6 (the build + big peak, 28 bars) played twice: 87 bars, 189.82 s (8,370,975 samples), 2-beat crossfade at the jump, the silent bar cut. File starts at song bar 28 (a bar before the peak). `music_boss_butcher.mp3`, `MUSIC_LOOP.butcher = { pad: .5, len: 8370975 / 44100 }`; musicScene → "butcher" when a Butcher boss is out or bossIntro === "butcher". Work dir /home/claude/work/butcher (render.py).
+- Art: walk / chop / hook / stagger re-cut 1.5x with `SHARPEN=85 tools/extract-zombie-dirs.py ...` (exact commands in the tools/extract-butcher.py header; extract-directions.place got a SHARPEN option: unsharp mask that only blurs the figure's own pixels). Spin / death via extract-butcher.py (k x1.5, cells 495x345, sharpened shrink). All six saved as .webp q90 (client paths changed from .png for spin / stagger / death).
+- Client BCELL 1.5x (walk 345x278 feet 272, chop 480x375, hook 630x375, spin 495x345, stagger 390x300); shadow, enrage glow, hand/chain origin, stagger stars, stride (135px), stomp dust, corpse (y + 48) scaled.
+- Server BUTCHER.radius 60 (was 40), chop trigger 185 / offset 80 / rings [105, 205, 300], spin radius 150; client BT mirrors.
+- Tried EDSR (cv2 dnn_superres, models cloned from github.com/Saafke/edsr_tensorflow to /home/claude/saafke/): softer than Lanczos + unsharp on this art, not used. Higgsfield has 0 credits.
+- Sim W4 (3 bots): killed in 70s. Preview now 4 asset chunks. Cache `20261112x`; next `20261112y`.

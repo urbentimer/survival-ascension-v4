@@ -85,10 +85,10 @@
   "frames": 8
  },
  "butcher-walk": {
-  "cellW": 230,
-  "cellH": 185,
-  "anchorX": 115,
-  "feetY": 179,
+  "cellW": 345,
+  "cellH": 278,
+  "anchorX": 172,
+  "feetY": 272,
   "rows": [
    "down",
    "downRight",
@@ -102,10 +102,10 @@
   "frames": 6
  },
  "butcher-chop": {
-  "cellW": 320,
-  "cellH": 250,
-  "anchorX": 160,
-  "feetY": 244,
+  "cellW": 480,
+  "cellH": 375,
+  "anchorX": 240,
+  "feetY": 369,
   "rows": [
    "down",
    "downRight",
@@ -119,10 +119,10 @@
   "frames": 6
  },
  "butcher-hook": {
-  "cellW": 420,
-  "cellH": 250,
-  "anchorX": 210,
-  "feetY": 244,
+  "cellW": 630,
+  "cellH": 375,
+  "anchorX": 315,
+  "feetY": 369,
   "rows": [
    "down",
    "downRight",
@@ -136,10 +136,10 @@
   "frames": 6
  },
  "butcher-stagger": {
-  "cellW": 260,
-  "cellH": 200,
-  "anchorX": 130,
-  "feetY": 194,
+  "cellW": 390,
+  "cellH": 300,
+  "anchorX": 195,
+  "feetY": 294,
   "rows": [
    "down",
    "downRight",
