@@ -176,7 +176,7 @@ button.bag-slot.sel{border-color:#f28b36;background:#2c2219;box-shadow:inset 0 0
 .bi-ack{justify-self:start;padding:12px 22px;font-size:14px;letter-spacing:.1em}
 .bi-wait{color:#b39f96;font-size:11px}
 .boss-wait{position:absolute;left:50%;top:86px;transform:translateX(-50%);z-index:7;padding:7px 14px;background:rgba(40,6,8,.85);border:1px solid #a33;border-radius:3px;color:#ffd0c8;font:700 12px Inter,system-ui,sans-serif;letter-spacing:.06em}
-.boss-bar{position:relative}.enrage-mark{position:absolute;left:30%;top:-2px;bottom:-2px;width:2px;background:#ffd75e;box-shadow:0 0 4px #000}
+.boss{position:relative}.boss-face{position:absolute;left:-60px;top:-4px;width:52px;height:52px;border:2px solid #c2413a;border-radius:4px;background:#000;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,.6)}@media(max-width:700px){.boss-face{display:none}}.boss-bar{position:relative}.enrage-mark{position:absolute;left:30%;top:-2px;bottom:-2px;width:2px;background:#ffd75e;box-shadow:0 0 4px #000}
 @media(max-width:700px){.boss-intro{grid-template-columns:1fr;align-content:center;overflow-y:auto}.bi-portrait{position:absolute;inset:auto 0 0 auto;max-height:55vh;opacity:.25;z-index:-1}.bi-card{margin:0 auto}}
 @media(prefers-reduced-motion:reduce){.boss-intro,.bi-portrait{animation:none}}
 .slot.skillcard{background:#000 center/cover no-repeat;border:1px solid #f28b3655;padding:0}.slot.skillcard small{position:absolute;top:2px;left:2px;right:2px;background:#000c;border-radius:3px;font-size:9px;padding:1px 2px;text-align:center;white-space:nowrap;overflow:hidden;color:#ffd27a}.slot.skillcard.empty{opacity:1;filter:none}
@@ -469,7 +469,7 @@ body.in-match #ls{display:none}
   <div class="bar-label small"><b>GENERATOR</b><span id="genText">100% fuel</span></div>
   <div class="hbar thin"><span id="genBar"></span></div>
   <div id="hiveWarn" class="hive-warn" aria-live="polite"><img src="assets/portraits/hivemind.webp" alt=""><div><small>MINI BOSS</small><b>THE HIVEMIND HAS ARRIVED</b><span>It bites, slams, leaps and spawns zombies. The wave won't end until it dies.</span></div></div>
-  <div id="bossBox" class="boss hidden"><div class="bar-label"><b id="bossName">BOSS</b><span id="bossText"></span></div><div class="hbar boss-bar"><span id="bossBar"></span><i class="enrage-mark" title="Enrages below 30%"></i></div></div>
+  <div id="bossBox" class="boss hidden"><img id="bossFace" class="boss-face" alt="" hidden><div class="bar-label"><b id="bossName">BOSS</b><span id="bossText"></span></div><div class="hbar boss-bar"><span id="bossBar"></span><i class="enrage-mark" title="Enrages below 30%"></i></div></div>
  </div>
  <div class="hud hud-tr">
   <canvas id="minimap" width="360" height="228" aria-label="Minimap"></canvas>
@@ -533,5 +533,5 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261112e"></script>
+<script type="module" src="./client.js?v=20261112f"></script>
 </body></html>
