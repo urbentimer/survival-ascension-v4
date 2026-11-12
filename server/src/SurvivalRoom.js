@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, trackNearest, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, buildCrucibleLayout, KC_SPOT, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, trackNearest, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -282,10 +282,10 @@ const CHAPTERS = [
   { site: 4, boss: "screamer", name: "WHITEOUT STATION" },                   // waves 9-12   Whiteout Station
   { site: 5, boss: "pyre", name: "SCORCHED REFINERY" },                       // waves 13-16  Scorched Refinery (he walks out of the pyramid)
   { site: 6, boss: "minebeast", mission: true, name: "THE DEEP MINE" },   // waves 17-20  The Deep Mine: wave 20 is the rune mission and the Mine Beast
-  { site: 2, boss: "abomination", standIn: true, name: "THE CRUCIBLE" }, // waves 21-24  THE CRUCIBLE (lava map, art coming): Crossroads Ruins stands in until it's built
+  { site: 7, boss: "abomination", name: "THE CRUCIBLE" },                   // waves 21-24  THE CRUCIBLE: the lava map (he bursts out of the Great Crucible)
 ];
 const chapterOf = stage => CHAPTERS[Math.floor((Math.max(1, stage) - 1) / 4) % CHAPTERS.length];
-const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }, { style: "mine", seed: 6060, w: 6000, h: 4000 }];   // mine: The Deep Mine (Nov 11), a big underground map ridden on mine carts, with the boss dungeon and the portal;   // (Nov 11) Midnight Carnival removed from the lobby (user). Its ride engine (this.coaster, coasterTrack...) stays for the mine-cart map;   // carnival: Midnight Carnival, a bigger map with a rideable coaster;   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
+const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }, { style: "mine", seed: 6060, w: 6000, h: 4000 }, { style: "crucible", seed: 2424, w: 6000, h: 4000 }];   // crucible: The Crucible (Nov 12), the lava map for the Abomination (waves 21-24)   // mine: The Deep Mine (Nov 11), a big underground map ridden on mine carts, with the boss dungeon and the portal;   // (Nov 11) Midnight Carnival removed from the lobby (user). Its ride engine (this.coaster, coasterTrack...) stays for the mine-cart map;   // carnival: Midnight Carnival, a bigger map with a rideable coaster;   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
 const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
@@ -404,7 +404,7 @@ const distance = (a, b) => hyp(a.x - b.x, a.y - b.y);
 // wakes the Mine Beast: it chases the carts for one lap (every hit pushes it back; if it reaches them it smashes them), then the carts roll back
 // into the dungeon and everyone is pulled through the portal: wave cleared.
 const LAYOUTS = new Map();   // a site's layout is always the same: built once per server (the mine takes ~250ms), so loading a map mid-game (the wave 20 mission) doesn't stall a tick
-function siteLayout(i) { let L = LAYOUTS.get(i); if (!L) { const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height; L = S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : S.style === "mine" ? buildMineLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed); LAYOUTS.set(i, L); } return L; }
+function siteLayout(i) { let L = LAYOUTS.get(i); if (!L) { const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height; L = S.style === "dynasty" ? buildDynastyLayout(W, H, S.seed) : S.style === "whiteout" ? buildWhiteoutLayout(W, H, S.seed) : S.style === "refinery" ? buildRefineryLayout(W, H, S.seed) : S.style === "carnival" ? buildCarnivalLayout(W, H, S.seed) : S.style === "mine" ? buildMineLayout(W, H, S.seed) : S.style === "crucible" ? buildCrucibleLayout(W, H, S.seed) : buildMapLayout(W, H, S.seed); LAYOUTS.set(i, L); } return L; }
 const DEEP = { wave: 20, site: 6, fuelCost: 5, fuelMax: 10, leave: 5, speed: 1.5, chaseSpeed: 1.12, awake: 7, gap0: 520, gapMax: 640, catchGap: 140, bounce: 420, gain: 45, stagger: 110, cartHp: 5,
   shardEvery: 4, shardCap: 16, drop: .4, takeR: 130, insertR: 210, zEvery: 1.3, zCap: [10, 5], flash: 3.2 };   // gain: px/s the Beast closes in; zCap: [base, per player] zombies alive at once
 // THE MINE BEAST (the mission's boss): fought on foot inside the dungeon once the fourth rune wakes it. It can't be killed: empty its bar and it
@@ -467,13 +467,14 @@ export class SurvivalRoom extends Room {
     const P = paintedOf(SITES[i]); this.painted = P;   // painted map: the world is the picture's size, the tower stands on the painted one
     const S = SITES[i], W = S.w || ARENA.width, H = S.h || ARENA.height;
     this.A = P ? { width: P.w, height: P.h, cx: P.tower[0], cy: P.tower[1], sx: P.start[0], sy: P.start[1], sh: 60 } : { width: W, height: H, cx: W / 2, cy: H / 2, sx: W / 2, sy: H / 2, sh: 100 };
-    if (S.style === "mine") { const tx = MN_SPOT.tower[0] * W / 6000, ty = MN_SPOT.tower[1] * H / 4000; this.A = { width: W, height: H, cx: tx, cy: ty, sx: tx, sy: ty, sh: 100 }; }   // The Deep Mine: the tower stands in the scavenge zone, top left   // sx, sy, sh: where survivors appear
-    this.flow = !!P || ["dynasty", "whiteout", "refinery", "carnival", "mine"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
+    if (S.style === "mine") { const tx = MN_SPOT.tower[0] * W / 6000, ty = MN_SPOT.tower[1] * H / 4000; this.A = { width: W, height: H, cx: tx, cy: ty, sx: tx, sy: ty, sh: 100 }; }
+    if (S.style === "crucible") { const [tx, ty] = KC_SPOT.tower; this.A = { width: W, height: H, cx: tx, cy: ty, sx: tx, sy: ty, sh: 100 }; }   // The Crucible: the tower stands in the middle strip, below the crucible   // The Deep Mine: the tower stands in the scavenge zone, top left   // sx, sy, sh: where survivors appear
+    this.flow = !!P || ["dynasty", "whiteout", "refinery", "carnival", "mine", "crucible"].includes(S.style);   // maps with walls and big buildings: every zombie walks the flow field (no dead ends)
     this.state.worldW = this.A.width; this.state.worldH = this.A.height; this.state.towerX = this.A.cx; this.state.towerY = this.A.cy;
     const layout = P ? paintedLayout(P) : siteLayout(i);
     this.minePieces = S.style === "mine" ? { shrines: layout.filter(d => d.kind === "mShrine"), statue: layout.find(d => d.kind === "mStatue"), portal: layout.find(d => d.kind === "mPortal"), crystals: layout.filter(d => /^mCrystal/.test(d.kind)) } : null; if (S.style !== "mine") { this.mine = null; this.state.mission = ""; }
     this.cordon = S.style === "mine" ? mineCordon(W, H) : null;   // The Deep Mine: nobody gets into the boss dungeon except by cart (cordonCheck)
-    const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted" || d.kind === "mShaft"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - ({ rPyramid: 118, mShaft: 128 }[pyr.kind] || 74) } : null;   // the Deep Mine: bosses climb out of the DANGER shaft
+    const pyr = !P && layout.find(d => d.kind === "rPyramid" || d.kind === "cvHaunted" || d.kind === "mShaft" || d.kind === "kCrucible"); this.bossDoor = pyr ? { x: pyr.x, y: pyr.y - ({ rPyramid: 118, mShaft: 128, kCrucible: 150 }[pyr.kind] || 74) } : null;   // the Deep Mine: bosses climb out of the DANGER shaft
     if (this.state.players) for (const q of this.state.players.values()) { q.ride = 0; q.rideCd = 0; }
     const CT = S.style === "carnival" ? coasterTrack(W, H) : S.style === "mine" ? mineTrack(W, H) : null; this.coaster = CT ? { T: CT, K: CT.cfg || COASTER, s: CT.stations[0].s, wait: (CT.cfg || COASTER).wait, next: 0, riders: new Map(), cd: new Map(), queue: new Map() } : null;   // Midnight Carnival: the train starts at the first station
     this.state.coasterS = CT ? this.coaster.s : 0; this.state.coasterWait = CT ? this.coaster.K.wait : 0;   // Scorched Refinery: bosses walk out of the pyramid
@@ -2224,7 +2225,7 @@ export class SurvivalRoom extends Room {
   // ---------- RAVEN ----------
   startShadowPass(p) {
     if (p.ride > 0) return;   // (not from a cart seat: the cart would snap her straight back)
-    const a = p.aim || 0, len = Math.max(0, Math.min(RAVEN.dash.dist, this.wallDist(p.x, p.y, a, RAVEN.dash.dist + BODY_R + 2) - BODY_R - 2));
+    const a = p.aim || 0, len = Math.max(0, Math.min(RAVEN.dash.dist, this.wallDist(p.x, p.y, a, RAVEN.dash.dist + BODY_R + 2, true) - BODY_R - 2));
     this.shadowDash.set(p.sessionId, { fx: p.x, fy: p.y, tx: p.x + Math.cos(a) * len, ty: p.y + Math.sin(a) * len, t0: Date.now(), hit: new Set(), a, px: p.x, py: p.y });
     p.dashT = RAVEN.dash.time; p.aim = a;
     this.broadcast("shadow", { k: "dash", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: Math.round(a * 100) / 100, len: Math.round(len) });
@@ -3381,7 +3382,7 @@ export class SurvivalRoom extends Room {
   // ---------- boss path-finding: a 40px grid over the map, flow field toward the target (walks AROUND buildings) ----------
   wideClear(a, b, r) {   // can a body of radius r walk straight from a to b?
     const d = distance(a, b); if (d < 1) return true; const nx = -(b.y - a.y) / d * r, ny = (b.x - a.x) / d * r;
-    return [[0, 0], [nx, ny], [-nx, -ny]].every(([ox, oy]) => this.lineClear({ x: a.x + ox, y: a.y + oy }, { x: b.x + ox, y: b.y + oy }))
+    return [[0, 0], [nx, ny], [-nx, -ny]].every(([ox, oy]) => this.lineClear({ x: a.x + ox, y: a.y + oy }, { x: b.x + ox, y: b.y + oy }, true))
       && !this.safeBoxes.some(bx => this.boxRayDist(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), d, [{ ...bx, hw: bx.hw + r, hh: bx.hh + r }]) < d);
   }
   pathGrid(r) {   // which 40px cells a body of radius r can't stand in (map pieces, tower, generator); cached per map
@@ -3624,7 +3625,7 @@ export class SurvivalRoom extends Room {
 
   // Zombies along a straight line from the player, nearest first.
   // How far a straight line from (x, y) at angle a goes before hitting a solid map piece (or `range` if nothing).
-  wallDist(x, y, a, range) {   // distance along the ray to the first solid map piece, or range (hot path: bullets, bot sight, path-finding)
+  wallDist(x, y, a, range, move = false) {   // distance along the ray to the first solid map piece, or range (hot path: bullets, bot sight, path-finding). move: count lava too (shots and sight fly over it)
     const dx = Math.cos(a), dy = Math.sin(a), st = this.rayStamp = (this.rayStamp || 0) + 1, grid = this.mapGrid; let best = range;
     if (!grid) return best;
     for (let t = 0; t <= range + 160; t += 120) {
@@ -3632,7 +3633,7 @@ export class SurvivalRoom extends Room {
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         const cell = grid.get((gx + i + 8) * 4096 + (gy + j + 8)); if (!cell) continue;
         for (const b of cell) {
-          if (b._r === st) continue; b._r = st;
+          if (b._r === st) continue; b._r = st; if (b.low && !move) continue;
           // ray vs box (slab test)
           let t0 = 0, t1 = best;
           if (Math.abs(dx) < 1e-9) { if (x < b.x - b.hw || x > b.x + b.hw) continue; }
@@ -3647,7 +3648,7 @@ export class SurvivalRoom extends Room {
     return best;
   }
   // Nothing solid between a and b?
-  lineClear(a, b) { const d = distance(a, b); return this.wallDist(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), d) >= d - 1; }
+  lineClear(a, b, move = false) { const d = distance(a, b); return this.wallDist(a.x, a.y, Math.atan2(b.y - a.y, b.x - a.x), d, move) >= d - 1; }
   rayHits(p, a, range) {
     const dx = Math.cos(a), dy = Math.sin(a), out = [];
     for (const z of this.state.zombies.values()) {

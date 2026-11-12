@@ -1631,7 +1631,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.jumpToWave(9); ok(room.state.mapSite === 4, "a jump to wave 9: Whiteout Station"); room.jumpToWave(13); ok(room.state.mapSite === 5, "wave 13: Scorched Refinery");
   room.jumpToWave(17); ok(room.state.mapSite === 6 && room.state.waveType === "normal" && !room.mine, "wave 17: The Deep Mine, an ordinary wave first");
   room.jumpToWave(20); ok(room.state.mapSite === 6 && room.mine && room.state.waveType === "mission", "wave 20: the rune mission on the Mine");
-  room.jumpToWave(21); ok(room.state.mapSite === 2 && !room.mine, "wave 21: on to the Crucible (Crossroads Ruins stands in until the lava map is built)");
+  room.jumpToWave(21); ok(room.state.mapSite === 7 && !room.mine && room.state.worldW === 6000 && room.bossDoor?.x === 3000, "wave 21: on to THE CRUCIBLE (6000x4000, the boss comes out of the Great Crucible)");
   room.jumpToWave(25); ok(room.state.mapSite === 0, "wave 25: round 2 starts back at Ascension");
   room.resetMatch?.(); ok(room.state.mapSite === 0, "a new match: Ascension");
   room._dispose(); }
@@ -1650,4 +1650,14 @@ for (const weapon of ["axe", "bat", "rifle"]) {
 { const { room, A, B, send, P } = makeRoom(); const p = P(A), q = P(B);
   room.mine = { step: "fight", shield: { i: 0, t: 0, by: "", ov: 0 } }; room.bossUp = true; p.ride = 1;
   ok(room.untouchable(p), "on the cart during the shield run: can't be hurt"); p.ride = 0; ok(!room.untouchable(p), "...off the cart: you can"); room.mine = null; room._dispose(); }
+// 69. (Nov 12) THE CRUCIBLE (lava map): two lava rivers you can't walk on (shots fly over), bridges across, everything reachable from the tower
+{ const { room, A, send, P } = makeRoom(); const p = P(A); room.fixedSite = true; room.loadSite(7);
+  ok(room.state.mapSite === 7 && room.state.worldW === 6000 && room.state.worldH === 4000 && room.flow && room.A.cx === 3000 && room.A.cy === 2350, "The Crucible: 6000x4000, flow-field zombies, the tower in the middle strip");
+  const lava = room.siteBoxes.filter(b => b.low); ok(lava.length > 100, `its lava rivers are solid strips (${lava.length})`);
+  const L = lava[40]; ok(room.blockedByMap(L.x, L.y, 0), "you can't stand on the lava");
+  ok(room.wallDist(L.x - L.hw - 200, L.y, 0, 600) === 600 && room.wallDist(L.x - L.hw - 200, L.y, 0, 600, true) < 600, "shots fly over it (walking doesn't)");
+  const g = room.pathGrid(46), C = 40, cell = (x, y) => Math.floor(y / C) * g.GW + Math.floor(x / C), seen = new Uint8Array(g.GW * g.GH), q = [cell(3000, 2500)]; seen[q[0]] = 1;
+  for (let h = 0; h < q.length; h++) { const c = q[h], i = c % g.GW, j = (c - i) / g.GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= g.GW || b >= g.GH) continue; const n = b * g.GW + a; if (!seen[n] && !g.blocked[n]) { seen[n] = 1; q.push(n); } } }
+  ok(seen[cell(700, 2400)] && seen[cell(5300, 2400)], "a boss-sized body gets from the tower to both outer strips (over the bridges)");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

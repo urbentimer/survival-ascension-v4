@@ -1,11 +1,12 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, statueBodyBoxes, trackNearest, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
+import { mapBoxes, statueBodyBoxes, trackNearest, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, crucibleGround, crucibleRivers, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
 import { MN_ART, MN_TILES, MN_CART, MN_FX } from "./mineArt.js";
 import { MB } from "./mineBeastArt.js";   // the Mine Beast's sheets + effects (tools/extract-minebeast.py)   // The Deep Mine pieces, the mine cart, the portal swirl + crystal shatter (tools/extract-mine.py)
 import { CV_ART, CV_TILES, CV_CART } from "./carnivalArt.js";   // Midnight Carnival pieces + the coaster cart (tools/extract-carnival.py)
-import { RF_ART, RF_TILES } from "./refineryArt.js";   // Scorched Refinery pieces (tools/extract-refinery.py)
+import { RF_ART, RF_TILES } from "./refineryArt.js";
+import { KC_ART, KC_TILES } from "./crucibleArt.js";   // The Crucible pieces + tiles (tools/extract-crucible.py)   // Scorched Refinery pieces (tools/extract-refinery.py)
 import { WO_ART, WO_TILES } from "./whiteoutArt.js";   // Whiteout Station pieces (tools/extract-whiteout.py)
 import { DYN_ART, DYN_TILES } from "./dynastyArt.js";   // Fallen Dynasty pieces: urls, sizes, lantern lights, fires (tools/extract-dynasty.py)   // same collision rules as the server (movement prediction)
 
@@ -3613,22 +3614,24 @@ const MAP_URLS = {
 };
 const TILE_URLS = { asphalt: "assets/map/tile-asphalt.webp", grass: "assets/map/tile-grass.webp", plaza: "assets/map/tile-plaza.webp" };
 const mapImgs = {}, tileImgs = {}, patterns = {};
-Object.assign(DYN_ART, WO_ART, RF_ART, CV_ART, MN_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
+Object.assign(DYN_ART, WO_ART, RF_ART, CV_ART, MN_ART, KC_ART);   // one table for every piece-built map (kinds "d..." = Fallen Dynasty, "w..." = Whiteout Station)
 for (const [k, a] of Object.entries(DYN_ART)) MAP_URLS[k] = a.url;
 for (const [k, url] of Object.entries(WO_TILES)) TILE_URLS["w" + k] = url;
 for (const [k, url] of Object.entries(RF_TILES)) TILE_URLS["r" + k] = url;
 for (const [k, url] of Object.entries(CV_TILES)) TILE_URLS["c" + k] = url;
 for (const [k, url] of Object.entries(MN_TILES)) TILE_URLS["m" + k] = url;
+for (const [k, url] of Object.entries(KC_TILES)) TILE_URLS["k" + k] = url;
 const cartImg = new Image(); if (CV_CART.url) cartImg.src = CV_CART.url;
 const mineCartImg = new Image(); mineCartImg.src = MN_CART.url; const portalFxImg = new Image(); portalFxImg.src = MN_FX.portal.url; const shatterFxImg = new Image(); shatterFxImg.src = MN_FX.shatter.url;
 for (const [k, url] of Object.entries(DYN_TILES)) TILE_URLS["d" + k] = url;
-for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img._mine = !!MN_ART[k]; img.src = url; mapImgs[k] = img; }
-for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); img._mine = k[0] === "m" && !!MN_TILES[k.slice(1)]; /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
+for (const [k, url] of Object.entries(MAP_URLS)) { const img = new Image(); img._snow = !!WO_ART[k]; img._raw = !!RF_ART[k] || !!CV_ART[k]; img._mine = !!MN_ART[k]; img._lava = !!KC_ART[k]; img.src = url; mapImgs[k] = img; }
+for (const [k, url] of Object.entries(TILE_URLS)) { const img = new Image(); img._snow = k[0] === "w" && !!WO_TILES[k.slice(1)]; img._raw = (k[0] === "r" && !!RF_TILES[k.slice(1)]) || (k[0] === "c" && !!CV_TILES[k.slice(1)]); img._mine = k[0] === "m" && !!MN_TILES[k.slice(1)]; img._lava = k[0] === "k" && !!KC_TILES[k.slice(1)]; if (k === "kmolten" || k === "kcrust") img._raw = true; /* Scorched Refinery + Midnight Carnival: no tint (user, Nov 11) */ img.src = url; tileImgs[k] = img; }
 // Spooky look for the ground and map pieces only (players, zombies, tower and structures keep their colours):
 // darker, less colourful, with a cold blue-green cast. Made once per picture, then reused.
 const SPOOKY = { filter: "brightness(.58) saturate(.5) contrast(1.1)", tint: "rgba(16,42,58,.30)" };
 const SPOOKY_CARN = { filter: "brightness(.6) saturate(.78) contrast(1.12)", tint: "rgba(22,14,58,.32)" };   // Midnight Carnival (user, Nov 11): a NIGHT carnival, dark tint like the city maps but keeping more colour so the bulbs and paint still read   // Midnight Carnival: a light night tint, so the bulbs and colours still pop
 const SPOOKY_MINE = { filter: "brightness(.84) saturate(.9) contrast(1.06)", tint: "rgba(14,20,42,.16)" };   // The Deep Mine: a light cold tint; the gloom comes from the cave darkness (drawNight) with the lanterns and crystals lighting it
+const SPOOKY_LAVA = { filter: "brightness(.8) saturate(.95) contrast(1.08)", tint: "rgba(34,8,4,.14)" };   // The Crucible: a little darker and warmer (the gloom is the volcano's darkness, lit by the lava)
 const SPOOKY_SNOW = { filter: "brightness(.74) saturate(.72) contrast(1.06)", tint: "rgba(18,44,70,.18)" };   // Whiteout Station (user: "a little brighter"): its pieces and tiles (img._snow) get a much lighter tint
 const spookyCache = new Map();
 function spooky(img) {
@@ -3636,7 +3639,7 @@ function spooky(img) {
   if (img._raw) return img;   // Scorched Refinery (user: bright, no tint): its art is drawn as it is
   if (spookyCache.has(img)) return spookyCache.get(img);
   const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
-  const S = img._snow ? SPOOKY_SNOW : img._mine ? SPOOKY_MINE : img._carn ? SPOOKY_CARN : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
+  const S = img._snow ? SPOOKY_SNOW : img._mine ? SPOOKY_MINE : img._lava ? SPOOKY_LAVA : img._carn ? SPOOKY_CARN : SPOOKY, g = c.getContext("2d"); g.filter = S.filter; g.drawImage(img, 0, 0); g.filter = "none";
   g.globalCompositeOperation = "source-atop"; g.fillStyle = S.tint; g.fillRect(0, 0, c.width, c.height);
   spookyCache.set(img, c); return c;
 }
@@ -3654,14 +3657,15 @@ function drawMapObj(d) {
 // Map layout comes from the server (state.mapLayout, made by server/src/mapLayout.js) so everyone has the same city
 // and the server knows what's solid. Format: "kind,x,y,flip;..." with kind = index in MAP_KINDS (same order as the server).
 let decor = null, decorSrc = "", dynFires = [], dynLights = [];   // Fallen Dynasty: every fire / lantern light on the map (world positions)
-const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery", "mine"];   // (Nov 11: Midnight Carnival removed)
+const SITE_STYLE = ["city", "city", "city", "dynasty", "whiteout", "refinery", "mine", "crucible"];   // (Nov 12: The Crucible, the lava map)   // (Nov 11: Midnight Carnival removed)
 const carnivalMap = () => SITE_STYLE[state?.mapSite || 0] === "carnival";   // lobby sites (server SITES)
 const whiteoutMap = () => SITE_STYLE[state?.mapSite || 0] === "whiteout";
 const refineryMap = () => SITE_STYLE[state?.mapSite || 0] === "refinery";
 const mineMap = () => SITE_STYLE[state?.mapSite || 0] === "mine";
-const softGround = () => whiteoutMap() || refineryMap() || carnivalMap() || mineMap();   // ground patches with soft irregular edges
+const crucibleMap = () => SITE_STYLE[state?.mapSite || 0] === "crucible";
+const softGround = () => whiteoutMap() || refineryMap() || carnivalMap() || mineMap() || crucibleMap();   // ground patches with soft irregular edges
 const fire3Piece = k => k[0] === "w" || (k[0] === "r" && !!RF_ART[k]) || !!CV_ART[k] || !!MN_ART[k];   // pieces that burn with the user's fire loops + smoke
-const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery" || st === "carnival" || st === "mine"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
+const dynastyMap = () => { const st = SITE_STYLE[state?.mapSite || 0]; return st === "dynasty" || st === "whiteout" || st === "refinery" || st === "carnival" || st === "mine" || st === "crucible"; };   // any map built from cut-out pieces (Fallen Dynasty, Whiteout Station)
 function syncDecor() {
   const src = state?.mapLayout || ""; if (src === decorSrc) return; decorSrc = src;
   dynFires = []; dynLights = [];
@@ -3711,9 +3715,9 @@ function drawWorld(){
 let dynGroundCache = null;
 function drawDynastyWorld() {
   const WW = worldW(), WH = worldH();
-  const rf = refineryMap(), cv = carnivalMap(), mn = mineMap(), wo = softGround(), T = mn ? "m" : cv ? "c" : rf ? "r" : wo ? "w" : "d", base = mn ? "mgravel" : cv ? "cgrass" : rf ? "rsand" : wo ? "wsnow" : "dgrass";
+  const rf = refineryMap(), cv = carnivalMap(), mn = mineMap(), kc = crucibleMap(), wo = softGround(), T = kc ? "k" : mn ? "m" : cv ? "c" : rf ? "r" : wo ? "w" : "d", base = kc ? "kbasalt" : mn ? "mgravel" : cv ? "cgrass" : rf ? "rsand" : wo ? "wsnow" : "dgrass";
   syncDecor();   // Whiteout Station's ground (foundation pads, ponds) is worked out from where the pieces stand
-  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: mn ? mineGround(WW, WH, decor) : cv ? carnivalGround(WW, WH, decor) : rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
+  if (!dynGroundCache || dynGroundCache.w !== WW || dynGroundCache.wo !== T || dynGroundCache.src !== decorSrc) dynGroundCache = { w: WW, wo: T, src: decorSrc, g: kc ? crucibleGround(WW, WH, decor) : mn ? mineGround(WW, WH, decor) : cv ? carnivalGround(WW, WH, decor) : rf ? refineryGround(WW, WH, decor) : wo ? whiteoutGround(WW, WH, decor) : dynastyGround(WW, WH) };
   const ready = [base, ...new Set(dynGroundCache.g.map(g => T + g.tile))].filter(k => pattern(k)).length;   // the cache key changes as tile art finishes loading
   drawGroundCached("dyn" + T + WW + "x" + WH + ":" + ready + ":" + decorSrc.length, (vx, vy, vw, vh) => {
     const fill = (p, x, y, w, h) => { const ax = Math.max(x, vx), ay = Math.max(y, vy), bx = Math.min(x + w, vx + vw), by = Math.min(y + h, vy + vh); if (bx > ax && by > ay) { ctx.fillStyle = p; ctx.fillRect(ax, ay, bx - ax, by - ay); } };
@@ -3726,6 +3730,7 @@ function drawDynastyWorld() {
       if (g.road) { const horiz = g.w > g.h; if (horiz) { px(g.x, g.y - 3, g.w, 3, "#4b4554"); px(g.x, g.y + g.h, g.w, 3, "#2a2630"); } else { px(g.x - 3, g.y, 3, g.h, "#4b4554"); px(g.x + g.w, g.y, 3, g.h, "#2a2630"); } } }
     ctx.fillStyle = "#0c0b10"; ctx.fillRect(-60, -60, WW + 120, 60); ctx.fillRect(-60, WH, WW + 120, 60); ctx.fillRect(-60, 0, 60, WH); ctx.fillRect(WW, 0, 60, WH);   // map edge
   });
+  if (kc) { const d = ctxDepth; ctx.save(); try { drawLava(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // The Crucible: the lava rivers flow (animated: drawn every frame over the cached ground, under the bridges)
   syncDecor();
   const tall = [];
   for (const d of decor) {
@@ -3739,12 +3744,45 @@ function drawDynastyWorld() {
     if (d.kind === "mWardGate") { tall.push({ y: d.flip ? d.y + 130 : d.y + 40, draw: () => drawWard(d) }); continue; }
     if (d.kind === "cvStation" || d.kind === "mStation") { drawMapObj(d); const img = spooky(mapImgs[d.kind]), rh = Math.round(a.h * (d.kind === "mStation" ? .25 : .33));   // the coaster station: its floor is walked on (drawn now); only its canopy roof is drawn over people and the train
       if (img) tall.push({ y: d.kind === "mStation" ? d.y - 104 : d.y - 6, /* the mine station: its roof goes over the carts parked under it (their riders sit below the eave), but not over people on the deck */ draw: () => ctx.drawImage(img, 0, 0, a.w, rh, Math.round(d.x - a.w / 2), d.y - a.h, a.w, rh) }); dynPieceFx(d, a); continue; }
-    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6, draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); dynPieceFx(d, a); } });
+    if (MAP_FLAT[d.kind]) drawMapObj(d); else tall.push({ y: d.kind === "kCrucible" ? d.y - 190 : a?.door ? d.y + a.door[1] + a.door[3] - 10 : d.y - 6,   /* the Great Crucible: the boss stands in its burst front, drawn over it */ draw: () => { if (a?.frames) drawAnimPiece(d, a); else drawMapObj(d); if (d.kind === "mPortal") portalFx(d, a); else if (a?.door) pyramidFx(d, a); if (/^mSeal/.test(d.kind)) sealFx(d, a); dynPieceFx(d, a); } });
   }
   if (mineMap() && deepFx.boulders?.length) for (const b of deepFx.boulders) if (inView(b.x, b.y - 50, 120)) tall.push({ y: b.y, draw: () => drawBoulder(b) });   // the Beast fight's fallen boulders
   if (coast) { try { coasterTall(tall); } catch (e) { reportError(e, "draw"); } }   // a coaster bug must never hide the whole world
   drawWorldObjects(tall);
   if (coast) { const d = ctxDepth; ctx.save(); try { drawStationSigns(); drawDeepWorld(); if (state.mission) { drawBeastFx(); drawShieldBeam(gnow(), gnow() / 1000); } } catch (e) { reportError(e, "draw"); } unwindTo(d); }
+}
+// ---------- The Crucible (Nov 12): the two lava rivers, drawn in code from the lava tiles (mapLayout.js crucibleRivers: same shape the server makes solid) ----------
+// A scorched dark rim, a band of cracked crust, the molten core flowing downstream, a hot glow on the core's edges, bubbles swelling and popping.
+let lavaRivers = null;
+function drawLava() {
+  if (!lavaRivers) lavaRivers = crucibleRivers();
+  const molten = pattern("kmolten"), crust = pattern("kcrust"); if (!molten || !crust) return;
+  const t = gnow() / 1000, ya = cam.y - 160, yb = cam.y + H + 160;
+  for (const r of lavaRivers) {
+    const P = r.pts.filter(p => p.y >= ya && p.y <= yb); if (P.length < 2) continue;
+    if (P.every(p => p.x + p.w * 1.4 < cam.x || p.x - p.w * 1.4 > cam.x + W)) continue;
+    const edge = (p, side, k, n) => p.x + side * (p.w * k + n * (Math.sin(p.y * .045 + side * 1.7 + r.i) * 5 + Math.sin(p.y * .13 + side) * 3));   // banks with a little wobble
+    const shape = (k, n = 1) => { ctx.beginPath(); P.forEach((p, i) => { const x = edge(p, -1, k, n); if (i) ctx.lineTo(x, p.y); else ctx.moveTo(x, p.y); }); for (let i = P.length - 1; i >= 0; i--) ctx.lineTo(edge(P[i], 1, k, n), P[i].y); ctx.closePath(); };
+    ctx.fillStyle = "rgba(12,4,2,.6)"; shape(1.16, 1.6); ctx.fill();   // scorched rim
+    crust.setTransform(new DOMMatrix().translate(r.i * 90, t * 7)); ctx.fillStyle = crust; shape(1); ctx.fill();   // the crust drifts slowly
+    const pulse = .5 + .5 * Math.sin(t * 1.7 + r.i);
+    molten.setTransform(new DOMMatrix().translate(Math.sin(t * .35 + r.i) * 8 + r.i * 40, t * 30)); ctx.fillStyle = molten; shape(.7 + .03 * pulse, .6); ctx.fill();   // the core flows downstream
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineJoin = "round";
+    for (const side of [-1, 1]) { ctx.beginPath(); P.forEach((p, i) => { const x = edge(p, side, .7 + .03 * pulse, .6); if (i) ctx.lineTo(x, p.y); else ctx.moveTo(x, p.y); });
+      ctx.strokeStyle = `rgba(255,150,40,${.18 + .12 * pulse})`; ctx.lineWidth = 14; ctx.stroke(); ctx.strokeStyle = `rgba(255,220,120,${.22 + .15 * pulse})`; ctx.lineWidth = 3; ctx.stroke(); }
+    for (const p of P) {   // bubbles: each 20px row has its own slow rhythm
+      const h = Math.sin(p.y * 12.9898 + r.i * 78.233) * 43758.5453, f = h - Math.floor(h); if (f > .35) continue;
+      const per = 2.2 + f * 6, u = ((t + f * 17) % per) / per; if (u > .3) continue;
+      const bx = p.x + (f * 2.9 % 1 - .5) * p.w * 1.1, k = u / .3, R = 3 + k * (6 + f * 18);
+      ctx.fillStyle = `rgba(255,${200 + 40 * (1 - k) | 0},110,${.75 * (1 - k * k)})`; ctx.beginPath(); ctx.arc(bx, p.y, R, 0, 7); ctx.fill();
+      if (k > .8) { ctx.strokeStyle = `rgba(255,230,150,${(1 - k) * 4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx, p.y, R * 1.4, 0, 7); ctx.stroke(); }   // pop!
+    }
+    ctx.restore();
+  }
+}
+function lavaLights() {   // the rivers light the dark all along their length
+  if (!lavaRivers) return; const t = gnow() / 1000;
+  for (const r of lavaRivers) for (let i = 0; i < r.pts.length; i += 6) { const p = r.pts[i]; if (!inView(p.x, p.y, 320)) continue; lightHole(p.x - cam.x, p.y - cam.y, p.w * 2.2 + 30 * Math.sin(t * 1.3 + i), .78); }
 }
 // ---------- Midnight Carnival: the coaster. The track is DRAWN here (it bends freely); the train's place comes from state.coasterS ----------
 let coast = null, coastLast = 0, CO = COASTER;   // CO: the ride's numbers (the coaster, or the mine train: T.cfg)
@@ -4537,6 +4575,13 @@ function drawPaintedOverlay(fires) {
       ctx.globalAlpha = .18 + (i % 5) * .06; ctx.fillStyle = i % 4 ? "#c9b8a6" : "#e8dcc8"; ctx.fillRect(x, y, 1 + (i % 3 === 0), 1 + (i % 3 === 0)); }
     for (let i = 0; i < 6; i++) { const u = (t * .7 + i * .37) % 1, x = cam.x + ((i * 331.7) % W), y = cam.y + ((i * 211.3) % (H * .6)) + u * 160; ctx.globalAlpha = .55 * (1 - u); ctx.fillStyle = "#9fd8ff"; ctx.fillRect(x, y, 2, 5); }
     ctx.globalAlpha = 1;
+  } else if (crucibleMap()) {   // The Crucible: grey ash drifting down, embers rising off the lava
+    for (let i = 0; i < 80; i++) { const x = cam.x + ((i * 173.3 + Math.sin(t * .5 + i) * 40 + t * 9) % (W + 40)) - 20, y = cam.y + ((i * 97.1 + t * (16 + (i % 5) * 8)) % (H + 40)) - 20;
+      ctx.globalAlpha = .2 + (i % 5) * .07; ctx.fillStyle = i % 4 ? "#a8a19c" : "#d8d0c8"; ctx.fillRect(x, y, 1 + (i % 3 === 0), 1 + (i % 3 === 0)); }
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 26; i++) { const u = (t * (.18 + (i % 4) * .05) + i * .137) % 1, x = cam.x + ((i * 331.7 + Math.sin(t + i) * 30) % W), y = cam.y + H - u * (H + 60);
+      ctx.globalAlpha = .7 * Math.sin(u * Math.PI); ctx.fillStyle = i % 3 ? "#ff9a3a" : "#ffd27a"; ctx.fillRect(x, y, 2, 2 + (i % 2)); }
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
   } else if (refineryMap()) {   // Scorched Refinery: sand blowing across in the wind
     for (let i = 0; i < 90; i++) { const sp = 150 + (i % 7) * 40, x = cam.x + ((i * 173.3 + t * sp) % (W + 80)) - 40, y = cam.y + ((i * 97.1 + t * 22 + Math.sin(t * 1.3 + i) * 14) % (H + 40)) - 20;
       ctx.globalAlpha = .25 + (i % 5) * .08; ctx.fillStyle = i % 3 ? "#f3d9a0" : "#fff1cf"; ctx.fillRect(x, y, 3 + (i % 4) * 3, 1 + (i % 2)); }
@@ -4665,7 +4710,7 @@ const VISION_STEPS = [0.2, 0.3];
 // The darkness layer is built at half resolution (a quarter of the pixels to fill and punch holes in) and scaled up with smoothing:
 // soft light edges look the same and the night costs a fraction of a full-size layer.
 const DARK_SCALE = .5, darkCv = document.createElement("canvas"); darkCv.width = Math.ceil(W * DARK_SCALE); darkCv.height = Math.ceil(H * DARK_SCALE); const dctx = darkCv.getContext("2d"); dctx.scale(DARK_SCALE, DARK_SCALE);
-let nightK = 0, nightLast = 0, forceNight = false; const CAVE_DARK = .5;   // forceNight: N key in the solo preview, to test the look
+let nightK = 0, nightLast = 0, forceNight = false; const CAVE_DARK = .5, LAVA_DARK = .46;   // LAVA_DARK: The Crucible, deep in the volcano (lit by its lava)   // forceNight: N key in the solo preview, to test the look
 const isNightView = () => !!state && (state.isNight || forceNight);
 let eyeGlowCv = null;
 function eyeGlow() {   // a 16x16 glowing green dot, blurred once
@@ -4690,11 +4735,11 @@ function lightHole(x, y, r, a) {
 function drawNight() {
   const now = gnow(), dt = Math.min(.1, (now - (nightLast || now)) / 1000); nightLast = now;
   if (window.__saNoDark) return;   // (automated map surveys: no darkness)
-  nightK += ((isNightView() ? 1 : mineMap() ? (now < (deepFx.dark || 0) ? .93 : CAVE_DARK) : 0) - nightK) * Math.min(1, dt * (now < (deepFx.dark || 0) ? 4 : 1.5));   // (a cave-in puts the lanterns out for a few seconds)   // The Deep Mine is always half dark (a cave): lanterns, crystals and you light it          // fade in/out over ~2 seconds
+  nightK += ((isNightView() ? 1 : mineMap() ? (now < (deepFx.dark || 0) ? .93 : CAVE_DARK) : crucibleMap() ? LAVA_DARK : 0) - nightK) * Math.min(1, dt * (now < (deepFx.dark || 0) ? 4 : 1.5));   // (a cave-in puts the lanterns out for a few seconds)   // The Deep Mine is always half dark (a cave): lanterns, crystals and you light it          // fade in/out over ~2 seconds
   if (nightK < .01) return;
-  ctx.fillStyle = `rgba(4,8,15,${.25 * nightK})`; ctx.fillRect(0, 0, W, H);     // cold blue tint
+  const warm = crucibleMap(); ctx.fillStyle = warm ? `rgba(26,6,2,${.22 * nightK})` : `rgba(4,8,15,${.25 * nightK})`; ctx.fillRect(0, 0, W, H);     // cold blue tint (The Crucible: a red-brown one)
   dctx.globalCompositeOperation = "source-over"; dctx.clearRect(0, 0, W, H);
-  dctx.fillStyle = `rgba(2,4,8,${NIGHT.dark * nightK})`; dctx.fillRect(0, 0, W, H);
+  dctx.fillStyle = warm ? `rgba(10,3,2,${NIGHT.dark * nightK})` : `rgba(2,4,8,${NIGHT.dark * nightK})`; dctx.fillRect(0, 0, W, H);
   dctx.globalCompositeOperation = "destination-out";
   const sl = mapImgs.streetlight;
   if (decor && sl?.naturalWidth) for (const d of decor) {
@@ -4712,6 +4757,7 @@ function drawNight() {
     if (mineMap()) for (const z of state.zombies.values()) if (z.kind === "minebeast" && inView(z.x, z.y, 500)) { const v = V(z) || z, u = z.act ? Math.max(0, Math.min(1, 1 - z.slam / (z.actLen || 1))) : 0, big = z.act === "wind" || z.act === "roar" || z.act === "dive" ? u : z.act === "charge" ? 1 : 0; lightHole(v.x - cam.x, v.y - 120 - cam.y, 320 + 160 * big, .9); }   // the Mine Beast glows: you always see it coming
     if (mineMap() && decor) for (const d of decor) { if (d.kind === "mPortal" && inView(d.x, d.y - 250, 300)) lightHole(d.x - cam.x, d.y - 300 - cam.y, 260, .9); else if (d.kind === "mRuneCircle" && inView(d.x, d.y, 300)) lightHole(d.x - cam.x, d.y - cam.y, 240, .55); else if (/^mSeal/.test(d.kind) && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 110 - cam.y, 150, .85); else if (d.kind === "mBrazier" && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - 60 - cam.y, 120, .8); else if ((d.kind === "mShrine" || d.kind === "mStop") && inView(d.x, d.y, 200)) lightHole(d.x - cam.x, d.y - (d.kind === "mStop" ? 40 : 150) - cam.y, 150, .8); }
     for (const [x, y, sc] of dynFires) if (inView(x, y, 200)) lightHole(x - cam.x, y - cam.y, 120 * sc + 40, .85);
+    if (crucibleMap()) lavaLights();
   }
   const pmN = paintedMap();
   if (pmN) {   // painted map: its lamps and fires light the night
@@ -4791,8 +4837,9 @@ function drawScreen() {
   m.imageSmoothingEnabled = false; m.clearRect(0, 0, MW, MH); m.fillStyle = '#11191a'; m.fillRect(0, 0, MW, MH);
   const pmM = paintedMap(), pmI = pmM && paintImgs[pmM.art];
   if (pmI?.naturalWidth) { m.globalAlpha = .75; m.imageSmoothingEnabled = true; m.drawImage(pmI, 0, 0, MW, MH); m.globalAlpha = 1; m.imageSmoothingEnabled = false; }
-  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(), mnM = mineMap(); m.fillStyle = mnM ? '#3b302b' : rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = mnM ? ({ stone: '#3a3340', mud: '#4a3526', planks: '#6b4a2e', dungeon: '#252838' }[g.tile] || '#3b302b') : rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
-    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' ? '#e0b24a' : d.kind === 'mPortal' ? '#4fc3e8' : d.kind[0] === 'm' ? (/Crystal|Seal/.test(d.kind) ? '#4fc3e8' : /Rock/.test(d.kind) ? '#5b463f' : '#7a5a3c') : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
+  else if (dynastyMap() && dynGroundCache) { const wo = whiteoutMap(), rf = refineryMap(), mnM = mineMap(), kcM = crucibleMap(); m.fillStyle = kcM ? '#262022' : mnM ? '#3b302b' : rf ? '#b98d4e' : wo ? '#39424f' : '#231f29'; m.fillRect(0, 0, MW, MH); for (const g of dynGroundCache.g) { m.fillStyle = kcM ? ({ ash: '#3f3a3c', cooled: '#2c2224', plates: '#4a3028' }[g.tile] || '#262022') : mnM ? ({ stone: '#3a3340', mud: '#4a3526', planks: '#6b4a2e', dungeon: '#252838' }[g.tile] || '#3b302b') : rf ? ({ cracked: '#a8733f', asphalt: '#4a4a4e' }[g.tile] || '#9c9488') : wo ? (g.tile === 'ice' ? '#4f7fa8' : g.road ? '#262b34' : '#2f3540') : g.road ? '#3f3a49' : '#4a4452'; m.fillRect(g.x * sx, g.y * sy, Math.max(2, g.w * sx), Math.max(2, g.h * sy)); }
+    for (const d of decor || []) { const a = DYN_ART[d.kind]; if (a && a.w >= 200 && !a.flat) { m.fillStyle = d.kind === 'rPyramid' || d.kind === 'kCrucible' ? '#e0b24a' : d.kind === 'kFalls' ? '#ff7a1a' : d.kind[0] === 'k' ? (/Rock|Basalt|Spire/.test(d.kind) ? '#4a3d3a' : '#6e4a34') : d.kind === 'mPortal' ? '#4fc3e8' : d.kind[0] === 'm' ? (/Crystal|Seal/.test(d.kind) ? '#4fc3e8' : /Rock/.test(d.kind) ? '#5b463f' : '#7a5a3c') : d.kind[0] === 'r' ? (/Burnt|Flare/.test(d.kind) ? '#d2541e' : '#6d5a4a') : d.kind[0] === 'w' ? (/Burnt/.test(d.kind) ? '#c2562a' : '#aab3c4') : /Burnt|Ruin|Apartment/.test(d.kind) ? '#5a3b30' : '#6a2e2a'; m.fillRect((d.x - a.w * .42) * sx, (d.y - a.h * .55) * sy, a.w * .84 * sx, a.h * .5 * sy); } }
+    if (kcM) { if (!lavaRivers) lavaRivers = crucibleRivers(); for (const r of lavaRivers) { m.strokeStyle = '#ff6a14'; m.lineWidth = Math.max(2, 260 * sx); m.beginPath(); r.pts.forEach((q, i) => i % 4 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.stroke(); m.fillStyle = '#c9b49a'; for (const b of r.bridges) m.fillRect((b.x - 300) * sx, (b.y - 60) * sy, 600 * sx, Math.max(2, 120 * sy)); } }   // The Crucible: the lava rivers, the bridges over them
     if (coast) { m.strokeStyle = coast.mn ? '#d9a35c' : '#ff5d6c'; m.lineWidth = 1.5; m.beginPath(); coast.T.pts.forEach((q, i) => i % 3 ? 0 : i ? m.lineTo(q.x * sx, q.y * sy) : m.moveTo(q.x * sx, q.y * sy)); m.closePath(); m.stroke(); for (const q of coast.T.stations) { m.fillStyle = '#5ad1c9'; m.beginPath(); m.arc(q.x * sx, q.y * sy, 3, 0, 7); m.fill(); } const c = coasterAt(coast.T, coast.s); m.fillStyle = '#ffe08a'; m.fillRect(c.x * sx - 2.5, c.y * sy - 2.5, 5, 5); } }
   else { m.fillStyle = '#353e3d'; for (const r of R.h) m.fillRect(0, (r.y - r.w / 2) * sy, MW, Math.max(2, r.w * sy)); for (const r of R.v) m.fillRect((r.x - r.w / 2) * sx, 0, Math.max(2, r.w * sx), MH); }
   if (decor) { m.fillStyle = '#4a4440'; for (const d of decor) if (d.kind === 'building' || d.kind === 'ruin') m.fillRect((d.x - 70) * sx, (d.y - 110) * sy, 140 * sx, 100 * sy); }
@@ -4892,7 +4939,7 @@ const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infini
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
-const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["THE DEEP MINE", "Underground · Mine Carts & a Sealed Portal"]];
+const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["THE DEEP MINE", "Underground · Mine Carts & a Sealed Portal"], ["THE CRUCIBLE", "Volcano · a ruined iron foundry"]];
 // (Nov 12, user) THE MAP ORDER (as on the server, CHAPTERS): 4 waves per map, its boss on the 4th; beat it and the team moves on.
 const MAP_ORDER = [
   { site: 0, name: "ASCENSION", short: "ASCENSION", sub: "Research Outpost", boss: "THE BUTCHER" },
@@ -4900,7 +4947,7 @@ const MAP_ORDER = [
   { site: 4, name: "WHITEOUT STATION", short: "WHITEOUT", sub: "Antarctica · Research Base", boss: "THE SCREAMER" },
   { site: 5, name: "SCORCHED REFINERY", short: "REFINERY", sub: "Desert · Oil Field & Pyramid", boss: "THE PYRE PRIEST" },
   { site: 6, name: "THE DEEP MINE", short: "DEEP MINE", sub: "Underground · Mine Carts & a Sealed Portal", boss: "THE MINE BEAST" },
-  { site: 2, name: "THE CRUCIBLE", short: "CRUCIBLE", sub: "Volcano · the lava map is coming (stand-in map for now)", boss: "THE ABOMINATION" },
+  { site: 7, name: "THE CRUCIBLE", short: "CRUCIBLE", sub: "Volcano · a ruined iron foundry", boss: "THE ABOMINATION" },
 ];
 let mapCardKey = -1;
 function showMapCard(wave) {   // the big title when the team arrives on a map (and at the start of the match)

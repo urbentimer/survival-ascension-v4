@@ -565,6 +565,116 @@ export function buildMineLayout(WW, WH, start = 6060) {
   return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "mRuneCircle") - (a.kind === "mRuneCircle"));   // flats first (the rune circle first of all: marks lie on top)
 }
 
+// ---------- THE CRUCIBLE (lava map for the Abomination, Nov 12): a ruined iron foundry inside a volcano (art: tools/extract-crucible.py) ----------
+// 6000 x 4000 like the mine. Two LAVA RIVERS pour from lava falls at the top edge down to the bottom edge and cut the map into three strips:
+// stone bridges are the only ways across (choke points). The Great Crucible stands top centre: the Abomination bursts out of its broken front.
+// Lava is solid to walk on but shots fly over it (its boxes carry low: 1). The rivers are drawn in code from the lava tiles (client).
+export const KC_SIZE = {kCrucible: [620, 616], kFalls: [1000, 530], kFurnace: [460, 453], kCrane: [480, 475], kSpire: [330, 377], kBasalt: [380, 387], kBridge: [900, 563], kRock1: [226, 93], kRock2: [220, 83], kRock3: [221, 95], kRock4: [228, 89], kRock5: [218, 158], kRock6: [214, 159], kRock7: [211, 158], kRock8: [222, 157], kRock9: [209, 214], kRock10: [206, 192], kRock11: [221, 177], kRock12: [227, 136], kRock13: [229, 158], kRock14: [220, 159], kRock15: [219, 188], kRock16: [227, 193],
+  kBrazier: [108, 111], kLanternPost: [105, 140], kFirePillar: [99, 146], kTorch: [112, 137], kAnvil: [137, 118], kCage: [117, 152], kChainRack: [154, 133], kIngots: [152, 102], kOreCart: [146, 120], kBarrels: [116, 128], kCrates: [146, 134], kCoal: [154, 102], kMould: [155, 95], kBellows: [146, 110], kSkeleton: [160, 138], kSign: [142, 132],
+  kSmelter: [207, 205], kGears: [209, 191], kBoiler: [209, 192], kValves: [214, 189], kConveyor: [215, 179], kHopper: [198, 203], kWaterTank: [180, 215], kWinch: [217, 191], kHut: [221, 186], kWatchtower: [154, 219], kGirders: [212, 147], kPipes: [221, 175], kGate: [220, 172], kHangCage: [161, 198], kStatue: [218, 188], kSlagCart: [214, 177],
+  kCrack1: [158, 68], kCrack2: [146, 142], kCrack3: [150, 150], kCrack4: [154, 152], kAsh: [153, 120], kPumice: [146, 134], kScorch: [152, 121], kCooled: [153, 119], kGrate: [139, 134], kStain: [150, 120], kBones: [150, 120], kEmbers: [138, 107], kChainM: [152, 118], kSignM: [155, 120], kShards: [151, 133], kPrints: [153, 136],
+  kRiverMark: [10, 10] };   // kRiverMark: one per map, stands for both rivers (their solid strips come from crucibleRiverBoxes)
+export const KC_KINDS = Object.keys(KC_SIZE);
+MAP_KINDS.push(...KC_KINDS);   // (appended after every older kind: their indexes never change)
+const KC_FLATS = ["kCrack1", "kCrack2", "kCrack3", "kCrack4", "kAsh", "kPumice", "kScorch", "kCooled", "kGrate", "kStain", "kBones", "kEmbers", "kChainM", "kSignM", "kShards", "kPrints", "kBridge", "kRiverMark"];
+for (const k of KC_FLATS) MAP_FLAT[k] = 1;
+const kcBox = (k, wf = .44, hf = .5) => { const [w, h] = KC_SIZE[k]; return { ox: 0, oy: -Math.round((h * hf + 6) / 2), hw: Math.round(w * wf), hh: Math.round((h * hf - 6) / 2) }; };
+for (const k of KC_KINDS) if (!MAP_FLAT[k]) MAP_SOLID[k] = kcBox(k);
+for (let i = 1; i <= 16; i++) MAP_SOLID["kRock" + i] = kcBox("kRock" + i, .46, .56);
+Object.assign(MAP_SOLID, {
+  kCrucible: [{ ox: -220, oy: -150, hw: 90, hh: 140 }, { ox: 220, oy: -150, hw: 90, hh: 140 }, { ox: 0, oy: -390, hw: 290, hh: 110 }],   // the burst front (x -130..130) and its rubble slope are open: the boss walks out
+  kFalls: { ox: 0, oy: -250, hw: 480, hh: 250 },   // the cliff and its pool
+  kCrane: [{ ox: -150, oy: -40, hw: 70, hh: 38 }, { ox: 170, oy: -40, hw: 65, hh: 38 }],   // only its two legs: you walk under the beam
+  kFurnace: kcBox("kFurnace", .44, .46), kSpire: kcBox("kSpire", .36, .36), kBasalt: kcBox("kBasalt", .42, .42),
+  kBrazier: { ox: 0, oy: -14, hw: 34, hh: 12 }, kLanternPost: { ox: -14, oy: -12, hw: 18, hh: 9 }, kFirePillar: { ox: 0, oy: -16, hw: 34, hh: 14 }, kTorch: { ox: 0, oy: -16, hw: 34, hh: 13 },
+  kSign: { ox: 0, oy: -12, hw: 44, hh: 9 }, kWatchtower: kcBox("kWatchtower", .4, .3), kHangCage: { ox: -30, oy: -14, hw: 30, hh: 12 }, kWaterTank: kcBox("kWaterTank", .4, .34) });
+export const KC_SPOT = { crucible: [3000, 960], tower: [3000, 2350] };
+export const KC_BRIDGE = { up: 410, dn: 255 };   // the bridge's deck: the band between these heights above the sprite's bottom is where you walk across
+const KC_RIVERS = [{ base: 1750, ph: 0, bridges: [1200, 2300, 3420] }, { base: 4250, ph: 2.1, bridges: [1350, 2450, 3300] }];   // bridges: the deck's middle (y)
+export function crucibleRiverAt(i, y) { const R = KC_RIVERS[i], k = R.ph; return { x: R.base + 160 * Math.sin(y / 560 + k) + 70 * Math.sin(y / 230 + k * .5), w: 135 + 25 * Math.sin(y / 380 + k * 1.7) }; }   // the middle and half width at y
+export function crucibleRivers() {   // both rivers for drawing: points every 20px from under the falls to the bottom edge, the bridges, the falls' feet
+  return KC_RIVERS.map((R, i) => { const pts = []; for (let y = 520; y <= 4060; y += 20) { const a = crucibleRiverAt(i, y); pts.push({ x: a.x, y, w: a.w }); }
+    return { i, pts, falls: { x: Math.round(crucibleRiverAt(i, 640).x), y: 650 }, bridges: R.bridges.map(yc => ({ x: Math.round(crucibleRiverAt(i, yc).x), y: yc })) }; });
+}
+export function crucibleRiverBoxes() {   // the lava's solid strips (shots fly over: low), with gaps where the bridges cross
+  const out = [], half = (KC_BRIDGE.up - KC_BRIDGE.dn) / 2;
+  KC_RIVERS.forEach((R, i) => { for (let y = 560; y < 4040; y += 40) { if (R.bridges.some(yc => Math.abs(y + 20 - yc) < half + 20)) continue; const a = crucibleRiverAt(i, y + 20); out.push({ x: Math.round(a.x), y: y + 20, hw: Math.round(a.w), hh: 22, low: 1 }); } });
+  return out;
+}
+// The ground: basalt everywhere, then {x, y, w, h, tile}: ash and cooled-lava patches (soft edges), iron plates under the tower's yard,
+// the road down from the crucible and under the furnace / crane.
+export function crucibleGround(WW, WH, layout = []) {
+  const R = []; let seed = 2626; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, [tx, ty] = KC_SPOT.tower, [cx, cy] = KC_SPOT.crucible;
+  for (let i = 0; i < 40; i++) { const w = 280 + rnd() * 520, h = 190 + rnd() * 320; R.push({ x: 40 + rnd() * (WW - w - 80), y: 60 + rnd() * (WH - h - 100), w, h, tile: rnd() < .55 ? "ash" : "cooled", blob: 1 }); }
+  R.push({ x: cx - 130, y: cy - 40, w: 260, h: ty - 240 - cy + 60, tile: "plates", road: 1 }); R.push({ x: tx - 300, y: ty - 230, w: 600, h: 440, tile: "plates", road: 1 });   // an iron road down from the crucible and a plated yard round the tower
+  for (const d of layout) if (d.kind === "kFurnace" || d.kind === "kCrane") { const [w, h] = KC_SIZE[d.kind]; R.push({ x: d.x - w * .5 - 30, y: d.y - h * .4, w: w + 60, h: h * .4 + 50, tile: "plates", road: 1 }); }
+  return R;
+}
+export function buildCrucibleLayout(WW, WH, start = 2424) {
+  let seed = start; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pick = a => a[Math.floor(rnd() * a.length)];
+  const out = [], boxes = [], [tx, ty] = KC_SPOT.tower, [ccx, ccy] = KC_SPOT.crucible, RV = crucibleRivers();
+  const bx = (k, x, y, flip, id) => solidList(k).map(s => ({ x0: x + (flip ? -s.ox : s.ox) - s.hw, x1: x + (flip ? -s.ox : s.ox) + s.hw, y0: y + s.oy - s.hh, y1: y + s.oy + s.hh, id, ov: s.hw > 40 && !Array.isArray(MAP_SOLID[k]) ? Math.max(0, KC_SIZE[k][1] + s.oy - s.hh) * .8 : 0 }));
+  for (const b of crucibleRiverBoxes()) boxes.push({ x0: b.x - b.hw, x1: b.x + b.hw, y0: b.y - b.hh, y1: b.y + b.hh, id: -3, lava: 1, ov: 0 });   // the lava: nothing is built on it, and everything must still be reachable across the bridges
+  out.push({ kind: "kRiverMark", x: 0, y: 0, flip: false });
+  const C = 20, GW = Math.ceil(WW / C), GH = Math.ceil(WH / C);
+  const sealed = R => { const g = new Uint8Array(GW * GH);
+    for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.x0 - R) / C)), i1 = Math.min(GW - 1, Math.floor((b.x1 + R) / C)), j0 = Math.max(0, Math.floor((b.y0 - R) / C)), j1 = Math.min(GH - 1, Math.floor((b.y1 + R) / C));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const px = i * C + C / 2, py = j * C + C / 2; if (px > b.x0 - R && px < b.x1 + R && py > b.y0 - R && py < b.y1 + R) g[j * GW + i] = 1; } }
+    const q = [Math.floor((ty + 120) / C) * GW + Math.floor(tx / C)]; g[q[0]] = 2;
+    for (let h = 0; h < q.length; h++) { const c = q[h], i = c % GW, j = (c - i) / GW; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= GW || b >= GH) continue; const n = b * GW + a; if (!g[n]) { g[n] = 2; q.push(n); } } }
+    return g.includes(0); };
+  const walkable = () => !sealed(22) && !sealed(30);
+  const dist = (a, b) => { const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0), up = a.y0 - b.y1, dn = b.y0 - a.y1; return Math.hypot(dx, Math.max(up > 0 ? up - (dx < 60 ? a.ov : 0) : dn > 0 ? dn - (dx < 60 ? b.ov : 0) : 0, 0)); };
+  const inMap = q => q.x0 >= 30 && q.x1 <= WW - 30 && q.y1 <= WH - 20 && q.y0 >= 40;
+  const keep = [[tx - 450, ty - 340, tx + 450, ty + 320], [ccx - 240, ccy - 60, ccx + 240, ty - 300]];   // the tower's yard; the boss's road down from the crucible
+  for (const r of RV) { for (const b of r.bridges) keep.push([b.x - 640, b.y - 200, b.x + 640, b.y + 200]); keep.push([r.falls.x - 560, 90, r.falls.x + 560, r.falls.y + 90]); }   // the bridges and their landings; the falls
+  const offKeep = q => !keep.some(([x0, y0, x1, y1], i) => q.x0 < x1 && q.x1 > x0 && q.y0 - (i === 0 ? q.ov || 0 : 0) < y1 && q.y1 > y0);
+  const place = (k, x, y, gap, flip = false, o = {}) => {
+    x = Math.round(x); y = Math.round(y); const id = out.length, b = bx(k, x, y, flip, id);
+    if (!b.every(q => (o.edge || inMap(q)) && (o.keep || offKeep(q)) && boxes.every(z => dist(q, z) >= (z.lava ? (o.bank ?? 70) : gap)))) return false;
+    out.push({ kind: k, x, y, flip }); boxes.push(...b);
+    if (!walkable()) { out.pop(); boxes.length -= b.length; return false; }
+    return true;
+  };
+  const fixed = (k, x, y, flip = false) => { const id = out.length; out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); boxes.push(...bx(k, Math.round(x), Math.round(y), flip, id)); };
+  const drop = (k, gap, area, tries = 300, o) => { for (let t = 0; t < tries; t++) if (place(k, area[0] + rnd() * (area[2] - area[0]), area[1] + rnd() * (area[3] - area[1]), gap, !/Sign/.test(k) && rnd() < .5, o)) return true; return false; };
+  // the landmarks: the Great Crucible (top centre), a lava fall at the head of each river, the bridges
+  fixed("kCrucible", ccx, ccy);
+  for (const r of RV) { fixed("kFalls", r.falls.x, r.falls.y); for (const b of r.bridges) out.push({ kind: "kBridge", x: b.x, y: b.y + Math.round((KC_BRIDGE.up + KC_BRIDGE.dn) / 2), flip: false }); }
+  // braziers lighting the boss's road and the tower's yard, fire pillars at every bridge landing
+  for (let y = ccy + 140; y < ty - 380; y += 260) { fixed("kBrazier", ccx - 230, y); fixed("kBrazier", ccx + 230, y, true); }
+  for (const [x, y] of [[tx - 470, ty - 360], [tx + 470, ty - 360], [tx - 470, ty + 340], [tx + 470, ty + 340]]) fixed("kFirePillar", x, y);
+  for (const r of RV) for (const b of r.bridges) for (const sg of [-1, 1]) place("kTorch", b.x + sg * 520, b.y - 150, 30, sg > 0, { keep: 1, bank: 40 });
+  // one big landmark in each corner of the side strips: the blast furnace, the gantry crane, obsidian spires, basalt columns
+  const L = RV[0], Rr = RV[1], lx = x => x < crucibleRiverAt(0, 2000).x - 300, rx = x => x > crucibleRiverAt(1, 2000).x + 300;
+  drop("kFurnace", 200, [300, 1100, 1300, 1900], 400); drop("kCrane", 200, [4700, 1100, 5700, 1900], 400);
+  drop("kSpire", 180, [300, 2700, 1300, 3600], 300); drop("kBasalt", 180, [4700, 2700, 5700, 3600], 300);
+  drop("kBasalt", 180, [2200, 2900, 2600, 3700], 300); drop("kSpire", 180, [3400, 2900, 3800, 3700], 300);   // the middle strip's south
+  drop("kBasalt", 180, [300, 600, 1100, 1000], 200); drop("kSpire", 180, [4900, 600, 5700, 1000], 200);
+  // volcanic rock walls round the edge of the map (the top edge between the falls and the crucible too), then outcrops everywhere
+  const ROCK = Array.from({ length: 16 }, (_, i) => "kRock" + (i + 1)), WALL = ["kRock1", "kRock2", "kRock3", "kRock4", "kRock5", "kRock6", "kRock7", "kRock8", "kRock13", "kRock14"];
+  for (let x = 120; x < WW - 100; x += 200 + rnd() * 50) { place(pick(WALL), x, 30 + 150 + rnd() * 30, 20, rnd() < .5, { edge: 1 }); place(pick(WALL), x, WH - 10 - rnd() * 20, 20, rnd() < .5, { edge: 1, bank: 10 }); }
+  for (let y = 380; y < WH - 120; y += 170 + rnd() * 50) { place(pick(WALL), 95 + rnd() * 20, y, 20, rnd() < .5, { edge: 1 }); place(pick(WALL), WW - 95 - rnd() * 20, y, 20, rnd() < .5, { edge: 1 }); }
+  for (let n = 0, t = 0; n < 34 && t < 600; t++) { const x = 160 + rnd() * (WW - 320), y = 260 + rnd() * (WH - 340);
+    if (place(pick(ROCK), x, y, 160 + rnd() * 80, rnd() < .5)) { n++; const a = rnd() * Math.PI, m = 1 + Math.floor(rnd() * 3);   // an outcrop: a short ridge of rocks
+      for (let j = 1; j <= m; j++) for (const sg of [1, -1]) if (rnd() < .7) place(pick(ROCK), x + Math.cos(a) * 180 * j * sg + (rnd() - .5) * 30, y + Math.sin(a) * 120 * j * sg + (rnd() - .5) * 30, 6, rnd() < .5); } }
+  // rocks lining the river banks here and there (never on the lava, never on a bridge landing)
+  for (const r of RV) for (let y = 800; y < WH - 200; y += 150 + rnd() * 120) { if (rnd() < .45) continue; const a = crucibleRiverAt(r.i, y), sg = rnd() < .5 ? -1 : 1; place(pick(ROCK), a.x + sg * (a.w + 150 + rnd() * 60), y, 40, rnd() < .5, { bank: 26 }); }
+  // the foundry: machines and props in clusters round the landmarks and out in the strips
+  const MACH = ["kSmelter", "kGears", "kBoiler", "kValves", "kConveyor", "kHopper", "kWaterTank", "kWinch", "kHut", "kWatchtower", "kGirders", "kPipes", "kGate", "kHangCage", "kStatue", "kSlagCart"];
+  for (let n = 0, t = 0; n < 32 && t < 900; t++) if (place(MACH[n % MACH.length], 140 + rnd() * (WW - 280), 300 + rnd() * (WH - 420), 120, rnd() < .5)) n++;
+  const PROPS = ["kAnvil", "kCage", "kChainRack", "kIngots", "kOreCart", "kBarrels", "kCrates", "kCoal", "kMould", "kBellows", "kSkeleton", "kSign", "kBrazier", "kLanternPost", "kLanternPost", "kTorch"];
+  for (let n = 0, t = 0; n < 80 && t < 1500; t++) { const k = pick(PROPS); if (place(k, 120 + rnd() * (WW - 240), 260 + rnd() * (WH - 340), 95, k !== "kSign" && rnd() < .5)) n++; }
+  for (const [x, y] of [[tx - 300, ty + 210], [tx + 300, ty - 220]]) place("kLanternPost", x, y, 30, x > tx, { keep: 1 });
+  // flat ground marks (under everything): glowing cracks and embers near the rivers, ash, pumice, scorch marks, bones everywhere
+  const onLava = (x, y) => RV.some(r => { const a = crucibleRiverAt(r.i, y); return Math.abs(x - a.x) < a.w + 90; });
+  const flat = (k, x, y, flip = false) => { if (!onLava(x, y - 40) && Math.hypot(x - tx, y - ty) > 300) out.push({ kind: k, x: Math.round(x), y: Math.round(y), flip }); };
+  for (const r of RV) for (let y = 700; y < WH - 100; y += 110 + rnd() * 90) { const a = crucibleRiverAt(r.i, y), sg = rnd() < .5 ? -1 : 1; flat(pick(["kCrack1", "kCrack2", "kCrack3", "kCrack4", "kCooled", "kEmbers", "kEmbers"]), a.x + sg * (a.w + 120 + rnd() * 200), y, rnd() < .5); }
+  flat("kGrate", tx - 250, ty + 230); flat("kSignM", ccx + 160, ccy + 260); flat("kChainM", ccx - 170, ccy + 380);
+  for (let i = 0; i < 170; i++) flat(pick(["kAsh", "kAsh", "kPumice", "kPumice", "kScorch", "kScorch", "kStain", "kBones", "kChainM", "kShards", "kShards", "kPrints", "kCrack1", "kCrack3", "kCooled", "kEmbers"]), 60 + rnd() * (WW - 120), 160 + rnd() * (WH - 200), rnd() < .5);
+  return out.sort((a, b) => (MAP_FLAT[b.kind] ? 1 : 0) - (MAP_FLAT[a.kind] ? 1 : 0) || (b.kind === "kBridge") - (a.kind === "kBridge"));   // flats first (bridges first of all: marks lie on top)
+}
+
 // Two main avenues through the tower, plus side streets (the client draws the same roads).
 export function roads(WW, WH) {
   const cx = WW / 2, cy = WH / 2;
@@ -626,6 +736,7 @@ export function mapBoxes(layout) {
   for (const d of layout) {
     if (d.hw) { boxes.push({ x: d.x, y: d.y, hw: d.hw, hh: d.hh }); continue; }   // painted map box
     if (MAP_PASS[d.kind]) continue;
+    if (d.kind === "kRiverMark") { boxes.push(...crucibleRiverBoxes()); continue; }   // The Crucible: both lava rivers (solid to walk, shots fly over)
     for (const s of solidList(d.kind)) boxes.push({ x: d.x + (d.flip ? -s.ox : s.ox), y: d.y + s.oy, hw: s.hw, hh: s.hh });
   }
   return boxes;
