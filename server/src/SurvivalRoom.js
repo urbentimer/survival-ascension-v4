@@ -95,12 +95,12 @@ const SCREAMER = {
 //   THE SUNDERING at 45% HP: stops (can't be hurt) and slowly separates into FIVE spawn (4.2s).
 //   THE FIVE     5 fast hunters, each with its own HP, each after a different survivor; they pounce. Every one that falls makes the rest faster.
 const ABOM = {
-  hp: 3900, speed: 74, radius: 46, dmg: 22, splitAt: .45,
-  slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 300, hw: 60, mult: 1.1, push: 110, cd: 3.2 },
-  roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, hitR: 58, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
-  spew: { first: 4, cd: 9, trigger: 400, wind: .6, dur: 1.3, total: 2.2, len: 380, arc: .36, every: .2, mult: .3, puddles: [130, 235, 340], pr: 58, life: 7, pmult: .22, pevery: .5 },
-  sunder: { len: 3.4, fan: [[-100, 21], [-58, 6], [-4, 3], [52, 6], [100, 21]] },   // fan = where the five stand in the last painted frame (client ABM_FAN), so the live ones appear exactly there
-  spawn: { hpFrac: .13, speed: 232, radius: 20, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 58, mult: 1, cd: 2.0 } },
+  hp: 3900, speed: 74, radius: 88, dmg: 22, splitAt: .45,   // (Nov 12) drawn 2x bigger: radius 46 -> 88, slam / roll / spew reach grew with him
+  slam: { trigger: 250, windup: .7, hit: .75, total: 1.5, len: 350, hw: 75, mult: 1.1, push: 110, cd: 3.2 },
+  roll: { first: 8, cd: 15, wind: 1.0, speed: 540, max: 950, hitR: 88, mult: 1.2, push: 90, daze: 3, end: .5, dazeMult: 1.5 },
+  spew: { first: 4, cd: 9, trigger: 440, wind: .6, dur: 1.3, total: 2.2, len: 420, arc: .36, every: .2, mult: .3, puddles: [150, 265, 380], pr: 58, life: 7, pmult: .22, pevery: .5 },
+  sunder: { len: 3.4, fan: [[-150, 46], [-87, 24], [-6, 20], [78, 24], [150, 46]] },   // fan = where the five stand in the last painted frame (client ABM_FAN), so the live ones appear exactly there (x1.5 since Nov 12: the Five are drawn 1.5x)
+  spawn: { hpFrac: .13, speed: 232, radius: 30, dmgMult: .7, rage: .09, lunge: { trigger: 200, wind: .4, leap: .28, dist: 230, total: 1.0, r: 70, mult: 1, cd: 2.0 } },   // radius 20 -> 30, landing r 58 -> 70 (Nov 12, 1.5x)
 };
 const PATH_CELL = 40;   // boss path-finding grid
 const HOOK_SPEED_TEST = 520;                          // solo preview default (slow, to practise deflecting)
@@ -625,7 +625,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
       if (!(this.solo || client.sessionId === this.state.hostId) || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer", "abomination"].includes(kind)) return;
-      if (kind === "abomination") { this.spawnZombie(true, "abomination"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Abomination"; return; }
+      if (kind === "abomination") { this.spawnZombie(true, "abomination"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 520, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Abomination"; return; }
       if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
       if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
       if (kind === "hivemind") { const was = this.state.explore; this.state.explore = false; const z = this.spawnHivemind(); this.state.explore = was; if (z) { z.x = clamp(p.x + 380, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); } return; }
@@ -971,7 +971,7 @@ export class SurvivalRoom extends Room {
       z.x = clamp(cx + Math.cos(ang) * 650, 60, this.A.width - 60); z.y = clamp(cy + Math.sin(ang) * 650, 60, this.A.height - 60); this.solveZombie(z);
     }
     if (this.bossHpOnArrival && z) { z.hp = z.maxHp * this.bossHpOnArrival; this.bossHpOnArrival = 0; }   // (test menu: the boss arrives at 66% / 33%)
-    if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 330, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
+    if (this.morphOnArrival) { this.morphOnArrival = false; if (z?.kind === "abomination") { z.hp = z.maxHp * ABOM.splitAt; if (alive.length) { z.x = clamp(alive[0].x + 480, 60, this.A.width - 60); z.y = alive[0].y; this.solveZombie(z); } } }   // test button: skip to the split
     if (z && this.bossDoor) { z.x = this.bossDoor.x; z.y = this.bossDoor.y; z.aim = Math.PI / 2; this.solveZombie(z); this.broadcast("pyramid", { x: Math.round(z.x), y: Math.round(z.y) }); }
     this.broadcast("roar", { x: Math.round(z?.x || 0), y: Math.round(z?.y || 0) });
     s.message = z?.kind === "hivemind" ? "THE ALPHA HIVEMIND HAS ARRIVED!" : `${String(z?.kind || "boss").replace(/[A-Z]/g, m => " " + m).toUpperCase()} HAS ARRIVED!`;

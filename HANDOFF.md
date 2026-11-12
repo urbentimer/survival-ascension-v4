@@ -551,3 +551,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `musicScene()` returns "scream" when a Screamer boss is out or `bossIntro === "screamer"` (card + fight). Hivemind keeps the normal boss track.
 - User got a 3:07 version (the song 3 times) + a 30 s seam check. Work dir `/home/claude/work/scream` (render2.py).
 - Cache now `20261112p`; next `20261112q`.
+
+## Nov 12 — Abomination 2x bigger
+- Client `ABM.sc = 2` (boss drawn 2x: sprite, shadow, glow, walk/roll stride, lava stream mouth, labels, light hole), `ABM.ssc = 1.5` (the Five drawn 1.5x, incl. death crumble, health bars).
+- The Sundering eases 2x -> 1.5x during the final parting (t 2.3-2.85), so the painted five still land on the live sprites. Fan = old fan x1.5 (+15 y): `[[-150,46],[-87,24],[-6,20],[78,24],[150,46]]` in both ABOM.sunder.fan and ABM_FAN.
+- Server: radius 46 -> 88; slam len 300 -> 350, hw 60 -> 75; roll hitR 58 -> 88; spew len 380 -> 420, trigger 440, puddles 150/265/380; spawn radius 20 -> 30, lunge r 58 -> 70. Wall collision / pathing still cap at min(radius, 34), so he still fits over the Crucible bridges.
+- Boss draw culling margin 460 (was 220) so the tall sprite doesn't pop at screen edges.
+- Sim: W24 with 3 bots at level 15 killed in 79s. Cache `20261112q`; next `20261112r`.

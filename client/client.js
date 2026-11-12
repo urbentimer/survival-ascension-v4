@@ -159,7 +159,7 @@ function connected() {
   room.onMessage("plateDrop", m => { fx.push({ type: "plateBurst", x: m.x, y: m.y, t: gnow() }); shake(8, 600); });   // the Pyre Plate falls out of him
   room.onMessage("plateGot", m => { const p = state?.players.get(m.id); if (p) fx.push({ type: "plateGot", id: m.id, x: p.x, y: p.y, t: gnow() }); if (m.id === myId) { equipKey = ""; flashUntil = gnow() + 120; } });
   room.onMessage("pyre", onPyre); room.onMessage("scream", onScreamer); room.onMessage("abom", onAbom);
-  room.onMessage("zdead", m => { if (m.k === "abomSpawn") { const t = gnow(); fx.push({ type: "abom", k: "sdead", x: m.x, y: m.y, t }); fx.push({ type: "abom", k: "ember", x: m.x, y: m.y - 30, sc: .8, from: 8, t }); shake(6, 260); playSfx("boom", m.x, m.y, .5); }
+  room.onMessage("zdead", m => { if (m.k === "abomSpawn") { const t = gnow(); fx.push({ type: "abom", k: "sdead", x: m.x, y: m.y, t }); fx.push({ type: "abom", k: "ember", x: m.x, y: m.y - 45, sc: 1.2, from: 8, t }); shake(6, 260); playSfx("boom", m.x, m.y, .5); }
     if (m.k === "screamer") { fx.push({ type: "scream", k: "death", x: m.x, y: m.y, t: gnow() }); shake(9, 450); scrWail.delete(m.id); playSfx("roar", m.x, m.y, .7); }
     if (m.k === "pyre") { fx.push({ type: "pyre", k: "death", x: m.x, y: m.y, t: gnow() }); splat(m.x, m.y, 30, true); shake(9, 450); pyreMove.delete(m.id); pyreWalk.delete(m.id); if (pyreWheel?.id === m.id) pyreWheel = null; feel.hp.delete(m.id); return; } if (m.k === "hivemind") { fx.push({ ...m, type: "hive", k: "death", t: gnow() }); splat(m.x, m.y, 40, true); shake(10, 500); feel.hp.delete(m.id); feel.pos?.delete(m.id); return; } if (feel.pos?.has(m.id)) feel.last.set(m.id, gnow()); else { const r = 14; splat(m.x, m.y, 10, false); addCorpse({ x: m.x, y: m.y, r, kind: m.k, facing: 1 }); } });
   room.onMessage("briggs", onBriggs); room.onMessage("astra", onAstra);
@@ -1565,7 +1565,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/abom-
   dazed: "assets/sprites/zombies/dir8/abom-dazed.webp", morph: "assets/sprites/zombies/dir8/abom-morph.webp", srun: "assets/sprites/zombies/dir8/abomspawn-run.webp",
   slunge: "assets/sprites/zombies/dir8/abomspawn-lunge.webp", sdead: "assets/sprites/zombies/dir8/abomspawn-dead.webp",
   fxLava: "assets/sprites/fx/abom-lava.webp", fxSlam: "assets/sprites/fx/abom-slam.webp", fxEmber: "assets/sprites/fx/abom-ember.webp" })) { const im = new Image(); im.src = url; abImgs[k] = im; }
-const ABM = { bw: 340, bh: 260, bax: 170, bfy: 236, mw: 460, sw: 240, sh: 210, sax: 120, sfy: 182, lava: "255,90,31" };
+const ABM = { bw: 340, bh: 260, bax: 170, bfy: 236, mw: 460, sw: 240, sh: 210, sax: 120, sfy: 182, lava: "255,90,31", sc: 2, ssc: 1.5 };   // (Nov 12) sc: he is drawn 2x (he looked small on The Crucible), ssc: the Five 1.5x (the Sundering shrinks 2x -> 1.5x as he parts, so the hand-over still lines up)
 const abFlames = [];   // this frame's ground fires [x, y, scale, loop, phase, alpha] (lava puddles, slam scorch lines): drawn by drawAbomFlames
 const abMove = new Map(), abTele = new Map(), abPuddles = [];   // walk cycles; latest telegraph per boss / spawn; lava puddles
 function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // one additive frame of a 24-frame strip; (x, y) = its centre (or its left-middle with `left`)
@@ -1576,20 +1576,20 @@ function aFx(key, frame, x, y, scale, alpha = 1, rot = 0, left = false) {   // o
 function onAbom(m) {
   const t = gnow(), feedMsg = text => { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); };
   if (m.k === "slam" || m.k === "roll" || m.k === "spew" || m.k === "lunge") abTele.set(m.id, { ...m, t });
-  if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 1.5, t }); fx.push({ type: "abom", k: "scorch", x: m.x, y: m.y, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
+  if (m.k === "slamHit") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y, sc: 2, t }); fx.push({ type: "abom", k: "scorch", x: m.x, y: m.y, t }); shake(9, 380); playSfx("boom", m.x, m.y, .8); }
   else if (m.k === "roll") playSfx("roar", m.x, m.y, .5);
-  else if (m.k === "daze") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 20, sc: 1.3, t }); shake(11, 450); playSfx("boom", m.x, m.y, .9); feedMsg("THE ABOMINATION IS DAZED: hit it now (×1.5)!"); }
+  else if (m.k === "daze") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 40, sc: 2.2, t }); shake(11, 450); playSfx("boom", m.x, m.y, .9); feedMsg("THE ABOMINATION IS DAZED: hit it now (×1.5)!"); }
   else if (m.k === "spew") fx.push({ type: "abom", k: "lava", id: m.id, a: m.a, len: m.len, wind: m.wind, dur: m.dur, t });
   else if (m.k === "puddles") { for (const [x, y] of m.list) abPuddles.push({ x, y, r: m.r, t, life: m.life * 1000 }); }
   else if (m.k === "sunder") { abTele.set(m.id, { ...m, t }); shake(6, 600); playSfx("roar", undefined, undefined, .9); feedMsg("He's tearing apart: back off and spread out!"); }
   else if (m.k === "split") { shake(7, 350); playSfx("roar", m.x, m.y, .9); }   // no burst here: the morph already ends on the five live sprites, so the hand-over is seamless
-  else if (m.k === "land") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 10, sc: .6, from: 8, t }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 300) shake(4, 160); playSfx("stomp", m.x, m.y, .5); }
+  else if (m.k === "land") { fx.push({ type: "abom", k: "slamfx", x: m.x, y: m.y + 16, sc: .9, from: 8, t }); const me = me_(); if (me && Math.hypot(me.x - m.x, me.y - m.y) < 300) shake(4, 160); playSfx("stomp", m.x, m.y, .5); }
 }
 function drawAbomination(z) {
-  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id);
+  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), S = ABM.sc;
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, z.act === "roll" ? 52 : 70, 17, 0, 0, 7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, (z.act === "roll" ? 52 : 70) * S, 17 * S, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.act === "sunder") return drawAbomSunder(z, t, gy, now, tele);
   // telegraphs
   if (z.act === "slam" && tele?.k === "slam" && t < tele.wind) { const k = t / tele.wind;
@@ -1605,60 +1605,61 @@ function drawAbomination(z) {
   else if (z.act === "roll" || z.act === "unroll") { sheet = "roll"; single = true; n = 6;
     if (z.act === "unroll") { f = 4; f2 = 5; k = Math.min(1, t / .35); }
     else if (t < .5) { f = 0; f2 = 1; k = t / .5; } else if (t < 1) { f = 1; f2 = 2; k = (t - .5) / .5; }
-    else { const u = mv.dist / 46; f = 2 + Math.floor(u) % 3; f2 = 2 + (Math.floor(u) + 1) % 3; k = u - Math.floor(u); lift = Math.abs(Math.sin(mv.dist / 60)) * 7; } }
+    else { const u = mv.dist / (46 * S); f = 2 + Math.floor(u) % 3; f2 = 2 + (Math.floor(u) + 1) % 3; k = u - Math.floor(u); lift = Math.abs(Math.sin(mv.dist / (60 * S))) * 7 * S; } }
   else if (z.act === "daze") { sheet = "dazed"; single = true; const L = z.actLen || 3; if (t < .35) f = f2 = 0; else if (t > L - .5) { f = 2; f2 = 3; k = Math.min(1, (t - (L - .5)) / .4); } else { f = f2 = Math.floor(t / .45) % 2 ? 2 : 1; } }
-  else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / 26; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); } }
+  else { sheet = "walk"; if (now - mv.at < 200) { const u = mv.dist / (26 * S); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); } }
   const [row, flip] = single ? [0, false] : pyRow(z.aim || 0), im = abImgs[sheet];
   const beat = .5 + .5 * Math.sin(now / 300), sund = 0;
-  bossGlow(z.x, gy - 85, ABM.lava, 80 + 70 * sund + 8 * beat, .3 + .2 * beat + .4 * sund);
+  bossGlow(z.x, gy - 85 * S, ABM.lava, (80 + 70 * sund + 8 * beat) * S, .3 + .2 * beat + .4 * sund);
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x + sx), Math.round(gy - lift)); if (flip) ctx.scale(-1, 1);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x + sx), Math.round(gy - lift)); ctx.scale(S, S); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * ABM.bh, cw, ABM.bh, f, f2, k, -ax, -ABM.bfy)); ctx.restore();
   const label = z.act === "daze" ? "DAZED · ×1.5 DAMAGE" : "";
-  if (label) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = z.act === "daze" ? "#ffe08a" : "#ff9d6b"; ctx.strokeText(label, z.x, gy - 205); ctx.fillText(label, z.x, gy - 205); ctx.restore(); }
+  if (label) { ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = z.act === "daze" ? "#ffe08a" : "#ff9d6b"; ctx.strokeText(label, z.x, gy - 175 * S - 30); ctx.fillText(label, z.x, gy - 175 * S - 30); ctx.restore(); }
 }
 // THE SUNDERING (3.4s): the user's 6-frame strip IS the whole animation (Nov 10). Frames 0-2 share a pose (slow cross-fades while he swells
 // and heats up); the tear (2 -> 3) and the final parting (4 -> 5) are bigger pose changes, so each gets a short hot flash to carry the cut.
 // The last 0.3s fades the painted five into the five live sprites standing on the same spots (ABM_FAN = ABOM.sunder.fan), so when the
 // server swaps him for the Five there is no jump and they simply start running.
-const ABM_FAN = [[-100, 21], [-58, 6], [-4, 3], [52, 6], [100, 21]];
+const ABM_FAN = [[-150, 46], [-87, 24], [-6, 20], [78, 24], [150, 46]];   // = ABOM.sunder.fan: the painted five's feet at 1.5x (x * 1.5, y * 1.5 + 15 so their feet meet the live sprites' feet)
 function drawAbomSunder(z, t, gy, now, tele) {
   const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }, L = z.actLen || 3.4, im = abImgs.morph, run = abImgs.srun, bump = (c, w) => Math.max(0, 1 - Math.abs(t - c) / w);
   const heat = sm(t / 1.3), flash = Math.max(sm(bump(1.5, .45)), .55 * sm(bump(2.55, .4))), hand = sm((t - (L - .32)) / .3), cool = sm((t - 2.7) / .7);
-  if (tele && !tele.snap && t >= 1.45) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70, sc: 1.25, from: 8, t: now }); shake(11, 420); playSfx("boom", z.x, z.y, .9); }
-  if (tele && !tele.snap2 && t >= 2.5) { tele.snap2 = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 55, sc: 1, from: 8, t: now }); shake(6, 260); playSfx("stomp", z.x, z.y, .6); }
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 70 + 55 * sm((t - 1.4) / 1.2), 17, 0, 0, 7); ctx.fill(); ctx.restore();
-  bossGlow(z.x, gy - 80, ABM.lava, 90 + 70 * heat + 50 * flash - 80 * cool, Math.min(1, .35 + .4 * heat + .3 * flash) * (1 - .65 * cool));
-  if (t < 1.5) aFx("fxEmber", t / 1.5 * 8, z.x, gy - 80, 1.2 + .4 * heat, .4 + .5 * heat);   // sparks gathering before the tear
-  if (t < 2.9) { const fa = Math.min(1, t / .5) * (1 - sm((t - 2.2) / .7)), tt = now / 1000; drawSmoke3(z.x, gy - 30, 1.9, 2.2, tt, fa * .7); drawFire3(2, z.x, gy + 10, 1.25, 1.3, tt, fa * .9); drawFire3(1, z.x - 78, gy + 4, .8, 4.1, tt, fa * .8); drawFire3(1, z.x + 80, gy + 4, .8, 6.2, tt, fa * .8); }   // the ground burns under him
+  const M = ABM.sc - (ABM.sc - ABM.ssc) * sm((t - 2.3) / .55);   // his scale: 2x, easing to the Five's 1.5x during the final parting (frames 4 -> 5)
+  if (tele && !tele.snap && t >= 1.45) { tele.snap = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 70 * M, sc: 1.25 * M, from: 8, t: now }); shake(11, 420); playSfx("boom", z.x, z.y, .9); }
+  if (tele && !tele.snap2 && t >= 2.5) { tele.snap2 = true; fx.push({ type: "abom", k: "ember", x: z.x, y: gy - 55 * M, sc: M, from: 8, t: now }); shake(6, 260); playSfx("stomp", z.x, z.y, .6); }
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.ellipse(z.x, gy, (70 + 55 * sm((t - 1.4) / 1.2)) * M, 17 * M, 0, 0, 7); ctx.fill(); ctx.restore();
+  bossGlow(z.x, gy - 80 * M, ABM.lava, (90 + 70 * heat + 50 * flash - 80 * cool) * M, Math.min(1, .35 + .4 * heat + .3 * flash) * (1 - .65 * cool));
+  if (t < 1.5) aFx("fxEmber", t / 1.5 * 8, z.x, gy - 80 * M, (1.2 + .4 * heat) * M, .4 + .5 * heat);   // sparks gathering before the tear
+  if (t < 2.9) { const fa = Math.min(1, t / .5) * (1 - sm((t - 2.2) / .7)), tt = now / 1000; drawSmoke3(z.x, gy - 30 * M, 1.9 * M, 2.2, tt, fa * .7); drawFire3(2, z.x, gy + 10 * M, 1.25 * M, 1.3, tt, fa * .9); drawFire3(1, z.x - 78 * M, gy + 4 * M, .8 * M, 4.1, tt, fa * .8); drawFire3(1, z.x + 80 * M, gy + 4 * M, .8 * M, 6.2, tt, fa * .8); }   // the ground burns under him
   const keys = [[0, 0], [.55, 1], [1.15, 2], [1.7, 3], [2.25, 4], [2.85, 5], [99, 5]]; let a = 0; while (a < keys.length - 2 && t >= keys[a + 1][0]) a++;
   const span = keys[a + 1][0] - keys[a][0], k = sm((t - keys[a][0] - span * .25) / (span * .75)), settled = sm((t - 1.6) / .5);   // each frame holds for a beat, then eases into the next
-  const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled), pulse = 1 + .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash;
+  const jx = (Math.random() - .5) * (1 + 4 * heat) * (1 - settled) * M, pulse = M + M * .03 * heat * (1 - settled) * Math.sin(t * (9 + 10 * heat)) + .04 * flash * M;
   if (im.naturalWidth && hand < 1) { ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = 1 - hand; ctx.translate(Math.round(z.x + jx), Math.round(gy)); ctx.scale(pulse, pulse);
     const draw = () => blendCells(im, 0, 0, ABM.mw, ABM.bh, keys[a][1], keys[a + 1][1], k, -ABM.mw / 2, -ABM.bfy); draw();
     if (flash > .02) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = (1 - hand) * flash * .8; draw(); } ctx.restore(); }   // one hot pass: bright, but the figures stay readable
   if (hand > 0 && run.naturalWidth) for (const [ox, oy] of [...ABM_FAN].sort((u, v) => u[1] - v[1])) {   // the live sprites fade in on their own spots, back row first
-    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = hand; ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, Math.round(z.x + ox) - ABM.sax, Math.round(z.y + oy + 16) - ABM.sfy, ABM.sw, ABM.sh); ctx.restore(); }
-  ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - hand; ctx.strokeText("CAN'T BE HURT", z.x, gy - 205); ctx.fillText("CAN'T BE HURT", z.x, gy - 205); ctx.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.globalAlpha = hand; ctx.translate(Math.round(z.x + ox), Math.round(z.y + oy + 24)); ctx.scale(ABM.ssc, ABM.ssc); ctx.drawImage(run, 0, 0, ABM.sw, ABM.sh, -ABM.sax, -ABM.sfy, ABM.sw, ABM.sh); ctx.restore(); }   // feet at y + radius(30) * .8, like drawAbomSpawn
+  ctx.save(); ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a0803"; ctx.fillStyle = "#ff9d6b"; ctx.globalAlpha = 1 - hand; ctx.strokeText("CAN'T BE HURT", z.x, gy - 175 * M - 30); ctx.fillText("CAN'T BE HURT", z.x, gy - 175 * M - 30); ctx.restore();
 }
 function drawAbomSpawn(z) {
-  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 };
+  const now = gnow(), t = actTime(z), gy = z.y + z.radius * .8, tele = abTele.get(z.id), L = { wind: .4, leap: .28 }, F = ABM.ssc;
   let mv = abMove.get(z.id); if (!mv) { mv = { x: z.x, y: z.y, dist: 0, at: 0 }; abMove.set(z.id, mv); }
   const step = Math.hypot(z.x - mv.x, z.y - mv.y); if (step > .3 && step < 80) { mv.dist += step; mv.at = now; } mv.x = z.x; mv.y = z.y;
   let sheet = "srun", f = 0, f2 = 0, k = 0, lift = 0;
-  if (z.act === "lunge") { sheet = "slunge"; if (t < L.wind) { f = f2 = 0; } else if (t < L.wind + L.leap) { const u = (t - L.wind) / L.leap; f = u < .5 ? 1 : 2; f2 = f; lift = Math.sin(Math.PI * u) * 30; } else { f = f2 = 3; } }
-  else if (now - mv.at < 160) { const u = mv.dist / 24; f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
-  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, gy, 30 - lift * .3, 9 - lift * .08, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (z.act === "lunge") { sheet = "slunge"; if (t < L.wind) { f = f2 = 0; } else if (t < L.wind + L.leap) { const u = (t - L.wind) / L.leap; f = u < .5 ? 1 : 2; f2 = f; lift = Math.sin(Math.PI * u) * 30 * F; } else { f = f2 = 3; } }
+  else if (now - mv.at < 160) { const u = mv.dist / (24 * F); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.ellipse(z.x, gy, (30 - lift / F * .3) * F, (9 - lift / F * .08) * F, 0, 0, 7); ctx.fill(); ctx.restore();
   if (z.act === "lunge" && tele?.k === "lunge" && t < L.wind + L.leap) {   // where it will land
     const lx = tele.x + Math.cos(tele.a) * tele.dist, ly = tele.y + Math.sin(tele.a) * tele.dist, kk = Math.min(1, t / (L.wind + L.leap));
-    ctx.save(); ctx.fillStyle = `rgba(255,90,31,${.1 + .22 * kk})`; ctx.strokeStyle = `rgba(255,170,90,${.5 + .45 * kk})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(lx, ly + 12, tele.r, tele.r * .7, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    ctx.save(); ctx.fillStyle = `rgba(255,90,31,${.1 + .22 * kk})`; ctx.strokeStyle = `rgba(255,170,90,${.5 + .45 * kk})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(lx, ly + 18, tele.r, tele.r * .7, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); }
   const [row, flip] = pyRow(z.aim || 0), im = abImgs[sheet];
-  bossGlow(z.x, gy - 55, z.enraged ? "255,40,30" : ABM.lava, z.enraged ? 62 : 44, z.enraged ? .6 + .2 * Math.sin(now / 80) : .3);
+  bossGlow(z.x, gy - 55 * F, z.enraged ? "255,40,30" : ABM.lava, (z.enraged ? 62 : 44) * F, z.enraged ? .6 + .2 * Math.sin(now / 80) : .3);
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
-  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x), Math.round(gy - lift)); if (flip) ctx.scale(-1, 1);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.translate(Math.round(z.x), Math.round(gy - lift)); ctx.scale(F, F); if (flip) ctx.scale(-1, 1);
   flashDraw(flashing, () => blendCells(im, 0, row * ABM.sh, ABM.sw, ABM.sh, f, f2, k, -ABM.sax, -ABM.sfy)); ctx.restore();
   // each of the Five has its own health bar
-  const w = 46, hk = Math.max(0, Math.min(1, z.hp / z.maxHp)); ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(z.x - w / 2 - 1, gy - 136 - lift, w + 2, 6); ctx.fillStyle = z.enraged ? "#ff3b30" : "#ff8a3d"; ctx.fillRect(z.x - w / 2, gy - 135 - lift, w * hk, 4);
+  const w = 60, hb = gy - 125 * F - 10 - lift, hk = Math.max(0, Math.min(1, z.hp / z.maxHp)); ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(z.x - w / 2 - 1, hb, w + 2, 6); ctx.fillStyle = z.enraged ? "#ff3b30" : "#ff8a3d"; ctx.fillRect(z.x - w / 2, hb + 1, w * hk, 4);
 }
 function drawAbomGround() {   // lava puddles + the roll lane (under everyone)
   const now = gnow();
@@ -1687,7 +1688,7 @@ function drawAbomFx(f, age) {   // false when finished
     const e = s - f.wind; if (e < 0) return true; if (e > f.dur + .45) return false;
     const zr = state?.zombies?.get(f.id), z = zr ? (V(zr) || zr) : null; if (!z || (zr.act !== "spew" && e < f.dur)) return false;
     const fr = e < .3 ? e / .3 * 8 : e < f.dur ? 8 + ((e - .3) / .09) % 8 : 16 + Math.min(7.9, (e - f.dur) / .45 * 8);
-    const ox = z.x + Math.cos(f.a) * 34, oy = z.y - 62 + Math.sin(f.a) * 18, tx = z.x + Math.cos(f.a) * f.len, ty = z.y + Math.sin(f.a) * f.len;   // from his mouth to the far end of the cone on the ground
+    const S = ABM.sc, ox = z.x + Math.cos(f.a) * 34 * S, oy = z.y + z.radius * .8 - 99 * S + Math.sin(f.a) * 18 * S, tx = z.x + Math.cos(f.a) * f.len, ty = z.y + Math.sin(f.a) * f.len;   // from his mouth to the far end of the cone on the ground
     const rot = Math.atan2(ty - oy, tx - ox), len = Math.hypot(tx - ox, ty - oy), sc = len / 200;
     aFx("fxLava", fr, ox, oy, sc, 1, rot, true); aFx("fxLava", (fr + 3) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot + .16, true); aFx("fxLava", (fr + 5) % 8 + (fr >= 16 ? 16 : fr >= 8 ? 8 : 0), ox, oy, sc * .92, .6, rot - .16, true);
     if (!f.snd) { f.snd = true; playSfx("flame", z.x, z.y, .8); }
@@ -1695,13 +1696,13 @@ function drawAbomFx(f, age) {   // false when finished
   }
   if (f.k === "sdead") {   // a Spawn crumbles into cooling rock
     if (s > 5) return false; const im = abImgs.sdead; if (!im?.naturalWidth) return true; const u = Math.min(4, s / .22), fr = Math.floor(u), a = s > 3.8 ? 1 - (s - 3.8) / 1.2 : 1, cw = im.naturalWidth / 5;
-    ctx.save(); ctx.globalAlpha = a; blendCells(im, 0, 0, cw, ABM.sh, fr, Math.min(4, fr + 1), u - fr, Math.round(f.x) - cw / 2, Math.round(f.y + 16) - ABM.sfy); ctx.restore(); return true;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(Math.round(f.x), Math.round(f.y + 24)); ctx.scale(ABM.ssc, ABM.ssc); blendCells(im, 0, 0, cw, ABM.sh, fr, Math.min(4, fr + 1), u - fr, -cw / 2, -ABM.sfy); ctx.restore(); return true;
   }
   return false;
 }
 function abomLights(now) {
   if (!state?.zombies) return;
-  for (const z of state.zombies.values()) { if (z.kind !== "abomination" && z.kind !== "abomSpawn") continue; if (!inView(z.x, z.y, 200)) continue; const v = V(z) || z; lightHole(v.x - cam.x, v.y - 50 - cam.y, z.kind === "abomination" ? 180 : 90, .8); }
+  for (const z of state.zombies.values()) { if (z.kind !== "abomination" && z.kind !== "abomSpawn") continue; if (!inView(z.x, z.y, 360)) continue; const v = V(z) || z; lightHole(v.x - cam.x, v.y - (z.kind === "abomination" ? 110 : 60) - cam.y, z.kind === "abomination" ? 320 : 130, .8); }   // (Nov 12) bigger with him (2x / the Five 1.5x)
   for (const q of abPuddles) if (inView(q.x, q.y, 150)) lightHole(q.x - cam.x, q.y - cam.y, q.r + 50, .6);
 }
 function drawPyreBurning() {   // survivors on fire: flames dancing on them
@@ -4688,7 +4689,7 @@ function drawWorldObjects(extra) {
   drawStompDust();
   drawHealRings();
   drawCorpses();
-  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
+  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss ? 460 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
