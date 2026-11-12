@@ -582,3 +582,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - tools/extract-abomination.py now cuts at RB = 2 (boss cells 680x520, feet 340/472, BOSS_H 344) and RS = 1.5 (spawn cells 360x315, feet 180/273): straight from the source art, premultiplied Lanczos (no magenta fringe), soft antialiased alpha (was a hard cut), UnsharpMask, webp q90. FX strips kept at full source res (271px frames); client aFx scales by 200/fw so callers are unchanged.
 - Client ABM: cell numbers are sheet pixels, `r: 2, sr: 1.5`; draws scale by sc / r and ssc / sr (= 1). `abCrisp` makes walk/roll frames hold, then cross-fade quickly.
 - build-preview skips the q60 re-encode for `/abom` sheets. Cache `20261112u`; next `20261112v`.
+
+## Nov 12 — Pyre Priest art sharpened
+- tools/extract-pyre.py cuts the walk / swing / sermon / death sheets at R = 1.65 (= the size he is drawn; 0.99x the source art): cells 495x305, feet (248, 261), premultiplied Lanczos, soft alpha, light UnsharpMask, webp q90. (The fx / portrait part is unchanged; only the sheets were re-run.)
+- Client PY: `r: 1.65`, cw/ch/ax/fy in sheet pixels, draws scale by sc / r. Walk frames use abCrisp. build-preview skips the q60 re-encode for `dir8/pyre-` sheets too.
+- Cache `20261112v`; next `20261112w`.

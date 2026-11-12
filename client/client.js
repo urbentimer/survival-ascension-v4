@@ -1160,7 +1160,7 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/pyre-
 // Wheel of Flame art (tools/extract-wheel.py): wline = 8 rows of a long fire line (lw x lh, glowing base at y lb);
 // whub = 16 frames of the burning rune (hw x hh, its centre at (hw/2, hc)). The flames always rise UP whichever way a line points (drawPyreWheel)
 const PYW = { lw: 582, lh: 44, lb: 38, hw: 156, hh: 162, hc: 114, hubR: 70, hubScale: 1.45 };
-const PY = { sc: 1.65, cw: 300, ch: 185, ax: 150, fy: 158, step: 30, swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, strikeWind: .3, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
+const PY = { sc: 1.65, r: 1.65, cw: 495, ch: 305, ax: 248, fy: 261, step: 30,   /* (Nov 12) cw..fy are sheet pixels: the sheets are cut at r = 1.65x (the size he is drawn), so draws scale by sc / r = 1 */ swingR: 260, flat: .6, wind: .7, spin: .55, sermon: 2.6, wheelCast: 1.2, strikeWind: .3, back: Math.PI / 2, ringW: 250 };   // ringW: the fire ring's width in its art
 const pyreMove = new Map(), pyreWalk = new Map(), pyreBurn = new Map();   // per boss: walk cycle; firewalk end; per player: burning until
 let pyreWheel = null;   // the Wheel of Flame: { id, a, w, warn, life, len, hw, t } (angle a at time t, turning w rad/s clockwise, centred on his feet)
 function pyRow(a) {   // facing -> sheet row (D, DR, R, UR, U) + mirror for the left side
@@ -1234,13 +1234,13 @@ function drawPyre(z) {
     sheet = "sermon"; const T = z.act === "wheel" ? PY.wheelCast : PY.sermon;
     f = t < .25 ? 0 : t < .45 ? 1 : t < T - .35 ? 2 : 3; f2 = Math.min(3, f + 1);
     k = t < .25 ? t / .25 : t < .45 ? (t - .25) / .2 : t < T - .35 ? 0 : 0;
-  } else if (now - mv.at < 160) { const u = mv.dist / (PY.step * PY.sc); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = u - Math.floor(u); }
+  } else if (now - mv.at < 160) { const u = mv.dist / (PY.step * PY.sc); f = Math.floor(u) % 4; f2 = (f + 1) % 4; k = abCrisp(u - Math.floor(u)); }   // frames hold, then a quick cross-fade (no blurry double image)
   const [row, flip] = pyRow(face), im = pyImgs[sheet]?.naturalWidth ? pyImgs[sheet] : pyImgs.walk;
   const flashAt = feel.flash.get(z.id), flashing = flashAt && now - flashAt < 90;
   if (z.enraged) bossGlow(z.x, gy - 75 * PY.sc, "255,60,20", 120 * PY.sc, .5 + .2 * Math.sin(now / 90));   // red halo (was a drop-shadow filter on a 300x185 sprite every frame)
   else if (z.act === "sermon" && f === 2) bossGlow(z.x, gy - 60 * PY.sc, "255,170,40", 130 * PY.sc, .6);
   ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.translate(Math.round(z.x), Math.round(gy)); ctx.scale(PY.sc, PY.sc); if (flip) ctx.scale(-1, 1);   // (Nov 12) 1.65x: as tall as the pyramid's doorway
+  ctx.translate(Math.round(z.x), Math.round(gy)); ctx.scale(PY.sc / PY.r, PY.sc / PY.r); if (flip) ctx.scale(-1, 1);   // (Nov 12) 1.65x: as tall as the pyramid's doorway
   flashDraw(flashing, () => blendCells(im, 0, row * PY.ch, PY.cw, PY.ch, f, f2, k, -PY.ax, -PY.fy));
   ctx.restore();
   pyreAura(z, feet, now, true);
@@ -1367,7 +1367,7 @@ function drawPyreFx(f, age) {   // false when finished
   if (f.k === "death") {   // collapses, the censer rolls away, burns down to ash
     if (s > 4) return false; const im = pyImgs.death; if (!im?.naturalWidth) return true;
     const u = Math.min(5, s / .3), fr = Math.floor(u), a = s > 2.8 ? 1 - (s - 2.8) / 1.2 : 1;
-    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high"; const fx0 = Math.round(f.x), fy0 = Math.round(f.y + 32 * PY.sc); ctx.translate(fx0, fy0); ctx.scale(PY.sc, PY.sc);
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingQuality = "high"; const fx0 = Math.round(f.x), fy0 = Math.round(f.y + 32 * PY.sc); ctx.translate(fx0, fy0); ctx.scale(PY.sc / PY.r, PY.sc / PY.r);
     blendCells(im, 0, 0, PY.cw, PY.ch, fr, Math.min(5, fr + 1), u - fr, -PY.ax, -PY.fy); ctx.restore(); return true;
   }
   return false;
