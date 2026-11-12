@@ -670,7 +670,9 @@ const SFX = {
 const VOICE = { dispatcher: { Q: "vAstraQ", E: "vAstraE" } };
 function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
 // Music loops (empty in the solo preview: it has to stay under 16 MB). Crossfade 1s between scenes.
-const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3" };
+const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
+  pyre: "assets/audio/music_boss_pyre.mp3" };   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's track (58 bars at 77 BPM, one-bar crossfade back to the start)
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -694,7 +696,7 @@ function decoded(s, ac) {   // the AudioBuffer once ready (decoding starts on fi
   return null;
 }
 for (const s of Object.values(SFX)) loadRaw(s);
-const musicTracks = Object.fromEntries(Object.entries(MUSIC).map(([k, url]) => [k, { url }]));
+const musicTracks = Object.fromEntries(Object.entries(MUSIC).map(([k, url]) => [k, { url, ...(MUSIC_LOOP[k] || {}) }]));
 for (const t of Object.values(musicTracks)) loadRaw(t);
 // play one sound. x, y = where it happens (optional: omitted = not positional). mult scales the volume.
 function playSfx(name, x, y, mult = 1) {
@@ -714,6 +716,8 @@ const music = { want: "", cur: null };   // cur = { name, src, gain }
 function musicScene() {   // which music fits right now
   if (!room || !state || state.phase === "lobby") return "menu";
   if (state.phase === "defeat" || state.phase === "victory") return "";
+  const pyre = [...state.zombies.values()].some(z => z.kind === "pyre" && z.boss) || (state.waveType === "boss" && state.bossIntro === "pyre");
+  if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)
   const hive = [...state.zombies.values()].some(z => z.kind === "hivemind");
   if (hive || (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight"))) return "boss";
   return state.isNight ? "night" : "day";
@@ -726,8 +730,9 @@ function updateMusic() {   // called every frame: crossfades to the scene's trac
   music.want = want;
   if (music.cur) { const old = music.cur; old.gain.gain.setTargetAtTime(0, ac.currentTime, MUSIC_FADE / 3); setTimeout(() => { try { old.src.stop(); } catch {} }, MUSIC_FADE * 1500); music.cur = null; }
   if (!want) return;
-  const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true; src.loopStart = .03; src.loopEnd = buf.duration - .03;   // skip the mp3's silent padding so the loop is seamless
-  gain.gain.value = 0; gain.gain.setTargetAtTime(MUSIC_VOL, ac.currentTime, MUSIC_FADE / 3); src.connect(gain); gain.connect(musicBus); src.start(0, .03);
+  const src = ac.createBufferSource(), gain = ac.createGain(); src.buffer = buf; src.loop = true;
+  if (t.pad && t.pad + t.len <= buf.duration) { src.loopStart = t.pad; src.loopEnd = t.pad + t.len; } else { src.loopStart = .03; src.loopEnd = buf.duration - .03; }   // exact loop points, else skip the mp3's silent padding
+  gain.gain.value = 0; gain.gain.setTargetAtTime(MUSIC_VOL, ac.currentTime, MUSIC_FADE / 3); src.connect(gain); gain.connect(musicBus); src.start(0, src.loopStart);
   music.cur = { name: want, src, gain };
 }
 function setMusicOn(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(on ? 1 : 0, audioContext.currentTime, .2); $("musicToggle").classList.toggle("off", !on); $("setAmbient").checked = on; savePrefs(); }

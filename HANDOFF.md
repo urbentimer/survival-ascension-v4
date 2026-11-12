@@ -520,3 +520,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - **Crosshair:** drawReticle() in screen space, last thing drawn each frame (over night/flash), dark outline + glow at night.
 - **Sofea:** DIR8.operator.fix all {2: [6,1]} (right = mirrored left row).
 - Tests 63-68 (pause, plate, map order, alpha, shield-run immunity). sim-waves runs 1-25 through every map. Cache 20261112j.
+
+## Nov 12 (k): the Pyre Priest's own music
+- User's file: an hour-long "Pyre Priest boss theme" mix (64 min, ~77 BPM). Picked the most intense steady stretch by loudness / onset density / low end over 3-min windows: 04:57.9 -> 07:58.8 of the source (58 bars, 180.83s). Loop end found by feature similarity on the beat grid, refined by onset + low-pass waveform correlation; one-bar (3.1s) equal-power crossfade of the end into the start. Gain -7 dB (~-16.5 LUFS, like the old boss track).
+- `client/assets/audio/music_boss_pyre.mp3` (128k): the loop with 0.5s of its own end before it and of its start after it; MUSIC_LOOP.pyre = { pad: .5, len: 180.834 } sets exact loopStart/loopEnd (robust to MP3 decoder delay). musicScene() -> "pyre" while the Pyre Priest is the boss (intro card + fight); other bosses keep music_boss_battle.mp3.
+- Work files in /home/claude/work/pyre (scripts feat.py, score.py, pick.py, render.py). Music isn't in the preview (16 MB limit); SA_MUSIC=1 node tools/build-preview.mjs makes a local test build with it.
+- Cache 20261112k.
