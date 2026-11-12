@@ -431,7 +431,7 @@ Object.assign(MAP_SOLID, {
   mSeal1: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal2: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal3: { ox: 0, oy: -30, hw: 50, hh: 26 }, mSeal4: { ox: 0, oy: -30, hw: 50, hh: 26 },
   mLanternPost: { ox: -10, oy: -12, hw: 16, hh: 9 }, mLanternPost2: { ox: 0, oy: -12, hw: 18, hh: 9 }, mSkullSign: { ox: 0, oy: -12, hw: 48, hh: 9 }, mSignpost: { ox: 0, oy: -12, hw: 18, hh: 9 }, mFloodlight: { ox: 0, oy: -14, hw: 34, hh: 12 }, mBanner: { ox: 0, oy: -12, hw: 58, hh: 9 },
   mPillar: { ox: 0, oy: -22, hw: 34, hh: 18 }, mCandles: { ox: 0, oy: -10, hw: 20, hh: 8 }, mTotem: { ox: 0, oy: -12, hw: 18, hh: 9 }, mBones: mnBox("mBones", .38, .45),
-  mStatue: [{ ox: 0, oy: -95, hw: 178, hh: 88 }, { ox: 0, oy: -302, hw: 178, hh: 119 }],   // its plinth and body; and the strip behind it up to the dungeon wall (nobody gets stuck out of sight behind it)
+  mStatue: { ox: 0, oy: -95, hw: 178, hh: 88 },   // its plinth (stays after the Beast breaks out). The stone body is STATUE_BODY: solid only while the statue stands
   mShrine: { ox: 0, oy: -34, hw: 70, hh: 30 }, mRune1: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune2: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune3: { ox: 0, oy: -6, hw: 4, hh: 4 }, mRune4: { ox: 0, oy: -6, hw: 4, hh: 4 },
   mWardH: { ox: 0, oy: -25, hw: 1075, hh: 25 }, mWardV: { ox: 0, oy: 0, hw: 25, hh: 660 },   // the cordon: nobody walks into the boss dungeon; only the carts go in
   mChasm: [{ ox: 0, oy: 0, hw: 300, hh: 62 }, { ox: 0, oy: 0, hw: 220, hh: 100 }], mChasmV: [{ ox: 0, oy: 0, hw: 62, hh: 285 }, { ox: 0, oy: 0, hw: 100, hh: 205 }] });   // a chasm: centre-placed, the track crosses it on a bridge
@@ -618,6 +618,8 @@ export const paintedOf = site => site?.painted ? PAINTED[site.painted] : null;
 export const paintedLayout = P => P.boxes.map(([x0, y0, x1, y1]) => ({ kind: "box", x: (x0 + x1) / 2, y: (y0 + y1) / 2, hw: (x1 - x0) / 2, hh: (y1 - y0) / 2 }));
 
 // Solid boxes {x, y, hw, hh} (centre + half sizes) for the pieces that block movement.
+export const STATUE_BODY = { ox: 0, oy: -302, hw: 178, hh: 119 };   // the statue's body + the strip behind it up to the dungeon wall (nobody gets stuck out of sight behind it). Nov 12: only while it stands: once the Beast bursts out (fight step on) you can walk there
+export const statueBodyBoxes = layout => layout.filter(d => d.kind === "mStatue").map(d => ({ x: d.x + STATUE_BODY.ox, y: d.y + STATUE_BODY.oy, hw: STATUE_BODY.hw, hh: STATUE_BODY.hh }));
 export function mapBoxes(layout) {
   const boxes = [];
   for (const d of layout) {

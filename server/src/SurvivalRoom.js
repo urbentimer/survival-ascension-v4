@@ -1,7 +1,7 @@
 import { Room } from "@colyseus/core";
 import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
-import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
+import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
@@ -457,7 +457,7 @@ export class SurvivalRoom extends Room {
     const CT = S.style === "carnival" ? coasterTrack(W, H) : S.style === "mine" ? mineTrack(W, H) : null; this.coaster = CT ? { T: CT, K: CT.cfg || COASTER, s: CT.stations[0].s, wait: (CT.cfg || COASTER).wait, next: 0, riders: new Map(), cd: new Map(), queue: new Map() } : null;   // Midnight Carnival: the train starts at the first station
     this.state.coasterS = CT ? this.coaster.s : 0; this.state.coasterWait = CT ? this.coaster.K.wait : 0;   // Scorched Refinery: bosses walk out of the pyramid
     this.state.mapLayout = P ? "P:" + SITES[i].painted : packLayout(layout);   // clients build the painted map's boxes from PAINTED themselves
-    this.setMapBoxes(mapBoxes(layout));
+    this.siteBoxes = mapBoxes(layout); this.statueBody = statueBodyBoxes(layout); this.statueBroken = false; this.refreshMapBoxes();
     if (this.state.players) for (const p of this.state.players.values()) { p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p); }   // everyone onto the new map
   }
   onCreateRest(options) {
@@ -1198,6 +1198,7 @@ export class SurvivalRoom extends Room {
   }
 
   // Solid map pieces (buildings, wrecks, trees...) near a point.
+  refreshMapBoxes() { this.setMapBoxes(this.statueBroken ? this.siteBoxes : this.siteBoxes.concat(this.statueBody || [])); }   // the Deep Mine statue's body is solid only until the Beast bursts out
   setMapBoxes(boxes) {   // 160px cells -> solid boxes touching that cell (fast lookups); tests plant their own walls with it
     this.mapGrid = new Map();
     for (const b of boxes) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
@@ -3017,6 +3018,7 @@ export class SurvivalRoom extends Room {
     s.message = "THE MINE BEAST IS BREAKING ITS CHAINS!"; this.broadcast("deep", { k: "awake", len: DEEP.awake }); this.mineSync();
   }
   mineFight() {   // the stone has burst off: the fight, on foot, inside the dungeon
+    this.statueBroken = true; this.refreshMapBoxes();   // the stone shell is gone: only the plinth still blocks
     const m = this.mine, s = this.state, ST = this.minePieces.statue, D = DIFFICULTY[s.difficulty] || DIFFICULTY.normal, scale = 1 + (s.stage - 1) * .08;
     const z = new ZombieState(); z.id = `z${++this.zombieSequence}`; z.kind = "minebeast"; z.x = ST.x; z.y = ST.y + 110; z.speed = BEAST.speed; z.radius = BEAST.radius; z.attackCooldown = 0; z.targetId = ""; z.boss = true; z.role = "mine"; z.slam = 0; z.act = ""; z.hookId = ""; z.enraged = false; z.aim = Math.PI / 2;
     z.maxHp = BEAST.hp * scale * (1 + BOSS_HP_PER_PLAYER * Math.max(0, s.players.size - 1)) * D.hp; z.hp = z.maxHp; z.damage = BEAST.dmg * scale * D.dmg;

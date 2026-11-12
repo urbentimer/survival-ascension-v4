@@ -1,7 +1,7 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
 import { GAME_SERVER } from "./config.js";
-import { mapBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
+import { mapBoxes, statueBodyBoxes, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
 import { MN_ART, MN_TILES, MN_CART, MN_FX } from "./mineArt.js";
 import { MB } from "./mineBeastArt.js";   // the Mine Beast's sheets + effects (tools/extract-minebeast.py)   // The Deep Mine pieces, the mine cart, the portal swirl + crystal shatter (tools/extract-mine.py)
 import { CV_ART, CV_TILES, CV_CART } from "./carnivalArt.js";   // Midnight Carnival pieces + the coaster cart (tools/extract-carnival.py)
@@ -3323,13 +3323,13 @@ window.__saCam = cam; window.__saRoom = () => room; window.__saPred = () => { co
 const PRED = { seq: 0, pending: [], x: 0, y: 0, ok: false, ex: 0, ey: 0, grid: null, src: null };
 const P_BODY_R = 12, P_TOWER_HALF = 34, P_GEN_H = 20, P_DASH = 140;   // matches DASH_DISTANCE on the server
 function predGrid() {
-  const src = state?.mapLayout || ""; if (PRED.src === src && PRED.grid) return PRED.grid;
+  const src = state?.mapLayout || "", st = deepState()?.step, broken = st === "fight" || st === "flee" || st === "chase" || st === "escaped"; if (PRED.src === src && PRED.broken === broken && PRED.grid) return PRED.grid;   // the mine statue's body stops blocking once the Beast is out (as on the server)
   const pm = paintedMap(), layout = pm ? paintedLayout(pm) : src ? src.split(";").map(r => { const [k, x, y, f] = r.split(",").map(Number); return { kind: MAP_KINDS[k], x, y, flip: f === 1 }; }).filter(d => d.kind) : [];
   const grid = new Map();
-  for (const b of mapBoxes(layout)) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
+  for (const b of broken ? mapBoxes(layout) : mapBoxes(layout).concat(statueBodyBoxes(layout))) for (let gx = Math.floor((b.x - b.hw) / 160); gx <= Math.floor((b.x + b.hw) / 160); gx++) for (let gy = Math.floor((b.y - b.hh) / 160); gy <= Math.floor((b.y + b.hh) / 160); gy++) {
     const k = gx + "," + gy; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
   }
-  PRED.src = src; PRED.grid = grid; return grid;
+  PRED.src = src; PRED.broken = broken; PRED.grid = grid; return grid;
 }
 function predSolve(p) {   // same as the server's solveCollisions for a survivor (deployables don't block survivors)
   const WW = worldW(), WH = worldH(), cx = towerX(), cy = towerY(), boxes = [{ x: cx, y: cy, hw: P_TOWER_HALF, hh: P_TOWER_HALF }, { x: cx + GEN_OFF.x, y: cy + GEN_OFF.y, hw: P_GEN_H, hh: P_GEN_H }];
