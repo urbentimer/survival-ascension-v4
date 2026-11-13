@@ -964,7 +964,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
   { p.aim = 0; const z1 = placeZombie(room, p.x + 120, p.y, 9999), z2 = placeZombie(room, p.x + 260, p.y + 90, 9999), z3 = placeZombie(room, p.x + 380, p.y - 40, 9999), zb = placeZombie(room, p.x - 420, p.y, 9999);
     [z1, z2, z3, zb].forEach(w => { w.speed = 0; w.role = "tower"; });
-    send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 9 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Manhole Frisbee: he rips up a manhole cover (10s cooldown)");
+    send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 3.9 && p.abilityCooldown <= 4 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Manhole Frisbee: he rips up a manhole cover (4s cooldown)");
     tick(120);
     ok(z1.hp < 9999 && z2.hp < 9999 && z3.hp < 9999 && zb.hp === 9999, `...it slices through a zombie and ricochets on to the next ones (${[z1, z2, z3].map(w => 9999 - Math.round(w.hp)).join(" / ")} dmg), not the one 420px behind him`);
     ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend"), "...then it drops");

@@ -51,7 +51,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 10, icon: "manholeFrisbee" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 4, icon: "manholeFrisbee" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
@@ -5124,7 +5124,7 @@ const ROSTER = [
              { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }],
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
-    skills: [{ k: "E", n: "Manhole Frisbee", cd: 10, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
+    skills: [{ k: "E", n: "Manhole Frisbee", cd: 4, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
              { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",

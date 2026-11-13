@@ -768,3 +768,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 13 — Manhole Frisbee slower
 - User: slower. `BRIGGS.cover.speed 950 -> 600` px/s, life 3.2 -> 5s (the 12 bounces still fit); client spin .03 -> .02 rad/ms (+.045 kick after a bounce). Test 36 ticks longer (120).
 - Cache `20261114a`; next `20261114b`.
+
+## Nov 13 — Manhole Frisbee cooldown 4s
+- `BRIGGS.cover.cd 10 -> 4` (user). A cover still flying when the cooldown is up drops (endCover "new") and the new throw goes (pressing during the rip does nothing). Client SKILLS / roster cd 4. Test 36 checks the 4s.
+- Cache `20261114b`; next `20261114c`.

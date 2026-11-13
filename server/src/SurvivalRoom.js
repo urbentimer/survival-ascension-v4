@@ -265,7 +265,8 @@ const SOFEA = {
 // BRIGGS (juggernaut): E = MANHOLE FRISBEE (Nov 13: rips up a manhole cover and flings it: it slices through zombies, ricochets to the next one and off walls),
 // Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
-  cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
+  cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 4 },   // (user, Nov 13: cooldown 4s)
+      // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)
@@ -1262,7 +1263,7 @@ export class SurvivalRoom extends Room {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
       if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts on the press (refunded if the call fails)
-      if (cls === "juggernaut") { if (!this.covers.has(p.sessionId) && p.stunned <= 0) this.ripCover(p); return; }   // (Nov 13) Manhole Frisbee
+      if (cls === "juggernaut") { if (p.stunned > 0) return; const old = this.covers.get(p.sessionId); if (old?.phase === "rip") return; if (old) this.endCover(p.sessionId, old, "new"); this.ripCover(p); return; }   // (Nov 13) Manhole Frisbee (a cover still flying when the 4s cooldown is up drops: the new one goes)
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
