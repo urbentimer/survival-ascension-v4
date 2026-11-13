@@ -18,7 +18,8 @@ fade = np.clip((1 - np.maximum(d, dr * .8)) / .1, 0, 1)   # out to 0 right at th
 cw, ch = round(W * UP), round(H * UP); atlas = Image.new('RGB', (cw * 4, ch * 2))
 for i, f in enumerate(frames):
     f = np.clip((f - 7) * 255 / 248, 0, 255) * fade[..., None]
-    im = Image.fromarray(f.astype(np.uint8)); im = im if UP == 1 else im.resize((cw, ch), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=2.0, percent=85, threshold=3))
+    im = Image.fromarray(f.astype(np.uint8)); im = im if UP == 1 else im.resize((cw, ch), Image.LANCZOS)
+    im = im.filter(ImageFilter.UnsharpMask(radius=2.4, percent=45, threshold=2)).filter(ImageFilter.UnsharpMask(radius=0.9, percent=140, threshold=3))   # (Nov 13, user: sharpen) local contrast + crisp edges
     atlas.paste(im, ((i % 4) * cw, (i // 4) * ch))
 atlas.save(os.path.join(A, 'sprites', 'fx', 'briggs-shock.webp'), quality=95, method=6)
 print('shock atlas', atlas.size, 'cell', cw, ch, 'ring centre in the cell', CX * UP, CY * UP, 'ring middle x radius', 168 * UP, '->', 191 * UP, '(frame 0 -> 4)')

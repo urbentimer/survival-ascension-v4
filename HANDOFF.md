@@ -740,3 +740,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User: no stretching / no growing; just the GIF at its size round Briggs. extract-briggs-shock.py UP 1 (439x439 cells, 4x2 atlas, q95, black lifted, edge fade only in the last 10%). Client: frame floor(s/110ms) of 8, drawn 1:1 (smoothing off, rounded) and additive at his feet, ends at 880ms; no cross-fade, no scaling.
 - The hit range now matches what that fire covers on screen: `BRIGGS.fort.blast = { r: 210, ry: 120, stun: 3 }` (oval round his feet + zombie radius). Test 36: 300px away isn't hit.
 - Cache `20261113v`; next `20261113w`.
+
+## Nov 13 — Deflect GIF sharpened
+- extract-briggs-shock.py: two unsharp passes on every frame at its own size (r 2.4 / 45% local contrast, then r 0.9 / 140% edges, thresholds 2-3 so the GIF's dither isn't pumped up). Asset only (no code change).
+- Cache `20261113w`; next `20261113x`.
