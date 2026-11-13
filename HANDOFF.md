@@ -718,3 +718,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `BRIGGS.fort.blast.r 100 -> 1000` (user): every zombie and boss within 1000px (+ its radius) takes the stored damage and is stunned 3s. Test 36: the unhit one is now 1300px away.
 - Client stand-in shockwave (until the user's art): 3 additive rings (orange 34px, pale 12px, red 6px) easing out from .6R to 1000px over 0.8s, squashed to the shields' ellipse. Project doc prompt A now says "out to 1000px from him (2000px across)".
 - Cache `20261113r`; next `20261113s`.
+
+## Nov 13 — DEFLECT shockwave: the user's ring art (massive, out to 1000px)
+- User sent the ring as a GIF and a 2x2 sheet (tools/art/briggs/shock/shockwave.gif / shockwave-sheet.png, same 4 looks ~887x443). Picked the SHEET: full colour (the GIF is 256 colours, dithered, a different render), outlined smoke, less pink fringe.
+- `python3 tools/extract-briggs-shock.py` -> client/assets/sprites/fx/briggs-shock.webp (2368x1258, 2x2 cells of 1184x629, each look re-centred on its ring; UP 1.25x Lanczos premultiplied + unsharp 90%/1.6). Keying = UNMIX against magenta (alpha + colour from how much magenta is mixed in: soft glow, see-through smoke, no pink / purple fringe; leftover purple -> smoky grey). Ring middle line measured per look (x radius) -> client BSHOCK.rm; the art's oval is ~2.6:1, drawn 1.25x taller (BSHOCK.sy).
+- Client fx "shieldBlast": the shockwave grows from 110px to 1000px (the deflect's reach) over 1s (ease-out ^1.7), looks switch every .25s (cross-fade in the last 45% of each), an additive bloom pass early on, fades out .85 -> 1.2s. The stand-in code rings are gone. build-preview: fx/briggs-(wall|slab|shield|shock) skip the q60 re-encode.
+- Cache `20261113s`; next `20261113t`.
