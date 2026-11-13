@@ -2006,7 +2006,7 @@ const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";
 const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
 const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
 const BS = { cw: 61, ch: 62, ax: 30.5, ay: 60, w: [54.2, 50, 48.4, 38.2, 29.2, 37.4, 48.1, 52.7, 54.9], h: [51.3, 52.6, 53.8, 55.6, 56.2, 57.2, 57.2, 51.5, 51.1],
-  R: 100, RY: 57, spin: 1.15, back: .9, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on (their gaps: ~28px between the slabs)
+  R: 170, RY: 97, spin: 1.15, back: .9, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on: 170px from Briggs (user, Nov 13)
 const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
 let starImg = null;
@@ -2049,7 +2049,9 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
   ctx.globalAlpha = .3 * alpha * clamp01(rise * 1.5) * Math.max(.4, 1 - z / 40); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(s.x, s.gy - 1, s.Wt * .5, 5 * s.ds, 0, 0, 7); ctx.fill();
   if (rise < 1) { ctx.beginPath(); ctx.rect(s.x - 50, s.gy - 110, 100, 112); ctx.clip(); }   // rising out of the ground: cut at the ground line
   const gy = s.gy + (1 - rise) * s.Ht - z; ctxBaseM = ctx.getTransform();
-  const layer = (im, row, al) => { shieldCell(im, row, s.i0, s.x, gy, sa, ya, s.mir, al); shieldCell(im, row, s.i1, s.x, gy, sb, yb, s.mir, al * bw); };
+  // (the art's views 6-8 show the back with the side edge on the wrong side for one continuous turn: they're mirrored, so each shield keeps facing outward)
+  const ma = s.mir !== (s.i0 >= 5 && s.i0 < 8), mb = s.mir !== (s.i1 >= 5 && s.i1 < 8);
+  const layer = (im, row, al) => { shieldCell(im, row, s.i0, s.x, gy, sa, ya, ma, al); shieldCell(im, row, s.i1, s.x, gy, sb, yb, mb, al * bw); };
   layer(shieldImg, 0, alpha); if (hot > 0) layer(shieldImg, 1, alpha * hot);
   if (dark > 0 && dk) { layer(dk, 0, alpha * dark * (1 - hot)); if (hot > 0) layer(dk, 1, alpha * dark * hot); }
   if (flash > 0) { ctx.globalCompositeOperation = "lighter"; layer(shieldImg, 1, alpha * flash * .85); }   // a hit / the blast: it flares white-hot
@@ -2101,9 +2103,9 @@ function drawBriggsFx(f, age) {   // false when finished
       deepEmit("dust", X, Y, 10, { r: BS.R * 1.4, sp: 150, s: 34, life: 1000 }); deepFlash(X, Y - 24, 260, "255,205,130", 420); }
     wallFrame(2, 5, X, Y, BS.R / BW.rx, s < .9 ? 1 : (1.3 - s) / .4);   // the glowing ring of cracks (the old blast's last frame), as big as the shields' circle
     if (s < .5) { const q = s / .5; ctx.save(); ctx.translate(X, Y); ctx.scale(1, BS.RY / BS.R); ctx.globalCompositeOperation = "lighter";   // the shockwave
-      for (const [d, lw, col] of [[0, 14, "255,170,70"], [.08, 6, "255,240,200"]]) { const k = q - d; if (k <= 0) continue; ctx.strokeStyle = `rgba(${col},${1 - k})`; ctx.lineWidth = lw * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, BS.R * (.55 + 1.5 * k), 0, 7); ctx.stroke(); }
+      for (const [d, lw, col] of [[0, 14, "255,170,70"], [.08, 6, "255,240,200"]]) { const k = q - d; if (k <= 0) continue; ctx.strokeStyle = `rgba(${col},${1 - k})`; ctx.lineWidth = lw * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, BS.R * (.6 + .9 * k), 0, 7); ctx.stroke(); }
       ctx.restore(); }
-    if (s < .6) { const k = clamp01(s / .45), out = 1 + .85 * (1 - Math.pow(1 - k, 3)), z = Math.sin(Math.min(1, s / .6) * Math.PI) * 16, al = s < .32 ? 1 : 1 - (s - .32) / .28;
+    if (s < .6) { const k = clamp01(s / .45), out = 1 + .45 * (1 - Math.pow(1 - k, 3)), z = Math.sin(Math.min(1, s / .6) * Math.PI) * 16, al = s < .32 ? 1 : 1 - (s - .32) / .28;
       const set = set0.map(sh => ({ ...sh, x: X + (sh.x - X) * out, gy: Y + (sh.gy - Y) * out })).sort((u, w) => u.sn - w.sn);
       for (const sh of set) drawShield(sh, 1, Math.max(0, 1 - s / .5), 1, al, z); }
     return true; }
@@ -4857,7 +4859,7 @@ function drawWorldObjects(extra) {
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
-  for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, 260)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
+  for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
