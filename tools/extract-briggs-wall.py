@@ -33,7 +33,7 @@ def steel(rgba):   # the slab bodies: dark, low-saturation pixels (not the glows
     a = rgba.astype(int); mx = a[..., :3].max(-1); mn = a[..., :3].min(-1)
     return (a[..., 3] > 0) & (mx < 150) & (mx - mn < 60)
 
-def resize_sharp(rgba, sc, pct=65):   # premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
+def resize_sharp(rgba, sc, pct=110):   # premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
     a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
     w, h = max(1, round(rgba.shape[1] * sc)), max(1, round(rgba.shape[0] * sc))
     up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)

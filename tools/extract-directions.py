@@ -185,6 +185,8 @@ if __name__ == '__main__':
         vlook = spec.endswith('~'); spec = spec.rstrip('~')   # "...%229x143.125~": with a fixed row grid, also look 25% into the rows above/below (characters drawn low on their row)
         spec, _, pitch = spec.partition('%')
         spec, _, ncols = spec.partition('!')   # "!4": this sheet has 4 columns (e.g. a skill pose sheet); goes before any %pitch
+        ncols, _, refc = ncols.partition('^')   # "!4^3": size the block by column 3 (a standing frame) instead of column 0 (skill sheets that start crouched)
+        REFC = int(refc) if refc else 0
         COLS = int(ncols) if ncols else 6   # "%175": columns are evenly spaced every 175px (effects bridge the gaps); "%219x150": rows too
         pitch, _, rpitch = pitch.partition('x')
         spec, _, order = spec.partition('@')   # "@U": rows on the sheet go U,UR,R,DR,D,DL,L,UL (instead of D,DR,R,UR,U,UL,L,DL)
@@ -197,7 +199,7 @@ if __name__ == '__main__':
         full = np.array(parts[0]).astype(int)
         if box: x0, y0, x1, y1 = map(int, box.split(',')); full = full[y0:y1, x0:x1]
         frames, nrows = cut_sheet(full, None, float(pitch) if pitch else None, float(rpitch) if rpitch else None, vlook)
-        idle_h = np.median([frames[(r, 0)][3] for r in range(nrows) if (r, 0) in frames])
+        idle_h = np.median([frames[(r, REFC)][3] for r in range(nrows) if (r, REFC) in frames])
         scale = TARGET_H / idle_h
         rscale = {r: (TARGET_H / frames[(r, 0)][3] if NORM_ROWS and (r, 0) in frames else scale) for r in range(nrows)}   # per source row
         remap = [4, 3, 2, 1, 0, 7, 6, 5] if order == 'U' else list(range(8))

@@ -11,18 +11,23 @@ y0 = b * 8 * ch
 right = a[y0 + 2 * ch:y0 + 3 * ch].copy()
 for c in range(4):
     cell = right[:, c * cw:(c + 1) * cw][:, ::-1]; a[y0 + 6 * ch:y0 + 7 * ch, c * cw:(c + 1) * cw] = cell
-blk = a[y0:y0 + 8 * ch].astype(int); r, g, bl, al = blk[..., 0], blk[..., 1], blk[..., 2], blk[..., 3]
-pink = (al > 0) & (r > g + 25) & (bl > g + 25)
-blk[..., 2] = np.where(pink, (g * .6).astype(int), bl); blk[..., 0] = np.where(pink, np.minimum(255, g + 45), r); blk[..., 1] = np.where(pink, g, g)
-a[y0:y0 + 8 * ch] = blk.astype(np.uint8)
 # (Nov 13) the E "throw" block: the art's left-facing rows fling the cover to the right too: rows UP-LEFT / LEFT / DOWN-LEFT = UP-RIGHT / RIGHT / DOWN-RIGHT mirrored
 if 'throw' in meta['blocks']:
     t0 = meta['blocks'].index('throw') * 8 * ch
     for dst, src in ((5, 3), (6, 2), (7, 1)):
         rowpx = a[t0 + src * ch:t0 + (src + 1) * ch].copy()
         for c in range(4): a[t0 + dst * ch:t0 + (dst + 1) * ch, c * cw:(c + 1) * cw] = rowpx[:, c * cw:(c + 1) * cw][:, ::-1]
-    tb = a[t0:t0 + 8 * ch].astype(int); r, g, bl, al = tb[..., 0], tb[..., 1], tb[..., 2], tb[..., 3]; pk = (al > 0) & (r > g + 25) & (bl > g + 25)
-    tb[..., 2] = np.where(pk, (g * .6).astype(int), bl); tb[..., 0] = np.where(pk, np.minimum(255, g + 45), r); a[t0:t0 + 8 * ch] = tb.astype(np.uint8)
-    print('throw block: left rows = mirrored right rows, pink fixed:', int(pk.sum()), 'px')
-Image.fromarray(a).quantize(256, method=Image.FASTOCTREE, dither=Image.NONE).save(path, optimize=True)   # 256 colours like the other atlases (1.7 MB -> ~0.4 MB)
-print('slam block: LEFT row = mirrored RIGHT, pink dust fixed:', int(pink.sum()), 'px')
+    print('throw block: left rows = mirrored right rows')
+# (Nov 13) the R "fists" block: the art's UP-LEFT / DOWN-LEFT rows throw their punches to the RIGHT: their jab / haymaker (cols 4-5) = UP-RIGHT / DOWN-RIGHT's mirrored
+if 'fists' in meta['blocks']:
+    f0 = meta['blocks'].index('fists') * 8 * ch
+    for dst, src in ((5, 3), (7, 1)):
+        for c in (4, 5): a[f0 + dst * ch:f0 + (dst + 1) * ch, c * cw:(c + 1) * cw] = a[f0 + src * ch:f0 + (src + 1) * ch, c * cw:(c + 1) * cw][:, ::-1]
+    print('fists block: up-left / down-left punches = mirrored up-right / down-right')
+# rock dust / sparks blended with the magenta background in the skill sheets: pinkish pixels -> warm brown / orange
+for name in ('slam', 'throw', 'fists', 'power'):
+    if name not in meta['blocks']: continue
+    t0 = meta['blocks'].index(name) * 8 * ch; tb = a[t0:t0 + 8 * ch].astype(int); r, g, bl, al = tb[..., 0], tb[..., 1], tb[..., 2], tb[..., 3]; pk = (al > 0) & (r > g + 25) & (bl > g + 25)
+    tb[..., 2] = np.where(pk, (g * .6).astype(int), bl); tb[..., 0] = np.where(pk, np.minimum(255, g + 45), r); a[t0:t0 + 8 * ch] = tb.astype(np.uint8); print(f'{name}: pink fixed {int(pk.sum())} px')
+Image.fromarray(a).save(path.replace('.png', '.webp'), lossless=True, quality=100, method=6); os.remove(path)   # (Nov 13, user: highest quality) full colour, lossless WebP (was a 256-colour PNG): juggernaut.webp
+print('slam block: LEFT row = mirrored RIGHT')

@@ -23,7 +23,7 @@ def load(name):
     rgb = a.copy(); rgb[..., 2] = np.where(pink, np.minimum(b, (g * .55).astype(int)), b); rgb[..., 0] = np.where(pink, np.maximum(r, g + 40), r)
     return np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), (fg * 255).astype(np.uint8)])
 
-def resize_sharp(rgba, sc, pct=115):   # premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
+def resize_sharp(rgba, sc, pct=150):   # premultiplied Lanczos (no magenta fringe), soft antialiased edge, unsharp mask on the colour
     a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
     w, h = max(1, round(rgba.shape[1] * sc)), max(1, round(rgba.shape[0] * sc))
     up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)

@@ -1939,9 +1939,9 @@ function onBriggs(m) {
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
-  if (a.k === "fists" && s < (a.cast || .6)) { const bl = DIR8.juggernaut.blocks, pw = bl.indexOf("power"); return { block: pw >= 0 ? pw : bl.indexOf("warcry"), col: Math.min(3, Math.floor(s / (a.cast || .6) * 4)) }; }   // R power-up (stand-in: the roar)
-  if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: 7, col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 13) the user's E pose: grip the cover, RIP it up, wind up, FLING (the cover leaves at the cast's end)
-  if (a.k === "cry" && s < .75) return a.fort ? { block: 6, col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 } : { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
+  if (a.k === "fists" && s < (a.cast || .6)) { const bl = DIR8.juggernaut.blocks, pw = bl.indexOf("power"); return { block: pw, col: Math.min(3, Math.floor(s / (a.cast || .6) * 4)) }; }   // R power-up (stand-in: the roar)
+  if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: DIR8.juggernaut.blocks.indexOf("throw"), col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 13) the user's E pose: grip the cover, RIP it up, wind up, FLING (the cover leaves at the cast's end)
+  if (a.k === "cry" && s < .75) return { block: DIR8.juggernaut.blocks.indexOf("slam"), col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
   return null;
 }
 // War Cry fire aura: back flames behind him + a burning ring in front, only while the Q buff lasts.
@@ -2084,6 +2084,8 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
 }
 // (Nov 13) MANHOLE FRISBEE: the cover in flight (spun flat, a shadow under it), the hole left in the street. Drawn in code until the user's art.
 const briggsCovers = new Map(), manholes = [];   // id -> { x, y, vx, vy, t (last update), t0, end }; holes: { x, y, t }
+const punchImg = new Image(); punchImg.src = "assets/sprites/fx/briggs-punch.webp";   // R's punch cone: 16 frames in a column, tip at (tx, ty)
+const BPUNCH = { cw: 267, ch: 122, tx: 6, ty: 61, n: 16, ms: 60 };
 const coverImg = new Image(); coverImg.src = "assets/sprites/fx/manhole.webp";   // the user's art (tools/extract-manhole.py): 96px cells: 0 = the cover from above, 1 = the open manhole
 function drawManholeCover(x, y, spin, al = 1) {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, .55); ctx.rotate(spin);
@@ -2123,14 +2125,6 @@ function drawBriggsCovers(items, now) {
       drawManholeCover(X, Y - Z, spin, al); } });
   }
 }
-function briggsFistGlow(p, now, aim) {   // the gauntlets' molten knuckles (code glow; the gauntlet art itself comes with the sheet)
-  const a = briggsAnim.get(p.sessionId) || {}, pa = now - (a.punchAt || -1e9), out = pa < 200 ? 26 * (1 - pa / 200) : 0, pulse = .75 + .25 * Math.sin(now / 90);
-  ctx.save(); ctx.globalCompositeOperation = "lighter";
-  for (const side of [-1, 1]) { const hx = p.x + Math.cos(aim) * (12 + (side === (a.hook ? 1 : -1) ? out : 0)) - Math.sin(aim) * 11 * side, hy = p.y + SPR.feet - 26 + Math.sin(aim) * 8 + Math.cos(aim) * 5 * side;
-    const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 11); g.addColorStop(0, `rgba(255,236,190,${.85 * pulse})`); g.addColorStop(.4, `rgba(255,150,50,${.55 * pulse})`); g.addColorStop(1, "rgba(255,90,10,0)");
-    ctx.fillStyle = g; ctx.fillRect(hx - 11, hy - 11, 22, 22); }
-  ctx.restore();
-}
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
   const id = p0.sessionId, a = briggsAnim.get(id); if (!a || (a.blastAt && a.blastAt >= (a.t0 || 0))) return;   // blasting: the fx takes over
   const X = p.x, Y = p.y + SPR.feet, el = now - ((a.t0 || 0) + 150); if (el < 0) return;
@@ -2163,7 +2157,13 @@ function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter
 }
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
-  if (f.k === "punchCone") {   // (Nov 13, stand-in until the user's cone art) curved shockwave arcs rushing out in the cone, white-hot near the fist
+  if (f.k === "punchCone" && punchImg.naturalWidth) {   // (Nov 13) the user's cone GIF (tools/extract-briggs-fists.py): 16 frames x 60ms, its tip on the fist, pointing where he punched;
+    // squashed to the ground's 3/4 view, flipped (not upside down) when it points left; sized to the punch's reach (haymaker 190px, jab 150px)
+    const i = Math.floor(age / BPUNCH.ms); if (i >= BPUNCH.n) return false;
+    const k = f.hook ? 1 : 150 / 190, ax = f.x + Math.cos(f.a) * 16, ay = f.y + SPR.feet - 26 + Math.sin(f.a) * 9, ra = Math.atan2(Math.sin(f.a) / .82, Math.cos(f.a));
+    ctx.save(); ctx.translate(ax, ay); ctx.scale(1, .82); ctx.rotate(ra); if (Math.cos(f.a) < 0) ctx.scale(1, -1); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(punchImg, 0, i * BPUNCH.ch, BPUNCH.cw, BPUNCH.ch, -BPUNCH.tx * k, -BPUNCH.ty * k, BPUNCH.cw * k, BPUNCH.ch * k); ctx.restore(); return true; }
+  if (f.k === "punchCone") {   // (fallback while the cone art loads) curved shockwave arcs rushing out in the cone, white-hot near the fist
     if (s > .3) return false; const q = s / .3, R = (f.hook ? 190 : 150), half = (f.hook ? 95 : 70) * Math.PI / 360, x0 = f.x + Math.cos(f.a) * 18, y0 = f.y - 8 + Math.sin(f.a) * 18;
     ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(x0, y0); ctx.scale(1, .8); ctx.lineCap = "round";
     for (const [d, w, col] of [[0, 9, "255,150,50"], [.12, 5, "255,215,130"], [.24, 3, "255,245,210"]]) { const k = q - d; if (k <= 0) continue; const r = 14 + R * (1 - Math.pow(1 - k, 2));
@@ -3421,7 +3421,7 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
-  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "slam", "throw"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "bat", "axe", "slam", "throw", "fists", "power"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
     fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
@@ -3473,8 +3473,8 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "juggernaut") {
     const c = briggsCast(p, now);
     if (c) { blk = c.block; col = c.col; }
-    else if (p.skillT > 0 && p.alive) {   // (Nov 13) Bare Knuckle: the gauntlet block when the art is in (stand-in: the knife block's walk / stab / slash), punches on the server's beat
-      const bl = DIR8.juggernaut.blocks, fb = bl.indexOf("fists"); blk = fb >= 0 ? fb : bl.indexOf("knife");
+    else if (p.skillT > 0 && p.alive) {   // (Nov 13) Bare Knuckle: the gauntlet block (guard, walk, jab = col 4, haymaker = col 5), punches on the server's beat
+      blk = DIR8.juggernaut.blocks.indexOf("fists");
       const ba = briggsAnim.get(p.sessionId) || {}, pa = now - (ba.punchAt || -1e9);
       if (pa < 240) col = ba.hook ? 5 : 4; else if (col >= 4) col = 0;
     }
@@ -3491,7 +3491,6 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
-  if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsFistGlow(p, now, pose.aim);   // (Nov 13) Bare Knuckle: molten knuckles
   if (rush) marcusRush(p, now, true);
   return true;
 }

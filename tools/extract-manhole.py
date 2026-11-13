@@ -9,7 +9,7 @@ from PIL import Image, ImageFilter
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'briggs'); A = os.path.join(here, '..', 'client', 'assets')
 CELL = 96
-def resize_sharp(rgba, size, pct=80):
+def resize_sharp(rgba, size, pct=130):
     a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
     up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize(size, Image.LANCZOS)).astype(np.float32)
     P = np.clip(np.dstack([up(pm[..., i]) for i in range(3)]), 0, 255); al = np.clip(up(rgba[..., 3]), 0, 255) / 255
