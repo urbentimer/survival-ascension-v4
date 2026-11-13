@@ -735,3 +735,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - New art: tools/art/briggs/shock/shockwave-fire.gif (8 frames x 110ms, 439x439, realistic fire on BLACK). `python3 tools/extract-briggs-shock.py` (rewritten; the cartoon-sheet cutter is in git history) -> client/assets/sprites/fx/briggs-shock.webp: RGB atlas 4x2 of 878x878 (UP 2x Lanczos + unsharp 85%/r2), black lifted to exactly 0, frame edges faded (no square), frames kept in place (ring centre 444,436 in a cell; its middle x radius 336 -> 382 by frame 4).
 - Client: BSHOCK { cw 878, ch 878, cx 444, cy 436, rm 336, ms 110 }; drawn ADDITIVELY ("lighter": black adds nothing), scaled so frame 0's ring grows 110 -> 352 (-> ~400 with the art's own growth) in .5s while the 8 frames play (neighbours cross-faded), fade .8 -> .95s.
 - Cache `20261113u`; next `20261113v`.
+
+## Nov 13 — Deflect shockwave = the GIF exactly as it is
+- User: no stretching / no growing; just the GIF at its size round Briggs. extract-briggs-shock.py UP 1 (439x439 cells, 4x2 atlas, q95, black lifted, edge fade only in the last 10%). Client: frame floor(s/110ms) of 8, drawn 1:1 (smoothing off, rounded) and additive at his feet, ends at 880ms; no cross-fade, no scaling.
+- The hit range now matches what that fire covers on screen: `BRIGGS.fort.blast = { r: 210, ry: 120, stun: 3 }` (oval round his feet + zombie radius). Test 36: 300px away isn't hit.
+- Cache `20261113v`; next `20261113w`.

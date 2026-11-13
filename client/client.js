@@ -2006,7 +2006,7 @@ const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";
 const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
 const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
 const shockImg = new Image(); shockImg.src = "assets/sprites/fx/briggs-shock.webp";   // the deflect's shockwave (tools/extract-briggs-shock.py): the user's fire ring GIF, 8 frames (4 x 2) on black: drawn ADDITIVELY
-const BSHOCK = { cw: 878, ch: 878, cx: 444, cy: 436, rm: 336, ms: 110 };   // the ring's centre in a cell; rm = frame 0's ring middle (x radius; it grows to 382 by frame 4)
+const BSHOCK = { cw: 439, ch: 439, cx: 222, cy: 218, ms: 110 };   // the GIF's own size; the ring's centre in a cell
 const BS = { cw: 72, ch: 73, ax: 36, ay: 71, w: [65, 60, 58.1, 45.8, 35, 44.9, 57.7, 63.3, 65.9], h: [61.6, 63.1, 64.6, 66.7, 67.4, 68.7, 68.7, 61.8, 61.3],
   R: 85, RY: 48, spin: 1.15, back: 1, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on: 170px wide in all (user, Nov 13; the server keeps zombies outside it: BRIGGS.fort.ring)
 const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -2104,12 +2104,10 @@ function drawBriggsFx(f, age) {   // false when finished
     if (s > 1) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
     if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }
       deepEmit("dust", X, Y, 10, { r: BS.R * 1.4, sp: 150, s: 34, life: 1000 }); deepFlash(X, Y - 24, 260, "255,205,130", 420); }
-    if (s < .95 && shockImg.naturalWidth) {   // THE SHOCKWAVE (the user's fire ring, 8 frames x 110ms, added on top: black = nothing): scaled so its ring grows from the shields
-      // out to ~400px (the deflect's reach, the server's 400 x 200 oval) in .5s while it burns down; neighbouring frames cross-faded; fades out at the end
-      const q = clamp01(s / .5), r = 110 + (352 - 110) * (1 - Math.pow(1 - q, 2)), F = s * 1000 / BSHOCK.ms, i0 = Math.min(7, Math.floor(F)), i1 = Math.min(7, i0 + 1), w = F - Math.floor(F), al = s < .8 ? 1 : 1 - (s - .8) / .15, k = r / BSHOCK.rm;
-      const fr = (i, a) => { if (a <= .003) return; ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, a); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(shockImg, (i % 4) * BSHOCK.cw, Math.floor(i / 4) * BSHOCK.ch, BSHOCK.cw, BSHOCK.ch, X - BSHOCK.cx * k, Y - BSHOCK.cy * k, BSHOCK.cw * k, BSHOCK.ch * k); ctx.restore(); };
-      fr(i0, al * (i1 === i0 ? 1 : 1 - w)); if (i1 !== i0) fr(i1, al * w);
+    if (s < .88 && shockImg.naturalWidth) {   // THE SHOCKWAVE: the user's fire-ring GIF exactly as it is (user, Nov 13): its own size round his feet, its 8 frames at 110ms,
+      // added on top (black = nothing). It covers ~210 x 130px out from him = the server's hit oval (BRIGGS.fort.blast)
+      const i = Math.min(7, Math.floor(s * 1000 / BSHOCK.ms)); ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(shockImg, (i % 4) * BSHOCK.cw, Math.floor(i / 4) * BSHOCK.ch, BSHOCK.cw, BSHOCK.ch, Math.round(X - BSHOCK.cx), Math.round(Y - BSHOCK.cy), BSHOCK.cw, BSHOCK.ch); ctx.restore();
     }
     if (s < .6) { const k = clamp01(s / .45), out = 1 + .45 * (1 - Math.pow(1 - k, 3)), z = Math.sin(Math.min(1, s / .6) * Math.PI) * 16, al = s < .32 ? 1 : 1 - (s - .32) / .28;
       const set = set0.map(sh => ({ ...sh, x: X + (sh.x - X) * out, gy: Y + (sh.gy - Y) * out })).sort((u, w) => u.sn - w.sn);
