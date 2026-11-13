@@ -698,7 +698,7 @@ const SFX = {
 const VOICE = { dispatcher: { Q: "vAstraQ", E: "vAstraE" } };
 function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
 // Music loops (the published preview fetches them as files next to the page). Crossfade 1s between scenes.
-const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
+const MUSIC = { menu: "assets/audio/music_main_menu.mp3", charsel: "assets/audio/music_charsel.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's first track (58 bars at 77 BPM, one-bar crossfade back to the start); the user tried a second track, then chose this one again
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit. (Nov 13: a guitar-ending version was tried; the user asked for this one back)
   butcher: "assets/audio/music_boss_butcher.mp3",   // (Nov 12) the Butcher's own theme: the user's 2:11 song (its 1-bar silence cut) with its build + big peak played twice: an 87-bar 3:10 loop at 110 BPM, starting a bar before the peak
@@ -706,7 +706,7 @@ const MUSIC = { menu: "assets/audio/music_main_menu.mp3", day: "assets/audio/mus
   mine: "assets/audio/music_boss_mine.mp3",   // (Nov 12) the Mine Beast's own theme: the user's 3:30 song with its 30s breakdown cut out (a 3:00 loop, 2-beat crossfade at 1:58), starting a bar before its big entry
   scream: "assets/audio/music_boss_scream.mp3",   // (Nov 12) the Screamer's own theme: the user's 62.48s song, cut at its exact repeat length (it plays as a perfect loop), starting on the 3-beat build into its big entry
   refinery: "assets/audio/music_map_refinery.mp3" };   // (Nov 13) the Scorched Refinery's own music (its waves, the breaks and the boss wave's horde; the Pyre Priest has his theme): the user's 2:31 song (130 BPM, 82 bars) with two 8-bar grooves played twice = 98 bars, 3:00.9; starts a bar before the beat comes in
-const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 }, hive: { pad: .5, len: 7353141 / 44100 }, refinery: { pad: .5, len: 7978682 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
+const MUSIC_LOOP = { pyre: { pad: .5, len: 180.834 }, abom: { pad: .5, len: 174.0001 }, scream: { pad: .5, len: 62.48 }, mine: { pad: .5, len: 7935820 / 44100 }, butcher: { pad: .5, len: 8370975 / 44100 }, hive: { pad: .5, len: 7353141 / 44100 }, refinery: { pad: .5, len: 7978682 / 44100 }, charsel: { pad: .5, len: 7728087 / 44100 } };   // tracks with exact loop points: the file carries 0.5s of the loop's end before it and of its start after it, so the loop is seamless whatever the MP3 decoder does at the edges
 const MUSIC_VOL = .28, MUSIC_FADE = 1;
 function sfxContext() {
   if (!audioContext) {
@@ -748,7 +748,8 @@ addEventListener("pointerdown", sfxContext, { once: true }); addEventListener("k
 function turretSound(id, x, y) { playSfx("turret", x, y); }   // the server fires the turret once per clip length, so every attack = one burst sound
 const music = { want: "", cur: null };   // cur = { name, src, gain }
 function musicScene() {   // which music fits right now
-  if (!room || !state || state.phase === "lobby") return "menu";
+  if (!room || !state) return "menu";
+  if (state.phase === "lobby") return "charsel";   // (Nov 13) the lobby = character select: its own loop (user's track, 46 bars)
   if (state.phase === "defeat" || state.phase === "victory") return "";
   const pyre = [...state.zombies.values()].some(z => z.kind === "pyre" && z.boss) || (state.waveType === "boss" && state.bossIntro === "pyre");
   if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)

@@ -792,3 +792,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: Bare Knuckle uses the "fists" block (guard / walk; jab col 4, haymaker col 5 on each punch), "power" for the .6s power-up; fx "punchCone" draws the cone art (frame = age/60ms, tip at the fist ~26px up, squashed .82 for the 3/4 ground, flipped when pointing left, jab = 150/190 of the haymaker size); briggsFistGlow removed (the art glows).
 - Sharper effects: shields unsharp 150%, manhole 130%, wall (crack ring) 110%. build-preview: fx/briggs-punch skips the q60 re-encode.
 - Cache `20261114e`; next `20261114f`.
+
+## Nov 13 — Character select (lobby) music
+- User's track: a 1-hour fantasy mix video (videoplayback.mp4, still image; no repeats, tracks change every 2-4 min). Used the OPENING track (0:00-3:43, 63 bpm, beat 0.9525s): quiet build to 1:35, then the full epic section. Loop = 0:25.07 -> 3:20.34 = exactly 46 bars (175.24 s), picked by a beat-synchronous search (chroma + mel before and after both points: .91 / .88), onset alignment -29.9 ms, equal-power half-beat crossfade ending on the downbeat; the volume eases down across the seam (-16.4 -> -20.2 dB, no jump). -16.5 LUFS target, padded 0.5 s, 128k mp3: client/assets/audio/music_charsel.mp3. Work dir /home/claude/work/charsel (search.py, render.py).
+- Client: MUSIC.charsel + MUSIC_LOOP.charsel { pad .5, len 7728087/44100 }; musicScene(): no room -> "menu", lobby phase (character select) -> "charsel".
+- Cache `20261114f`; next `20261114g`.
