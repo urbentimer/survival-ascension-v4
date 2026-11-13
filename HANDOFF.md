@@ -777,3 +777,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `DASH_COOLDOWN 5 -> 3` (server) + `DASH_CD_MS 3000` (client HUD chip / prediction). Test 3: still on cooldown at 2.5s, ready at 3s.
 - Cache `20261114c`; next `20261114d`.
 - Next: Briggs's R (ideas given to the user).
+
+## Nov 13 — Briggs R: BARE KNUCKLE (2 huge steel gauntlets) — mechanic in, art pending
+- User picked Bare Knuckle, then: "hold 2 large gauntlets". Prompts sent (gauntlet moveset 8x6 in his weapon-sheet layout = a "fists" block; power-up 8x4 = a "power" block; punch cone 1x6; card; name maybe changes: IRON FISTS / WRECKING GAUNTLETS offered).
+- Server: `BRIGGS.fists = { cast .6, life 12, cd 90, rate .3, range 150, cone 70, dmg 45 (x stage scale), hookEvery 3, hookMult 1.6, hookRange 190, hookCone 95, push 55, hookPush 110, bossPush .25, heal .04 }`. "skill2" (R) -> bareKnuckle (castUntil = stands still while powering up); fistsOn(p); while on, fireWeapon / meleeAttack -> briggsPunch (cone in front, line of sight, every 3rd a haymaker, kills heal 4% max HP each, pushes the rest); updateBriggs: skillT = seconds left, endFists -> 90s cooldown (m.fistsReady), chargeCd = R cooldown for the HUD. Bot: R when 5+ zombies within 220px, punches what's within 190px. Broadcasts briggs {fists}, {punch a, hook, n, heal, x, y}, {fistsEnd}.
+- Client: R key for juggernaut; HUD R slot "bareKnuckle" (no card art yet); hold/click to punch (300ms); stand-ins until the art: the knife block for walk / jab (col 4) / haymaker (col 5), the roar (warcry block) for the power-up, code fx "punchCone" (3 arcs rushing out in the cone + a flash), "heal" (+N green), molten knuckle glows (briggsFistGlow). Blocks "fists" / "power" are picked up automatically when cut into the atlas. Roster: R entry.
+- Test 36: R 12s, no punching while powering up, cone hits front not behind + shove, kill heals, every 3rd haymaker, 90s cooldown, can't re-use.
+- Cache `20261114d`; next `20261114e`.

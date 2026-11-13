@@ -263,8 +263,10 @@ const SOFEA = {
            saber: { range: 120, cone: 150 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },   // sweep (Nov 5: 155px / 120 deg -> 230px / 150 deg -> 30% smaller: 160px -> 120px, user: too big)
 };
 // BRIGGS (juggernaut): E = MANHOLE FRISBEE (Nov 13: rips up a manhole cover and flings it: it slices through zombies, ricochets to the next one and off walls),
-// Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
+// Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort), R = BARE KNUCKLE (Nov 13: 12s with 2 huge steel gauntlets: every punch blasts a
+// shockwave cone, every 3rd is a haymaker, kills heal him). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
+  fists: { cast: 0.6, life: 12, cd: 90, rate: 0.3, range: 150, cone: 70, dmg: 45, hookEvery: 3, hookMult: 1.6, hookRange: 190, hookCone: 95, push: 55, hookPush: 110, bossPush: 0.25, heal: 0.04 },   // R: dmg x stage scale; heal = share of max HP per kill
   cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 4 },   // (user, Nov 13: cooldown 4s)
       // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },
@@ -718,7 +720,8 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
     this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
       if (p.characterClass === "dispatcher") this.astraCast(p, "R");   // Astra's R: safehouse
-      else if (p.characterClass === "operator") this.mechaKey(p); });   // Sofea's R: get in / out of the mecha
+      else if (p.characterClass === "operator") this.mechaKey(p);   // Sofea's R: get in / out of the mecha
+      else if (p.characterClass === "juggernaut") this.bareKnuckle(p); });   // (Nov 13) Briggs's R: Bare Knuckle
     // Sofea's mecha: right click = lightsaber swing
     this.onMessage("mechaSlash", (client, data) => { const p = this.state.players.get(client.sessionId), a = Number(data?.a);
       if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
@@ -1097,6 +1100,7 @@ export class SurvivalRoom extends Room {
 
   // One shot from player p toward angle aim. Used by humans and AI bots alike.
   fireWeapon(p, aim, dist) {
+    if (p.characterClass === "juggernaut" && this.fistsOn(p)) return this.briggsPunch(p, aim);   // Bare Knuckle: the click punches
     const now = Date.now();
     if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
     if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility
@@ -1199,6 +1203,7 @@ export class SurvivalRoom extends Room {
   }
   meleeAttack(p, aim, wantHeavy = false) {
     if (p.stunned > 0) return;
+    if (p.characterClass === "juggernaut" && this.fistsOn(p)) return this.briggsPunch(p, aim);
     const now = Date.now();
     // heavy only counts if the server saw the axe charging for (almost) the full second
     const heavy = wantHeavy && p.melee === "axe" && p.charging && now - (this.chargeAt.get(p.sessionId) || now) >= AXE_HEAVY.charge * 1000 - 60;
@@ -1741,6 +1746,32 @@ export class SurvivalRoom extends Room {
       p.ultCd = Math.ceil(left / 100) / 10; p.ultActive = 0; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
+  // ---------- BRIGGS: Bare Knuckle (R) ----------
+  fistsOn(p, now = Date.now()) { const m = this.briggs.get(p.sessionId); return !!m && p.alive && (m.fistsUntil || 0) > now; }
+  bareKnuckle(p) {   // R: powers up (cast: he stands still), then 12s of punching: the click punches instead of shooting
+    const now = Date.now(), m = this.bmemOf(p), F = BRIGGS.fists;
+    if (p.stunned > 0 || (m.fistsReady || 0) > now || this.fistsOn(p, now)) return;
+    m.fistsFrom = now + F.cast * 1000; m.fistsUntil = m.fistsFrom + F.life * 1000; m.castUntil = m.fistsFrom; m.punchN = 0; m.punchAt = 0; p.charging = false; p.skillT = F.life;
+    this.broadcast("briggs", { k: "fists", id: p.sessionId, cast: F.cast, life: F.life }); this.state.message = `${p.name}: BARE KNUCKLE!`;
+  }
+  briggsPunch(p, a) {   // a shockwave cone in front of him (every 3rd punch: a bigger, wider haymaker); kills heal him
+    const now = Date.now(), m = this.bmemOf(p), F = BRIGGS.fists;
+    if (p.stunned > 0 || now < (m.fistsFrom || 0) || now - (m.punchAt || 0) < F.rate * 900) return;
+    m.punchAt = now; m.punchN = (m.punchN || 0) + 1; p.aim = a;
+    const hook = m.punchN % F.hookEvery === 0, range = hook ? F.hookRange : F.range, cone = (hook ? F.hookCone : F.cone) * Math.PI / 180, scale = 1 + (this.state.stage - 1) * 0.08;
+    let hits = 0, kills = 0;
+    for (const z of [...this.state.zombies.values()]) {
+      const dx = z.x - p.x, dy = z.y - p.y, d = Math.hypot(dx, dy), zr = z.radius || 14; if (d > range + zr) continue;
+      const za = Math.atan2(dy, dx), da = Math.abs(Math.atan2(Math.sin(za - a), Math.cos(za - a))); if (da > cone / 2 && d > zr + 18) continue;
+      if (!this.lineClear(p, z)) continue;
+      hits++; this.hitZombie(z, p, F.dmg * scale * (hook ? F.hookMult : 1));
+      if (!this.state.zombies.has(z.id) || z.hp <= 0) { kills++; continue; }
+      this.steerMove(z, z.id, za, (hook ? F.hookPush : F.push) * (z.boss ? F.bossPush : 1), q => this.solveZombie(q));
+    }
+    const heal = kills ? Math.min(p.maxHp - p.hp, p.maxHp * F.heal * kills) : 0; if (heal > 0) p.hp += heal;
+    this.broadcast("briggs", { k: "punch", id: p.sessionId, a: Math.round(a * 100) / 100, hook: hook ? 1 : 0, n: hits, heal: Math.round(heal), x: Math.round(p.x), y: Math.round(p.y) });
+  }
+  endFists(p, now) { const m = this.bmemOf(p); m.fistsUntil = 0; m.fistsReady = now + BRIGGS.fists.cd * 1000; p.skillT = 0; this.broadcast("briggs", { k: "fistsEnd", id: p.sessionId }); }
   // ---------- BRIGGS: Manhole Frisbee (E) ----------
   ripCover(p) {   // he rips a manhole cover out of the street (cast), then flings it where he's aiming
     const now = Date.now(), C = BRIGGS.cover, a = p.aim || 0;
@@ -1792,6 +1823,8 @@ export class SurvivalRoom extends Room {
     if (this.covers.size) this.updateCovers(dt, now);
     for (const p of this.state.players.values()) {
       if (p.characterClass !== "juggernaut") continue;
+      { const m = this.briggs.get(p.sessionId); if (m?.fistsUntil) { if (now < m.fistsUntil && p.alive) p.skillT = Math.ceil((m.fistsUntil - now) / 100) / 10; else this.endFists(p, now); }
+        p.chargeCd = m?.fistsReady > now ? Math.ceil((m.fistsReady - now) / 100) / 10 : 0; }   // HUD: Bare Knuckle's seconds left (skillT) / R cooldown (chargeCd)
       if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
       { const m = this.briggs.get(p.sessionId); if (m?.fortUntil) { if (now < m.fortUntil && p.alive) { p.stunned = 0; p.slowed = 0; this.fortressTaunt(p, now); } else { this.endFortress(p, now); if (!p.alive) { const info = this.ultInfo.get(p.sessionId); if (info && info.summonedAt + BRIGGS.fort.life * 1000 > now) info.summonedAt = now - BRIGGS.fort.life * 1000; } } } }   // (downed: it ends, the cooldown starts)
       const { left, active, alive } = this.ultState(p, now);
@@ -3697,7 +3730,9 @@ export class SurvivalRoom extends Room {
     if (b.characterClass === "juggernaut") {   // Briggs bot: Unbreakable into a crowd, the manhole cover at a zombie in range
       const crowd = zs.filter(z => distance(b, z) < 350).length;
       if (b.ultReady && crowd >= 4) this.useUlt(b);
+      else if (!(b.chargeCd > 0) && !(b.skillT > 0) && zs.filter(z => distance(b, z) < 220).length >= 5) this.bareKnuckle(b);   // R: gauntlets on when they crowd him
       else if (b.abilityCooldown <= 0 && near && nearD < 420 && this.lineClear(b, near)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
+      if (b.skillT > 0 && near && nearD < 190) this.briggsPunch(b, Math.atan2(near.y - b.y, near.x - b.x));   // ...and punches what's in reach
     }
     if (b.characterClass === "dispatcher") {   // Astra bot: medics when someone's hurt, police in a crowd, safehouse when it gets bad
       const crowd = zs.filter(z => distance(b, z) < 450).length, m = this.amemOf(b);

@@ -976,6 +976,18 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     { const nb = events.filter(e => e.type === "briggs" && e.k === "cv" && (e.wall || e.hz)).length; ok(nb >= 1 && nb <= 12 && events.some(e => e.type === "briggs" && e.k === "cvend"), `...12 bounces at most (${nb} here), then it drops`); }
     p.x = px0; p.abilityCooldown = 0; }
   room.state.zombies.clear();
+  { const bm = room.bmemOf(p); p.hp = 100; p.aim = 0; events.length = 0;   // R: Bare Knuckle
+    send(A, "skill2"); ok(room.fistsOn(p) && p.skillT > 11.9 && events.some(e => e.type === "briggs" && e.k === "fists"), "R: Bare Knuckle: 12s with the gauntlets");
+    send(A, "attack", { a: 0 }); ok(!events.some(e => e.k === "punch"), "...no punching while he powers up");
+    bm.fistsFrom = Date.now() - 1; bm.castUntil = 0;
+    const zk = placeZombie(room, p.x + 80, p.y, 30), zf = placeZombie(room, p.x + 120, p.y + 20, 9999), zb2 = placeZombie(room, p.x - 120, p.y, 9999); [zk, zf, zb2].forEach(w => { w.speed = 0; w.role = "tower"; });
+    const hp1 = p.hp, fx0 = zf.x; send(A, "attack", { a: 0 });
+    ok(!room.state.zombies.has(zk.id) && zf.hp < 9999 && zf.x > fx0 + 20 && zb2.hp === 9999, `...the click punches: a shockwave cone hits and shoves back what's in front (${Math.round(zf.x - fx0)}px), not what's behind`);
+    ok(p.hp > hp1 && events.some(e => e.k === "punch" && e.heal > 0), `...a kill heals him (+${Math.round(p.hp - hp1)} HP)`);
+    bm.punchAt = 0; send(A, "attack", { a: 0 }); bm.punchAt = 0; send(A, "attack", { a: 0 }); const ps = events.filter(e => e.type === "briggs" && e.k === "punch");
+    ok(ps.length === 3 && !ps[0].hook && !ps[1].hook && ps[2].hook, "...every 3rd punch is a haymaker");
+    bm.fistsUntil = Date.now() - 1; tick(1); ok(!room.fistsOn(p) && p.skillT === 0 && p.chargeCd > 85 && events.some(e => e.k === "fistsEnd"), `...then the 90s cooldown (${p.chargeCd}s)`);
+    send(A, "skill2"); ok(!room.fistsOn(p), "...R can't be used again until then"); room.state.zombies.clear(); p.hp = p.maxHp; }
   // War Cry
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
   q.x = p.x + 200; q.y = p.y; const far = placeZombie(room, p.x + 300, p.y, 500); far.role = "tower"; const near = placeZombie(room, p.x + 100, p.y, 500); near.role = "tower"; const nx = near.x;

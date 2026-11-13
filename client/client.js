@@ -506,6 +506,10 @@ function renderHotbar(me) {
     const sh = [...(state.structures?.values() || [])].find(st => st.kind === "safehouse" && st.ownerId === myId), rc = me.chargeCd || 0;
     slots.splice(2, 0, { n: 9, key: "R", card: "safehouse", name: "Safehouse: 2 workers build 4 walls around you in 5s (faster with Quick Recovery; you can't be hurt while they build); zombies can't get in (6 hits break it, +1 per Body Armour pick; the workers repair) for 45s. Downed teammates inside don't bleed out", sub: sh ? (sh.deploy > 0 ? "BUILDING…" : `${Math.ceil(sh.hp)}/${sh.maxHp} · ${Math.ceil(sh.life)}s`) : rc > 0 ? "cooldown" : "READY", active: sh ? (sh.deploy > 0 ? 1 : sh.life / 45) : 0, frac: !sh && rc > 0 ? rc / 90 : 0, cd: !sh && rc > 0 ? Math.ceil(rc) : 0 });
   }
+  if (jug) {   // (Nov 13) R: Bare Knuckle (the gauntlets), beside E
+    const on = me.skillT > 0, rc = me.chargeCd || 0;
+    slots.splice(2, 0, { n: 9, key: "R", card: "bareKnuckle", name: "Bare Knuckle: 2 huge steel gauntlets for 12s. Click to punch: every punch blasts a shockwave cone, every 3rd is a haymaker (bigger, wider). Kills heal you. 90s cooldown", sub: on ? `PUNCH! ${Math.ceil(me.skillT)}s` : rc > 0 ? "cooldown" : "READY", active: on ? me.skillT / 12 : 0, frac: !on && rc > 0 ? rc / 90 : 0, cd: !on && rc > 0 ? Math.ceil(rc) : 0 });
+  }
   if (op) {   // R: Crimson Aegis mecha, beside E
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
     slots.splice(2, 0, { n: 9, key: "R", card: "crimsonAegis", name: "Crimson Aegis: pilot a mecha for 30s. Hold click = flame jet, right click = lightsaber, R = step out. 100s cooldown", sub: mv ? (mv.phase === "call" ? "TRANSFORMING…" : `MECHA ${Math.ceil(mv.left)}s · R out`) : rc > 0 ? "cooldown" : "READY", active: mv ? (mv.phase === "call" ? 1 : mv.left / 30) : 0, frac: !mv && rc > 0 ? rc / 100 : 0, cd: !mv && rc > 0 ? Math.ceil(rc) : 0 });
@@ -917,7 +921,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
-  else if (k === "r") { if (["dispatcher", "operator"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
+  else if (k === "r") { if (["dispatcher", "operator", "juggernaut"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
   else if (k === "f" && !e.repeat) { if (!tryRevive() && !deepUse() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
@@ -1112,7 +1116,8 @@ function sendControls(t) {
   }
   if (!wheel && !squadWheel && !anyPanelOpen() && !(me.stunned > 0)) {
     const clicked = clickShotAt && gnow() - clickShotAt < 300; // a quick click counts even if the button is already released
-    if (me.activeSlot === 1) {
+    if (me.characterClass === "juggernaut" && me.skillT > 0) { if ((firing || clicked) && t - lastShoot >= 300) { room.send("attack", { a: aimAngle(me) }); lastShoot = t; clickShotAt = 0; } }   // Bare Knuckle: hold / click to punch
+    else if (me.activeSlot === 1) {
       const cd = (MELEE_INFO[me.melee] || MELEE_INFO.knife).cd * 1000 / (me.characterClass === "assault" && me.skillT > 0 ? 1.25 : 1);   // Combat Rush: +25% attack speed
       if (me.melee !== "axe" && (firing || clicked) && t - lastMelee > cd) { room.send("attack", { a: aimAngle(me) }); lastMelee = t; clickShotAt = 0; }
     } else if (me.activeSlot === 2 || me.activeSlot === 3) {
@@ -1908,6 +1913,15 @@ function onBriggs(m) {
     for (const id of m.ids || []) zStunFx.set(id, t + (m.stun || 3) * 1000);
     if (near) { hitStopUntil = gnow() + 90; shake(18, 600); }
   }
+  else if (m.k === "fists") { briggsAnim.set(m.id, { ...a, k: "fists", t0: t, cast: m.cast || .6, punchAt: 0 }); setTimeout(() => { if (near) { shake(9, 300); playSfx("stomp", m.x, m.y, .8); } }, (m.cast || .6) * 600); }   // (Nov 13) Bare Knuckle
+  else if (m.k === "punch") {   // a punch: the shockwave cone, dust, a shake (bigger on the haymaker), +HP when kills heal him
+    briggsAnim.set(m.id, { ...a, punchAt: t, hook: m.hook, pa: m.a }); fx.push({ type: "briggs", k: "punchCone", x: m.x, y: m.y, a: m.a, hook: m.hook, t });
+    const r0 = m.hook ? 190 : 150, fx0 = m.x + Math.cos(m.a) * 30, fy0 = m.y + Math.sin(m.a) * 30;
+    deepEmit("dust", fx0 + Math.cos(m.a) * r0 * .5, fy0 + Math.sin(m.a) * r0 * .5, m.hook ? 4 : 2, { r: 30, a: m.a, spread: 1, sp: 120, s: 24, life: 600 }); if (m.n) deepEmit("spark", fx0, fy0, m.hook ? 10 : 5, { a: m.a, spread: 1.1, sp: 380, up: 120, z: 24, s: 5, life: 220 });
+    if (near) { shake(m.hook ? 8 : 3, m.hook ? 220 : 110); playSfx(m.hook ? "boom" : "zhit", m.x, m.y, m.hook ? .5 : 1); }
+    if (m.heal > 0) fx.push({ type: "briggs", k: "heal", x: m.x, y: m.y, v: m.heal, t });
+  }
+  else if (m.k === "fistsEnd") { const b = briggsAnim.get(m.id); if (b) b.punchAt = 0; }
   else if (m.k === "rip") {   // (Nov 13) Manhole Frisbee: he rips the cover up (the cast pose); a hole is left in the street for a while
     briggsAnim.set(m.id, { ...a, k: "rip", t0: t, cast: m.cast || .34 }); const hx = m.x + Math.cos(m.a) * 22, hy = m.y + SPR.feet + Math.sin(m.a) * 12;
     manholes.push({ x: hx, y: hy, t: t + 160 }); if (manholes.length > 12) manholes.shift();
@@ -1925,6 +1939,7 @@ function onBriggs(m) {
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
+  if (a.k === "fists" && s < (a.cast || .6)) { const bl = DIR8.juggernaut.blocks, pw = bl.indexOf("power"); return { block: pw >= 0 ? pw : bl.indexOf("warcry"), col: Math.min(3, Math.floor(s / (a.cast || .6) * 4)) }; }   // R power-up (stand-in: the roar)
   if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: 7, col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 13) the user's E pose: grip the cover, RIP it up, wind up, FLING (the cover leaves at the cast's end)
   if (a.k === "cry" && s < .75) return a.fort ? { block: 6, col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 } : { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
   return null;
@@ -2108,6 +2123,14 @@ function drawBriggsCovers(items, now) {
       drawManholeCover(X, Y - Z, spin, al); } });
   }
 }
+function briggsFistGlow(p, now, aim) {   // the gauntlets' molten knuckles (code glow; the gauntlet art itself comes with the sheet)
+  const a = briggsAnim.get(p.sessionId) || {}, pa = now - (a.punchAt || -1e9), out = pa < 200 ? 26 * (1 - pa / 200) : 0, pulse = .75 + .25 * Math.sin(now / 90);
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (const side of [-1, 1]) { const hx = p.x + Math.cos(aim) * (12 + (side === (a.hook ? 1 : -1) ? out : 0)) - Math.sin(aim) * 11 * side, hy = p.y + SPR.feet - 26 + Math.sin(aim) * 8 + Math.cos(aim) * 5 * side;
+    const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 11); g.addColorStop(0, `rgba(255,236,190,${.85 * pulse})`); g.addColorStop(.4, `rgba(255,150,50,${.55 * pulse})`); g.addColorStop(1, "rgba(255,90,10,0)");
+    ctx.fillStyle = g; ctx.fillRect(hx - 11, hy - 11, 22, 22); }
+  ctx.restore();
+}
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
   const id = p0.sessionId, a = briggsAnim.get(id); if (!a || (a.blastAt && a.blastAt >= (a.t0 || 0))) return;   // blasting: the fx takes over
   const X = p.x, Y = p.y + SPR.feet, el = now - ((a.t0 || 0) + 150); if (el < 0) return;
@@ -2140,6 +2163,15 @@ function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter
 }
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
+  if (f.k === "punchCone") {   // (Nov 13, stand-in until the user's cone art) curved shockwave arcs rushing out in the cone, white-hot near the fist
+    if (s > .3) return false; const q = s / .3, R = (f.hook ? 190 : 150), half = (f.hook ? 95 : 70) * Math.PI / 360, x0 = f.x + Math.cos(f.a) * 18, y0 = f.y - 8 + Math.sin(f.a) * 18;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(x0, y0); ctx.scale(1, .8); ctx.lineCap = "round";
+    for (const [d, w, col] of [[0, 9, "255,150,50"], [.12, 5, "255,215,130"], [.24, 3, "255,245,210"]]) { const k = q - d; if (k <= 0) continue; const r = 14 + R * (1 - Math.pow(1 - k, 2));
+      ctx.strokeStyle = `rgba(${col},${(1 - k) * .9})`; ctx.lineWidth = w * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, r, f.a - half * (.6 + .4 * k), f.a + half * (.6 + .4 * k)); ctx.stroke(); }
+    if (q < .35) { const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 30); g.addColorStop(0, `rgba(255,240,200,${1 - q / .35})`); g.addColorStop(1, "rgba(255,140,40,0)"); ctx.fillStyle = g; ctx.fillRect(-30, -30, 60, 60); }
+    ctx.restore(); return true; }
+  if (f.k === "heal") { if (s > 1) return false; ctx.save(); ctx.globalAlpha = s > .6 ? (1 - s) / .4 : 1; ctx.textAlign = "center"; ctx.font = "900 13px system-ui, sans-serif"; ctx.lineWidth = 3; ctx.strokeStyle = "#062a10"; ctx.fillStyle = "#7dff8f";
+    const y = f.y - 62 - 26 * s; ctx.strokeText(`+${f.v}`, f.x + 14, y); ctx.fillText(`+${f.v}`, f.x + 14, y); ctx.restore(); return true; }
   if (f.k === "ping") {   // (Nov 13) the frisbee bouncing off a zombie / a wall: a bright starburst + a ring popping out
     if (s > .26) return false; const q = s / .26, y = f.y - (f.wall ? 18 : 22), r = 8 + 26 * q; ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(255,232,170,${1 - q})`; ctx.lineWidth = 3 * (1 - q) + 1;
     ctx.beginPath(); ctx.ellipse(f.x, y, r, r * .55, 0, 0, 7); ctx.stroke(); ctx.restore(); drawStar(f.x, y, .6 * (q < .3 ? .6 + q : 1 - (q - .3)), 1 - q, q * 2, .5); return true; }
@@ -3441,6 +3473,11 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "juggernaut") {
     const c = briggsCast(p, now);
     if (c) { blk = c.block; col = c.col; }
+    else if (p.skillT > 0 && p.alive) {   // (Nov 13) Bare Knuckle: the gauntlet block when the art is in (stand-in: the knife block's walk / stab / slash), punches on the server's beat
+      const bl = DIR8.juggernaut.blocks, fb = bl.indexOf("fists"); blk = fb >= 0 ? fb : bl.indexOf("knife");
+      const ba = briggsAnim.get(p.sessionId) || {}, pa = now - (ba.punchAt || -1e9);
+      if (pa < 240) col = ba.hook ? 5 : 4; else if (col >= 4) col = 0;
+    }
   }
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
@@ -3454,6 +3491,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
+  if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsFistGlow(p, now, pose.aim);   // (Nov 13) Bare Knuckle: molten knuckles
   if (rush) marcusRush(p, now, true);
   return true;
 }
@@ -5125,7 +5163,8 @@ const ROSTER = [
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Manhole Frisbee", cd: 4, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
-             { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
+             { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." },
+             { k: "R", n: "Bare Knuckle", cd: 90, card: "bareKnuckle", t: "Two huge steel gauntlets for 12s: click to punch. Every punch blasts a shockwave cone that hurls zombies back; every 3rd is a bigger, wider haymaker. Every kill heals him 4% of his max HP." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },
