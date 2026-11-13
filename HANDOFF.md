@@ -797,3 +797,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User's track: a 1-hour fantasy mix video (videoplayback.mp4, still image; no repeats, tracks change every 2-4 min). Used the OPENING track (0:00-3:43, 63 bpm, beat 0.9525s): quiet build to 1:35, then the full epic section. Loop = 0:25.07 -> 3:20.34 = exactly 46 bars (175.24 s), picked by a beat-synchronous search (chroma + mel before and after both points: .91 / .88), onset alignment -29.9 ms, equal-power half-beat crossfade ending on the downbeat; the volume eases down across the seam (-16.4 -> -20.2 dB, no jump). -16.5 LUFS target, padded 0.5 s, 128k mp3: client/assets/audio/music_charsel.mp3. Work dir /home/claude/work/charsel (search.py, render.py).
 - Client: MUSIC.charsel + MUSIC_LOOP.charsel { pad .5, len 7728087/44100 }; musicScene(): no room -> "menu", lobby phase (character select) -> "charsel".
 - Cache `20261114f`; next `20261114g`.
+
+## Nov 13 — Character select music plays from the main menu
+- User: the music should already play before making a room. musicScene(): no room OR lobby -> "charsel" (carries on, no restart, into the lobby); MUSIC.menu (music_main_menu.mp3) no longer used (file kept).
+- Sound unlock: makeAudio() creates the AudioContext at page load (suspended; it can decode) and warmAudio() decodes ONLY the charsel track until unlocked; sfxContext() (any click / key press / touch anywhere: capture listeners) resumes it, sets audioUnlocked and decodes the rest. Browsers allow no sound before the first interaction. Checked in Chromium over http: no start before a click, the 176.24 s buffer starts on the first click on the name box, one start only after creating the room.
+- Cache `20261114g`; next `20261114h`.
