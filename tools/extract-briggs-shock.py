@@ -27,7 +27,7 @@ def unmix(rgb):   # rgb float (h, w, 3) -> rgba float, magenta (255, 0, 255) tak
     grey = F.mean(-1, keepdims=True); F = np.where(sm[..., None], np.concatenate([grey * 1.05, grey * .95, grey * .85], -1), F)
     return np.dstack([F, al * 255])
 
-def resize_sharp(rgba, sc, pct=90, rad=1.6):
+def resize_sharp(rgba, sc, pct=120, rad=1.3):
     a = rgba[..., 3:4] / 255; pm = np.clip(rgba[..., :3] * a, 0, 255).astype(np.uint8)
     w, h = round(rgba.shape[1] * sc), round(rgba.shape[0] * sc)
     up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize((w, h), Image.LANCZOS)).astype(np.float32)

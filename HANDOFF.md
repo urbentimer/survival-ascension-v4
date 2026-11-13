@@ -724,3 +724,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `python3 tools/extract-briggs-shock.py` -> client/assets/sprites/fx/briggs-shock.webp (2368x1258, 2x2 cells of 1184x629, each look re-centred on its ring; UP 1.25x Lanczos premultiplied + unsharp 90%/1.6). Keying = UNMIX against magenta (alpha + colour from how much magenta is mixed in: soft glow, see-through smoke, no pink / purple fringe; leftover purple -> smoky grey). Ring middle line measured per look (x radius) -> client BSHOCK.rm; the art's oval is ~2.6:1, drawn 1.25x taller (BSHOCK.sy).
 - Client fx "shieldBlast": the shockwave grows from 110px to 1000px (the deflect's reach) over 1s (ease-out ^1.7), looks switch every .25s (cross-fade in the last 45% of each), an additive bloom pass early on, fades out .85 -> 1.2s. The stand-in code rings are gone. build-preview: fx/briggs-(wall|slab|shield|shock) skip the q60 re-encode.
 - Cache `20261113s`; next `20261113t`.
+
+## Nov 13 — Deflect: 400px, smaller shockwave, old crack ring gone
+- User: the deflect hits ~400px; smaller shockwave; sharpen; delete the old inner ring around Briggs.
+- Server `BRIGGS.fort.blast = { r: 400, ry: 200, stun: 3 }`: hit test is the OVAL the shockwave covers on screen (centred on his feet, ring.cy), + the zombie's radius. Test 36: 470px away isn't hit.
+- Client: shockwave grows 110 -> 400px in .7s (looks every .18s, fade .62 -> .95s), drawn 1.3x taller than the art (2:1, matches the 400 x 200 oval); it's now drawn smaller than the art (<= .94x) so it stays crisp; extract-briggs-shock.py unsharp 120% / r 1.3. The old wall-blast crack ring (wall atlas row 2) is no longer drawn at the end (the rise still uses row 0's crack ring).
+- Cache `20261113t`; next `20261113u`.

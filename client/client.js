@@ -2006,7 +2006,7 @@ const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";
 const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
 const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
 const shockImg = new Image(); shockImg.src = "assets/sprites/fx/briggs-shock.webp";   // the deflect's shockwave ring (tools/extract-briggs-shock.py): 2 x 2 looks, each centred in its cell
-const BSHOCK = { cw: 1184, ch: 629, rm: [423.8, 451.6, 458.1, 461.2], sy: 1.25 };   // rm = each look's ring middle (x radius, cell px); sy: drawn a bit taller than the art (2.6:1 -> ~2.1:1, closer to the game's ground ovals)
+const BSHOCK = { cw: 1184, ch: 629, rm: [423.8, 451.6, 458.1, 461.2], sy: 1.3 };   // rm = each look's ring middle (x radius, cell px); sy: drawn taller than the art (2.6:1 -> 2:1 = the server's 400 x 200 hit oval)
 const BS = { cw: 72, ch: 73, ax: 36, ay: 71, w: [65, 60, 58.1, 45.8, 35, 44.9, 57.7, 63.3, 65.9], h: [61.6, 63.1, 64.6, 66.7, 67.4, 68.7, 68.7, 61.8, 61.3],
   R: 85, RY: 48, spin: 1.15, back: 1, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on: 170px wide in all (user, Nov 13; the server keeps zombies outside it: BRIGGS.fort.ring)
 const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -2101,13 +2101,12 @@ function drawBriggsFx(f, age) {   // false when finished
   if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
   if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
   if (f.k === "shieldBlast") {   // (Nov 13) Unbreakable ends: the 8 shields flare white-hot and get thrown outward, a shockwave, sparks, rocks; cracks left on the floor
-    if (s > 1.4) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
+    if (s > 1) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
     if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }
       deepEmit("dust", X, Y, 10, { r: BS.R * 1.4, sp: 150, s: 34, life: 1000 }); deepFlash(X, Y - 24, 260, "255,205,130", 420); }
-    wallFrame(2, 5, X, Y, BS.R / BW.rx, s < .9 ? 1 : (1.3 - s) / .4);   // the glowing ring of cracks (the old blast's last frame), as big as the shields' circle
-    if (s < 1.2 && shockImg.naturalWidth) {   // THE SHOCKWAVE (the user's ring art, 4 looks): grows from the shields out to 1000px (the deflect's reach) in 1s,
+    if (s < .95 && shockImg.naturalWidth) {   // THE SHOCKWAVE (the user's ring art, 4 looks): grows from the shields out to 400px (the deflect's reach: the server's 400 x 200 oval) in .7s,
       // blazing -> thinner -> breaking up -> embers, the looks cross-fading as it grows; a bright additive pass early on; fades out at the end
-      const q = clamp01(s / 1), r = 110 + (1000 - 110) * (1 - Math.pow(1 - q, 1.7)), L = Math.min(3, s / .25), i0 = Math.floor(L), i1 = Math.min(3, i0 + 1), w = clamp01((L - i0 - .55) / .45), al = s < .85 ? 1 : 1 - (s - .85) / .35;
+      const q = clamp01(s / .7), r = 110 + (400 - 110) * (1 - Math.pow(1 - q, 1.7)), L = Math.min(3, s / .18), i0 = Math.floor(L), i1 = Math.min(3, i0 + 1), w = clamp01((L - i0 - .55) / .45), al = s < .62 ? 1 : 1 - (s - .62) / .33;
       const look = (i, a, add) => { if (a <= .003) return; const sc = r / BSHOCK.rm[i], ww = BSHOCK.cw * sc, hh = BSHOCK.ch * sc * BSHOCK.sy; ctx.save(); ctx.globalAlpha = Math.min(1, a); if (add) ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
         ctx.drawImage(shockImg, (i % 2) * BSHOCK.cw, Math.floor(i / 2) * BSHOCK.ch, BSHOCK.cw, BSHOCK.ch, X - ww / 2, Y - hh / 2, ww, hh); ctx.restore(); };
       look(i0, al, false); if (w > 0 && i1 !== i0) look(i1, al * w, false); look(i0, al * .32 * (1 - L / 3), true);
