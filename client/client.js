@@ -2005,8 +2005,8 @@ function briggsFire(p, now, front) {
 const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";   // (the v2 ring sheets: the crack rings at the rise and after the blast)
 const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
 const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
-const BS = { cw: 61, ch: 62, ax: 30.5, ay: 60, w: [54.2, 50, 48.4, 38.2, 29.2, 37.4, 48.1, 52.7, 54.9], h: [51.3, 52.6, 53.8, 55.6, 56.2, 57.2, 57.2, 51.5, 51.1],
-  R: 170, RY: 97, spin: 1.15, back: .9, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on: 170px from Briggs (user, Nov 13)
+const BS = { cw: 72, ch: 73, ax: 36, ay: 71, w: [65, 60, 58.1, 45.8, 35, 44.9, 57.7, 63.3, 65.9], h: [61.6, 63.1, 64.6, 66.7, 67.4, 68.7, 68.7, 61.8, 61.3],
+  R: 85, RY: 48, spin: 1.15, back: 1, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on: 170px wide in all (user, Nov 13; the server keeps zombies outside it: BRIGGS.fort.ring)
 const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
 let starImg = null;
@@ -2044,11 +2044,12 @@ function shieldCell(im, row, i, x, gy, sx, sy, mir, al) { if (al <= .003) return
 let ctxBaseM = null; const ctxBase = (x, y, sx, sy) => { const m = ctxBaseM; return [m.a * sx, m.b * sx, m.c * sy, m.d * sy, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]; };
 function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one shield: shadow, its two nearest views cross-faded (normal -> overcharged), darker at the back, white-hot flash
   if (!shieldImg.naturalWidth) return; const dk = shieldDarkImg();
-  const sa = s.Wt / BS.w[s.i0], sb = s.Wt / BS.w[s.i1], ya = s.Ht / BS.h[s.i0], yb = s.Ht / BS.h[s.i1], bq = clamp01((s.w - .3) / .4), bw = bq * bq * (3 - 2 * bq), dark = s.sn < 0 ? -s.sn * .9 : 0;
-  ctx.save(); ctx.imageSmoothingEnabled = true;
+  const bq = clamp01((s.w - .3) / .4), bw = bq * bq * (3 - 2 * bq), Wt = BS.w[s.i0] + (BS.w[s.i1] - BS.w[s.i0]) * bw, Ht = BS.h[s.i0] + (BS.h[s.i1] - BS.h[s.i0]) * bw;   // one view at its own size (1:1, crisp); stretched toward the next only while they cross-fade
+  const sa = Wt / BS.w[s.i0], sb = Wt / BS.w[s.i1], ya = Ht / BS.h[s.i0], yb = Ht / BS.h[s.i1], dark = s.sn < 0 ? -s.sn * .9 : 0;
+  ctx.save(); ctx.imageSmoothingEnabled = bw > 0 && bw < 1;
   ctx.globalAlpha = .3 * alpha * clamp01(rise * 1.5) * Math.max(.4, 1 - z / 40); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(s.x, s.gy - 1, s.Wt * .5, 5 * s.ds, 0, 0, 7); ctx.fill();
   if (rise < 1) { ctx.beginPath(); ctx.rect(s.x - 50, s.gy - 110, 100, 112); ctx.clip(); }   // rising out of the ground: cut at the ground line
-  const gy = s.gy + (1 - rise) * s.Ht - z; ctxBaseM = ctx.getTransform();
+  const gy = Math.round(s.gy + (1 - rise) * s.Ht - z); ctxBaseM = ctx.getTransform(); s = { ...s, x: Math.round(s.x) };
   // (the art's views 6-8 show the back with the side edge on the wrong side for one continuous turn: they're mirrored, so each shield keeps facing outward)
   const ma = s.mir !== (s.i0 >= 5 && s.i0 < 8), mb = s.mir !== (s.i1 >= 5 && s.i1 < 8);
   const layer = (im, row, al) => { shieldCell(im, row, s.i0, s.x, gy, sa, ya, ma, al); shieldCell(im, row, s.i1, s.x, gy, sb, yb, mb, al * bw); };

@@ -272,7 +272,8 @@ const BRIGGS = {
   // (re-taunted every second, so new ones come too). Zombies do NO damage; a boss does 15% (85% less), then that boss can't hurt him again for 3s.
   // The shield stores every hit's full damage; at the end it BLASTS it back out: every zombie and boss within 100px takes all of it and is stunned 3s.
   // No stun / slow / knockback / hook drag on him, walks 30% slower. 60s cooldown after.
-  fort: { life: 30, bossTaken: 0.15, bossGap: 3, tauntR: 1000, every: 1, slow: 0.7, blast: { r: 100, stun: 3 } },
+  fort: { life: 30, bossTaken: 0.15, bossGap: 3, tauntR: 1000, every: 1, slow: 0.7, blast: { r: 100, stun: 3 },
+    ring: { rx: 95, ry: 54, cy: 7, rCap: 60 } },   // (Nov 13) zombies and bosses can't get inside his 8 shields: an ellipse round his feet (the client's shields stand at 85 x 48) + their own radius; they hit him from there
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
@@ -1662,6 +1663,20 @@ export class SurvivalRoom extends Room {
   }
   fortressList(now) { let out = null; for (const p of this.state.players.values()) if (p.characterClass === "juggernaut" && this.fortressOn(p, now)) (out || (out = [])).push(p); return out; }
   fortSnap(list) { return list.map(p => ({ p, hp: p.hp, alive: p.alive, dt: p.damageTaken })); }
+  fortRing(z, p) {   // the ellipse a zombie's centre can't enter round a shielded Briggs: [cx, cy, rx, ry]
+    const R = BRIGGS.fort.ring, r = Math.min(z.radius || 14, R.rCap); return [p.x, p.y + R.cy, R.rx + r, R.ry + r * .6];
+  }
+  fortPush(z, list) {   // after its turn: anything inside a shield ring goes back out to its edge (and out of any wall it lands in)
+    for (const p of list) { if (!p.alive) continue; const [cx, cy, rx, ry] = this.fortRing(z, p), dx = z.x - cx, dy = z.y - cy, q = (dx / rx) ** 2 + (dy / ry) ** 2;
+      if (q >= 1) continue;
+      if (q < 1e-6) { const a = Math.random() * Math.PI * 2; z.x = cx + Math.cos(a) * rx; z.y = cy + Math.sin(a) * ry; }
+      else { const k = 1 / Math.sqrt(q); z.x = cx + dx * k; z.y = cy + dy * k; }
+      this.solveZombie(z); }
+  }
+  fortReach(z, p) {   // how much further out than his body a zombie can hit him from (the ring's edge in its direction)
+    const [cx, cy, rx, ry] = this.fortRing(z, p), a = Math.atan2(z.y - cy, z.x - cx), rb = 1 / Math.sqrt((Math.cos(a) / rx) ** 2 + (Math.sin(a) / ry) ** 2);
+    return Math.max(0, rb - (z.radius || 14) - 6);
+  }
   fortAbsorb(snap, z, now, guard) {   // after one zombie's turn: whatever it did to a shielded Briggs goes into the store; a boss's hit lands at 15%, once per 3s per boss
     const F = BRIGGS.fort;
     for (const s of snap) {
@@ -4088,7 +4103,7 @@ export class SurvivalRoom extends Room {
       }
       const isMachine = !!target.maxHp && !target.sessionId;
       z.targetId = target.sessionId || "";
-      const tv = target.sessionId && this.state.vehicles.get(target.sessionId), d = distance(z, target) - (tv?.phase === "ride" ? SOFEA[tv.kind].reach || 0 : 0);   // the tank / mecha is big: they hit its side
+      const tv = target.sessionId && this.state.vehicles.get(target.sessionId), d = distance(z, target) - (tv?.phase === "ride" ? SOFEA[tv.kind].reach || 0 : 0) - (fortP && target.sessionId && fortP.includes(target) ? this.fortReach(z, target) : 0);   // the tank / mecha is big: they hit its side; Briggs's shields: they hit him from the ring
       const a = Math.atan2(target.y - z.y, target.x - z.x);
       if (z.kind === "mutant") {
         if (z.slam > 0) {                                  // mid-attack
@@ -4149,7 +4164,7 @@ export class SurvivalRoom extends Room {
       if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target) && !(target.sessionId && this.sheltered(target))) {
         this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
       }
-      } finally { if (fsnap) this.fortAbsorb(fsnap, z, now, guard); }
+      } finally { if (fortP) this.fortPush(z, fortP); if (fsnap) this.fortAbsorb(fsnap, z, now, guard); }
     }
     this.keepOutOfSafehouses(); this.applyShelter(shelter);
     this.applyVehicleGuard(guard);

@@ -705,3 +705,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User: the shields looked like they spun on their own; they must follow the circle, always facing outward. Cause: the art's views 6-8 (back 3/4) show the side edge on the same side as views 2-4, which isn't one continuous turn. Fix: those 3 views are drawn mirrored (ma/mb in drawShield), so the side edge you see is always the end nearer the camera.
 - Circle: `BS.R 170, RY 97` (user: "spacing 170px"). Blast: shields thrown to 1.45R; shockwave .6R -> 1.5R. Deflect radius on the server still 100px (asked the user).
 - Cache `20261113p`; next `20261113q`.
+
+## Nov 13 — Unbreakable shields: 170px circle, bigger + sharper, NOTHING gets inside
+- User: 170px wide IN TOTAL (shields nearly touch: fine), bigger shields, sharper, and no zombie or boss may go inside the circle.
+- extract-briggs-shield.py: SC 0.18 -> 0.216 (1.2x; cells 72x73, anchor 36,71), unsharp 115%. Client BS: w/h updated, R 85, RY 48, back 1 (no far shrink). drawShield: each view drawn 1:1 with smoothing OFF and rounded positions (crisp); only during the cross-fade (middle 40% of a step) both views are stretched toward each other with smoothing.
+- Server: `BRIGGS.fort.ring = { rx 95, ry 54, cy 7, rCap 60 }`. fortRing(z, p) = the ellipse round his feet + the zombie's radius (y x .6); fortPush(z, list) in the zombie loop's finally (after every zombie's turn, incl. bosses / Mine Beast / stunned): anything inside goes back to the edge, then solveZombie (walls). fortReach(z, p): the generic attack distance d minus (ring edge in its direction - radius - 6), so zombies hit him FROM the ring (store + sparks keep working; the hit's x/y = the zombie at the ring). Custom boss AIs are pushed out too (their own reach decides if they land).
+- Test 36: + "nothing gets inside his 8 shields ... still hit the shield from there (stored)".
+- New prompts (project doc claude/briggs-iron-bastion.md, top): DEFLECT shockwave A ring (2x2 wide, 4 looks, grown to 1000px in code), B centre eruption (2x2), C ground scar (1 image). Asked the user whether the deflect damage/stun should also reach 1000px (now 100px).
+- Cache `20261113q`; next `20261113r`.

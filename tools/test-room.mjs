@@ -983,6 +983,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(room.cryBuff(q) > 1.2, "...teammates nearby hit 25% harder");
   room.briggs.get("A").safeUntil = 0; const hb = p.hp, st0 = room.bmemOf(p).fortStored || 0; near.damage = 40; near.speed = 0; near.x = p.x + 30; near.attackCooldown = 0; tick(1);
   ok(p.hp === hb && (room.bmemOf(p).fortStored || 0) - st0 > 30, `...zombies do NO damage to him, but the shield stores the hit (${Math.round(room.bmemOf(p).fortStored)} stored)`);
+  { const zi = placeZombie(room, p.x + 15, p.y + 5, 500); zi.speed = 60; zi.damage = 30; room.bmemOf(p).fortTaunt = 0; tick(2); const [cx, cy, rx, ry] = room.fortRing(zi, p), q = ((zi.x - cx) / rx) ** 2 + ((zi.y - cy) / ry) ** 2;
+    const s1 = room.bmemOf(p).fortStored; zi.attackCooldown = 0; tick(1); ok(q >= .99 && room.bmemOf(p).fortStored > s1 && p.hp === hb, `...nothing gets inside his 8 shields (pushed out to ${Math.round(Math.hypot(zi.x - p.x, zi.y - p.y))}px) but they still hit the shield from there (stored)`); room.state.zombies.delete(zi.id); }
   { room.state.zombies.clear(); const bz = placeZombie(room, p.x + 24, p.y, 1e6); bz.boss = true; bz.damage = 100; bz.speed = 0; bz.attackCooldown = 0; const h1 = p.hp; tick(1);
     const d1 = h1 - p.hp; ok(Math.abs(d1 - (100 - p.defence) * 0.15) < 1.5, `...a boss's hit does 85% less (${d1.toFixed(1)} of ${100 - p.defence})`);
     bz.attackCooldown = 0; const h2 = p.hp; tick(1); ok(p.hp === h2, "...and the same boss can't hurt him again for 3s");
