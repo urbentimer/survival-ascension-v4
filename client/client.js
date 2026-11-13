@@ -51,7 +51,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Iron Bastion", cd: 30, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 10, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
@@ -1879,7 +1879,7 @@ function drawDemoCrate(st) {
   }
   demoFrame(6, armed ? Math.floor(now / 180) % 4 : 0, st.x, st.y + 6);
 }
-// ---------- BRIGGS: Iron Bastion (E) + Unbreakable (Q: the War Cry roar + 60s in the shield) ----------
+// ---------- BRIGGS: Manhole Frisbee (E) + Unbreakable (Q: the roar + 30s in 8 shields). (Iron Bastion, the old E, deleted Nov 13) ----------
 const briggsRage = p => p.characterClass === "juggernaut" && p.ultActive > 0 ? p.ultActive - (ULT.juggernaut.life - ULT.juggernaut.rage) : 0;   // seconds of the roar's shotgun rage left
 const briggsStore = new Map(), zStunFx = new Map();   // (Nov 13) Unbreakable: damage the shield has stored (server "store"); zombie id -> stunned until (the deflect)
 function stunStars(z, z0) {   // 3 little stars circling over a stunned zombie's head
@@ -1892,18 +1892,12 @@ function stunStars(z, z0) {   // 3 little stars circling over a stunned zombie's
     ctx.closePath(); ctx.fill(); ctx.stroke(); }
   ctx.restore();
 }
-const bImg = new Image(); bImg.src = "assets/sprites/fx/briggs-fx.png";
-const BFX = { cw: 220, ch: 150 }, briggsAnim = new Map();   // id -> { k, t0, hitAt }
-function bfxFrame(col, row, x, y, sc = 1, alpha = 1, flip = false) {   // (x, y) = bottom-centre of the frame
-  if (!bImg.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = sc > 1.6; /* the big War Cry ring is scaled up a lot: smooth it */ ctx.globalAlpha = alpha; ctx.translate(Math.round(x), Math.round(y)); if (flip) ctx.scale(-1, 1);
-  ctx.drawImage(bImg, col * BFX.cw, row * BFX.ch, BFX.cw, BFX.ch, -BFX.cw * sc / 2, -BFX.ch * sc, BFX.cw * sc, BFX.ch * sc); ctx.restore();
-}
+const briggsAnim = new Map();   // id -> { k, t0, hitAt, ... } (cast poses, the Q, the frisbee)
 function onBriggs(m) {
   const t = gnow(), a = briggsAnim.get(m.id) || {}, me = me_(), near = me && Math.hypot((m.x ?? me.x) - me.x, (m.y ?? me.y) - me.y) < 900;
-  if (m.k === "bastion") { briggsAnim.set(m.id, { ...a, k: "bastion", t0: t, domeAt: t + 300 }); setTimeout(() => near && shake(7, 220), 300); }
-  else if (m.k === "cry") {   // the roar lands 0.18s in: hit-stop, big shake, the shockwave ring; (Nov 13) Unbreakable: then the shield forms
+  if (m.k === "cry") {   // the roar lands 0.18s in: hit-stop, big shake, the shockwave ring; (Nov 13) Unbreakable: then the shield forms
     briggsAnim.set(m.id, { ...a, k: "cry", t0: t, fort: !!m.fort, blastAt: 0, rose: 0, hits: [], flash: [], ...(m.fort ? { domeAt: t + 300 } : {}) });
-    setTimeout(() => { if (!m.fort) fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: gnow() }); if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, m.fort ? 150 : 180);
+    setTimeout(() => { if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, m.fort ? 150 : 180);
   }
   else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5, hits: [...(a.hits || []).slice(-5), { x: m.x, y: m.y, t }] });   // (Unbreakable: sparks off the shield facing the attacker, m.x/m.y)
   else if (m.k === "store") briggsStore.set(m.id, m.v);
@@ -1914,11 +1908,21 @@ function onBriggs(m) {
     for (const id of m.ids || []) zStunFx.set(id, t + (m.stun || 3) * 1000);
     if (near) { hitStopUntil = gnow() + 90; shake(18, 600); }
   }
-  else if (m.k === "shatter") { fx.push({ type: "briggs", k: "shatter", x: m.x, y: m.y, t }); if (near) shake(10, 360); }
+  else if (m.k === "rip") {   // (Nov 13) Manhole Frisbee: he rips the cover up (the cast pose); a hole is left in the street for a while
+    briggsAnim.set(m.id, { ...a, k: "rip", t0: t, cast: m.cast || .34 }); const hx = m.x + Math.cos(m.a) * 22, hy = m.y + SPR.feet + Math.sin(m.a) * 12;
+    manholes.push({ x: hx, y: hy, t: t + 160 }); if (manholes.length > 12) manholes.shift();
+    setTimeout(() => { deepEmit("chip", hx, hy, 6, { sp: 150, up: 260, s: 4 }); deepEmit("dust", hx, hy, 2, { r: 14, sp: 60, s: 20, life: 600 }); if (near) { playSfx("stomp", m.x, m.y, .7); shake(4, 160); } }, 160); }
+  else if (m.k === "cv") {   // the cover in flight: where it is and where it's going (sent at the throw, every hit and every bounce)
+    const c = briggsCovers.get(m.id) || { t0: t }; Object.assign(c, { x: m.x, y: m.y, vx: m.vx, vy: m.vy, t, end: 0 }); briggsCovers.set(m.id, c);
+    if (m.go && near) playSfx("shotgun", m.x, m.y, .25);
+    if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,225,170", 140); playSfx("zhit", m.zx, m.zy); }
+    if (m.wall) { deepEmit("spark", m.x, m.y, 9, { sp: 340, up: 150, z: 22, s: 5, life: 260 }); deepEmit("chip", m.x, m.y, 3, { sp: 140, up: 200, z: 20, s: 3 }); playSfx("zhit", m.x, m.y, 1.4); }
+  }
+  else if (m.k === "cvend") { const c = briggsCovers.get(m.id); if (c) { Object.assign(c, { x: m.x, y: m.y, vx: c.vx * .25, vy: c.vy * .25, t, end: t }); deepEmit("spark", m.x, m.y, 6, { sp: 200, up: 120, z: 18, s: 4, life: 220 }); } }
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
-  if (a.k === "bastion" && s < .48) return { block: 4, col: Math.min(3, Math.floor(s / .12)) };
+  if (a.k === "rip" && s < (a.cast || .34) + .22) { const c = a.cast || .34; return { block: 6, col: s < c * .45 ? 0 : s < c ? 1 : s < c + .1 ? 2 : 3 }; }   // (until the throw art) crouch, hands in the street (rip), up, fling
   if (a.k === "cry" && s < .75) return a.fort ? { block: 6, col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 } : { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
   return null;
 }
@@ -2060,6 +2064,33 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
   if (flash > 0) { ctx.globalCompositeOperation = "lighter"; layer(shieldImg, 1, alpha * flash * .85); }   // a hit / the blast: it flares white-hot
   ctx.restore();
 }
+// (Nov 13) MANHOLE FRISBEE: the cover in flight (spun flat, a shadow under it), the hole left in the street. Drawn in code until the user's art.
+const briggsCovers = new Map(), manholes = [];   // id -> { x, y, vx, vy, t (last update), t0, end }; holes: { x, y, t }
+const coverImg = { naturalWidth: 0 };   // (the user's cover art goes here: a code-drawn cover until then)
+function drawManholeCover(x, y, spin, al = 1) {
+  ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, .55); ctx.rotate(spin);
+  if (coverImg.naturalWidth) { const r = 17; ctx.drawImage(coverImg, -r, -r, r * 2, r * 2); ctx.restore(); return; }
+  ctx.fillStyle = "#3a3e43"; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#17191c"; ctx.stroke();
+  ctx.strokeStyle = "#5c636b"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 12.5, 0, 7); ctx.stroke();
+  ctx.strokeStyle = "#24272b"; ctx.lineWidth = 1.4; for (let k = -2; k <= 2; k++) { const o = k * 4.5, h = Math.sqrt(Math.max(0, 140 - o * o)); ctx.beginPath(); ctx.moveTo(o, -h); ctx.lineTo(o, h); ctx.moveTo(-h, o); ctx.lineTo(h, o); ctx.stroke(); }
+  ctx.fillStyle = "#8a5a2e"; ctx.globalAlpha = al * .7; ctx.beginPath(); ctx.arc(5, -6, 2.2, 0, 7); ctx.arc(-7, 4, 1.6, 0, 7); ctx.fill(); ctx.restore();
+}
+function drawBriggsCovers(items, now) {
+  for (let i = manholes.length - 1; i >= 0; i--) { const h = manholes[i], age = now - h.t; if (age > 9000) { manholes.splice(i, 1); continue; } if (age < 0 || !inView(h.x, h.y, 40)) continue;   // the open hole
+    const al = age > 8000 ? (9000 - age) / 1000 : 1; items.push({ y: -1e9 + 1, draw: () => { ctx.save(); ctx.globalAlpha = al; ctx.translate(h.x, h.y); ctx.scale(1, .55);
+      ctx.fillStyle = "#2c2f33"; ctx.beginPath(); ctx.arc(0, 0, 19, 0, 7); ctx.fill(); ctx.fillStyle = "#050607"; ctx.beginPath(); ctx.arc(0, 1.5, 14.5, 0, 7); ctx.fill(); ctx.strokeStyle = "#4a4f55"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke(); ctx.restore(); } }); }
+  for (const [id, c] of briggsCovers) {
+    const dt = (now - c.t) / 1000, land = c.end ? Math.min(1, (now - c.end) / 380) : 0;
+    if (c.end && now - c.end > 1300) { briggsCovers.delete(id); continue; }
+    const k = c.end ? Math.min(dt, .38) * (1 - land * .5) : Math.min(dt, .25), x = c.x + c.vx * k, y = c.y + c.vy * k, z = c.end ? 22 * (1 - land) * (1 - land) : 22, spin = (now - c.t0) * (c.end ? .03 * (1 - land) : .03), al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1;
+    if (!inView(x, y, 60)) continue;
+    items.push({ y, draw: () => {
+      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(x, y + 2, 15, 6, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
+      if (!c.end) { ctx.save(); ctx.globalCompositeOperation = "lighter"; const sp = Math.hypot(c.vx, c.vy) || 1, tx = x - c.vx / sp * 46, ty = y - z - c.vy / sp * 46, g = ctx.createLinearGradient(tx, ty, x, y - z);   // a motion streak
+        g.addColorStop(0, "rgba(255,200,120,0)"); g.addColorStop(1, "rgba(255,220,170,.35)"); ctx.strokeStyle = g; ctx.lineWidth = 10; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y - z); ctx.stroke(); ctx.restore(); }
+      drawManholeCover(x, y - z, spin, al); } });
+  }
+}
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
   const id = p0.sessionId, a = briggsAnim.get(id); if (!a || (a.blastAt && a.blastAt >= (a.t0 || 0))) return;   // blasting: the fx takes over
   const X = p.x, Y = p.y + SPR.feet, el = now - ((a.t0 || 0) + 150); if (el < 0) return;
@@ -2090,16 +2121,8 @@ function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter
   g.addColorStop(0, `rgba(255,${Math.round(200 + 55 * heat)},${Math.round(120 + 120 * heat)},${(.18 + .32 * heat) * pulse})`); g.addColorStop(.6, `rgba(255,120,30,${(.12 + .22 * heat) * pulse})`); g.addColorStop(1, "rgba(255,80,0,0)");
   ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, R, R * .72, 0, 0, 7); ctx.fill(); ctx.restore();
 }
-function briggsDome(p, now) {   // the steel dome over him: forms, then a slow glowing loop; sparks where he gets hit
-  const a = briggsAnim.get(p.sessionId) || {}, x = p.x, y = p.y + SPR.feet + 8, form = now - (a.domeAt || 0);
-  if (form >= 0 && form < 300) return bfxFrame(Math.min(2, Math.floor(form / 100)), 0, x, y, .56, .85);
-  if (now - (a.hitAt || 0) < 300) return bfxFrame(1 + Math.min(4, Math.floor((now - a.hitAt) / 60)), 1, x, y, .56, .8, a.hitFlip);
-  bfxFrame(3 + Math.floor(now / 160) % 3, 0, x, y, .56, .78);
-}
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
-  if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
-  if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
   if (f.k === "shieldBlast") {   // (Nov 13) Unbreakable ends: the 8 shields flare white-hot and get thrown outward, a shockwave, sparks, rocks; cracks left on the floor
     if (s > 1) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
     if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }
@@ -3411,7 +3434,6 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
-  if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsDome(p, now);   // the E's dome (old Iron Bastion, until his new E)
   if (rush) marcusRush(p, now, true);
   return true;
 }
@@ -3663,7 +3685,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
   if (inp.dash) { let dx = inp.dx, dy = inp.dy; if (!dx && !dy) dx = me.facing || 1; const m = Math.hypot(dx, dy); mx = dx / m * P_DASH; my = dy / m * P_DASH; }
   else {
     if (!inp.dx && !inp.dy) return;
-    const m = Math.hypot(inp.dx, inp.dy), sp = me.speed * (me.charging ? .6 : 1) * (me.slowed > 0 ? .5 : 1) * (me.characterClass === "juggernaut" && me.skillT > 0 ? .7 : 1);
+    const m = Math.hypot(inp.dx, inp.dy), sp = me.speed * (me.charging ? .6 : 1) * (me.slowed > 0 ? .5 : 1) ;
     mx = inp.dx / m * sp * inp.dt; my = inp.dy / m * sp * inp.dt;
   }
   const steps = Math.max(1, Math.ceil(Math.hypot(mx, my) / 8)), WW = worldW(), WH = worldH();
@@ -4865,6 +4887,7 @@ function drawWorldObjects(extra) {
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
+  if (briggsCovers.size || manholes.length) drawBriggsCovers(items, gnow());   // (Nov 13) Briggs's Manhole Frisbee
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
@@ -5081,8 +5104,8 @@ const ROSTER = [
              { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }],
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
-    skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
-             { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s in his steel shield: every zombie and boss within 1000px comes for him. Zombies can't hurt him; a boss does 85% less, once every 3s. The shield stores every hit and at the end blasts it all back: everything within 100px takes it and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
+    skills: [{ k: "E", n: "Manhole Frisbee", cd: 10, card: "ironBastion", t: "Rips a manhole cover out of the street and flings it: it slices through zombies, ricochets to the next one (up to 8) and bounces off walls. Knocks them back and stuns them for a moment." },
+             { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },

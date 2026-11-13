@@ -957,18 +957,19 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(bug && bug[0] === "warn" && bug[2] === "the boss got stuck" && /boss/.test(JSON.stringify(bug)), "REPORT BUG: the note lands in the game log (kind bug) with its tags and context");
   send(A, "bugReport", { text: "x" }); ok(logged.filter(([, k]) => k === "bug").length === 1, "...an empty one is ignored");
   room._dispose(); }
-// 36. BRIGGS (juggernaut): shotgun, Iron Bastion (E: 15s dome, can't be hurt), Unbreakable (Q, Nov 13: roar + 30s shield: 1000px taunt incl. bosses, zombies 0 dmg, a boss 15% once per 3s, stored damage blasts out at the end + 3s stun)
+// 36. BRIGGS (juggernaut): shotgun, Manhole Frisbee (E, Nov 13: ricocheting cover), Unbreakable (Q, Nov 13: roar + 30s shield: 1000px taunt incl. bosses, zombies 0 dmg, a boss 15% once per 3s, stored damage blasts out at the end + 3s stun)
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.state.phase = "lobby"; send(A, "chooseClass", { id: "juggernaut" }); send(A, "start", {}); room.state.phase = "playing";
   ok(p.maxHp === 160 && p.weapon === "shotgun", "Briggs: 160 HP, starts with the shotgun");
   p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
-  send(A, "ability", { a: 0 }); ok(p.skillT > 14.9 && events.some(e => e.type === "briggs" && e.k === "bastion"), "E: Iron Bastion dome for 15s");
-  const z = placeZombie(room, p.x + 30, p.y, 9999); z.role = "hunter"; z.damage = 40; z.attackCooldown = 0; const hp0 = p.hp; tick(3);
-  ok(p.hp === hp0 && events.some(e => e.type === "briggs" && e.k === "hit"), "zombies hit the dome: no damage (sparks)");
-  p.stunned = 1; const x0 = p.x; room.moveWithCollision(p, 80, 0); tick(1); ok(p.stunned === 0, "...and no stun inside the dome");
-  room.briggs.get("A").castUntil = 0; room.lastInputs.set("A", Date.now() - 1000); const xa = p.x; for (let i = 0; i < 10; i++) { room.lastInputs.set("A", Date.now() - 100); send(A, "input", { dx: 1, dy: 0 }); }
-  ok(Math.abs((p.x - xa) - 150 * 0.7) < 3, `he walks 30% slower in it (${Math.round(p.x - xa)}px/s)`);
-  const zhp = z.hp; p.skillT = 0.01; tick(2); ok(p.skillT === 0 && p.abilityCooldown > 29 && z.hp < zhp && events.some(e => e.type === "briggs" && e.k === "shatter"), `the dome shatters (hits + pushes zombies) and E cools down 30s (${p.abilityCooldown.toFixed(0)}s)`);
+  { p.aim = 0; const z1 = placeZombie(room, p.x + 120, p.y, 9999), z2 = placeZombie(room, p.x + 260, p.y + 90, 9999), z3 = placeZombie(room, p.x + 380, p.y - 40, 9999), zb = placeZombie(room, p.x - 420, p.y, 9999);
+    [z1, z2, z3, zb].forEach(w => { w.speed = 0; w.role = "tower"; });
+    send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 9 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Manhole Frisbee: he rips up a manhole cover (10s cooldown)");
+    tick(50);
+    ok(z1.hp < 9999 && z2.hp < 9999 && z3.hp < 9999 && zb.hp === 9999, `...it slices through a zombie and ricochets on to the next ones (${[z1, z2, z3].map(w => 9999 - Math.round(w.hp)).join(" / ")} dmg), not the one 420px behind him`);
+    ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend"), "...then it drops");
+    room.state.zombies.clear(); p.abilityCooldown = 0; events.length = 0; const px0 = p.x; p.x = 70; p.aim = Math.PI; send(A, "ability", { a: Math.PI }); tick(12);
+    ok(events.some(e => e.type === "briggs" && e.k === "cv" && e.wall), "...and bounces off walls / the map's edge"); tick(40); p.x = px0; p.abilityCooldown = 0; }
   room.state.zombies.clear();
   // War Cry
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");

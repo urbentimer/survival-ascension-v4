@@ -262,9 +262,10 @@ const SOFEA = {
            flame: { range: 190, cone: 60 * Math.PI / 180, every: 0.25, dmg: 12 },   // cone 42 -> 60 degrees (Nov 5)
            saber: { range: 120, cone: 150 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },   // sweep (Nov 5: 155px / 120 deg -> 230px / 150 deg -> 30% smaller: 160px -> 120px, user: too big)
 };
-// BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s; to be replaced), Q = UNBREAKABLE (Nov 13: War Cry + the shield for 60s, see fort)
+// BRIGGS (juggernaut): E = MANHOLE FRISBEE (Nov 13: rips up a manhole cover and flings it: it slices through zombies, ricochets to the next one and off walls),
+// Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
-  bastion: { cast: 0.4, life: 15, cd: 30, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
+  cover: { cast: 0.34, speed: 950, r: 18, dmg: 70, bossMult: 1.5, hits: 8, walls: 4, life: 1.8, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; after a hit it turns to the nearest one it hasn't hit (seek, line of sight)
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)
@@ -457,7 +458,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.zStun = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.zStun = new Map(); this.covers = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
     this.state.noCd = true;   // test mode: Q unlocked from the start (no 100 kills needed). Cooldowns always apply (Nov 6). Host can switch it off in the Esc menu
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -917,7 +918,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); this.covers?.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -1046,7 +1047,7 @@ export class SurvivalRoom extends Room {
     }
     if (p) this.log(consented ? "info" : "warn", "leave", consented ? `${p.name} left` : `${p.name} lost connection (closed the tab, network drop or the page froze)`, client);
     if (p) this.state.message = `${p.name} left the room.`;
-    this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId); this.hooks.delete(client.sessionId); this.spins.delete(client.sessionId);
+    this.state.players.delete(client.sessionId); this.state.vehicles.delete(client.sessionId); this.vmemory.delete(client.sessionId); this.covers?.delete(client.sessionId); this.hooks.delete(client.sessionId); this.spins.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId); this.inQ?.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       const next = [...this.state.players.values()].find(p => !p.isBot);
@@ -1261,7 +1262,7 @@ export class SurvivalRoom extends Room {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
       if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts on the press (refunded if the call fails)
-      if (cls === "juggernaut") { if (!(p.skillT > 0)) this.ironBastion(p); return; }
+      if (cls === "juggernaut") { if (!this.covers.has(p.sessionId) && p.stunned <= 0) this.ripCover(p); return; }   // (Nov 13) Manhole Frisbee
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
@@ -1603,25 +1604,8 @@ export class SurvivalRoom extends Room {
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0 && !this.hooks.has(p.sessionId);
     }
   }
-  // ---------- BRIGGS: Iron Bastion (E) + War Cry (Q) ----------
+  // ---------- BRIGGS: War Cry / Unbreakable (Q) ----------
   bmemOf(p) { let m = this.briggs.get(p.sessionId); if (!m) { m = { castUntil: 0, domeAt: 0, cryUntil: 0, buffUntil: 0, hitAt: 0 }; this.briggs.set(p.sessionId, m); } return m; }
-  // a fist slam into the ground, then the dome: 15s of no damage, no stun, no knockback; he can still fight, 30% slower
-  ironBastion(p) {
-    const now = Date.now(), m = this.bmemOf(p), B = BRIGGS.bastion;
-    m.castUntil = now + B.cast * 1000; m.domeAt = now; p.skillT = B.life; p.charging = false;
-    this.broadcast("briggs", { k: "bastion", id: p.sessionId, a: Math.round((p.aim || 0) * 100) / 100 });
-    this.state.message = `${p.name}: IRON BASTION!`;
-  }
-  shatterBastion(p, now) {
-    const S = BRIGGS.bastion.shatter, scale = 1 + (this.state.stage - 1) * 0.08;
-    p.skillT = 0; p.abilityCooldown = BRIGGS.bastion.cd; this.bmemOf(p).safeUntil = now + 500;
-    for (const z of [...this.state.zombies.values()]) {
-      const d = distance(p, z); if (d > S.r + z.radius) continue;
-      if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), S.push, q => this.solveZombie(q));
-      this.hitZombie(z, p, S.dmg * scale);
-    }
-    this.broadcast("briggs", { k: "shatter", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
-  }
   // a short roar (0.3s), then BOOM: shockwave knocks back + hurts what's close, everything within 350px charges him
   warCry(p, now) {
     const C = BRIGGS.cry, m = this.bmemOf(p), scale = 1 + (this.state.stage - 1) * 0.08;
@@ -1756,11 +1740,58 @@ export class SurvivalRoom extends Room {
       p.ultCd = Math.ceil(left / 100) / 10; p.ultActive = 0; p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
+  // ---------- BRIGGS: Manhole Frisbee (E) ----------
+  ripCover(p) {   // he rips a manhole cover out of the street (cast), then flings it where he's aiming
+    const now = Date.now(), C = BRIGGS.cover, a = p.aim || 0;
+    this.covers.set(p.sessionId, { phase: "rip", t0: now, x: p.x, y: p.y, vx: 0, vy: 0, hit: new Set(), hits: 0, walls: 0 });
+    p.abilityCooldown = C.cd; p.charging = false; this.bmemOf(p).castUntil = now + C.cast * 1000;   // he stands still while he rips it up
+    this.broadcast("briggs", { k: "rip", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: Math.round(a * 100) / 100, cast: C.cast });
+  }
+  coverWall(x, y, pad) { for (const b of this.mapBoxesNear(x, y)) if (!b.low && Math.abs(x - b.x) < b.hw + pad && Math.abs(y - b.y) < b.hh + pad) return true; return false; }   // (it flies over lava / low pieces)
+  coverMsg(id, c, extra) { this.broadcast("briggs", { k: "cv", id, x: Math.round(c.x), y: Math.round(c.y), vx: Math.round(c.vx), vy: Math.round(c.vy), ...extra }); }
+  endCover(id, c, why) { this.covers.delete(id); this.broadcast("briggs", { k: "cvend", id, x: Math.round(c.x), y: Math.round(c.y), why }); }
+  updateCovers(dt, now) {
+    const C = BRIGGS.cover, W = this.state.worldW || 3600, H = this.state.worldH || 2400, scale = 1 + (this.state.stage - 1) * 0.08;
+    for (const [id, c] of [...this.covers]) {
+      const p = this.state.players.get(id); if (!p) { this.covers.delete(id); continue; }
+      c.el = (c.el || 0) + dt;   // (tick time: the cast and the flight run on dt)
+      if (c.phase === "rip") {
+        if (c.el < C.cast) continue;
+        const a = p.aim || 0; c.phase = "fly"; c.el = 0; c.x = p.x + Math.cos(a) * 26; c.y = p.y + Math.sin(a) * 26; c.vx = Math.cos(a) * C.speed; c.vy = Math.sin(a) * C.speed;
+        this.coverMsg(id, c, { go: 1 }); continue;
+      }
+      if (c.el > C.life) { this.endCover(id, c, "time"); continue; }
+      const len = Math.hypot(c.vx, c.vy) * dt, n = Math.max(1, Math.ceil(len / 12)); let ended = false;
+      for (let i = 0; i < n && !ended; i++) {
+        const nx = c.x + c.vx * dt / n, ny = c.y + c.vy * dt / n, out = nx < 10 || ny < 10 || nx > W - 10 || ny > H - 10;
+        if (out || this.coverWall(nx, ny, C.r * .5)) {   // a wall (or the map's edge): bounce off it
+          const bx = nx < 10 || nx > W - 10 || this.coverWall(nx, c.y, C.r * .5), by = ny < 10 || ny > H - 10 || this.coverWall(c.x, ny, C.r * .5);
+          if (bx || !by) c.vx = -c.vx; if (by || !bx) c.vy = -c.vy;
+          if (++c.walls > C.walls) { this.endCover(id, c, "wall"); ended = true; break; }
+          this.coverMsg(id, c, { wall: 1 }); continue;
+        }
+        c.x = nx; c.y = ny;
+        for (const z of this.state.zombies.values()) {
+          if (c.hit.has(z.id) || (z.hp ?? 1) <= 0) continue;
+          const dx = z.x - c.x, dy = z.y - c.y, rr = C.r + (z.radius || 14); if (dx * dx + dy * dy > rr * rr) continue;
+          c.hit.add(z.id); c.hits++;
+          const sp = Math.hypot(c.vx, c.vy) || 1, a0 = Math.atan2(c.vy, c.vx);
+          this.hitZombie(z, p, C.dmg * scale * (z.boss ? C.bossMult : 1));
+          if (this.state.zombies.has(z.id) && !z.boss) { this.steerMove(z, z.id, a0, C.push, q => this.solveZombie(q)); this.stunZombie(z, C.stun, now); }
+          if (c.hits >= C.hits) { this.endCover(id, c, "hits"); ended = true; break; }
+          let best = null, bd = C.seek * C.seek;   // ricochet: on to the nearest zombie it hasn't hit (that it can reach)
+          for (const q of this.state.zombies.values()) { if (c.hit.has(q.id)) continue; const ex = q.x - c.x, ey = q.y - c.y, d2 = ex * ex + ey * ey; if (d2 < bd && this.lineClear(c, q, false)) { bd = d2; best = q; } }
+          if (best) { const b = Math.atan2(best.y - c.y, best.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp; }
+          this.coverMsg(id, c, { hz: 1, zx: Math.round(z.x), zy: Math.round(z.y), boss: z.boss ? 1 : 0 }); break;
+        }
+      }
+    }
+  }
   updateBriggs(dt, now) {
+    if (this.covers.size) this.updateCovers(dt, now);
     for (const p of this.state.players.values()) {
       if (p.characterClass !== "juggernaut") continue;
       if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
-      if (p.skillT > 0) { p.stunned = 0; p.slowed = 0; p.skillT = Math.max(0, p.skillT - dt); if (p.skillT <= 0 || !p.alive) this.shatterBastion(p, now); }
       { const m = this.briggs.get(p.sessionId); if (m?.fortUntil) { if (now < m.fortUntil && p.alive) { p.stunned = 0; p.slowed = 0; this.fortressTaunt(p, now); } else { this.endFortress(p, now); if (!p.alive) { const info = this.ultInfo.get(p.sessionId); if (info && info.summonedAt + BRIGGS.fort.life * 1000 > now) info.summonedAt = now - BRIGGS.fort.life * 1000; } } } }   // (downed: it ends, the cooldown starts)
       const { left, active, alive } = this.ultState(p, now);
       p.ultCd = alive ? BRIGGS.cry.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
@@ -1964,8 +1995,8 @@ export class SurvivalRoom extends Room {
     const g = new Map();
     for (const p of this.state.players.values()) {
       if (!p.alive) continue;
-      if (p.characterClass === "juggernaut") {   // dome: nothing gets through (and no hook drag / knockback); War Cry: half damage
-        const bm = this.briggs.get(p.sessionId), dome = p.skillT > 0 || (bm && now < (bm.safeUntil || 0)), fort = bm && now < (bm.fortUntil || 0);
+      if (p.characterClass === "juggernaut") {   // safeUntil (the half second after Unbreakable ends): nothing gets through; Unbreakable: per hit (fortAbsorb)
+        const bm = this.briggs.get(p.sessionId), dome = !!(bm && now < (bm.safeUntil || 0)), fort = bm && now < (bm.fortUntil || 0);
         const k = dome ? 0 : fort ? 0 : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;   // Unbreakable: handled per hit (fortAbsorb); what's left this tick = hazards (fortHazard)
         if (k < 1) g.set(p, { hp: p.hp, k, x: dome || fort ? p.x : null, y: p.y, dome: dome || fort, fort: fort && !dome, dt: p.damageTaken });
         continue;
@@ -3662,10 +3693,10 @@ export class SurvivalRoom extends Room {
       else if (near && b.abilityCooldown <= 0 && nearD > 320 && nearD < 1000 && seen.includes(near) && !this.arshanBusy(b)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
     }
     if (b.characterClass === "assault" && b.ultReady && near && nearD < 200 && zs.filter(z => distance(b, z) < 220).length >= 4) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useUlt(b, { d: Math.max(160, nearD + 60) }); }   // Marcus bot: frag the crowd and hop out
-    if (b.characterClass === "juggernaut") {   // Briggs bot: dome when it gets hairy, War Cry into a crowd
+    if (b.characterClass === "juggernaut") {   // Briggs bot: Unbreakable into a crowd, the manhole cover at a zombie in range
       const crowd = zs.filter(z => distance(b, z) < 350).length;
       if (b.ultReady && crowd >= 4) this.useUlt(b);
-      else if (b.abilityCooldown <= 0 && !(b.skillT > 0) && nearD < 170 && (b.hp < b.maxHp * 0.75 || crowd >= 3)) this.useAbility(b);
+      else if (b.abilityCooldown <= 0 && near && nearD < 420 && this.lineClear(b, near)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
     }
     if (b.characterClass === "dispatcher") {   // Astra bot: medics when someone's hurt, police in a crowd, safehouse when it gets bad
       const crowd = zs.filter(z => distance(b, z) < 450).length, m = this.amemOf(b);
@@ -3921,7 +3952,7 @@ export class SurvivalRoom extends Room {
     const bud = Math.min(0.25, (this.moveBudget.get(sid) ?? 0.1) + Math.max(0, (now - previous) / 1000));
     const want = Number.isFinite(Number(data?.dt)) ? clamp(Number(data.dt) / 1000, 0, 0.1) : Math.min(0.1, Math.max(0, (now - previous) / 1000));
     const dt = Math.min(want, bud); this.moveBudget.set(sid, bud - dt);
-    const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && (p.skillT > 0 || this.fortressOn(p)) ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
+    const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && this.fortressOn(p) ? BRIGGS.fort.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
     if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(sid, now); return; }   // Briggs mid-cast (fist slam / roar)
     this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
     // Face the way you walk (left/right). Gun follows movement unless you're shooting.
