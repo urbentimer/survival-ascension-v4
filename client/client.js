@@ -2103,8 +2103,9 @@ function drawBriggsFx(f, age) {   // false when finished
     if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }
       deepEmit("dust", X, Y, 10, { r: BS.R * 1.4, sp: 150, s: 34, life: 1000 }); deepFlash(X, Y - 24, 260, "255,205,130", 420); }
     wallFrame(2, 5, X, Y, BS.R / BW.rx, s < .9 ? 1 : (1.3 - s) / .4);   // the glowing ring of cracks (the old blast's last frame), as big as the shields' circle
-    if (s < .5) { const q = s / .5; ctx.save(); ctx.translate(X, Y); ctx.scale(1, BS.RY / BS.R); ctx.globalCompositeOperation = "lighter";   // the shockwave
-      for (const [d, lw, col] of [[0, 14, "255,170,70"], [.08, 6, "255,240,200"]]) { const k = q - d; if (k <= 0) continue; ctx.strokeStyle = `rgba(${col},${1 - k})`; ctx.lineWidth = lw * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, BS.R * (.6 + .9 * k), 0, 7); ctx.stroke(); }
+    if (s < .8) { const q = s / .8; ctx.save(); ctx.translate(X, Y); ctx.scale(1, BS.RY / BS.R); ctx.globalCompositeOperation = "lighter";   // the shockwave, out to 1000px (the deflect's reach; a stand-in until the user's shockwave art)
+      for (const [d, lw, col] of [[0, 34, "255,140,50"], [.04, 12, "255,225,150"], [.1, 6, "255,90,30"]]) { const k = q - d; if (k <= 0) continue; const e = 1 - Math.pow(1 - k, 2.2), r = BS.R * .6 + (1000 - BS.R * .6) * e;
+        ctx.strokeStyle = `rgba(${col},${(1 - k) * .95})`; ctx.lineWidth = lw * (1 - k * .7) + 2; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); }
       ctx.restore(); }
     if (s < .6) { const k = clamp01(s / .45), out = 1 + .45 * (1 - Math.pow(1 - k, 3)), z = Math.sin(Math.min(1, s / .6) * Math.PI) * 16, al = s < .32 ? 1 : 1 - (s - .32) / .28;
       const set = set0.map(sh => ({ ...sh, x: X + (sh.x - X) * out, gy: Y + (sh.gy - Y) * out })).sort((u, w) => u.sn - w.sn);

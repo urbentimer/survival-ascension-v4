@@ -1000,10 +1000,10 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (let i = 0; i < 6; i++) { p.lastShot = Date.now() - 1000 / (p.fireRate * 3) - 5; room.fireWeapon(p, 0, 100); }
   ok(shots === 6 && p.mag === 1, `War Cry: shotgun fires 3x faster and uses no ammo (${shots} shots, mag still ${p.mag})`);
   room.ultInfo.get("A").summonedAt -= 10500; room.bmemOf(p).cryUntil -= 10500; tick(1); ok(!room.shotgunRage(p) && room.fortressOn(p) && p.ultActive > 15, `after 10s the rage ends but the shield stays (${p.ultActive}s left)`);
-  { const m = room.bmemOf(p); room.state.zombies.clear(); const z1 = placeZombie(room, p.x + 60, p.y, 1e5), z2 = placeZombie(room, p.x + 400, p.y, 1e5), zb = placeZombie(room, p.x - 50, p.y + 40, 1e6); zb.boss = true; [z1, z2, zb].forEach(q => { q.damage = 0; q.speed = 60; });
+  { const m = room.bmemOf(p); room.state.zombies.clear(); const z1 = placeZombie(room, p.x + 60, p.y, 1e5), z2 = placeZombie(room, p.x + 1300, p.y, 1e5), zb = placeZombie(room, p.x - 50, p.y + 40, 1e6); zb.boss = true; [z1, z2, zb].forEach(q => { q.damage = 0; q.speed = 60; });
     m.fortStored = 900; room.ultInfo.get("A").summonedAt -= 20000; m.fortUntil = Date.now() - 1; events.length = 0; tick(1);
     const bl = events.find(e => e.type === "briggs" && e.k === "blast");
-    ok(!room.fortressOn(p) && bl && bl.dmg === 900 && z1.hp <= 1e5 - 900 && zb.hp <= 1e6 - 900 && z2.hp === 1e5, `after 30s the shield DEFLECTS what it stored: 900 to everything within 100px (zombie ${1e5 - z1.hp}, boss ${1e6 - zb.hp}, 400px away ${1e5 - z2.hp})`);
+    ok(!room.fortressOn(p) && bl && bl.dmg === 900 && z1.hp <= 1e5 - 900 && zb.hp <= 1e6 - 900 && z2.hp === 1e5, `after 30s the shield DEFLECTS what it stored: 900 to everything within 1000px (zombie ${1e5 - z1.hp}, boss ${1e6 - zb.hp}, 1300px away ${1e5 - z2.hp})`);
     const x1 = z1.x, xb = zb.x, x2 = z2.x; z1.attackCooldown = 0; tick(10); ok(z1.x === x1 && zb.x === xb && room.zStun.has(z1.id) && room.zStun.has(zb.id) && !room.zStun.has(z2.id), `...and stuns them 3s: they don't move (the far one isn't stunned) [${(z1.x - x1).toFixed(1)} ${(zb.x - xb).toFixed(1)}]`);
     room.zStun.set(z1.id, Date.now() - 1); tick(2); ok(z1.x !== x1, "...then they move again");
     ok(!p.ultReady && p.ultCd > 50, `...and the 60s cooldown runs (${p.ultCd}s left)`); }

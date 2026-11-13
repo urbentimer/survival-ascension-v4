@@ -713,3 +713,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Test 36: + "nothing gets inside his 8 shields ... still hit the shield from there (stored)".
 - New prompts (project doc claude/briggs-iron-bastion.md, top): DEFLECT shockwave A ring (2x2 wide, 4 looks, grown to 1000px in code), B centre eruption (2x2), C ground scar (1 image). Asked the user whether the deflect damage/stun should also reach 1000px (now 100px).
 - Cache `20261113q`; next `20261113r`.
+
+## Nov 13 — Deflect reaches 1000px (same as the taunt)
+- `BRIGGS.fort.blast.r 100 -> 1000` (user): every zombie and boss within 1000px (+ its radius) takes the stored damage and is stunned 3s. Test 36: the unhit one is now 1300px away.
+- Client stand-in shockwave (until the user's art): 3 additive rings (orange 34px, pale 12px, red 6px) easing out from .6R to 1000px over 0.8s, squashed to the shields' ellipse. Project doc prompt A now says "out to 1000px from him (2000px across)".
+- Cache `20261113r`; next `20261113s`.

@@ -272,7 +272,7 @@ const BRIGGS = {
   // (re-taunted every second, so new ones come too). Zombies do NO damage; a boss does 15% (85% less), then that boss can't hurt him again for 3s.
   // The shield stores every hit's full damage; at the end it BLASTS it back out: every zombie and boss within 100px takes all of it and is stunned 3s.
   // No stun / slow / knockback / hook drag on him, walks 30% slower. 60s cooldown after.
-  fort: { life: 30, bossTaken: 0.15, bossGap: 3, tauntR: 1000, every: 1, slow: 0.7, blast: { r: 100, stun: 3 },
+  fort: { life: 30, bossTaken: 0.15, bossGap: 3, tauntR: 1000, every: 1, slow: 0.7, blast: { r: 1000, stun: 3 },   // (Nov 13, user) the deflect reaches 1000px, the same as the taunt
     ring: { rx: 95, ry: 54, cy: 7, rCap: 60 } },   // (Nov 13) zombies and bosses can't get inside his 8 shields: an ellipse round his feet (the client's shields stand at 85 x 48) + their own radius; they hit him from there
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
@@ -1644,7 +1644,7 @@ export class SurvivalRoom extends Room {
     const m = this.bmemOf(p), F = BRIGGS.fort; if (now < (m.fortTaunt || 0)) return; m.fortTaunt = now + F.every * 1000;
     for (const z of this.state.zombies.values()) if (distance(p, z) <= F.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: Math.min(m.fortUntil, now + F.every * 1000 + 600) });
   }
-  endFortress(p, now) {   // DEFLECT: the shield blasts out everything it stored: every zombie and boss within 100px takes all of it and is stunned 3s
+  endFortress(p, now) {   // DEFLECT: the shield blasts out everything it stored: every zombie and boss within 1000px takes all of it and is stunned 3s
     const m = this.bmemOf(p), B = BRIGGS.fort.blast, stored = Math.round(m.fortStored || 0); m.fortUntil = 0; m.safeUntil = now + 500; m.fortStored = 0;
     for (const [id, t] of this.taunt) if (t.id === p.sessionId) this.taunt.delete(id);
     if (!p.alive) return;
