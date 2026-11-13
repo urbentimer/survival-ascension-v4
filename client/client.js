@@ -508,7 +508,7 @@ function renderHotbar(me) {
   }
   if (jug) {   // (Nov 13) R: Bare Knuckle (the gauntlets), beside E
     const on = me.skillT > 0, rc = me.chargeCd || 0;
-    slots.splice(2, 0, { n: 9, key: "R", card: "bareKnuckle", name: "Bare Knuckle: 2 huge steel gauntlets for 12s. Click to punch: every punch blasts a shockwave cone, every 3rd is a haymaker (bigger, wider). Kills heal you. 90s cooldown", sub: on ? `PUNCH! ${Math.ceil(me.skillT)}s` : rc > 0 ? "cooldown" : "READY", active: on ? me.skillT / 12 : 0, frac: !on && rc > 0 ? rc / 90 : 0, cd: !on && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(2, 0, { n: 9, key: "R", card: "bareKnuckle", name: "Bare Knuckle: 2 huge steel gauntlets for 12s. Click to punch: every punch blasts a shockwave cone, every 3rd is a haymaker (bigger, wider). Kills heal you. 15s cooldown", sub: on ? `PUNCH! ${Math.ceil(me.skillT)}s` : rc > 0 ? "cooldown" : "READY", active: on ? me.skillT / 12 : 0, frac: !on && rc > 0 ? rc / 15 : 0, cd: !on && rc > 0 ? Math.ceil(rc) : 0 });
   }
   if (op) {   // R: Crimson Aegis mecha, beside E
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
@@ -5174,7 +5174,7 @@ const ROSTER = [
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Manhole Frisbee", cd: 4, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
              { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." },
-             { k: "R", n: "Bare Knuckle", cd: 90, card: "bareKnuckle", t: "Two huge steel gauntlets for 12s: click to punch. Every punch blasts a shockwave cone that hurls zombies back; every 3rd is a bigger, wider haymaker. Every kill heals him 4% of his max HP." }],
+             { k: "R", n: "Bare Knuckle", cd: 15, card: "bareKnuckle", t: "Two huge steel gauntlets for 12s: click to punch. Every punch blasts a shockwave cone that hurls zombies back; every 3rd is a bigger, wider haymaker. Every kill heals him 4% of his max HP." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },

@@ -266,7 +266,7 @@ const SOFEA = {
 // Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort), R = BARE KNUCKLE (Nov 13: 12s with 2 huge steel gauntlets: every punch blasts a
 // shockwave cone, every 3rd is a haymaker, kills heal him). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
-  fists: { cast: 0.6, life: 12, cd: 90, rate: 0.3, range: 150, cone: 70, dmg: 45, hookEvery: 3, hookMult: 1.6, hookRange: 190, hookCone: 95, push: 55, hookPush: 110, bossPush: 0.25, heal: 0.04 },   // R: dmg x stage scale; heal = share of max HP per kill
+  fists: { cast: 0.6, life: 12, cd: 15,   /* (user, Nov 13: cooldown 15s) */ rate: 0.3, range: 150, cone: 70, dmg: 45, hookEvery: 3, hookMult: 1.6, hookRange: 190, hookCone: 95, push: 55, hookPush: 110, bossPush: 0.25, heal: 0.04 },   // R: dmg x stage scale; heal = share of max HP per kill
   cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 4 },   // (user, Nov 13: cooldown 4s)
       // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },

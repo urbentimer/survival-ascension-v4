@@ -802,3 +802,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User: the music should already play before making a room. musicScene(): no room OR lobby -> "charsel" (carries on, no restart, into the lobby); MUSIC.menu (music_main_menu.mp3) no longer used (file kept).
 - Sound unlock: makeAudio() creates the AudioContext at page load (suspended; it can decode) and warmAudio() decodes ONLY the charsel track until unlocked; sfxContext() (any click / key press / touch anywhere: capture listeners) resumes it, sets audioUnlocked and decodes the rest. Browsers allow no sound before the first interaction. Checked in Chromium over http: no start before a click, the 176.24 s buffer starts on the first click on the name box, one start only after creating the room.
 - Cache `20261114g`; next `20261114h`.
+
+## Nov 13 — Bare Knuckle cooldown 15s
+- `BRIGGS.fists.cd 90 -> 15` (user). Client HUD text / cooldown ring / roster 15. Test 36 checks 15s.
+- Cache `20261114h`; next `20261114i`.

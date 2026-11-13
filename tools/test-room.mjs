@@ -986,7 +986,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     ok(p.hp > hp1 && events.some(e => e.k === "punch" && e.heal > 0), `...a kill heals him (+${Math.round(p.hp - hp1)} HP)`);
     bm.punchAt = 0; send(A, "attack", { a: 0 }); bm.punchAt = 0; send(A, "attack", { a: 0 }); const ps = events.filter(e => e.type === "briggs" && e.k === "punch");
     ok(ps.length === 3 && !ps[0].hook && !ps[1].hook && ps[2].hook, "...every 3rd punch is a haymaker");
-    bm.fistsUntil = Date.now() - 1; tick(1); ok(!room.fistsOn(p) && p.skillT === 0 && p.chargeCd > 85 && events.some(e => e.k === "fistsEnd"), `...then the 90s cooldown (${p.chargeCd}s)`);
+    bm.fistsUntil = Date.now() - 1; tick(1); ok(!room.fistsOn(p) && p.skillT === 0 && p.chargeCd > 14 && p.chargeCd <= 15 && events.some(e => e.k === "fistsEnd"), `...then the 15s cooldown (${p.chargeCd}s)`);
     send(A, "skill2"); ok(!room.fistsOn(p), "...R can't be used again until then"); room.state.zombies.clear(); p.hp = p.maxHp; }
   // War Cry
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");
