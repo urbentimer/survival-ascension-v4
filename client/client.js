@@ -488,7 +488,7 @@ function renderHotbar(me) {
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
     { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -1135,7 +1135,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "warCry", life: 60, cd: 60, rage: 10 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
+const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "warCry", life: 30, cd: 60, rage: 10 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -1881,6 +1881,17 @@ function drawDemoCrate(st) {
 }
 // ---------- BRIGGS: Iron Bastion (E) + Unbreakable (Q: the War Cry roar + 60s in the shield) ----------
 const briggsRage = p => p.characterClass === "juggernaut" && p.ultActive > 0 ? p.ultActive - (ULT.juggernaut.life - ULT.juggernaut.rage) : 0;   // seconds of the roar's shotgun rage left
+const briggsStore = new Map(), zStunFx = new Map();   // (Nov 13) Unbreakable: damage the shield has stored (server "store"); zombie id -> stunned until (the deflect)
+function stunStars(z, z0) {   // 3 little stars circling over a stunned zombie's head
+  const until = zStunFx.get(z0.id); if (!until) return; const now = gnow(); if (now > until) { zStunFx.delete(z0.id); return; }
+  const hy = z.y - (z0.kind === "minebeast" ? 330 * MBS : z0.boss ? Math.max(110, (z0.radius || 40) * 2.6) : 52), rx = z0.boss ? 34 : 18, left = (until - now) / 1000;
+  ctx.save(); ctx.globalAlpha = Math.min(1, left / .4);
+  for (let i = 0; i < 3; i++) { const a = now / 260 + i * 2.094, x = z.x + Math.cos(a) * rx, y = hy + Math.sin(a) * rx * .35, r = z0.boss ? 7 : 5;
+    ctx.fillStyle = "#ffe14a"; ctx.strokeStyle = "#7a4a00"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let k = 0; k < 10; k++) { const rr = k % 2 ? r * .45 : r, aa = -Math.PI / 2 + k * Math.PI / 5 + now / 400; ctx.lineTo(x + Math.cos(aa) * rr, y + Math.sin(aa) * rr); }
+    ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+}
 const bImg = new Image(); bImg.src = "assets/sprites/fx/briggs-fx.png";
 const BFX = { cw: 220, ch: 150 }, briggsAnim = new Map();   // id -> { k, t0, hitAt }
 function bfxFrame(col, row, x, y, sc = 1, alpha = 1, flip = false) {   // (x, y) = bottom-centre of the frame
@@ -1895,6 +1906,13 @@ function onBriggs(m) {
     setTimeout(() => { fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: gnow() }); if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, 180);
   }
   else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5 });
+  else if (m.k === "store") briggsStore.set(m.id, m.v);
+  else if (m.k === "blast") {   // (Nov 13) Unbreakable ends: the shield blasts out what it stored; everything within 100px is stunned 3s
+    briggsStore.delete(m.id); fx.push({ type: "briggs", k: "shatter", x: m.x, y: m.y, t }); fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: Math.max(140, (m.r || 100) * 1.6), t });
+    if (m.dmg > 0) fx.push({ type: "briggs", k: "deflect", x: m.x, y: m.y, v: m.dmg, t });
+    for (const id of m.ids || []) zStunFx.set(id, t + (m.stun || 3) * 1000);
+    if (near) { hitStopUntil = gnow() + 90; shake(18, 600); }
+  }
   else if (m.k === "shatter") { fx.push({ type: "briggs", k: "shatter", x: m.x, y: m.y, t }); if (near) shake(10, 360); }
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
@@ -1976,6 +1994,12 @@ function briggsFire(p, now, front) {
   }
   ctx.restore();
 }
+function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter the more damage it has stored (orange -> white-hot), with a faster pulse
+  const v = briggsStore.get(p.sessionId) || 0; if (v <= 0) return; const heat = Math.min(1, v / 1500), x = p.x, y = p.y + SPR.feet - 22, pulse = .75 + .25 * Math.sin(now / (260 - 150 * heat));
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; const R = 62 + 10 * heat, g = ctx.createRadialGradient(x, y, 6, x, y, R);
+  g.addColorStop(0, `rgba(255,${Math.round(200 + 55 * heat)},${Math.round(120 + 120 * heat)},${(.18 + .32 * heat) * pulse})`); g.addColorStop(.6, `rgba(255,120,30,${(.12 + .22 * heat) * pulse})`); g.addColorStop(1, "rgba(255,80,0,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, R, R * .72, 0, 0, 7); ctx.fill(); ctx.restore();
+}
 function briggsDome(p, now) {   // the steel dome over him: forms, then a slow glowing loop; sparks where he gets hit
   const a = briggsAnim.get(p.sessionId) || {}, x = p.x, y = p.y + SPR.feet + 8, form = now - (a.domeAt || 0);
   if (form >= 0 && form < 300) return bfxFrame(Math.min(2, Math.floor(form / 100)), 0, x, y, .56, .85);
@@ -1986,6 +2010,11 @@ function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
   if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
+  if (f.k === "deflect") {   // the big number over him: how much the shield threw back
+    if (s > 1.6) return false; const k = Math.min(1, s / .18), up = 40 + 46 * Math.min(1, s / 1.2), a = s > 1.1 ? 1 - (s - 1.1) / .5 : 1;
+    ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.font = `900 ${Math.round(18 + 16 * k)}px system-ui, sans-serif`; ctx.lineWidth = 6; ctx.strokeStyle = "#2a0f00"; ctx.fillStyle = "#ffcf4a";
+    const txt = `DEFLECT ${f.v}`; ctx.strokeText(txt, f.x, f.y - up); ctx.fillText(txt, f.x, f.y - up); ctx.restore(); return true;
+  }
   return false;
 }
 // ---------- ASTRA (dispatcher): E medics, Q police, R safehouse ----------
@@ -3280,7 +3309,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
   if (p.characterClass === "juggernaut" && briggsRage(p) > 0 && p.alive) briggsFire(p, now, true);   // burning ring in front
-  if (p.characterClass === "juggernaut" && (p.skillT > 0 || p.ultActive > 0) && p.alive) briggsDome(p, now);   // E dome / Unbreakable's 60s shield
+  if (p.characterClass === "juggernaut" && (p.skillT > 0 || p.ultActive > 0) && p.alive) { briggsDome(p, now); if (p.ultActive > 0) briggsHeat(p, now); }   // E dome / Unbreakable's 30s shield (+ its heat as it stores damage)
   if (rush) marcusRush(p, now, true);
   return true;
 }
@@ -4727,7 +4756,7 @@ function drawWorldObjects(extra) {
   drawStompDust();
   drawHealRings();
   drawCorpses();
-  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); } }); }
+  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
@@ -4947,7 +4976,7 @@ const ROSTER = [
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
     skills: [{ k: "E", n: "Iron Bastion", cd: 30, card: "ironBastion", t: "A steel dome for 15s: nothing gets through. It shatters outward and knocks zombies back." },
-             { k: "Q", n: "Unbreakable", cd: 60, card: "warCry", t: "A huge roar, then 60s in his steel shield: every zombie and boss within 1000px comes for him, he takes 80% less damage and can't be stunned or knocked back. The roar's first 10s: shotgun spam with no ammo, teammates nearby +25% damage." }],
+             { k: "Q", n: "Unbreakable", cd: 60, card: "warCry", t: "A huge roar, then 30s in his steel shield: every zombie and boss within 1000px comes for him. Zombies can't hurt him; a boss does 85% less, once every 3s. The shield stores every hit and at the end blasts it all back: everything within 100px takes it and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",
     skills: [{ k: "E", n: "Steel Convoy", card: "steelConvoy", cd: 30, t: "Drive a tank for 30s: cannon on click, run zombies over, takes much less damage." },

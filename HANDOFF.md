@@ -672,3 +672,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - E (old 15s Iron Bastion dome) still works until the user picks a new E; R not made yet.
 - Test 36 updated (1000px taunt incl. a boss, late zombies taunted, 80% less, no stun, rage ends at 10s, shatter + cooldown at 60s). sim-bosses 4 / 12 / 24 OK (sim-bosses can't do wave 20: the mission).
 - Cache `20261113k`; next `20261113l`.
+
+## Nov 13 — Unbreakable v2 (user's rules)
+- `BRIGGS.fort = { life: 30, bossTaken: .15, bossGap: 3, tauntR: 1000, every: 1, slow: .7, blast: { r: 100, stun: 3 } }`. Zombies do NO damage to him; a boss does 15% and then can't hurt him again for 3s (per boss, `m.fortBossCd`). Every hit's full damage is STORED (`m.fortStored`); at the end endFortress() = DEFLECT: every zombie and boss within 100px (+ its radius) takes the whole store (hitZombie, so his damage buffs apply) and is stunned 3s. Taunt (1000px, incl. bosses) and the roar's 10s rage stay. 60s cooldown after.
+- How hits are told apart: the main zombie loop is wrapped in try/finally; `fortSnap` before each zombie's turn, `fortAbsorb` after it (zombie: restore all; boss: allow 15% once per 3s; downs undone like the vehicle guard). Whatever's left at the tick's end (burning, puddles, boss projectiles updated elsewhere) goes through applyVehicleGuard's `fort` branch = a boss-type source while a boss is up (15% once per 3s), else nothing. `fortRestore` broadcasts "hit" + "store" (stored total, 4/s).
+- NEW zombie stun: `this.zStun` (id -> until); `stunZombie(z, sec)` (Mine Beast = its stagger act; other bosses / acting zombies have act + slam cleared); the zombie loop skips stunned zombies (no move, no attack).
+- Client: ULT life 30; HUD "SHIELD 22s · 840" (stored); `briggsHeat` = the dome glows hotter as the store grows (until the new art); "blast" = shatter + big ring + "DEFLECT n" number + hit-stop/shake + stun stars over the hit zombies (`stunStars`, 3s).
+- New art prompts (v2, 5 images: ground-slam pose 8x4, wall rising, 3 heat levels, release blast, Q card) in project doc claude/briggs-iron-bastion.md.
+- Test 36 rewritten for v2 (zombie 0 + stored, boss 15% then 3s gap, deflect 900 to zombie + boss within 100px and not 400px away, stunned don't move, move again after). Cache `20261113l`; next `20261113m`.

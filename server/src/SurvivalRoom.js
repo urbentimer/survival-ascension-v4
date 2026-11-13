@@ -268,9 +268,11 @@ const BRIGGS = {
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)
-  // (Nov 13, user) Q = UNBREAKABLE: War Cry + the shield together. The roar, then 60s inside the steel shield: every zombie AND boss within 1000px charges him
-  // (re-taunted every second, so new ones come too), he takes 80% less damage, no stun / slow / knockback / hook drag, walks 30% slower. Shatters at the end. 60s cooldown after.
-  fort: { life: 60, taken: 0.2, tauntR: 1000, every: 1, slow: 0.7 },
+  // (Nov 13, user) Q = UNBREAKABLE: War Cry + the shield together. The roar, then 30s inside the steel shield: every zombie AND boss within 1000px charges him
+  // (re-taunted every second, so new ones come too). Zombies do NO damage; a boss does 15% (85% less), then that boss can't hurt him again for 3s.
+  // The shield stores every hit's full damage; at the end it BLASTS it back out: every zombie and boss within 100px takes all of it and is stunned 3s.
+  // No stun / slow / knockback / hook drag on him, walks 30% slower. 60s cooldown after.
+  fort: { life: 30, bossTaken: 0.15, bossGap: 3, tauntR: 1000, every: 1, slow: 0.7, blast: { r: 100, stun: 3 } },
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
@@ -454,7 +456,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.zStun = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
     this.state.noCd = true;   // test mode: Q unlocked from the start (no 100 kills needed). Cooldowns always apply (Nov 6). Host can switch it off in the Esc menu
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -1623,7 +1625,7 @@ export class SurvivalRoom extends Room {
   warCry(p, now) {
     const C = BRIGGS.cry, m = this.bmemOf(p), scale = 1 + (this.state.stage - 1) * 0.08;
     m.castUntil = now + C.cast * 1000; m.cryUntil = now + C.life * 1000; p.charging = false;
-    const F = BRIGGS.fort; m.fortUntil = now + F.life * 1000; m.fortTaunt = 0;   // (Nov 13) Unbreakable: the shield + the big taunt for 60s (fortressTaunt keeps it up)
+    const F = BRIGGS.fort; m.fortUntil = now + F.life * 1000; m.fortTaunt = 0; m.fortStored = 0; m.fortSent = 0; m.fortBossCd = new Map(); m.hazCd = 0;   // (Nov 13) Unbreakable: the shield + the big taunt for 30s (fortressTaunt keeps it up); the store starts empty
     for (const z of [...this.state.zombies.values()]) {
       const d = distance(p, z);
       if (d <= F.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: now + F.every * 1000 + 600 });
@@ -1641,12 +1643,43 @@ export class SurvivalRoom extends Room {
     const m = this.bmemOf(p), F = BRIGGS.fort; if (now < (m.fortTaunt || 0)) return; m.fortTaunt = now + F.every * 1000;
     for (const z of this.state.zombies.values()) if (distance(p, z) <= F.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: Math.min(m.fortUntil, now + F.every * 1000 + 600) });
   }
-  endFortress(p, now) {   // the shield shatters: the same burst as the old dome's (hurts + shoves what's close)
-    const m = this.bmemOf(p), S = BRIGGS.bastion.shatter, scale = 1 + (this.state.stage - 1) * 0.08; m.fortUntil = 0; m.safeUntil = now + 500;
+  endFortress(p, now) {   // DEFLECT: the shield blasts out everything it stored: every zombie and boss within 100px takes all of it and is stunned 3s
+    const m = this.bmemOf(p), B = BRIGGS.fort.blast, stored = Math.round(m.fortStored || 0); m.fortUntil = 0; m.safeUntil = now + 500; m.fortStored = 0;
     for (const [id, t] of this.taunt) if (t.id === p.sessionId) this.taunt.delete(id);
     if (!p.alive) return;
-    for (const z of [...this.state.zombies.values()]) { const d = distance(p, z); if (d > S.r + z.radius) continue; if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), S.push, q => this.solveZombie(q)); this.hitZombie(z, p, S.dmg * scale); }
-    this.broadcast("briggs", { k: "shatter", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+    const ids = [];
+    for (const z of [...this.state.zombies.values()]) {
+      if (distance(p, z) > B.r + (z.radius || 0)) continue; ids.push(z.id);
+      this.stunZombie(z, B.stun, now); if (stored > 0) this.hitZombie(z, p, stored);
+    }
+    this.broadcast("briggs", { k: "blast", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: B.r, dmg: stored, ids, stun: B.stun });
+    this.state.message = stored > 0 ? `${p.name}'s shield DEFLECTS ${stored} damage!` : `${p.name}'s shield breaks.`;
+  }
+  stunZombie(z, sec, now = Date.now()) {   // (Nov 13) a stunned zombie or boss does nothing (the zombie loop skips it); a boss's attack in progress is cancelled
+    this.zStun.set(z.id, Math.max(this.zStun.get(z.id) || 0, now + sec * 1000)); z.attackCooldown = Math.max(z.attackCooldown || 0, sec);
+    if (z.kind === "minebeast") { this.startAct(z, "stagger", sec); const bm = this.bossMem?.get(z.id); if (bm) bm.next = Math.max(bm.next || 0, now + (sec + .5) * 1000); }
+    else if (z.boss || z.act) { z.act = ""; z.slam = 0; }
+  }
+  fortressList(now) { let out = null; for (const p of this.state.players.values()) if (p.characterClass === "juggernaut" && this.fortressOn(p, now)) (out || (out = [])).push(p); return out; }
+  fortSnap(list) { return list.map(p => ({ p, hp: p.hp, alive: p.alive, dt: p.damageTaken })); }
+  fortAbsorb(snap, z, now, guard) {   // after one zombie's turn: whatever it did to a shielded Briggs goes into the store; a boss's hit lands at 15%, once per 3s per boss
+    const F = BRIGGS.fort;
+    for (const s of snap) {
+      const p = s.p; if (!s.alive) continue;
+      const after = p.alive ? p.hp : (this.downHp.get(p.sessionId) ?? 0); if (after >= s.hp) continue;
+      const raw = s.hp - after, m = this.bmemOf(p); m.fortStored = (m.fortStored || 0) + raw;
+      let allow = 0;
+      if (z?.boss) { const cd = m.fortBossCd || (m.fortBossCd = new Map()); if (now >= (cd.get(z.id) || 0)) { allow = raw * F.bossTaken; cd.set(z.id, now + F.bossGap * 1000); } }
+      this.fortRestore(p, s.hp, s.dt, allow, now); const e = guard?.get(p); if (e) e.hp -= allow;   // (the tick's guard doesn't count it again)
+    }
+  }
+  fortRestore(p, hp0, dt0, allow, now) {   // put his HP back to what it was minus what's allowed through (undoing a down if the hit had downed him)
+    const fixed = hp0 - allow;
+    if (fixed > 0) { if (!p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; } p.hp = fixed; }
+    else if (p.alive) { p.hp = fixed; this.downPlayer(p); }
+    if (dt0 != null) p.damageTaken = dt0 + allow;
+    const bm = this.bmemOf(p); if (now - bm.hitAt > 160) { bm.hitAt = now; this.broadcast("briggs", { k: "hit", id: p.sessionId }); }
+    if (now - (bm.fortSent || 0) > 250) { bm.fortSent = now; this.broadcast("briggs", { k: "store", id: p.sessionId, v: Math.round(bm.fortStored || 0) }); }
   }
   shotgunRage(p, now = Date.now()) { if (p.characterClass !== "juggernaut" || p.weapon !== "shotgun") return false; const m = this.briggs.get(p.sessionId); return !!m && m.cryUntil > now; }
   cryBuff(p) { const m = this.briggs.get(p.sessionId); return m && m.buffUntil > Date.now() ? 1 + BRIGGS.cry.buff : 1; }
@@ -1918,8 +1951,8 @@ export class SurvivalRoom extends Room {
       if (!p.alive) continue;
       if (p.characterClass === "juggernaut") {   // dome: nothing gets through (and no hook drag / knockback); War Cry: half damage
         const bm = this.briggs.get(p.sessionId), dome = p.skillT > 0 || (bm && now < (bm.safeUntil || 0)), fort = bm && now < (bm.fortUntil || 0);
-        const k = dome ? 0 : fort ? BRIGGS.fort.taken : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;   // Unbreakable: 80% less
-        if (k < 1) g.set(p, { hp: p.hp, k, x: dome || fort ? p.x : null, y: p.y, dome: dome || fort });
+        const k = dome ? 0 : fort ? 0 : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;   // Unbreakable: handled per hit (fortAbsorb); what's left this tick = hazards (fortHazard)
+        if (k < 1) g.set(p, { hp: p.hp, k, x: dome || fort ? p.x : null, y: p.y, dome: dome || fort, fort: fort && !dome, dt: p.damageTaken });
         continue;
       }
       if (p.characterClass !== "operator") continue;
@@ -1931,10 +1964,15 @@ export class SurvivalRoom extends Room {
   }
   applyVehicleGuard(g) {
     const now = Date.now();
-    for (const [p, { hp, k, x, y, dome }] of g) {
+    for (const [p, { hp, k, x, y, dome, fort, dt }] of g) {
       if (x != null) { p.x = x; p.y = y; p.stunned = 0; p.slowed = 0; }   // in the dome: nothing moves him
       const after = p.alive ? p.hp : (this.downHp.get(p.sessionId) ?? 0);
       if (after >= hp) continue;
+      if (fort) {   // Unbreakable: damage that didn't come from a zombie's turn (burning, puddles, a boss's projectiles): stored; while a boss is out it lands at 15%, once per 3s
+        const m = this.bmemOf(p), raw = hp - after; m.fortStored = (m.fortStored || 0) + raw; let allow = 0;
+        if (this.bossUp && now >= (m.hazCd || 0)) { allow = raw * BRIGGS.fort.bossTaken; m.hazCd = now + BRIGGS.fort.bossGap * 1000; }
+        this.fortRestore(p, hp, dt, allow, now); continue;
+      }
       if (dome) { const bm = this.bmemOf(p); if (now - bm.hitAt > 160) { bm.hitAt = now; this.broadcast("briggs", { k: "hit", id: p.sessionId }); } }
       const fixed = hp - (hp - after) * k;
       if (fixed > 0 && !p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; }
@@ -4025,7 +4063,10 @@ export class SurvivalRoom extends Room {
     if (this.abFx.puddles.length) this.abomPuddles(now);
     const barricades = []; for (const st of this.state.structures.values()) if (st.kind === "barricade") barricades.push(st);
     const seenXY = seen.map(p => [p.x, p.y, p]), seenBossXY = seenBoss.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
-    for (const z of [...this.state.zombies.values()]) {
+    const fortP = this.fortressList(now); this._guard = guard;
+    if (this.zStun.size) for (const [id, t] of this.zStun) if (t <= now || !this.state.zombies.has(id)) this.zStun.delete(id);
+    for (const z of [...this.state.zombies.values()]) { const fsnap = fortP ? this.fortSnap(fortP) : null; try {   // (Nov 13) Unbreakable: what each zombie does to Briggs is sorted out after its turn (finally)
+      if (this.zStun.size && (this.zStun.get(z.id) || 0) > now) continue;   // stunned (Briggs's deflect): no move, no attack
       if (z.kind === "minebeast") { if (this.mine?.step === "fight") this.beastThink(z, dt, now); continue; }   // the Mine Beast: its own fight; in the chase the mission drives it (mineTick)
       const taunted = this.tauntTarget(z, now);
       if (z.kind === "butcher") { this.butcherThink(z, dt, now, taunted ? [taunted] : seenBoss); continue; }
@@ -4108,6 +4149,7 @@ export class SurvivalRoom extends Room {
       if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target) && !(target.sessionId && this.sheltered(target))) {
         this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
       }
+      } finally { if (fsnap) this.fortAbsorb(fsnap, z, now, guard); }
     }
     this.keepOutOfSafehouses(); this.applyShelter(shelter);
     this.applyVehicleGuard(guard);
