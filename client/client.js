@@ -1905,7 +1905,7 @@ function onBriggs(m) {
     briggsAnim.set(m.id, { ...a, k: "cry", t0: t, fort: !!m.fort, blastAt: 0, ...(m.fort ? { domeAt: t + 300 } : {}) });
     setTimeout(() => { if (!m.fort) fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: gnow() }); if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, m.fort ? 150 : 180);
   }
-  else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5 });
+  else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5, ...(t - (a.sparkAt || 0) > BW.sparkGap ? { sparkAt: t } : {}) });   // (the Unbreakable ring sparks at most every 0.42s, so a crowd of hits still reads as hits)
   else if (m.k === "store") briggsStore.set(m.id, m.v);
   else if (m.k === "blast") {   // (Nov 13) Unbreakable ends: the shield blasts out what it stored; everything within 100px is stunned 3s
     briggsStore.delete(m.id); { const b = briggsAnim.get(m.id); if (b) b.blastAt = t; }   // the ring stops turning and plays the release blast (wall atlas row 2) where it stands
@@ -1996,28 +1996,44 @@ function briggsFire(p, now, front) {
   ctx.restore();
 }
 // (Nov 13) UNBREAKABLE's steel ring, from the user's art (tools/extract-briggs-wall.py): it rises out of the ground at the slam (wall atlas row 0),
-// then 8 slabs TURN ANTICLOCKWISE around him on a cylinder, each drawn in thin vertical strips from the front-slab texture (foreshortened at the
-// sides, the back ones show their inner face mirrored and darker), glowing hotter as the shield stores damage (cool / hot / overcharged), seams lit
-// between the slabs; at the end it blasts out (row 2). Back half drawn behind Briggs, front half in front.
+// then 8 flat steel panels TURN ANTICLOCKWISE around him (an octagon; each panel drawn in thin vertical strips from a slab texture; the far ones show
+// their inner face, darker and a bit shorter), with glowing orange bars at the seams. The user's 3 looks: normal = the locked ring of the rise sheet
+// (frame 6); a zombie/boss hit = starburst sparks on every seam for a moment (rise frame 5), then back to normal; about to blow = golden plates,
+// white-hot seams, sparks jumping off the top (heat frame 6). At the end it blasts out (row 2). Back half drawn behind Briggs, front half in front.
 const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";
 const slabImg = new Image(); slabImg.src = "assets/sprites/fx/briggs-slab.webp";
-const BW = { cw: 145, ch: 160, ax: 72.4, ay: 104.8, rx: 51, ry: 29.8, tw: 78, th: 109, tg: 106.4, ts: .5, spin: 1.15, split: 16, riseMs: 75 };   // rx = the octagon's corner radius (front panel 2*rx*sin22.5 = 39px, like the art)
-const SLAB_SHADE = [1, .84, .68, .5];   // facing the camera ... side ... inner face of the far slabs
-let slabTex = null;   // [heat frame][shade] -> canvas
+const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, ry: 41.7, tw: 78, th: 109, tg: 106.4, top: 20, ts: .7, spin: 1.15, split: 38, riseMs: 75, spark: 300, sparkGap: 420 };   // rx = the octagon's corner radius (front panel 2*rx*sin22.5 = 57px, like the art at 0.56)
+const SLAB_SHADE = [[0, 1], [0, .84], [0, .68], [1, .86], [1, .72]];   // [outer / inner face, brightness]: facing the camera ... side; the far slabs' inner face ... at the sides
+const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+const mixc = (u, w, t) => u.map((v, i) => Math.round(v + (w[i] - v) * t)).join(",");
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+let slabTex = null;   // [look: 0 normal, 1 hot, 2 overcharged][shade] -> canvas (briggs-slab.webp: row 0 outer faces, row 1 inner faces)
 function slabTextures() {
   if (slabTex || !slabImg.naturalWidth) return slabTex;
   slabTex = [];
-  for (let f = 0; f < 6; f++) { const row = [];
-    for (const k of SLAB_SHADE) { const c = document.createElement("canvas"); c.width = BW.tw; c.height = BW.th; const g = c.getContext("2d");
-      g.drawImage(slabImg, f * BW.tw, 0, BW.tw, BW.th, 0, 0, BW.tw, BW.th);
+  for (let f = 0; f < 3; f++) { const row = [];
+    for (const [face, k] of SLAB_SHADE) { const c = document.createElement("canvas"); c.width = BW.tw; c.height = BW.th; const g = c.getContext("2d");
+      g.drawImage(slabImg, f * BW.tw, face * BW.th, BW.tw, BW.th, 0, 0, BW.tw, BW.th);
       if (k < 1) { g.globalCompositeOperation = "source-atop"; g.fillStyle = `rgba(14,10,8,${1 - k})`; g.fillRect(0, 0, BW.tw, BW.th); }
       row.push(c); }
     slabTex.push(row); }
   return slabTex;
 }
+let starImg = null;
+function sparkStar() {   // a starburst like the art's: long cross rays, short diagonals, a white-hot core (drawn once)
+  if (starImg) return starImg; const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+  const star = (L, D, r, fill) => { g.beginPath(); for (let k = 0; k < 16; k++) { const an = k * Math.PI / 8, len = k % 4 === 0 ? L : k % 2 === 0 ? D : r; g.lineTo(32 + Math.cos(an) * len, 32 + Math.sin(an) * len); } g.closePath(); g.fillStyle = fill; g.fill(); };
+  const gr = g.createRadialGradient(32, 32, 1, 32, 32, 24); gr.addColorStop(0, "rgba(255,200,90,.95)"); gr.addColorStop(.45, "rgba(255,140,40,.45)"); gr.addColorStop(1, "rgba(255,90,10,0)"); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  star(31, 16, 7, "#ff9426"); star(25, 12, 5, "#ffd560"); star(16, 8, 3.4, "#fff3c8");
+  g.fillStyle = "#fff"; g.beginPath(); g.arc(32, 32, 4.5, 0, 7); g.fill();
+  return starImg = c;
+}
+function drawStar(x, y, s, alpha, rot = 0, bloom = 0) { if (s <= .02 || alpha <= 0) return; const img = sparkStar(); ctx.save(); ctx.globalAlpha = Math.min(1, alpha); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.drawImage(img, -32 * s, -32 * s, 64 * s, 64 * s);
+  if (bloom) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, alpha * bloom); const b = s * 1.35; ctx.drawImage(img, -32 * b, -32 * b, 64 * b, 64 * b); }   // a bright additive pass: it pops
+  ctx.restore(); }
 function wallFrame(row, col, x, y, part) {   // a frame of the wall atlas on the ring's ground centre (x, y); part: "back" (above the split line), "front", "all"
   if (!wallImg.naturalWidth) return; ctx.save();
-  if (part !== "all") { ctx.beginPath(); if (part === "back") ctx.rect(x - 200, y - 300, 400, 300 - BW.split); else ctx.rect(x - 200, y - BW.split, 400, 300); ctx.clip(); }
+  if (part !== "all") { ctx.beginPath(); if (part === "back") ctx.rect(x - 220, y - 320, 440, 320 - BW.split); else ctx.rect(x - 220, y - BW.split, 440, 320); ctx.clip(); }
   ctx.imageSmoothingEnabled = false; ctx.drawImage(wallImg, col * BW.cw, row * BW.ch, BW.cw, BW.ch, Math.round(x - BW.ax), Math.round(y - BW.ay), BW.cw, BW.ch); ctx.restore();
 }
 function briggsRing(p, now, front) {
@@ -2025,33 +2041,63 @@ function briggsRing(p, now, front) {
   const X = p.x, Y = p.y + SPR.feet, rise = now - ((a.t0 || 0) + 150);
   if (rise < 0) return;
   if (rise < 6 * BW.riseMs) return wallFrame(0, Math.floor(rise / BW.riseMs), X, Y, front ? "front" : "back");   // bursting up out of the ground
-  const T = slabTextures(); if (!T) return wallFrame(1, 0, X, Y, front ? "front" : "back");
-  const v = briggsStore.get(p.sessionId) || 0, lvl = v < 350 ? 0 : v < 1000 ? 1 : 2, pulse = Math.floor(now / (lvl === 2 ? 140 : lvl === 1 ? 220 : 340)) % 2, tex = T[lvl * 2 + pulse];
+  const T = slabTextures(); if (!T) return wallFrame(0, 5, X, Y, front ? "front" : "back");
+  // the look: the last seconds heat it up (hot from 5s left, overcharged from 3s left, cross-faded); a hit flashes sparks on the seams
+  const left = p.ultActive || 0, hot = clamp01((5 - left) / 1.2), over = clamp01((3 - left) / .7);
+  const layers = over >= 1 ? [[2, 1]] : hot >= 1 ? [[1, 1], [2, over]] : [[0, 1], [1, hot]];
+  const sk = now - (a.sparkAt || -1e9), spark = sk < BW.spark ? sk / BW.spark : -1;
   const id = p.sessionId || "", seed = ((id.charCodeAt(0) || 0) * 7 + (id.charCodeAt(1) || 0)) % 8 * Math.PI / 4;
   const rot = seed - ((now - (a.t0 || 0) - 150 - 6 * BW.riseMs) / 1000) * BW.spin;   // anticlockwise on screen: the front slabs slide right, the back ones left
-  const slabs = []; for (let k = 0; k < 8; k++) { const c = rot + k * Math.PI / 4, sn = Math.sin(c); if ((sn >= 0) === front) slabs.push({ c, sn }); }
+  const slabs = []; for (let k = 0; k < 8; k++) { const c = rot + k * Math.PI / 4, sn = Math.sin(c); if ((sn >= 0) === front) slabs.push({ c, sn, k }); }
   slabs.sort((u, w) => u.sn - w.sn);   // far first
   // an octagon of flat steel panels: panel k runs between the corners at c + 22.5deg and c - 22.5deg; its texture is laid straight across (flat, not curved)
-  const hit = now - (a.hitAt || 0) < 110, N = 10, q = Math.PI / 8, sc = BW.ts, R = BW.rx, RY = BW.ry;
+  const N = 10, q = Math.PI / 8, sc = BW.ts, R = BW.rx, RY = BW.ry, short = sn => 1 - .14 * Math.max(0, -sn);   // the far panels look shorter (we see their inner face from above)
+  const corner = c => [X + R * Math.cos(c), Y + RY * Math.sin(c)];
   ctx.save(); ctx.imageSmoothingEnabled = true;
+  if (!front && hot > 0) { const r = R + 26, g = ctx.createRadialGradient(X, Y, 10, X, Y, r); g.addColorStop(0, `rgba(255,160,60,${.1 * hot + .14 * over})`); g.addColorStop(1, "rgba(255,90,0,0)"); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(X, Y, r, r * .58, 0, 0, 7); ctx.fill(); ctx.globalCompositeOperation = "source-over"; }   // its heat on the ground
   for (const { c, sn } of slabs) {
-    const ax = X + R * Math.cos(c + q), ay = Y + RY * Math.sin(c + q), bx = X + R * Math.cos(c - q), by = Y + RY * Math.sin(c - q);
-    const shade = sn > .6 ? 0 : sn > .2 ? 1 : sn > -.2 ? 2 : 3, img = tex[Math.max(0, shade - (hit ? 1 : 0))];
+    const [ax, ay] = corner(c + q), [bx, by] = corner(c - q);
     if (Math.abs(bx - ax) < .8) continue;   // edge-on
-    for (let i = 0; i < N; i++) {
-      const u0 = i / N, u1 = (i + 1) / N, x0 = ax + (bx - ax) * u0, x1 = ax + (bx - ax) * u1, gy = ay + (by - ay) * (u0 + u1) / 2;
-      const vs = sc * (1 - .14 * Math.max(0, -sn));   // the far panels look shorter (we see their inner face from above), like the art
-      ctx.drawImage(img, u0 * BW.tw, 0, (u1 - u0) * BW.tw, BW.th, Math.min(x0, x1), gy - BW.tg * vs, Math.abs(x1 - x0) + .6, BW.th * vs);
+    const shade = sn > .6 ? 0 : sn > .2 ? 1 : sn >= 0 ? 2 : sn > -.4 ? 4 : 3, vs = sc * short(sn);
+    for (const [li, al] of layers) { if (al <= 0) continue; ctx.globalAlpha = al; const img = T[li][shade];
+      for (let i = 0; i < N; i++) {
+        const u0 = i / N, u1 = (i + 1) / N, x0 = ax + (bx - ax) * u0, x1 = ax + (bx - ax) * u1, gy = ay + (by - ay) * (u0 + u1) / 2;
+        ctx.drawImage(img, u0 * BW.tw, 0, (u1 - u0) * BW.tw, BW.th, Math.min(x0, x1), gy - BW.tg * vs, Math.abs(x1 - x0) + .6, BW.th * vs);
+      } }
+  }
+  ctx.globalAlpha = 1;
+  // the seams: glowing bars like the art's (a yellow-white core in a fat orange bar with dark-red edges, red light spilling onto the slab edges and
+  // the ground), the full height of the slabs; white-hot when overcharged, flaring on a hit
+  const fl = spark >= 0 ? Math.max(0, 1 - spark * 1.3) : 0, wht = Math.max(over, fl * .85), pulse = .88 + .12 * Math.sin(now / (over > 0 ? 50 : 130)), face = front ? 1 : .78;
+  const red = mixc([235, 50, 18], [255, 150, 50], wht), org = mixc([255, 118, 26], [255, 196, 90], wht), core = mixc([255, 226, 140], [255, 253, 238], wht);
+  const seams = [];
+  for (let k = 0; k < 8; k++) { const b = rot + k * Math.PI / 4 + q, sn = Math.sin(b); if ((sn >= 0) !== front) continue;
+    const [x, gy] = corner(b), vs = sc * short(sn), top = gy - (BW.tg - BW.top - (front ? 6 : 12)) * vs, bot = gy - 3; seams.push({ x, gy, h: gy - top, k });   // (stops under the slabs' top caps)
+    ctx.globalCompositeOperation = "lighter";
+    const hw = 7 + 3 * hot + 4 * fl; let g = ctx.createLinearGradient(x - hw, 0, x + hw, 0);
+    g.addColorStop(0, `rgba(${red},0)`); g.addColorStop(.5, `rgba(${red},${(.55 + .2 * hot + .35 * fl) * pulse * face})`); g.addColorStop(1, `rgba(${red},0)`);
+    ctx.fillStyle = g; ctx.fillRect(x - hw, top + 1, hw * 2, bot - top + 1);
+    g = ctx.createRadialGradient(x, gy, 1, x, gy, 9 + 3 * hot); g.addColorStop(0, `rgba(${red},${.6 * pulse * face})`); g.addColorStop(1, `rgba(${red},0)`);   // red light on the ground at its foot
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, gy, 9 + 3 * hot, 4, 0, 0, 7); ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    const bw = 2.7 + .6 * hot + .6 * fl; g = ctx.createLinearGradient(x - bw, 0, x + bw, 0);
+    g.addColorStop(0, `rgba(170,34,12,${face})`); g.addColorStop(.22, `rgba(${org},${face})`); g.addColorStop(.5, `rgba(${core},${face})`); g.addColorStop(.78, `rgba(${org},${face})`); g.addColorStop(1, `rgba(170,34,12,${face})`);
+    ctx.fillStyle = g; ctx.fillRect(x - bw, top, bw * 2, bot - top);
+  }
+  if (spark >= 0) {   // a hit: a starburst at the top of every seam (and some halfway down), little bits flying off
+    const s = spark < .2 ? .4 + 3 * spark : 1 - (spark - .2) / .8 * .5, al = (spark < .55 ? 1 : (1 - spark) / .45) * face, sd = (a.sparkAt || 0) * .001;
+    for (const m of seams) { const r = h01(sd + m.k * 3.1);
+      drawStar(m.x, m.gy - m.h + 2, (.62 + .26 * r) * s, al, (r - .5) * .5, .45);
+      if (r > .35) drawStar(m.x, m.gy - m.h * (.3 + .35 * r), (.4 + .12 * r) * s, al, (.5 - r) * .6, .3);
+      ctx.fillStyle = `rgba(255,226,140,${al})`;
+      for (let j = 0; j < 3; j++) { const an = -Math.PI / 2 + (h01(sd + m.k * 7.3 + j * 1.9) - .5) * 2.8, d = spark * (14 + 9 * j); ctx.fillRect(Math.round(m.x + Math.cos(an) * d) - 1, Math.round(m.gy - m.h + Math.sin(an) * d + spark * spark * 12) - 1, 2, 2); }
     }
   }
-  // the seams at the corners: lit strips, brighter and wider as it heats up
-  ctx.globalCompositeOperation = "lighter";
-  const sw = [1.6, 2, 2.6][lvl], col = ["255,120,40", "255,170,60", "255,236,170"][lvl], al = [.72, .82, .95][lvl] * (.82 + .18 * Math.sin(now / 90));
-  for (let k = 0; k < 8; k++) { const b = rot + k * Math.PI / 4 + q, sn = Math.sin(b); if ((sn >= 0) !== front) continue;
-    const x = X + R * Math.cos(b), gy = Y + RY * sn, h = (BW.tg - 10) * sc * (1 - .14 * Math.max(0, -sn)), face = front ? 1 : .55;
-    const g = ctx.createLinearGradient(x - sw * 2, 0, x + sw * 2, 0); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(.5, `rgba(${col},${al * face})`); g.addColorStop(1, `rgba(${col},0)`);
-    ctx.fillStyle = g; ctx.fillRect(x - sw * 2, gy - h, sw * 4, h - 3); }
-  if (front && lvl > 0) { const R = 70, g = ctx.createRadialGradient(X, Y - 14, 8, X, Y - 14, R); g.addColorStop(0, `rgba(255,150,50,${.06 + .08 * lvl})`); g.addColorStop(1, "rgba(255,90,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(X, Y - 14, R, R * .7, 0, 0, 7); ctx.fill(); }   // its heat on the ground around him
+  if (over > 0) for (const { c, sn, k } of slabs) {   // about to blow: small sparks jumping off the top edge
+    const [ax, ay] = corner(c + q), [bx, by] = corner(c - q), vs = sc * short(sn);
+    for (let j = 0; j < 2; j++) { const tt = (now + k * 131 + j * 83) / 200, ph = tt % 1, u = .15 + .7 * h01(Math.floor(tt) * 1.7 + k * 5 + j);
+      const x = ax + (bx - ax) * u, top = ay + (by - ay) * u - BW.tg * vs + 5; drawStar(x, top - ph * 12, .3 * (1 - ph) * over, over * (1 - ph * .5) * face, ph); }
+  }
   ctx.restore();
 }
 function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter the more damage it has stored (orange -> white-hot), with a faster pulse

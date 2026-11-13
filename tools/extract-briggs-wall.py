@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); ART = os.path.join(here, 'art', 'briggs'); A = os.path.join(here, '..', 'client', 'assets')
-SC, TEX = 0.4, 0.8
+SC, TEX = 0.56, 0.8   # (Nov 13, user: "make it larger and more spaced out") 1.4x the first cut (0.4)
 # the ring in the reference frame (wall-heat frame 0, column-relative art px): seams of the front slab at x 140 / 242, its ground line y 489,
 # the back slabs' ground line ~y 340 -> centre (191, 414.5), radii 133 x 74.5 (seam circle), slab height 109 (incl. the top cap)
 REF = dict(cx=191, gy=414.5, rx=133, ry=74.5, h=109, s0=141, s1=239, top=356, bot=492)   # s0..s1: the front slab's body only (its outline), seams are drawn by the game
@@ -42,6 +42,14 @@ def resize_sharp(rgba, sc, pct=65):   # premultiplied Lanczos (no magenta fringe
     img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.3 * max(1, sc), percent=pct, threshold=2))
     return Image.fromarray(np.dstack([np.array(img), (np.clip((al - .18) / .64, 0, 1) * 255).astype(np.uint8)]))
 
+def resize_box(rgba, box, size, pct=50):   # like resize_sharp, but a (fractional) box of the source to an exact size
+    a = rgba[..., 3:4].astype(np.float32) / 255; pm = np.clip(rgba[..., :3].astype(np.float32) * a, 0, 255).astype(np.uint8)
+    up = lambda x: np.array(Image.fromarray(np.ascontiguousarray(x)).resize(size, Image.LANCZOS, box=box)).astype(np.float32)
+    P = np.clip(np.dstack([up(pm[..., i]) for i in range(3)]), 0, 255); al = np.clip(up(rgba[..., 3]), 0, 255) / 255
+    rgb = np.where(al[..., None] > .02, P / np.maximum(al[..., None], .02), 0)
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=1.3, percent=pct, threshold=2))
+    return Image.fromarray(np.dstack([np.array(img), (np.clip((al - .18) / .64, 0, 1) * 255).astype(np.uint8)]))
+
 ref_rgba = None
 def frames(name):
     fg, rgba = load(name); W = rgba.shape[1]; pitch = W / 6; out = []
@@ -65,15 +73,17 @@ def align(col, ref, search=(24, 18)):   # integer shift (dx, dy) of col that bes
     return best[1], best[2]
 
 heat = frames('wall-heat.png'); ref = heat[0]
-def slab_dx(i):   # how far left frame i's front slab is drawn compared with frame 0 (vertical edges: rivets, outline, stripes)
-    f = lambda c: np.abs(np.diff(c[380:490, 80:300, :3].astype(float).mean(-1), axis=1)); f0, fi = f(heat[0]), f(heat[i]); best = (-1, 0)
-    for dx in range(-20, 21):
-        v = (np.roll(fi, dx, 1)[:, 25:-25] * f0[:, 25:-25]).sum()
-        if v > best[0]: best = (v, dx)
-    return best[1]
+def slab_d(col):   # how far a frame's front slab is drawn from heat frame 0's (vertical edges: rivets, outline, stripes): (dx, dy) to add to the crop
+    f = lambda c, y0: np.abs(np.diff(c[y0:y0 + 110, 80:300, :3].astype(float).mean(-1), axis=1)); f0 = f(heat[0], 380); best = (-1, 0, 0)
+    for dy in range(-8, 9):
+        fi = f(col, 380 + dy)
+        for dx in range(-25, 26):
+            v = (np.roll(fi, -dx, 1)[:, 30:-30] * f0[:, 30:-30]).sum()
+            if v > best[0]: best = (v, dx, dy)
+    return best[1], best[2]
 sheets = {'rise': frames('wall-rise.png'), 'heat': heat, 'blast': frames('wall-blast.png')}
 cw, ch = round(CW * SC), round(CH * SC); atlas = Image.new('RGBA', (cw * 6, ch * 3))
-tw, th = round((REF['s1'] - REF['s0']) * TEX), round((REF['bot'] - REF['top']) * TEX); slabs = Image.new('RGBA', (tw * 6, th))
+tw, th = round((REF['s1'] - REF['s0']) * TEX), round((REF['bot'] - REF['top']) * TEX); slabs = Image.new('RGBA', (tw * 3, th * 2)); aligned = {}
 for row, key in enumerate(['rise', 'heat', 'blast']):
     for i, col in enumerate(sheets[key]):
         dx, dy = 0, 0   # (the artist kept each ring in its column; the rise ring sits ~10px left of the heat ring and a few px high: line it up)
@@ -84,11 +94,29 @@ for row, key in enumerate(['rise', 'heat', 'blast']):
         cell = col[152:152 + CH]
         if key == 'blast':   # the explosion frames run into their column's edges in the art: fade them out before the cell border (no square cut)
             yy, xx = np.mgrid[0:CH, 0:CW]; d = np.maximum(np.abs(xx - AX) / (CW / 2), np.abs(yy - AY) / max(AY, CH - AY))
-            cell = cell.copy(); cell[..., 3] = (cell[..., 3] * np.clip((1 - d) / .4, 0, 1) ** .7).astype(np.uint8)
+            dxn = np.abs(xx - AX) / (CW / 2)   # (Nov 13) plus a steeper fade at the sides: the neighbour frames' explosions spill into this column there
+            cell = cell.copy(); cell[..., 3] = (cell[..., 3] * np.clip((1 - d) / .4, 0, 1) ** .7 * np.clip((.93 - dxn) / .2, 0, 1) ** .8).astype(np.uint8)
         im = resize_sharp(cell, SC); atlas.alpha_composite(im.crop((0, 0, cw, ch)), (i * cw, row * ch))
-        if key == 'heat':   # the front slab's body (the ring drifts a few px left frame by frame: follow it by matching edges)
-            k = slab_dx(i); sl = col[REF['top']:REF['bot'], REF['s0'] - k:REF['s1'] - k]; print(f'   slab {i}: x -{k}')
-            slabs.alpha_composite(resize_sharp(sl, TEX, 50), (i * tw, 0))
+        aligned[(key, i)] = col
+# the turning ring's panel textures (Nov 13, user's picks): 0 = the locked ring as it rises (rise frame 6: the normal look), 1 = hot (heat 4), 2 = about to blow (heat 6)
+# the rise sheet's ring is drawn 97% the size of the heat sheet's: its front slab body measured by matching edges against heat frame 0 (scale .97)
+RISE_SLAB = (130.8, 356.5, 225.9, 488.4)   # x0, y0, x1, y1 in the raw rise frame 6 column = REF's s0..s1 x top..bot
+slabs.alpha_composite(resize_box(sheets['rise'][5], RISE_SLAB, (tw, th)), (0, 0)); print('   slab 0 (rise 5): box', RISE_SLAB)
+for j, i in ((1, 3), (2, 5)):
+    col = heat[i]; dx, dy = slab_d(col); sl = col[REF['top'] + dy:REF['bot'] + dy, REF['s0'] + dx:REF['s1'] + dx]; print(f'   slab {j} (heat {i}): {dx},{dy}')
+    slabs.alpha_composite(resize_sharp(sl, TEX, 50), (j * tw, 0))
+# row 2 of the slab image: the INNER face of a slab (what the far side of the ring shows: plain plate + rivets, no hazard stripe), cut from the
+# ring's back-left slab in the same frames; that slab is seen at an angle, so it's sheared level (its bottom edge) before it's cut out
+def inner_face(col, x0, x1, y0, y1):
+    sub = col[y0 - 12:y1 + 12, x0:x1]; al = sub[..., 3] > 128; H, W = al.shape
+    bot = np.array([np.where(al[:, x])[0].max() if al[:, x].any() else -1 for x in range(W)], float); xs = np.arange(W); m = (xs > W * .2) & (xs < W * .8) & (bot > 0)
+    k, c = np.polyfit(xs[m], bot[m], 1); out = np.zeros_like(sub)
+    for x in range(W): out[:, x] = np.roll(sub[:, x], int(round(c - (k * x + c))), 0)   # level: every column's bottom moved to the line's left end
+    yb = int(round(c)) + 1; body = out[yb - (y1 - y0):yb]; print(f'   inner face x {x0}..{x1}: slope {k:.3f}, {body.shape[1]}x{body.shape[0]}')
+    gtop, gbot = 20, round((489 - REF['top']) * TEX)   # in the texture: the slab top row .. the ground row (same as the outer faces)
+    im = resize_box(body, (0, 0, body.shape[1], body.shape[0]), (tw, gbot - gtop)); t = Image.new('RGBA', (tw, th)); t.alpha_composite(im, (0, gtop)); return t
+for j, (sh, i, box) in enumerate([('rise', 5, (100, 173, 248, 340)), ('heat', 3, (98, 177, 243, 342)), ('heat', 5, (96, 173, 243, 342))]):
+    slabs.alpha_composite(inner_face(sheets[sh][i], *box), (j * tw, th))
 atlas.save(os.path.join(A, 'sprites', 'fx', 'briggs-wall.webp'), quality=90, alpha_quality=92, method=6)
 slabs.save(os.path.join(A, 'sprites', 'fx', 'briggs-slab.webp'), quality=92, alpha_quality=95, method=6)
 print('wall atlas', atlas.size, 'cell', cw, ch, 'anchor', round(AX * SC, 1), round(AY * SC, 1))
