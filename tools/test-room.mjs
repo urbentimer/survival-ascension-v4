@@ -91,8 +91,8 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
   p.x = 300; p.y = 600; send(A, "dash", { dx: 1, dy: 0 }); ok(Math.round(p.x - 300) === 140, `dash moves 140px (${Math.round(p.x - 300)})`); const x = p.x;
   send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "dash has a cooldown");
-  room.lastDashAt.set("A", Date.now() - 4000); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "still on cooldown after 4s");
-  room.lastDashAt.set("A", Date.now() - 5100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 5s"); room._dispose(); }
+  room.lastDashAt.set("A", Date.now() - 2500); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "still on cooldown after 2.5s");
+  room.lastDashAt.set("A", Date.now() - 3100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 3s"); room._dispose(); }
 
 // 4. countdown between waves
 { const { room, A, send, P } = makeRoom(); for (let i = 0; i < 4; i++) room.spawnZombie(false, "walker"); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();

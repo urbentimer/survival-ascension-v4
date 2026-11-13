@@ -1093,7 +1093,7 @@ function releaseAxe() {
 }
 // true only in the solo preview build (tools/build-preview.mjs defines __SOLO__): enables test keys like N = night view
 const SOLO_PREVIEW = typeof __SOLO__ !== "undefined" && __SOLO__ === true;
-const DASH_CD_MS = 5000;   // matches DASH_COOLDOWN on the server
+const DASH_CD_MS = 3000;   // matches DASH_COOLDOWN on the server (3s, Nov 13)
 function sendControls(t) {
   if (!room || !state || (state.phase !== "playing" && state.phase !== "cleared")) return;   // the break: you can walk (the server ignores shots then)
   if (state.paused) { dashQueued = false; return; }   // paused by the host: no moving, no shooting

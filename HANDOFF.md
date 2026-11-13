@@ -772,3 +772,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 13 — Manhole Frisbee cooldown 4s
 - `BRIGGS.cover.cd 10 -> 4` (user). A cover still flying when the cooldown is up drops (endCover "new") and the new throw goes (pressing during the rip does nothing). Client SKILLS / roster cd 4. Test 36 checks the 4s.
 - Cache `20261114b`; next `20261114c`.
+
+## Nov 13 — Dash cooldown 3s for everyone
+- `DASH_COOLDOWN 5 -> 3` (server) + `DASH_CD_MS 3000` (client HUD chip / prediction). Test 3: still on cooldown at 2.5s, ready at 3s.
+- Cache `20261114c`; next `20261114d`.
+- Next: Briggs's R (ideas given to the user).

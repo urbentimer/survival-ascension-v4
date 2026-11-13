@@ -365,7 +365,7 @@ const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
 const BODY_R = 12;          // a survivor's collision radius
 const BUILD_RANGE = 160;
-const DASH_DISTANCE = 140, DASH_COOLDOWN = 5, DASH_IFRAMES = 0.25;   // Nov 6: a real dodge (was 50px, no i-frames)   // seconds // you can place structures up to this far from yourself
+const DASH_DISTANCE = 140, DASH_COOLDOWN = 3, DASH_IFRAMES = 0.25;   // Nov 6: a real dodge (was 50px, no i-frames); Nov 13 (user): every hero's dash 5s -> 3s   // seconds // you can place structures up to this far from yourself
 // Recalculate damage/fire rate from weapon + class + upgrades + temporary buffs.
 // Upgrades are stored separately, so switching weapons never erases them.
 // Marcus E: Combat Rush. +50% damage and +25% attack speed (guns and melee) for 6s, 15s cooldown (counts from the press).
