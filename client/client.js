@@ -40,12 +40,12 @@ const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me
     return [u[0], u[1], `−${Math.round(st * 100)}% damage taken (${cls} hero, max −${Math.round(st * 800)}%)`]; });   // capped upgrades leave the list
 // ===================== GAME DATA (display only; the server has the final say) =====================
 const WEAPON_INFO = {
-  pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 1.0, infinite: true },
-  smg:      { name: "SMG",      slot: 3, mag: 30, reload: 1.4, auto: true },
-  rifle:    { name: "Rifle",    slot: 2, mag: 30, reload: 1.6, auto: true },
-  shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 2.0 },
-  sniper:   { name: "Sniper",   slot: 2, mag: 5,  reload: 2.2 },
-  launcher: { name: "Launcher", slot: 2, mag: 3,  reload: 2.6 },
+  pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 0.5, infinite: true },
+  smg:      { name: "SMG",      slot: 3, mag: 30, reload: 0.7, auto: true },
+  rifle:    { name: "Rifle",    slot: 2, mag: 30, reload: 0.8, auto: true },
+  shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 1.0 },
+  sniper:   { name: "Sniper",   slot: 2, mag: 5,  reload: 1.1 },
+  launcher: { name: "Launcher", slot: 2, mag: 3,  reload: 1.3 },
 };
 const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd: 0.6 }, axe: { name: "Fire axe", cd: 0.9 }, katana: { name: "Katana", cd: 0.5 } };
 const SKILLS = {

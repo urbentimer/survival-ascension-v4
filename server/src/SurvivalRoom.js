@@ -200,17 +200,17 @@ const CLASS_STATS = {
 };
 // Weapons are balanced around ~20 damage/second on a single zombie; each has a different strength.
 const WEAPONS = {
-  // slot: "secondary" = key 3 (sidearms), "primary" = key 2. mag = shots per magazine, reload = seconds.
+  // slot: "secondary" = key 3 (sidearms), "primary" = key 2. mag = shots per magazine, reload = seconds (Nov 13, user: every reload halved).
   // auto: hold the mouse to keep firing (otherwise one shot per click). jitter = random spread in radians.
-  pistol:   { slot: "secondary", dmg: 11, rate: 3.5, range: 400, mag: 12, reload: 1.0, infinite: true },          // semi-auto, never runs dry. Nov 9: was 14 dmg / 4 per s / 450 range (out-damaged the SMG for free)
-  smg:      { slot: "secondary", dmg:  8, rate: 8.0, range: 380, mag: 30, reload: 1.4, auto: true, jitter: 0.07 }, // full-auto spray, short range. Nov 9: was 6 dmg / 360 range
-  rifle:    { slot: "primary",   dmg: 15, rate: 4.5, range: 520, mag: 30, reload: 1.6, auto: true, jitter: 0.03 }, // full-auto, accurate
-  shotgun:  { slot: "primary",   dmg: 12, rate: 1.1, range: 390, mag: 6,  reload: 2.0, pellets: 5, spread: 0.21, pelletMult: 1, pierce: 2, falloff: { near: 100, min: 0.5 } },
+  pistol:   { slot: "secondary", dmg: 11, rate: 3.5, range: 400, mag: 12, reload: 0.5, infinite: true },          // semi-auto, never runs dry. Nov 9: was 14 dmg / 4 per s / 450 range (out-damaged the SMG for free)
+  smg:      { slot: "secondary", dmg:  8, rate: 8.0, range: 380, mag: 30, reload: 0.7, auto: true, jitter: 0.07 }, // full-auto spray, short range. Nov 9: was 6 dmg / 360 range
+  rifle:    { slot: "primary",   dmg: 15, rate: 4.5, range: 520, mag: 30, reload: 0.8, auto: true, jitter: 0.03 }, // full-auto, accurate
+  shotgun:  { slot: "primary",   dmg: 12, rate: 1.1, range: 390, mag: 6,  reload: 1.0, pellets: 5, spread: 0.21, pelletMult: 1, pierce: 2, falloff: { near: 100, min: 0.5 } },
             // pump, 5-pellet cone. Nov 9: range 260 -> 390, each pellet goes through 2 zombies, and a pellet does FULL damage (2x the old) within
             // 100px, falling to half at max range (the old damage): devastating point blank, same as before far away
-  sniper:   { slot: "primary",   dmg: 80, rate: 0.8, range: 760, mag: 5,  reload: 2.2, pierce: 3, bigMult: 1.5 },  // bolt-action, goes through up to 3 zombies.
+  sniper:   { slot: "primary",   dmg: 80, rate: 0.8, range: 760, mag: 5,  reload: 1.1, pierce: 3, bigMult: 1.5 },  // bolt-action, goes through up to 3 zombies.
             // Nov 9: dmg 55 -> 80 (one-shots walkers till ~wave 10, runners all run) + bigMult: x1.5 on bosses and brutes (the big-target gun)
-  launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 2.6, splash: 80 } // explodes on first hit
+  launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 1.3, splash: 80 } // explodes on first hit
 };
 // Melee (key 1): swing in an arc toward the mouse. cd = seconds between swings, arc = half-angle in radians.
 const MELEE = {

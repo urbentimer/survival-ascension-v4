@@ -194,7 +194,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   send(A, "slot", { n: 2 }); placeZombie(room, 760, 380, 99999);
   for (let i = 0; i < 30; i++) { p.lastShot = 0; send(A, "attack", { a: 0 }); }
   ok(p.mag === 0, "30 shots empty the rifle magazine");
-  ok(p.reloadLeft > 1.5, "...and the last shot starts a 1.6s reload by itself (no key needed)");
+  ok(p.reloadLeft > .75 && p.reloadLeft <= .8, "...and the last shot starts a 0.8s reload by itself (no key needed)");
   const reserve = p.ammo; for (let i = 0; i < 20; i++) { room.lastTick = Date.now() - 100; room.tick(); }
   ok(p.mag === 30 && p.ammo === reserve - 30 && p.reloadLeft === 0, "reload refills the mag from spare ammo");
   for (let i = 0; i < 5; i++) { p.lastShot = 0; send(A, "attack", { a: 0 }); } send(A, "reload"); ok(p.reloadLeft > 0, "C reloads a part-empty magazine early");

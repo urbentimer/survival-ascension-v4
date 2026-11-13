@@ -806,3 +806,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 13 — Bare Knuckle cooldown 15s
 - `BRIGGS.fists.cd 90 -> 15` (user). Client HUD text / cooldown ring / roster 15. Test 36 checks 15s.
 - Cache `20261114h`; next `20261114i`.
+
+## Nov 13 — Every reload halved
+- WEAPONS reload (server) and WEAPON_INFO (client display): pistol 1.0 -> 0.5, SMG 1.4 -> 0.7, rifle 1.6 -> 0.8, shotgun 2.0 -> 1.0, sniper 2.2 -> 1.1, launcher 2.6 -> 1.3 s. Fast Hands still stacks on top (+15% per pick). Test 9: rifle reload 0.8s.
+- Cache `20261114i`; next `20261114j`.
