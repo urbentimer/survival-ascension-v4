@@ -262,12 +262,15 @@ const SOFEA = {
            flame: { range: 190, cone: 60 * Math.PI / 180, every: 0.25, dmg: 12 },   // cone 42 -> 60 degrees (Nov 5)
            saber: { range: 120, cone: 150 * Math.PI / 180, dmg: 80, swing: 0.9, hitAt: 0.25 } },   // sweep (Nov 5: 155px / 120 deg -> 230px / 150 deg -> 30% smaller: 160px -> 120px, user: too big)
 };
-// BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s), Q = War Cry (taunt + half damage + team buff, 10s)
+// BRIGGS (juggernaut): E = Iron Bastion (steel dome: can't be hurt for 15s; to be replaced), Q = UNBREAKABLE (Nov 13: War Cry + the shield for 60s, see fort)
 const BRIGGS = {
   bastion: { cast: 0.4, life: 15, cd: 30, slow: 0.7, shatter: { r: 150, push: 60, dmg: 40 } },
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
-  cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },
+  cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)
+  // (Nov 13, user) Q = UNBREAKABLE: War Cry + the shield together. The roar, then 60s inside the steel shield: every zombie AND boss within 1000px charges him
+  // (re-taunted every second, so new ones come too), he takes 80% less damage, no stun / slow / knockback / hook drag, walks 30% slower. Shatters at the end. 60s cooldown after.
+  fort: { life: 60, taken: 0.2, tauntR: 1000, every: 1, slow: 0.7 },
 };
 function briggsLoadout(p) { p.owned = "shotgun,pistol"; p.primary = "shotgun"; p.secondary = "pistol"; p.weapon = "shotgun"; p.activeSlot = 2; }
 // ARSHAN (slasher): chain-axe. E = Reaper's Reach (throw the hook up to 1100px, latch an enemy or a wall, pull HIMSELF there),
@@ -1387,7 +1390,7 @@ export class SurvivalRoom extends Room {
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: Math.max(0, (info.readyAt || 0) - now) }; }   // Q cooldown counts from the press (Nov 6)
     if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
-    if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.cry.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
+    if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.fort.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
       const v = this.state.vehicles.get(p.sessionId), alive = v?.kind === "heli", active = !alive ? 0 : (v.phase === "call" ? SOFEA.heli.life : v.left) * 1000;
       return { info, alive, active, left: alive ? active + SOFEA.heli.cd * 1000 : Math.max(0, info.readyAt - now) };
@@ -1415,7 +1418,7 @@ export class SurvivalRoom extends Room {
     }
     if (p.characterClass === "juggernaut") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0) return;
-      info.summonedAt = now; info.readyAt = now + (BRIGGS.cry.life + BRIGGS.cry.cd) * 1000; this.ultInfo.set(p.sessionId, info); this.warCry(p, now); return;
+      info.summonedAt = now; info.readyAt = now + (BRIGGS.fort.life + BRIGGS.cry.cd) * 1000; this.ultInfo.set(p.sessionId, info); this.warCry(p, now); return;
     }
     if (p.characterClass === "operator") {
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !this.callVehicle(p, "heli")) return;
@@ -1620,17 +1623,30 @@ export class SurvivalRoom extends Room {
   warCry(p, now) {
     const C = BRIGGS.cry, m = this.bmemOf(p), scale = 1 + (this.state.stage - 1) * 0.08;
     m.castUntil = now + C.cast * 1000; m.cryUntil = now + C.life * 1000; p.charging = false;
+    const F = BRIGGS.fort; m.fortUntil = now + F.life * 1000; m.fortTaunt = 0;   // (Nov 13) Unbreakable: the shield + the big taunt for 60s (fortressTaunt keeps it up)
     for (const z of [...this.state.zombies.values()]) {
       const d = distance(p, z);
-      if (d <= C.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: now + (z.boss ? C.bossTaunt : C.life) * 1000 });
+      if (d <= F.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: now + F.every * 1000 + 600 });
       if (d <= C.impact.r + z.radius) {
         if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), C.impact.push, q => this.solveZombie(q));
         this.hitZombie(z, p, C.impact.dmg * scale);
       }
     }
     for (const a of this.state.players.values()) if (a.alive && distance(a, p) <= C.buffR) this.bmemOf(a).buffUntil = now + C.life * 1000;
-    this.broadcast("briggs", { k: "cry", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: C.tauntR });
-    this.state.message = `${p.name}: WAR CRY!`;
+    this.broadcast("briggs", { k: "cry", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: C.tauntR, fort: 1 });
+    this.state.message = `${p.name}: UNBREAKABLE! Every zombie is coming for him.`;
+  }
+  fortressOn(p, now = Date.now()) { const m = this.briggs.get(p.sessionId); return !!m && p.alive && m.fortUntil > now; }
+  fortressTaunt(p, now) {   // every second while Unbreakable lasts: every zombie and boss within 1000px goes for him
+    const m = this.bmemOf(p), F = BRIGGS.fort; if (now < (m.fortTaunt || 0)) return; m.fortTaunt = now + F.every * 1000;
+    for (const z of this.state.zombies.values()) if (distance(p, z) <= F.tauntR + z.radius) this.taunt.set(z.id, { id: p.sessionId, until: Math.min(m.fortUntil, now + F.every * 1000 + 600) });
+  }
+  endFortress(p, now) {   // the shield shatters: the same burst as the old dome's (hurts + shoves what's close)
+    const m = this.bmemOf(p), S = BRIGGS.bastion.shatter, scale = 1 + (this.state.stage - 1) * 0.08; m.fortUntil = 0; m.safeUntil = now + 500;
+    for (const [id, t] of this.taunt) if (t.id === p.sessionId) this.taunt.delete(id);
+    if (!p.alive) return;
+    for (const z of [...this.state.zombies.values()]) { const d = distance(p, z); if (d > S.r + z.radius) continue; if (!z.boss) this.steerMove(z, z.id, Math.atan2(z.y - p.y, z.x - p.x), S.push, q => this.solveZombie(q)); this.hitZombie(z, p, S.dmg * scale); }
+    this.broadcast("briggs", { k: "shatter", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
   }
   shotgunRage(p, now = Date.now()) { if (p.characterClass !== "juggernaut" || p.weapon !== "shotgun") return false; const m = this.briggs.get(p.sessionId); return !!m && m.cryUntil > now; }
   cryBuff(p) { const m = this.briggs.get(p.sessionId); return m && m.buffUntil > Date.now() ? 1 + BRIGGS.cry.buff : 1; }
@@ -1697,6 +1713,7 @@ export class SurvivalRoom extends Room {
       if (p.characterClass !== "juggernaut") continue;
       if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
       if (p.skillT > 0) { p.stunned = 0; p.slowed = 0; p.skillT = Math.max(0, p.skillT - dt); if (p.skillT <= 0 || !p.alive) this.shatterBastion(p, now); }
+      { const m = this.briggs.get(p.sessionId); if (m?.fortUntil) { if (now < m.fortUntil && p.alive) { p.stunned = 0; p.slowed = 0; this.fortressTaunt(p, now); } else { this.endFortress(p, now); if (!p.alive) { const info = this.ultInfo.get(p.sessionId); if (info && info.summonedAt + BRIGGS.fort.life * 1000 > now) info.summonedAt = now - BRIGGS.fort.life * 1000; } } } }   // (downed: it ends, the cooldown starts)
       const { left, active, alive } = this.ultState(p, now);
       p.ultCd = alive ? BRIGGS.cry.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
@@ -1900,9 +1917,9 @@ export class SurvivalRoom extends Room {
     for (const p of this.state.players.values()) {
       if (!p.alive) continue;
       if (p.characterClass === "juggernaut") {   // dome: nothing gets through (and no hook drag / knockback); War Cry: half damage
-        const bm = this.briggs.get(p.sessionId), dome = p.skillT > 0 || (bm && now < (bm.safeUntil || 0));
-        const k = dome ? 0 : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;
-        if (k < 1) g.set(p, { hp: p.hp, k, x: dome ? p.x : null, y: p.y, dome });
+        const bm = this.briggs.get(p.sessionId), dome = p.skillT > 0 || (bm && now < (bm.safeUntil || 0)), fort = bm && now < (bm.fortUntil || 0);
+        const k = dome ? 0 : fort ? BRIGGS.fort.taken : bm && now < bm.cryUntil ? BRIGGS.cry.taken : 1;   // Unbreakable: 80% less
+        if (k < 1) g.set(p, { hp: p.hp, k, x: dome || fort ? p.x : null, y: p.y, dome: dome || fort });
         continue;
       }
       if (p.characterClass !== "operator") continue;
@@ -3851,7 +3868,7 @@ export class SurvivalRoom extends Room {
     const bud = Math.min(0.25, (this.moveBudget.get(sid) ?? 0.1) + Math.max(0, (now - previous) / 1000));
     const want = Number.isFinite(Number(data?.dt)) ? clamp(Number(data.dt) / 1000, 0, 0.1) : Math.min(0.1, Math.max(0, (now - previous) / 1000));
     const dt = Math.min(want, bud); this.moveBudget.set(sid, bud - dt);
-    const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && p.skillT > 0 ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
+    const sp = p.speed * (p.charging ? AXE_HEAVY.moveMult : 1) * (p.slowed > 0 ? 0.5 : 1) * (p.characterClass === "juggernaut" && (p.skillT > 0 || this.fortressOn(p)) ? BRIGGS.bastion.slow : 1) * (this.spins?.has(p.sessionId) ? ARSHAN.spin.speed / p.speed : 1);   // Briggs's dome: 30% slower; Arshan's cyclone: 130 px/s
     if (this.bmemOf(p).castUntil > now) { this.lastInputs.set(sid, now); return; }   // Briggs mid-cast (fist slam / roar)
     this.moveWithCollision(p, dx / mag * sp * dt, dy / mag * sp * dt);
     // Face the way you walk (left/right). Gun follows movement unless you're shooting.

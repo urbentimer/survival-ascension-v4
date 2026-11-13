@@ -665,3 +665,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 13 — Abomination music: back to the first loop
 - The user asked for the first loop back: `music_boss_abom.mp3` restored from git (sha256 728ac177…, 2,801,206 bytes; the Nov 12 2:54 loop), `MUSIC_LOOP.abom = { pad: .5, len: 174.0001 }`. The guitar-ending version stays in /home/claude/work/abom (render_guitar.py, music_boss_abom_guitar.mp3) if wanted later.
 - Cache `20261113j`; next `20261113k`.
+
+## Nov 13 — Briggs: Q is now UNBREAKABLE (War Cry + the shield)
+- User: "combine his Q and E: he taunts all zombies and bosses in a huge radius while in a shield for a good 1 minute, taking 80% less damage". `BRIGGS.fort = { life: 60, taken: 0.2, tauntR: 1000, every: 1, slow: 0.7 }`. warCry() now also sets `m.fortUntil` (60s); fortressTaunt() re-taunts every zombie AND boss within 1000px every second (new ones too); vehicleGuard: k 0.2 + no knockback / hook drag (position kept) while fortressOn; updateBriggs clears stun / slow; walks 30% slower; endFortress() at the end (or when he goes down: the ult ends, cooldown starts) = the old dome's shatter burst + drops his taunts. The roar's 10s of shotgun rage + team +25% stay (cryUntil). ultState life = fort.life (60) + 60s cooldown. Broadcast "cry" carries fort: 1 (client forms the dome 0.3s later).
+- Client: ULT.juggernaut { name "Unbreakable", life 60, rage 10 }; `briggsRage(p)` = seconds of rage left (fire aura, shotgun spam, HUD "RAGE 9s" then "SHIELD 48s"); the dome draws while skillT > 0 OR ultActive > 0 (old dome art for now; the new steel-wall ring art is coming: project doc claude/briggs-iron-bastion.md). ROSTER Q text updated. The Q card art still says WAR CRY (new card prompt in the doc).
+- E (old 15s Iron Bastion dome) still works until the user picks a new E; R not made yet.
+- Test 36 updated (1000px taunt incl. a boss, late zombies taunted, 80% less, no stun, rage ends at 10s, shatter + cooldown at 60s). sim-bosses 4 / 12 / 24 OK (sim-bosses can't do wave 20: the mission).
+- Cache `20261113k`; next `20261113l`.
