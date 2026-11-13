@@ -730,3 +730,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server `BRIGGS.fort.blast = { r: 400, ry: 200, stun: 3 }`: hit test is the OVAL the shockwave covers on screen (centred on his feet, ring.cy), + the zombie's radius. Test 36: 470px away isn't hit.
 - Client: shockwave grows 110 -> 400px in .7s (looks every .18s, fade .62 -> .95s), drawn 1.3x taller than the art (2:1, matches the 400 x 200 oval); it's now drawn smaller than the art (<= .94x) so it stays crisp; extract-briggs-shock.py unsharp 120% / r 1.3. The old wall-blast crack ring (wall atlas row 2) is no longer drawn at the end (the rise still uses row 0's crack ring).
 - Cache `20261113t`; next `20261113u`.
+
+## Nov 13 — Deflect shockwave v2: the user's fire-ring GIF
+- New art: tools/art/briggs/shock/shockwave-fire.gif (8 frames x 110ms, 439x439, realistic fire on BLACK). `python3 tools/extract-briggs-shock.py` (rewritten; the cartoon-sheet cutter is in git history) -> client/assets/sprites/fx/briggs-shock.webp: RGB atlas 4x2 of 878x878 (UP 2x Lanczos + unsharp 85%/r2), black lifted to exactly 0, frame edges faded (no square), frames kept in place (ring centre 444,436 in a cell; its middle x radius 336 -> 382 by frame 4).
+- Client: BSHOCK { cw 878, ch 878, cx 444, cy 436, rm 336, ms 110 }; drawn ADDITIVELY ("lighter": black adds nothing), scaled so frame 0's ring grows 110 -> 352 (-> ~400 with the art's own growth) in .5s while the 8 frames play (neighbours cross-faded), fade .8 -> .95s.
+- Cache `20261113u`; next `20261113v`.
