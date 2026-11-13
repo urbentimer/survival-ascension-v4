@@ -1915,7 +1915,7 @@ function onBriggs(m) {
   else if (m.k === "cv") {   // the cover in flight: where it is and where it's going (sent at the throw, every hit and every bounce)
     const c = briggsCovers.get(m.id) || { t0: t, trail: [], n: 0, ang: 0 }; c.n++;
     const ox = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.px : m.x, oy = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.py : m.y;   // carry on from where it's drawn (no jump off an arc)
-    const seg = m.tx != null ? { x0: ox, y0: oy, tx: m.tx, ty: m.ty, t, dur: Math.max(.06, Math.hypot(m.tx - ox, m.ty - oy) / (Math.hypot(m.vx, m.vy) || 950)), side: c.n % 2 ? 1 : -1 } : null;
+    const seg = m.tx != null ? { x0: ox, y0: oy, tx: m.tx, ty: m.ty, t, dur: Math.max(.06, Math.hypot(m.tx - ox, m.ty - oy) / (Math.hypot(m.vx, m.vy) || 600)), side: c.n % 2 ? 1 : -1 } : null;
     Object.assign(c, { x: ox, y: oy, vx: m.vx, vy: m.vy, t, end: 0, seg, kick: m.go ? 0 : t }); briggsCovers.set(m.id, c);
     if (m.go && near) playSfx("shotgun", m.x, m.y, .25);
     if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,225,170", 140); playSfx("zhit", m.zx, m.zy); fx.push({ type: "briggs", k: "ping", x: m.zx, y: m.zy, t }); }
@@ -2095,7 +2095,7 @@ function drawBriggsCovers(items, now) {
     else if (sg) { const k = Math.min((now - sg.t) / 1000 - sg.dur, .25); x = sg.tx + c.vx * k; y = sg.ty + c.vy * k; z = 22; }
     else { const k = Math.min((now - c.t) / 1000, .25); x = c.x + c.vx * k; y = c.y + c.vy * k; z = 22; }
     c.px = x; c.py = y;
-    c.ang += fdt * (c.end ? .03 * (1 - land) : .03 + .06 * Math.exp(-(now - (c.kick || -1e9)) / 160));   // spins faster just after a bounce
+    c.ang += fdt * (c.end ? .02 * (1 - land) : .02 + .045 * Math.exp(-(now - (c.kick || -1e9)) / 180));   // spins faster just after a bounce
     const tr = c.trail; if (!c.end) tr.push({ x, y: y - z, t: now }); while (tr.length && now - tr[0].t > (c.end ? 0 : 150)) tr.shift();
     const al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1, spin = c.ang, X = x, Y = y, Z = z;
     if (!inView(x, y, 80)) continue;
@@ -2104,7 +2104,7 @@ function drawBriggsCovers(items, now) {
       if (tr.length > 1) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";   // the glowing ribbon
         for (let i = 1; i < tr.length; i++) { const f = i / (tr.length - 1); ctx.strokeStyle = `rgba(255,${Math.round(170 + 70 * f)},${Math.round(80 + 100 * f)},${.55 * f})`; ctx.lineWidth = 2 + 13 * f; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
         ctx.restore();
-        for (const [ago, ga] of [[90, .16], [45, .32]]) { let gp = null; for (const q of tr) if (now - q.t >= ago) gp = q; if (gp) drawManholeCover(gp.x, gp.y, spin - ago * .03, ga * al); } }   // afterimages
+        for (const [ago, ga] of [[90, .16], [45, .32]]) { let gp = null; for (const q of tr) if (now - q.t >= ago) gp = q; if (gp) drawManholeCover(gp.x, gp.y, spin - ago * .02, ga * al); } }   // afterimages
       drawManholeCover(X, Y - Z, spin, al); } });
   }
 }

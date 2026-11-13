@@ -265,7 +265,7 @@ const SOFEA = {
 // BRIGGS (juggernaut): E = MANHOLE FRISBEE (Nov 13: rips up a manhole cover and flings it: it slices through zombies, ricochets to the next one and off walls),
 // Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
-  cover: { cast: 0.34, speed: 950, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 3.2, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
+  cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)

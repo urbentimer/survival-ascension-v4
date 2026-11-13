@@ -764,3 +764,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Server: a zombie hit's "cv" message also carries tx/ty = the next zombie it's turning to.
 - Client (style only, no gameplay change): each ricochet is drawn as an ARC to that zombie (quadratic curve bulging out to alternate sides, up to 70px, with a 14px hop), starting from wherever the cover is drawn (no jumps); past the target it carries on straight until the next event. The cover spins faster right after each bounce; a glowing ribbon trail (150ms, tapered, additive) and 2 afterimages follow it; fx "ping" at every bounce (starburst + a ring popping out).
 - Cache `20261113z`; next `20261114a`.
+
+## Nov 13 — Manhole Frisbee slower
+- User: slower. `BRIGGS.cover.speed 950 -> 600` px/s, life 3.2 -> 5s (the 12 bounces still fit); client spin .03 -> .02 rad/ms (+.045 kick after a bounce). Test 36 ticks longer (120).
+- Cache `20261114a`; next `20261114b`.
