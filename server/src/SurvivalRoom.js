@@ -265,7 +265,7 @@ const SOFEA = {
 // BRIGGS (juggernaut): E = MANHOLE FRISBEE (Nov 13: rips up a manhole cover and flings it: it slices through zombies, ricochets to the next one and off walls),
 // Q = UNBREAKABLE (War Cry + 8 shields for 30s, see fort). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
-  cover: { cast: 0.34, speed: 950, r: 18, dmg: 70, bossMult: 1.5, hits: 8, walls: 4, life: 1.8, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; after a hit it turns to the nearest one it hasn't hit (seek, line of sight)
+  cover: { cast: 0.34, speed: 950, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 3.2, seek: 340, push: 30, stun: 0.5, cd: 10 },   // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
   cry: { cast: 0.3, life: 10, cd: 60, tauntR: 350, bossTaunt: 3, taken: 0.5, buffR: 400, buff: 0.25, impact: { r: 210, push: 45, dmg: 30 } },   // (the roar part of the Q: its 10s of shotgun rage + team buff, and the impact)
@@ -1743,7 +1743,7 @@ export class SurvivalRoom extends Room {
   // ---------- BRIGGS: Manhole Frisbee (E) ----------
   ripCover(p) {   // he rips a manhole cover out of the street (cast), then flings it where he's aiming
     const now = Date.now(), C = BRIGGS.cover, a = p.aim || 0;
-    this.covers.set(p.sessionId, { phase: "rip", t0: now, x: p.x, y: p.y, vx: 0, vy: 0, hit: new Set(), hits: 0, walls: 0 });
+    this.covers.set(p.sessionId, { phase: "rip", t0: now, x: p.x, y: p.y, vx: 0, vy: 0, hit: new Set(), hits: 0, b: 0 });
     p.abilityCooldown = C.cd; p.charging = false; this.bmemOf(p).castUntil = now + C.cast * 1000;   // he stands still while he rips it up
     this.broadcast("briggs", { k: "rip", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: Math.round(a * 100) / 100, cast: C.cast });
   }
@@ -1767,7 +1767,7 @@ export class SurvivalRoom extends Room {
         if (out || this.coverWall(nx, ny, C.r * .5)) {   // a wall (or the map's edge): bounce off it
           const bx = nx < 10 || nx > W - 10 || this.coverWall(nx, c.y, C.r * .5), by = ny < 10 || ny > H - 10 || this.coverWall(c.x, ny, C.r * .5);
           if (bx || !by) c.vx = -c.vx; if (by || !bx) c.vy = -c.vy;
-          if (++c.walls > C.walls) { this.endCover(id, c, "wall"); ended = true; break; }
+          if (++c.b > C.bounces) { this.endCover(id, c, "wall"); ended = true; break; }
           this.coverMsg(id, c, { wall: 1 }); continue;
         }
         c.x = nx; c.y = ny;
@@ -1778,7 +1778,7 @@ export class SurvivalRoom extends Room {
           const sp = Math.hypot(c.vx, c.vy) || 1, a0 = Math.atan2(c.vy, c.vx);
           this.hitZombie(z, p, C.dmg * scale * (z.boss ? C.bossMult : 1));
           if (this.state.zombies.has(z.id) && !z.boss) { this.steerMove(z, z.id, a0, C.push, q => this.solveZombie(q)); this.stunZombie(z, C.stun, now); }
-          if (c.hits >= C.hits) { this.endCover(id, c, "hits"); ended = true; break; }
+          if (++c.b > C.bounces) { this.endCover(id, c, "hits"); ended = true; break; }
           let best = null, bd = C.seek * C.seek;   // ricochet: on to the nearest zombie it hasn't hit (that it can reach)
           for (const q of this.state.zombies.values()) { if (c.hit.has(q.id)) continue; const ex = q.x - c.x, ey = q.y - c.y, d2 = ex * ex + ey * ey; if (d2 < bd && this.lineClear(c, q, false)) { bd = d2; best = q; } }
           if (best) { const b = Math.atan2(best.y - c.y, best.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp; }

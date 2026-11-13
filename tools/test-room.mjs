@@ -965,11 +965,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   { p.aim = 0; const z1 = placeZombie(room, p.x + 120, p.y, 9999), z2 = placeZombie(room, p.x + 260, p.y + 90, 9999), z3 = placeZombie(room, p.x + 380, p.y - 40, 9999), zb = placeZombie(room, p.x - 420, p.y, 9999);
     [z1, z2, z3, zb].forEach(w => { w.speed = 0; w.role = "tower"; });
     send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 9 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Manhole Frisbee: he rips up a manhole cover (10s cooldown)");
-    tick(50);
+    tick(80);
     ok(z1.hp < 9999 && z2.hp < 9999 && z3.hp < 9999 && zb.hp === 9999, `...it slices through a zombie and ricochets on to the next ones (${[z1, z2, z3].map(w => 9999 - Math.round(w.hp)).join(" / ")} dmg), not the one 420px behind him`);
     ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend"), "...then it drops");
+    room.state.zombies.clear(); p.abilityCooldown = 0; tick(2);
+    { const row = []; for (let i = 0; i < 20; i++) { const w = placeZombie(room, p.x + 100 + i * 55, p.y + (i % 2 ? 25 : -25), 9999); w.speed = 0; w.role = "tower"; row.push(w); }
+      send(A, "ability", { a: 0 }); tick(80); const hitN = row.filter(w => w.hp < 9999).length; ok(hitN === 13 && !room.covers.has("A"), `...it bounces 12 times: 13 zombies in a row get hit, then it drops (${hitN})`); }
     room.state.zombies.clear(); p.abilityCooldown = 0; events.length = 0; const px0 = p.x; p.x = 70; p.aim = Math.PI; send(A, "ability", { a: Math.PI }); tick(12);
-    ok(events.some(e => e.type === "briggs" && e.k === "cv" && e.wall), "...and bounces off walls / the map's edge"); tick(40); p.x = px0; p.abilityCooldown = 0; }
+    ok(events.some(e => e.type === "briggs" && e.k === "cv" && e.wall), "...and bounces off walls / the map's edge"); tick(80);
+    { const nb = events.filter(e => e.type === "briggs" && e.k === "cv" && (e.wall || e.hz)).length; ok(nb >= 1 && nb <= 12 && events.some(e => e.type === "briggs" && e.k === "cvend"), `...12 bounces at most (${nb} here), then it drops`); }
+    p.x = px0; p.abilityCooldown = 0; }
   room.state.zombies.clear();
   // War Cry
   q.hp = q.maxHp; p.hp = p.maxHp; p.ultKills = 100; tick(1); ok(p.ultReady, "Q unlocks at 100 kills");

@@ -51,7 +51,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 10, icon: "ironBastion" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 10, icon: "manholeFrisbee" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
@@ -486,7 +486,7 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "ironBastion" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "manholeFrisbee" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
@@ -1922,7 +1922,7 @@ function onBriggs(m) {
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
-  if (a.k === "rip" && s < (a.cast || .34) + .22) { const c = a.cast || .34; return { block: 6, col: s < c * .45 ? 0 : s < c ? 1 : s < c + .1 ? 2 : 3 }; }   // (until the throw art) crouch, hands in the street (rip), up, fling
+  if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: 7, col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 13) the user's E pose: grip the cover, RIP it up, wind up, FLING (the cover leaves at the cast's end)
   if (a.k === "cry" && s < .75) return a.fort ? { block: 6, col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 } : { block: 5, col: s < .08 ? 0 : s < .18 ? 1 : s < .5 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
   return null;
 }
@@ -2066,10 +2066,10 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
 }
 // (Nov 13) MANHOLE FRISBEE: the cover in flight (spun flat, a shadow under it), the hole left in the street. Drawn in code until the user's art.
 const briggsCovers = new Map(), manholes = [];   // id -> { x, y, vx, vy, t (last update), t0, end }; holes: { x, y, t }
-const coverImg = { naturalWidth: 0 };   // (the user's cover art goes here: a code-drawn cover until then)
+const coverImg = new Image(); coverImg.src = "assets/sprites/fx/manhole.webp";   // the user's art (tools/extract-manhole.py): 96px cells: 0 = the cover from above, 1 = the open manhole
 function drawManholeCover(x, y, spin, al = 1) {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, .55); ctx.rotate(spin);
-  if (coverImg.naturalWidth) { const r = 17; ctx.drawImage(coverImg, -r, -r, r * 2, r * 2); ctx.restore(); return; }
+  if (coverImg.naturalWidth) { const r = 21; ctx.imageSmoothingEnabled = true; ctx.drawImage(coverImg, 0, 0, 96, 96, -r, -r, r * 2, r * 2); ctx.restore(); return; }
   ctx.fillStyle = "#3a3e43"; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#17191c"; ctx.stroke();
   ctx.strokeStyle = "#5c636b"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 12.5, 0, 7); ctx.stroke();
   ctx.strokeStyle = "#24272b"; ctx.lineWidth = 1.4; for (let k = -2; k <= 2; k++) { const o = k * 4.5, h = Math.sqrt(Math.max(0, 140 - o * o)); ctx.beginPath(); ctx.moveTo(o, -h); ctx.lineTo(o, h); ctx.moveTo(-h, o); ctx.lineTo(h, o); ctx.stroke(); }
@@ -2077,7 +2077,8 @@ function drawManholeCover(x, y, spin, al = 1) {
 }
 function drawBriggsCovers(items, now) {
   for (let i = manholes.length - 1; i >= 0; i--) { const h = manholes[i], age = now - h.t; if (age > 9000) { manholes.splice(i, 1); continue; } if (age < 0 || !inView(h.x, h.y, 40)) continue;   // the open hole
-    const al = age > 8000 ? (9000 - age) / 1000 : 1; items.push({ y: -1e9 + 1, draw: () => { ctx.save(); ctx.globalAlpha = al; ctx.translate(h.x, h.y); ctx.scale(1, .55);
+    const al = age > 8000 ? (9000 - age) / 1000 : 1; items.push({ y: -1e9 + 1, draw: () => { ctx.save(); ctx.globalAlpha = al; ctx.translate(h.x, h.y); ctx.scale(1, .58);
+      if (coverImg.naturalWidth) { ctx.imageSmoothingEnabled = true; ctx.drawImage(coverImg, 96, 0, 96, 96, -28, -28, 56, 56); ctx.restore(); return; }
       ctx.fillStyle = "#2c2f33"; ctx.beginPath(); ctx.arc(0, 0, 19, 0, 7); ctx.fill(); ctx.fillStyle = "#050607"; ctx.beginPath(); ctx.arc(0, 1.5, 14.5, 0, 7); ctx.fill(); ctx.strokeStyle = "#4a4f55"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke(); ctx.restore(); } }); }
   for (const [id, c] of briggsCovers) {
     const dt = (now - c.t) / 1000, land = c.end ? Math.min(1, (now - c.end) / 380) : 0;
@@ -2085,7 +2086,7 @@ function drawBriggsCovers(items, now) {
     const k = c.end ? Math.min(dt, .38) * (1 - land * .5) : Math.min(dt, .25), x = c.x + c.vx * k, y = c.y + c.vy * k, z = c.end ? 22 * (1 - land) * (1 - land) : 22, spin = (now - c.t0) * (c.end ? .03 * (1 - land) : .03), al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1;
     if (!inView(x, y, 60)) continue;
     items.push({ y, draw: () => {
-      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(x, y + 2, 15, 6, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
+      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(x, y + 2, 18, 7, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
       if (!c.end) { ctx.save(); ctx.globalCompositeOperation = "lighter"; const sp = Math.hypot(c.vx, c.vy) || 1, tx = x - c.vx / sp * 46, ty = y - z - c.vy / sp * 46, g = ctx.createLinearGradient(tx, ty, x, y - z);   // a motion streak
         g.addColorStop(0, "rgba(255,200,120,0)"); g.addColorStop(1, "rgba(255,220,170,.35)"); ctx.strokeStyle = g; ctx.lineWidth = 10; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y - z); ctx.stroke(); ctx.restore(); }
       drawManholeCover(x, y - z, spin, al); } });
@@ -3369,7 +3370,7 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
-  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "slam"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.png", blocks: ["shotgun", "knife", "bat", "axe", "bastion", "warcry", "slam", "throw"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
     fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
@@ -5104,7 +5105,7 @@ const ROSTER = [
              { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }],
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
-    skills: [{ k: "E", n: "Manhole Frisbee", cd: 10, card: "ironBastion", t: "Rips a manhole cover out of the street and flings it: it slices through zombies, ricochets to the next one (up to 8) and bounces off walls. Knocks them back and stuns them for a moment." },
+    skills: [{ k: "E", n: "Manhole Frisbee", cd: 10, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
              { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },
   { id: "operator", name: "SOFEA", role: "OPERATOR", cat: "specialist", hp: 115, dmg: 15, spd: 180, def: 0, desc: "Heavy-metal specialist. Calls in her own tank and a gunship, and pilots the Crimson Aegis mecha straight into the horde.",

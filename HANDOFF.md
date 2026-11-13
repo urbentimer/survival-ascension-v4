@@ -752,3 +752,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: briggsCovers (extrapolated from the last cv; drop + roll + fade after cvend), manholes (the hole, 9s), drawBriggsCovers(items) depth-sorted (shadow, motion streak, flat spinning disc; coverImg placeholder for the art), hit/wall sparks (deepEmit) + zhit. Roster E/Q text updated.
 - Test 36: E = rips (10s cd), ricochets through 3 zombies not the one behind, drops, bounces off the map edge.
 - Cache `20261113x`; next `20261113y`.
+
+## Nov 13 — Manhole Frisbee: the user's art in, 12 bounces
+- Art (tools/art/briggs): throw-pose.png (8x4: grip, RIP, wind up, FLING), manhole-art.png (cover from above + open manhole), manhole-card.png.
+- `python3 tools/clean-briggs-throw.py` -> throw-pose-clean.png: the fling column keeps only Briggs (the art also drew the flying cover, always flying right, + speed lines / rocks) and centres him in his column (he poked past the column line). cut-briggs.sh adds `throw=$B/throw-pose-clean.png!4%271.5x181` (block 7, scale .37); fix-briggs-slam.py also mirrors the throw block's left rows from the right rows (the art flung right in every row) + pink fix. DIR8 juggernaut blocks + "throw"; briggsCast rip = block 7 (cols at .35 / .7 / 1 x cast, fling until cast + .24).
+- `python3 tools/extract-manhole.py` -> fx/manhole.webp (2 cells 96x96: cover, hole) + icons/card-manholeFrisbee.png (CSS .card-manholeFrisbee; E card / HUD / roster use it). Cover drawn r 21 squashed flat (.55) and spun; hole 56px squashed .58. card-ironBastion.png + its CSS deleted.
+- Server: `BRIGGS.cover` now `bounces: 12, life: 3.2, r: 20` (no hits/walls): every zombie hit or wall counts (c.b); the 13th contact ends it. Test 36: 13 zombies in a row get hit, + "12 bounces at most".
+- Cache `20261113y`; next `20261113z`.
