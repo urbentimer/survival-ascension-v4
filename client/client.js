@@ -1913,10 +1913,13 @@ function onBriggs(m) {
     manholes.push({ x: hx, y: hy, t: t + 160 }); if (manholes.length > 12) manholes.shift();
     setTimeout(() => { deepEmit("chip", hx, hy, 6, { sp: 150, up: 260, s: 4 }); deepEmit("dust", hx, hy, 2, { r: 14, sp: 60, s: 20, life: 600 }); if (near) { playSfx("stomp", m.x, m.y, .7); shake(4, 160); } }, 160); }
   else if (m.k === "cv") {   // the cover in flight: where it is and where it's going (sent at the throw, every hit and every bounce)
-    const c = briggsCovers.get(m.id) || { t0: t }; Object.assign(c, { x: m.x, y: m.y, vx: m.vx, vy: m.vy, t, end: 0 }); briggsCovers.set(m.id, c);
+    const c = briggsCovers.get(m.id) || { t0: t, trail: [], n: 0, ang: 0 }; c.n++;
+    const ox = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.px : m.x, oy = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.py : m.y;   // carry on from where it's drawn (no jump off an arc)
+    const seg = m.tx != null ? { x0: ox, y0: oy, tx: m.tx, ty: m.ty, t, dur: Math.max(.06, Math.hypot(m.tx - ox, m.ty - oy) / (Math.hypot(m.vx, m.vy) || 950)), side: c.n % 2 ? 1 : -1 } : null;
+    Object.assign(c, { x: ox, y: oy, vx: m.vx, vy: m.vy, t, end: 0, seg, kick: m.go ? 0 : t }); briggsCovers.set(m.id, c);
     if (m.go && near) playSfx("shotgun", m.x, m.y, .25);
-    if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,225,170", 140); playSfx("zhit", m.zx, m.zy); }
-    if (m.wall) { deepEmit("spark", m.x, m.y, 9, { sp: 340, up: 150, z: 22, s: 5, life: 260 }); deepEmit("chip", m.x, m.y, 3, { sp: 140, up: 200, z: 20, s: 3 }); playSfx("zhit", m.x, m.y, 1.4); }
+    if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,225,170", 140); playSfx("zhit", m.zx, m.zy); fx.push({ type: "briggs", k: "ping", x: m.zx, y: m.zy, t }); }
+    if (m.wall) { deepEmit("spark", m.x, m.y, 9, { sp: 340, up: 150, z: 22, s: 5, life: 260 }); deepEmit("chip", m.x, m.y, 3, { sp: 140, up: 200, z: 20, s: 3 }); playSfx("zhit", m.x, m.y, 1.4); fx.push({ type: "briggs", k: "ping", x: m.x, y: m.y, t, wall: 1 }); }
   }
   else if (m.k === "cvend") { const c = briggsCovers.get(m.id); if (c) { Object.assign(c, { x: m.x, y: m.y, vx: c.vx * .25, vy: c.vy * .25, t, end: t }); deepEmit("spark", m.x, m.y, 6, { sp: 200, up: 120, z: 18, s: 4, life: 220 }); } }
 }
@@ -2080,16 +2083,29 @@ function drawBriggsCovers(items, now) {
     const al = age > 8000 ? (9000 - age) / 1000 : 1; items.push({ y: -1e9 + 1, draw: () => { ctx.save(); ctx.globalAlpha = al; ctx.translate(h.x, h.y); ctx.scale(1, .58);
       if (coverImg.naturalWidth) { ctx.imageSmoothingEnabled = true; ctx.drawImage(coverImg, 96, 0, 96, 96, -28, -28, 56, 56); ctx.restore(); return; }
       ctx.fillStyle = "#2c2f33"; ctx.beginPath(); ctx.arc(0, 0, 19, 0, 7); ctx.fill(); ctx.fillStyle = "#050607"; ctx.beginPath(); ctx.arc(0, 1.5, 14.5, 0, 7); ctx.fill(); ctx.strokeStyle = "#4a4f55"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke(); ctx.restore(); } }); }
-  for (const [id, c] of briggsCovers) {
-    const dt = (now - c.t) / 1000, land = c.end ? Math.min(1, (now - c.end) / 380) : 0;
+  for (const [id, c] of briggsCovers) {   // (Nov 13, user: "bounce like Sivir's") each ricochet ARCS to the next zombie (curving out to alternate sides,
+    // hopping up a little), the cover spins faster right after a hit, a glowing ribbon trail + 2 afterimages follow it; "ping" fx at every bounce
     if (c.end && now - c.end > 1300) { briggsCovers.delete(id); continue; }
-    const k = c.end ? Math.min(dt, .38) * (1 - land * .5) : Math.min(dt, .25), x = c.x + c.vx * k, y = c.y + c.vy * k, z = c.end ? 22 * (1 - land) * (1 - land) : 22, spin = (now - c.t0) * (c.end ? .03 * (1 - land) : .03), al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1;
-    if (!inView(x, y, 60)) continue;
+    const fdt = Math.min(50, now - (c.last || now)); c.last = now;
+    const land = c.end ? Math.min(1, (now - c.end) / 380) : 0; let x, y, z;
+    const sg = c.seg, u = sg ? (now - sg.t) / 1000 / sg.dur : 2;
+    if (c.end) { const k = Math.min((now - c.t) / 1000, .38) * (1 - land * .5); x = c.x + c.vx * k; y = c.y + c.vy * k; z = 22 * (1 - land) * (1 - land); }
+    else if (sg && u < 1) { const dx = sg.tx - sg.x0, dy = sg.ty - sg.y0, L = Math.hypot(dx, dy) || 1, bl = Math.min(70, L * .32) * sg.side, qx = (sg.x0 + sg.tx) / 2 - dy / L * bl, qy = (sg.y0 + sg.ty) / 2 + dx / L * bl * .6, v = 1 - u;
+      x = v * v * sg.x0 + 2 * v * u * qx + u * u * sg.tx; y = v * v * sg.y0 + 2 * v * u * qy + u * u * sg.ty; z = 22 + 14 * Math.sin(Math.PI * u); }
+    else if (sg) { const k = Math.min((now - sg.t) / 1000 - sg.dur, .25); x = sg.tx + c.vx * k; y = sg.ty + c.vy * k; z = 22; }
+    else { const k = Math.min((now - c.t) / 1000, .25); x = c.x + c.vx * k; y = c.y + c.vy * k; z = 22; }
+    c.px = x; c.py = y;
+    c.ang += fdt * (c.end ? .03 * (1 - land) : .03 + .06 * Math.exp(-(now - (c.kick || -1e9)) / 160));   // spins faster just after a bounce
+    const tr = c.trail; if (!c.end) tr.push({ x, y: y - z, t: now }); while (tr.length && now - tr[0].t > (c.end ? 0 : 150)) tr.shift();
+    const al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1, spin = c.ang, X = x, Y = y, Z = z;
+    if (!inView(x, y, 80)) continue;
     items.push({ y, draw: () => {
-      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(x, y + 2, 18, 7, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
-      if (!c.end) { ctx.save(); ctx.globalCompositeOperation = "lighter"; const sp = Math.hypot(c.vx, c.vy) || 1, tx = x - c.vx / sp * 46, ty = y - z - c.vy / sp * 46, g = ctx.createLinearGradient(tx, ty, x, y - z);   // a motion streak
-        g.addColorStop(0, "rgba(255,200,120,0)"); g.addColorStop(1, "rgba(255,220,170,.35)"); ctx.strokeStyle = g; ctx.lineWidth = 10; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y - z); ctx.stroke(); ctx.restore(); }
-      drawManholeCover(x, y - z, spin, al); } });
+      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(X, Y + 2, 18, 7, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
+      if (tr.length > 1) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";   // the glowing ribbon
+        for (let i = 1; i < tr.length; i++) { const f = i / (tr.length - 1); ctx.strokeStyle = `rgba(255,${Math.round(170 + 70 * f)},${Math.round(80 + 100 * f)},${.55 * f})`; ctx.lineWidth = 2 + 13 * f; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
+        ctx.restore();
+        for (const [ago, ga] of [[90, .16], [45, .32]]) { let gp = null; for (const q of tr) if (now - q.t >= ago) gp = q; if (gp) drawManholeCover(gp.x, gp.y, spin - ago * .03, ga * al); } }   // afterimages
+      drawManholeCover(X, Y - Z, spin, al); } });
   }
 }
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
@@ -2124,6 +2140,9 @@ function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter
 }
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
+  if (f.k === "ping") {   // (Nov 13) the frisbee bouncing off a zombie / a wall: a bright starburst + a ring popping out
+    if (s > .26) return false; const q = s / .26, y = f.y - (f.wall ? 18 : 22), r = 8 + 26 * q; ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(255,232,170,${1 - q})`; ctx.lineWidth = 3 * (1 - q) + 1;
+    ctx.beginPath(); ctx.ellipse(f.x, y, r, r * .55, 0, 0, 7); ctx.stroke(); ctx.restore(); drawStar(f.x, y, .6 * (q < .3 ? .6 + q : 1 - (q - .3)), 1 - q, q * 2, .5); return true; }
   if (f.k === "shieldBlast") {   // (Nov 13) Unbreakable ends: the 8 shields flare white-hot and get thrown outward, a shockwave, sparks, rocks; cracks left on the floor
     if (s > 1) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
     if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }

@@ -759,3 +759,8 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - `python3 tools/extract-manhole.py` -> fx/manhole.webp (2 cells 96x96: cover, hole) + icons/card-manholeFrisbee.png (CSS .card-manholeFrisbee; E card / HUD / roster use it). Cover drawn r 21 squashed flat (.55) and spun; hole 56px squashed .58. card-ironBastion.png + its CSS deleted.
 - Server: `BRIGGS.cover` now `bounces: 12, life: 3.2, r: 20` (no hits/walls): every zombie hit or wall counts (c.b); the 13th contact ends it. Test 36: 13 zombies in a row get hit, + "12 bounces at most".
 - Cache `20261113y`; next `20261113z`.
+
+## Nov 13 — Manhole Frisbee bounces "like Sivir's"
+- Server: a zombie hit's "cv" message also carries tx/ty = the next zombie it's turning to.
+- Client (style only, no gameplay change): each ricochet is drawn as an ARC to that zombie (quadratic curve bulging out to alternate sides, up to 70px, with a 14px hop), starting from wherever the cover is drawn (no jumps); past the target it carries on straight until the next event. The cover spins faster right after each bounce; a glowing ribbon trail (150ms, tapered, additive) and 2 afterimages follow it; fx "ping" at every bounce (starburst + a ring popping out).
+- Cache `20261113z`; next `20261114a`.

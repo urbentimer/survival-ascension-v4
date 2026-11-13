@@ -1782,7 +1782,7 @@ export class SurvivalRoom extends Room {
           let best = null, bd = C.seek * C.seek;   // ricochet: on to the nearest zombie it hasn't hit (that it can reach)
           for (const q of this.state.zombies.values()) { if (c.hit.has(q.id)) continue; const ex = q.x - c.x, ey = q.y - c.y, d2 = ex * ex + ey * ey; if (d2 < bd && this.lineClear(c, q, false)) { bd = d2; best = q; } }
           if (best) { const b = Math.atan2(best.y - c.y, best.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp; }
-          this.coverMsg(id, c, { hz: 1, zx: Math.round(z.x), zy: Math.round(z.y), boss: z.boss ? 1 : 0 }); break;
+          this.coverMsg(id, c, { hz: 1, zx: Math.round(z.x), zy: Math.round(z.y), boss: z.boss ? 1 : 0, ...(best ? { tx: Math.round(best.x), ty: Math.round(best.y) } : {}) }); break;   // tx/ty: the next zombie (the client arcs the cover to it)
         }
       }
     }
