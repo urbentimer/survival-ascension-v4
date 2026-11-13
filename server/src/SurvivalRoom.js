@@ -1670,15 +1670,15 @@ export class SurvivalRoom extends Room {
       const raw = s.hp - after, m = this.bmemOf(p); m.fortStored = (m.fortStored || 0) + raw;
       let allow = 0;
       if (z?.boss) { const cd = m.fortBossCd || (m.fortBossCd = new Map()); if (now >= (cd.get(z.id) || 0)) { allow = raw * F.bossTaken; cd.set(z.id, now + F.bossGap * 1000); } }
-      this.fortRestore(p, s.hp, s.dt, allow, now); const e = guard?.get(p); if (e) e.hp -= allow;   // (the tick's guard doesn't count it again)
+      this.fortRestore(p, s.hp, s.dt, allow, now, z); const e = guard?.get(p); if (e) e.hp -= allow;   // (the tick's guard doesn't count it again)
     }
   }
-  fortRestore(p, hp0, dt0, allow, now) {   // put his HP back to what it was minus what's allowed through (undoing a down if the hit had downed him)
+  fortRestore(p, hp0, dt0, allow, now, src) {   // src: the zombie that hit him (its position goes to the client: sparks off the shield facing it)   // put his HP back to what it was minus what's allowed through (undoing a down if the hit had downed him)
     const fixed = hp0 - allow;
     if (fixed > 0) { if (!p.alive) { p.alive = true; p.bleedout = 0; p.bledOut = false; this.downs.set(p.sessionId, Math.max(0, (this.downs.get(p.sessionId) || 1) - 1)); this.state.message = ""; } p.hp = fixed; }
     else if (p.alive) { p.hp = fixed; this.downPlayer(p); }
     if (dt0 != null) p.damageTaken = dt0 + allow;
-    const bm = this.bmemOf(p); if (now - bm.hitAt > 160) { bm.hitAt = now; this.broadcast("briggs", { k: "hit", id: p.sessionId }); }
+    const bm = this.bmemOf(p); if (now - bm.hitAt > 160) { bm.hitAt = now; this.broadcast("briggs", { k: "hit", id: p.sessionId, ...(src ? { x: Math.round(src.x), y: Math.round(src.y) } : {}) }); }
     if (now - (bm.fortSent || 0) > 250) { bm.fortSent = now; this.broadcast("briggs", { k: "store", id: p.sessionId, v: Math.round(bm.fortStored || 0) }); }
   }
   shotgunRage(p, now = Date.now()) { if (p.characterClass !== "juggernaut" || p.weapon !== "shotgun") return false; const m = this.briggs.get(p.sessionId); return !!m && m.cryUntil > now; }

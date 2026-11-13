@@ -1902,14 +1902,14 @@ function onBriggs(m) {
   const t = gnow(), a = briggsAnim.get(m.id) || {}, me = me_(), near = me && Math.hypot((m.x ?? me.x) - me.x, (m.y ?? me.y) - me.y) < 900;
   if (m.k === "bastion") { briggsAnim.set(m.id, { ...a, k: "bastion", t0: t, domeAt: t + 300 }); setTimeout(() => near && shake(7, 220), 300); }
   else if (m.k === "cry") {   // the roar lands 0.18s in: hit-stop, big shake, the shockwave ring; (Nov 13) Unbreakable: then the shield forms
-    briggsAnim.set(m.id, { ...a, k: "cry", t0: t, fort: !!m.fort, blastAt: 0, ...(m.fort ? { domeAt: t + 300 } : {}) });
+    briggsAnim.set(m.id, { ...a, k: "cry", t0: t, fort: !!m.fort, blastAt: 0, rose: 0, hits: [], flash: [], ...(m.fort ? { domeAt: t + 300 } : {}) });
     setTimeout(() => { if (!m.fort) fx.push({ type: "briggs", k: "ring", x: m.x, y: m.y, r: m.r, t: gnow() }); if (near) { hitStopUntil = gnow() + 70; shake(16, 520); } }, m.fort ? 150 : 180);
   }
-  else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5, ...(t - (a.sparkAt || 0) > BW.sparkGap ? { sparkAt: t } : {}) });   // (the Unbreakable ring sparks at most every 0.42s, so a crowd of hits still reads as hits)
+  else if (m.k === "hit") briggsAnim.set(m.id, { ...a, hitAt: t, hitFlip: Math.random() < .5, hits: [...(a.hits || []).slice(-5), { x: m.x, y: m.y, t }] });   // (Unbreakable: sparks off the shield facing the attacker, m.x/m.y)
   else if (m.k === "store") briggsStore.set(m.id, m.v);
   else if (m.k === "blast") {   // (Nov 13) Unbreakable ends: the shield blasts out what it stored; everything within 100px is stunned 3s
-    briggsStore.delete(m.id); { const b = briggsAnim.get(m.id); if (b) b.blastAt = t; }   // the ring stops turning and plays the release blast (wall atlas row 2) where it stands
-    fx.push({ type: "briggs", k: "wallBlast", x: m.x, y: m.y, t });
+    briggsStore.delete(m.id); const b = briggsAnim.get(m.id); if (b) b.blastAt = t;   // the shields stop where they are and get thrown outward, white-hot
+    fx.push({ type: "briggs", k: "shieldBlast", x: m.x, y: m.y, t, rot: shieldRot(m.id, b || { t0: t }, t) });
     if (m.dmg > 0) fx.push({ type: "briggs", k: "deflect", x: m.x, y: m.y, v: m.dmg, t });
     for (const id of m.ids || []) zStunFx.set(id, t + (m.stun || 3) * 1000);
     if (near) { hitStopUntil = gnow() + 90; shake(18, 600); }
@@ -1995,32 +1995,22 @@ function briggsFire(p, now, front) {
   }
   ctx.restore();
 }
-// (Nov 13) UNBREAKABLE's steel ring, from the user's art (tools/extract-briggs-wall.py): it rises out of the ground at the slam (wall atlas row 0),
-// then 8 flat steel panels TURN ANTICLOCKWISE around him (an octagon; each panel drawn in thin vertical strips from a slab texture; the far ones show
-// their inner face, darker and a bit shorter), with glowing orange bars at the seams. The user's 3 looks: normal = the locked ring of the rise sheet
-// (frame 6); a zombie/boss hit = starburst sparks on every seam for a moment (rise frame 5), then back to normal; about to blow = golden plates,
-// white-hot seams, sparks jumping off the top (heat frame 6). At the end it blasts out (row 2). Back half drawn behind Briggs, front half in front.
-const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";
-const slabImg = new Image(); slabImg.src = "assets/sprites/fx/briggs-slab.webp";
-const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, ry: 41.7, tw: 78, th: 109, tg: 106.4, top: 20, ts: .7, spin: 1.15, split: 38, riseMs: 75, spark: 300, sparkGap: 420 };   // rx = the octagon's corner radius (front panel 2*rx*sin22.5 = 57px, like the art at 0.56)
-const SLAB_SHADE = [[0, 1], [0, .84], [0, .68], [1, .86], [1, .72]];   // [outer / inner face, brightness]: facing the camera ... side; the far slabs' inner face ... at the sides
+// (Nov 13, v3) UNBREAKABLE: 8 SEPARATE steel shields orbit Briggs (anticlockwise), with gaps between them. The user's art is a TURNAROUND of one
+// shield (tools/extract-briggs-shield.py: 9 views, front face -> side-on -> back face, as it turns right; row 1 = the same 9 overcharged).
+// Each shield shows the view for the way it faces right now (the left half of the circle = the same views mirrored), the two nearest views
+// cross-faded and stretched to the same size so it turns smoothly; the far ones a bit smaller and darker; a shadow under each. They're
+// depth-sorted with everything else (one draw item per shield). They punch up out of the ground at the slam (a wave around the circle, the
+// rise sheet's crack ring under them), a hit sends Mine-Beast sparks off the shield facing the attacker, the last seconds cross-fade to the
+// overcharged views with sparks jumping off the tops, and the end throws them outward white-hot (fx "shieldBlast").
+const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";   // (the v2 ring sheets: the crack rings at the rise and after the blast)
+const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
+const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
+const BS = { cw: 61, ch: 62, ax: 30.5, ay: 60, w: [54.2, 50, 48.4, 38.2, 29.2, 37.4, 48.1, 52.7, 54.9], h: [51.3, 52.6, 53.8, 55.6, 56.2, 57.2, 57.2, 51.5, 51.1],
+  R: 100, RY: 57, spin: 1.15, back: .9, rise: 260, riseGap: 32 };   // R x RY = the circle the shields stand on (their gaps: ~28px between the slabs)
 const h01 = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
-const mixc = (u, w, t) => u.map((v, i) => Math.round(v + (w[i] - v) * t)).join(",");
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
-let slabTex = null;   // [look: 0 normal, 1 hot, 2 overcharged][shade] -> canvas (briggs-slab.webp: row 0 outer faces, row 1 inner faces)
-function slabTextures() {
-  if (slabTex || !slabImg.naturalWidth) return slabTex;
-  slabTex = [];
-  for (let f = 0; f < 3; f++) { const row = [];
-    for (const [face, k] of SLAB_SHADE) { const c = document.createElement("canvas"); c.width = BW.tw; c.height = BW.th; const g = c.getContext("2d");
-      g.drawImage(slabImg, f * BW.tw, face * BW.th, BW.tw, BW.th, 0, 0, BW.tw, BW.th);
-      if (k < 1) { g.globalCompositeOperation = "source-atop"; g.fillStyle = `rgba(14,10,8,${1 - k})`; g.fillRect(0, 0, BW.tw, BW.th); }
-      row.push(c); }
-    slabTex.push(row); }
-  return slabTex;
-}
 let starImg = null;
-function sparkStar() {   // a starburst like the art's: long cross rays, short diagonals, a white-hot core (drawn once)
+function sparkStar() {   // a starburst: long cross rays, short diagonals, a white-hot core (drawn once)
   if (starImg) return starImg; const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
   const star = (L, D, r, fill) => { g.beginPath(); for (let k = 0; k < 16; k++) { const an = k * Math.PI / 8, len = k % 4 === 0 ? L : k % 2 === 0 ? D : r; g.lineTo(32 + Math.cos(an) * len, 32 + Math.sin(an) * len); } g.closePath(); g.fillStyle = fill; g.fill(); };
   const gr = g.createRadialGradient(32, 32, 1, 32, 32, 24); gr.addColorStop(0, "rgba(255,200,90,.95)"); gr.addColorStop(.45, "rgba(255,140,40,.45)"); gr.addColorStop(1, "rgba(255,90,10,0)"); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
@@ -2031,74 +2021,63 @@ function sparkStar() {   // a starburst like the art's: long cross rays, short d
 function drawStar(x, y, s, alpha, rot = 0, bloom = 0) { if (s <= .02 || alpha <= 0) return; const img = sparkStar(); ctx.save(); ctx.globalAlpha = Math.min(1, alpha); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.drawImage(img, -32 * s, -32 * s, 64 * s, 64 * s);
   if (bloom) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(1, alpha * bloom); const b = s * 1.35; ctx.drawImage(img, -32 * b, -32 * b, 64 * b, 64 * b); }   // a bright additive pass: it pops
   ctx.restore(); }
-function wallFrame(row, col, x, y, part) {   // a frame of the wall atlas on the ring's ground centre (x, y); part: "back" (above the split line), "front", "all"
-  if (!wallImg.naturalWidth) return; ctx.save();
-  if (part !== "all") { ctx.beginPath(); if (part === "back") ctx.rect(x - 220, y - 320, 440, 320 - BW.split); else ctx.rect(x - 220, y - BW.split, 440, 320); ctx.clip(); }
-  ctx.imageSmoothingEnabled = false; ctx.drawImage(wallImg, col * BW.cw, row * BW.ch, BW.cw, BW.ch, Math.round(x - BW.ax), Math.round(y - BW.ay), BW.cw, BW.ch); ctx.restore();
+function wallFrame(row, col, x, y, sc = 1, alpha = 1) {   // a frame of the v2 ring sheet on its ground centre (x, y), scaled
+  if (!wallImg.naturalWidth || alpha <= 0) return; ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(wallImg, col * BW.cw, row * BW.ch, BW.cw, BW.ch, x - BW.ax * sc, y - BW.ay * sc, BW.cw * sc, BW.ch * sc); ctx.restore();
 }
-function briggsRing(p, now, front) {
-  const a = briggsAnim.get(p.sessionId) || {}; if (a.blastAt && a.blastAt >= (a.t0 || 0)) return;   // blasting: the fx takes over
-  const X = p.x, Y = p.y + SPR.feet, rise = now - ((a.t0 || 0) + 150);
-  if (rise < 0) return;
-  if (rise < 6 * BW.riseMs) return wallFrame(0, Math.floor(rise / BW.riseMs), X, Y, front ? "front" : "back");   // bursting up out of the ground
-  const T = slabTextures(); if (!T) return wallFrame(0, 5, X, Y, front ? "front" : "back");
-  // the look: the last seconds heat it up (hot from 5s left, overcharged from 3s left, cross-faded); a hit flashes sparks on the seams
-  const left = p.ultActive || 0, hot = clamp01((5 - left) / 1.2), over = clamp01((3 - left) / .7);
-  const layers = over >= 1 ? [[2, 1]] : hot >= 1 ? [[1, 1], [2, over]] : [[0, 1], [1, hot]];
-  const sk = now - (a.sparkAt || -1e9), spark = sk < BW.spark ? sk / BW.spark : -1;
-  const id = p.sessionId || "", seed = ((id.charCodeAt(0) || 0) * 7 + (id.charCodeAt(1) || 0)) % 8 * Math.PI / 4;
-  const rot = seed - ((now - (a.t0 || 0) - 150 - 6 * BW.riseMs) / 1000) * BW.spin;   // anticlockwise on screen: the front slabs slide right, the back ones left
-  const slabs = []; for (let k = 0; k < 8; k++) { const c = rot + k * Math.PI / 4, sn = Math.sin(c); if ((sn >= 0) === front) slabs.push({ c, sn, k }); }
-  slabs.sort((u, w) => u.sn - w.sn);   // far first
-  // an octagon of flat steel panels: panel k runs between the corners at c + 22.5deg and c - 22.5deg; its texture is laid straight across (flat, not curved)
-  const N = 10, q = Math.PI / 8, sc = BW.ts, R = BW.rx, RY = BW.ry, short = sn => 1 - .14 * Math.max(0, -sn);   // the far panels look shorter (we see their inner face from above)
-  const corner = c => [X + R * Math.cos(c), Y + RY * Math.sin(c)];
+let shieldDark = null;
+function shieldDarkImg() {   // the atlas, darker (the far shields)
+  if (shieldDark || !shieldImg.naturalWidth) return shieldDark; const c = document.createElement("canvas"); c.width = shieldImg.naturalWidth; c.height = shieldImg.naturalHeight;
+  const g = c.getContext("2d"); g.drawImage(shieldImg, 0, 0); g.globalCompositeOperation = "source-atop"; g.fillStyle = "rgba(12,9,14,.38)"; g.fillRect(0, 0, c.width, c.height); return shieldDark = c;
+}
+const shieldRot = (id, a, now) => (((id || "").charCodeAt(0) || 0) * 7 % 8) * Math.PI / 4 - ((now - (a.t0 || 0) - 150) / 1000) * BS.spin;   // anticlockwise on screen: the front shields slide right
+function shieldSet(X, Y, rot) {   // the 8 shields: where they stand and which views they show
+  const out = [];
+  for (let k = 0; k < 8; k++) { const th = rot + k * Math.PI / 4, sn = Math.sin(th);
+    let v = th - Math.PI / 2; v = Math.atan2(Math.sin(v), Math.cos(v));   // 0 = facing the camera; < 0 = the right half (the art turns right), > 0 = the left half (mirrored)
+    const f = Math.abs(v) / (Math.PI / 8), i0 = Math.min(8, Math.floor(f)), i1 = Math.min(8, i0 + 1), w = i0 >= 8 ? 0 : f - i0, ds = BS.back + (1 - BS.back) * (sn + 1) / 2;
+    out.push({ k, th, sn, x: X + BS.R * Math.cos(th), gy: Y + BS.RY * sn, mir: v > 0, i0, i1, w, ds, Wt: (BS.w[i0] + (BS.w[i1] - BS.w[i0]) * w) * ds, Ht: (BS.h[i0] + (BS.h[i1] - BS.h[i0]) * w) * ds });
+  }
+  return out;
+}
+function shieldCell(im, row, i, x, gy, sx, sy, mir, al) { if (al <= .003) return; ctx.globalAlpha = Math.min(1, al); ctx.setTransform(...ctxBase(x, gy, mir ? -sx : sx, sy)); ctx.drawImage(im, i * BS.cw, row * BS.ch, BS.cw, BS.ch, -BS.ax, -BS.ay, BS.cw, BS.ch); }
+let ctxBaseM = null; const ctxBase = (x, y, sx, sy) => { const m = ctxBaseM; return [m.a * sx, m.b * sx, m.c * sy, m.d * sy, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]; };
+function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one shield: shadow, its two nearest views cross-faded (normal -> overcharged), darker at the back, white-hot flash
+  if (!shieldImg.naturalWidth) return; const dk = shieldDarkImg();
+  const sa = s.Wt / BS.w[s.i0], sb = s.Wt / BS.w[s.i1], ya = s.Ht / BS.h[s.i0], yb = s.Ht / BS.h[s.i1], bq = clamp01((s.w - .3) / .4), bw = bq * bq * (3 - 2 * bq), dark = s.sn < 0 ? -s.sn * .9 : 0;
   ctx.save(); ctx.imageSmoothingEnabled = true;
-  if (!front && hot > 0) { const r = R + 26, g = ctx.createRadialGradient(X, Y, 10, X, Y, r); g.addColorStop(0, `rgba(255,160,60,${.1 * hot + .14 * over})`); g.addColorStop(1, "rgba(255,90,0,0)"); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(X, Y, r, r * .58, 0, 0, 7); ctx.fill(); ctx.globalCompositeOperation = "source-over"; }   // its heat on the ground
-  for (const { c, sn } of slabs) {
-    const [ax, ay] = corner(c + q), [bx, by] = corner(c - q);
-    if (Math.abs(bx - ax) < .8) continue;   // edge-on
-    const shade = sn > .6 ? 0 : sn > .2 ? 1 : sn >= 0 ? 2 : sn > -.4 ? 4 : 3, vs = sc * short(sn);
-    for (const [li, al] of layers) { if (al <= 0) continue; ctx.globalAlpha = al; const img = T[li][shade];
-      for (let i = 0; i < N; i++) {
-        const u0 = i / N, u1 = (i + 1) / N, x0 = ax + (bx - ax) * u0, x1 = ax + (bx - ax) * u1, gy = ay + (by - ay) * (u0 + u1) / 2;
-        ctx.drawImage(img, u0 * BW.tw, 0, (u1 - u0) * BW.tw, BW.th, Math.min(x0, x1), gy - BW.tg * vs, Math.abs(x1 - x0) + .6, BW.th * vs);
-      } }
-  }
-  ctx.globalAlpha = 1;
-  // the seams: glowing bars like the art's (a yellow-white core in a fat orange bar with dark-red edges, red light spilling onto the slab edges and
-  // the ground), the full height of the slabs; white-hot when overcharged, flaring on a hit
-  const fl = spark >= 0 ? Math.max(0, 1 - spark * 1.3) : 0, wht = Math.max(over, fl * .85), pulse = .88 + .12 * Math.sin(now / (over > 0 ? 50 : 130)), face = front ? 1 : .78;
-  const red = mixc([235, 50, 18], [255, 150, 50], wht), org = mixc([255, 118, 26], [255, 196, 90], wht), core = mixc([255, 226, 140], [255, 253, 238], wht);
-  const seams = [];
-  for (let k = 0; k < 8; k++) { const b = rot + k * Math.PI / 4 + q, sn = Math.sin(b); if ((sn >= 0) !== front) continue;
-    const [x, gy] = corner(b), vs = sc * short(sn), top = gy - (BW.tg - BW.top - (front ? 6 : 12)) * vs, bot = gy - 3; seams.push({ x, gy, h: gy - top, k });   // (stops under the slabs' top caps)
-    ctx.globalCompositeOperation = "lighter";
-    const hw = 7 + 3 * hot + 4 * fl; let g = ctx.createLinearGradient(x - hw, 0, x + hw, 0);
-    g.addColorStop(0, `rgba(${red},0)`); g.addColorStop(.5, `rgba(${red},${(.55 + .2 * hot + .35 * fl) * pulse * face})`); g.addColorStop(1, `rgba(${red},0)`);
-    ctx.fillStyle = g; ctx.fillRect(x - hw, top + 1, hw * 2, bot - top + 1);
-    g = ctx.createRadialGradient(x, gy, 1, x, gy, 9 + 3 * hot); g.addColorStop(0, `rgba(${red},${.6 * pulse * face})`); g.addColorStop(1, `rgba(${red},0)`);   // red light on the ground at its foot
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, gy, 9 + 3 * hot, 4, 0, 0, 7); ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
-    const bw = 2.7 + .6 * hot + .6 * fl; g = ctx.createLinearGradient(x - bw, 0, x + bw, 0);
-    g.addColorStop(0, `rgba(170,34,12,${face})`); g.addColorStop(.22, `rgba(${org},${face})`); g.addColorStop(.5, `rgba(${core},${face})`); g.addColorStop(.78, `rgba(${org},${face})`); g.addColorStop(1, `rgba(170,34,12,${face})`);
-    ctx.fillStyle = g; ctx.fillRect(x - bw, top, bw * 2, bot - top);
-  }
-  if (spark >= 0) {   // a hit: a starburst at the top of every seam (and some halfway down), little bits flying off
-    const s = spark < .2 ? .4 + 3 * spark : 1 - (spark - .2) / .8 * .5, al = (spark < .55 ? 1 : (1 - spark) / .45) * face, sd = (a.sparkAt || 0) * .001;
-    for (const m of seams) { const r = h01(sd + m.k * 3.1);
-      drawStar(m.x, m.gy - m.h + 2, (.62 + .26 * r) * s, al, (r - .5) * .5, .45);
-      if (r > .35) drawStar(m.x, m.gy - m.h * (.3 + .35 * r), (.4 + .12 * r) * s, al, (.5 - r) * .6, .3);
-      ctx.fillStyle = `rgba(255,226,140,${al})`;
-      for (let j = 0; j < 3; j++) { const an = -Math.PI / 2 + (h01(sd + m.k * 7.3 + j * 1.9) - .5) * 2.8, d = spark * (14 + 9 * j); ctx.fillRect(Math.round(m.x + Math.cos(an) * d) - 1, Math.round(m.gy - m.h + Math.sin(an) * d + spark * spark * 12) - 1, 2, 2); }
-    }
-  }
-  if (over > 0) for (const { c, sn, k } of slabs) {   // about to blow: small sparks jumping off the top edge
-    const [ax, ay] = corner(c + q), [bx, by] = corner(c - q), vs = sc * short(sn);
-    for (let j = 0; j < 2; j++) { const tt = (now + k * 131 + j * 83) / 200, ph = tt % 1, u = .15 + .7 * h01(Math.floor(tt) * 1.7 + k * 5 + j);
-      const x = ax + (bx - ax) * u, top = ay + (by - ay) * u - BW.tg * vs + 5; drawStar(x, top - ph * 12, .3 * (1 - ph) * over, over * (1 - ph * .5) * face, ph); }
-  }
+  ctx.globalAlpha = .3 * alpha * clamp01(rise * 1.5) * Math.max(.4, 1 - z / 40); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(s.x, s.gy - 1, s.Wt * .5, 5 * s.ds, 0, 0, 7); ctx.fill();
+  if (rise < 1) { ctx.beginPath(); ctx.rect(s.x - 50, s.gy - 110, 100, 112); ctx.clip(); }   // rising out of the ground: cut at the ground line
+  const gy = s.gy + (1 - rise) * s.Ht - z; ctxBaseM = ctx.getTransform();
+  const layer = (im, row, al) => { shieldCell(im, row, s.i0, s.x, gy, sa, ya, s.mir, al); shieldCell(im, row, s.i1, s.x, gy, sb, yb, s.mir, al * bw); };
+  layer(shieldImg, 0, alpha); if (hot > 0) layer(shieldImg, 1, alpha * hot);
+  if (dark > 0 && dk) { layer(dk, 0, alpha * dark * (1 - hot)); if (hot > 0) layer(dk, 1, alpha * dark * hot); }
+  if (flash > 0) { ctx.globalCompositeOperation = "lighter"; layer(shieldImg, 1, alpha * flash * .85); }   // a hit / the blast: it flares white-hot
   ctx.restore();
+}
+function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
+  const id = p0.sessionId, a = briggsAnim.get(id); if (!a || (a.blastAt && a.blastAt >= (a.t0 || 0))) return;   // blasting: the fx takes over
+  const X = p.x, Y = p.y + SPR.feet, el = now - ((a.t0 || 0) + 150); if (el < 0) return;
+  if (el < 1200) items.push({ y: -1e9, draw: () => wallFrame(0, 0, X, Y, BS.R / BW.rx * (.82 + .18 * clamp01(el / 160)), el < 600 ? 1 : 1 - (el - 600) / 600) });   // the ring of cracks they burst out of (on the floor)
+  const left = p0.ultActive || 0, hot = clamp01((3.6 - left) / 1.2), set = shieldSet(X, Y, shieldRot(id, a, now));
+  if (a.hits?.length) { for (const h of a.hits) if (!h.done) { h.done = 1;   // a hit: Mine-Beast sparks off the shield facing the attacker, a flash, a starburst
+      const ph = h.x != null ? Math.atan2((h.y - Y) * BS.R / BS.RY, h.x - X) : Math.random() * 6.283; let best = set[0], bd = 9;
+      for (const s of set) { const d = Math.abs(Math.atan2(Math.sin(s.th - ph), Math.cos(s.th - ph))); if (d < bd) { bd = d; best = s; } }
+      a.flash = a.flash || []; a.flash[best.k] = now; a.star = { k: best.k, t: now, u: Math.random() - .5, v: .35 + Math.random() * .45 };
+      deepEmit("spark", best.x, best.gy, 7, { a: ph, spread: 1.8, sp: 320, up: 170, z: best.Ht * .6, s: 5, life: 260 }); deepEmit("chip", best.x, best.gy, 2, { a: ph, spread: 1.4, sp: 160, up: 200, z: best.Ht * .4, s: 3 });
+      deepFlash(best.x, best.gy - best.Ht * .55, 50, "255,205,130", 180); }
+    a.hits = a.hits.filter(h => now - h.t < 400); }
+  if (hot > .25 && now - (a.ocAt || 0) > 55) { a.ocAt = now; const s = set[Math.floor(Math.random() * 8)];   // about to blow: sparks jumping off the tops
+    deepEmit("spark", s.x + (Math.random() - .5) * s.Wt * .6, s.gy, 1 + (Math.random() < hot * .6 ? 1 : 0), { sp: 90, up: 260, z: s.Ht * .95, s: 4, life: 240 }); }
+  const pulse = hot > 0 ? hot * (.12 + .12 * Math.sin(now / 55)) : 0;
+  for (const s of set) {
+    const r = clamp01((el - s.k * BS.riseGap) / BS.rise), rise = r >= 1 ? 1 : 1 + 2.7 * Math.pow(r - 1, 3) + 1.7 * Math.pow(r - 1, 2);   // ease out with a little overshoot: they pop up
+    if (r > 0 && !((a.rose || 0) & (1 << s.k))) { a.rose = (a.rose || 0) | (1 << s.k); deepEmit("chip", s.x, s.gy, 4, { r: 22, sp: 170, up: 300, s: 4 }); deepEmit("dust", s.x, s.gy, 2, { r: 26, sp: 70, s: 22, life: 700 }); }
+    if (r <= 0) continue;
+    const fl = Math.max(pulse, clamp01(1 - (now - (a.flash?.[s.k] || -1e9)) / 220));
+    items.push({ y: s.gy, draw: () => { drawShield(s, hot, fl, r < 1 ? Math.min(rise, 1.08) : 1);
+      const st = a.star; if (st && st.k === s.k && now - st.t < 200) { const q = (now - st.t) / 200; drawStar(s.x + st.u * s.Wt * .7, s.gy - s.Ht * st.v, .5 * (q < .25 ? .5 + 2 * q : 1 - (q - .25) * .6), 1 - q * q, st.u, .4); } } });
+  }
 }
 function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter the more damage it has stored (orange -> white-hot), with a faster pulse
   const v = briggsStore.get(p.sessionId) || 0; if (v <= 0) return; const heat = Math.min(1, v / 1500), x = p.x, y = p.y + SPR.feet - 22, pulse = .75 + .25 * Math.sin(now / (260 - 150 * heat));
@@ -2116,9 +2095,20 @@ function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
   if (f.k === "ring") { if (s > .55) return false; const sc = (f.r || 350) * 2 / 200; ctx.save(); ctx.filter = "hue-rotate(60deg) saturate(1.2)"; /* the old pink shockwave -> fiery orange to match the aura */ bfxFrame(Math.min(5, Math.floor(s / .09)), 3, f.x, f.y + SPR.feet + BFX.ch * sc / 2, sc, .7 * (1 - Math.max(0, s - .35) / .2)); ctx.restore(); return true; }
   if (f.k === "shatter") { if (s > .6) return false; bfxFrame(Math.min(5, Math.floor(s / .1)), 2, f.x, f.y + SPR.feet + 8, .62); return true; }
-  if (f.k === "wallBlast") { if (s > .58) return false; wallFrame(2, Math.min(5, Math.floor(s / .095)), f.x, f.y + SPR.feet, "all"); return true; }
+  if (f.k === "shieldBlast") {   // (Nov 13) Unbreakable ends: the 8 shields flare white-hot and get thrown outward, a shockwave, sparks, rocks; cracks left on the floor
+    if (s > 1.3) return false; const X = f.x, Y = f.y + SPR.feet, set0 = shieldSet(X, Y, f.rot);
+    if (!f.burst) { f.burst = 1; for (const sh of set0) { const an = sh.th; deepEmit("spark", sh.x, sh.gy, 7, { a: an, spread: 1.3, sp: 420, up: 200, z: sh.Ht * .5, s: 5, life: 300 }); deepEmit("chip", sh.x, sh.gy, 4, { a: an, spread: 1.2, sp: 300, up: 340, z: sh.Ht * .4, s: 4 }); }
+      deepEmit("dust", X, Y, 10, { r: BS.R * 1.4, sp: 150, s: 34, life: 1000 }); deepFlash(X, Y - 24, 260, "255,205,130", 420); }
+    wallFrame(2, 5, X, Y, BS.R / BW.rx, s < .9 ? 1 : (1.3 - s) / .4);   // the glowing ring of cracks (the old blast's last frame), as big as the shields' circle
+    if (s < .5) { const q = s / .5; ctx.save(); ctx.translate(X, Y); ctx.scale(1, BS.RY / BS.R); ctx.globalCompositeOperation = "lighter";   // the shockwave
+      for (const [d, lw, col] of [[0, 14, "255,170,70"], [.08, 6, "255,240,200"]]) { const k = q - d; if (k <= 0) continue; ctx.strokeStyle = `rgba(${col},${1 - k})`; ctx.lineWidth = lw * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, BS.R * (.55 + 1.5 * k), 0, 7); ctx.stroke(); }
+      ctx.restore(); }
+    if (s < .6) { const k = clamp01(s / .45), out = 1 + .85 * (1 - Math.pow(1 - k, 3)), z = Math.sin(Math.min(1, s / .6) * Math.PI) * 16, al = s < .32 ? 1 : 1 - (s - .32) / .28;
+      const set = set0.map(sh => ({ ...sh, x: X + (sh.x - X) * out, gy: Y + (sh.gy - Y) * out })).sort((u, w) => u.sn - w.sn);
+      for (const sh of set) drawShield(sh, 1, Math.max(0, 1 - s / .5), 1, al, z); }
+    return true; }
   if (f.k === "deflect") {   // the big number over him: how much the shield threw back
-    if (s > 1.6) return false; const k = Math.min(1, s / .18), up = 74 + 30 * Math.min(1, s / 1.2), a = s > 1.1 ? 1 - (s - 1.1) / .5 : 1;
+    if (s > 1.6) return false; const k = Math.min(1, s / .18), up = 140 + 30 * Math.min(1, s / 1.2), a = s > 1.1 ? 1 - (s - 1.1) / .5 : 1;
     ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.font = `900 ${Math.round(12 + 10 * k)}px system-ui, sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = "#2a0f00"; ctx.fillStyle = "#ffcf4a";
     const txt = `DEFLECT ${f.v}`; ctx.strokeText(txt, f.x, f.y - up); ctx.fillText(txt, f.x, f.y - up); ctx.restore(); return true;
   }
@@ -3229,6 +3219,7 @@ const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',s
 function drawShotFx(){
   const now=gnow();
   drawPyreBurning();
+  drawDeepParts();   // (Mine-Beast sparks / rocks / flashes: Briggs's shields use them on every map)
   for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','scream','abom','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
@@ -3401,7 +3392,6 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "juggernaut") {
     const c = briggsCast(p, now);
     if (c) { blk = c.block; col = c.col; }
-    if (p.ultActive > 0 && p.alive) briggsRing(p, now, false);   // (Nov 13) Unbreakable: the back half of the turning steel ring, behind him
   }
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
@@ -3415,7 +3405,6 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
   ctx.restore();
-  if (p.characterClass === "juggernaut" && p.ultActive > 0 && p.alive) briggsRing(p, now, true);   // ...and its front half in front of him
   if (p.characterClass === "juggernaut" && p.skillT > 0 && p.alive) briggsDome(p, now);   // the E's dome (old Iron Bastion, until his new E)
   if (rush) marcusRush(p, now, true);
   return true;
@@ -4386,7 +4375,9 @@ function drawDeepDecals() {   // cracked, scorched floor where something hit (fa
       ctx.strokeStyle = `rgba(0,0,0,${.75 * al})`; ctx.lineWidth = 3.5; ctx.stroke(); if (d.blue) { ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(80,180,255,${.55 * al * (1 - age)})`; ctx.lineWidth = 1.6; ctx.stroke(); ctx.globalCompositeOperation = "source-over"; } }
     ctx.restore(); }
 }
-function drawDeepParts() {
+let frameId = 0, deepFrame = -1;
+function drawDeepParts() {   // (Nov 13) also used outside the mine (Briggs's shields): drawn once per frame, by whichever layer gets here first
+  if (deepFrame === frameId) return; deepFrame = frameId; if (!deepParts.length && !deepFlashes.length) return;
   const now = gnow(), dt = Math.min(.05, (now - (deepPartsAt || now)) / 1000); deepPartsAt = now;
   for (let i = deepFlashes.length - 1; i >= 0; i--) { const f = deepFlashes[i], k = (now - f.t0) / f.len; if (k >= 1) { deepFlashes.splice(i, 1); continue; } if (!inView(f.x, f.y, f.r)) continue;
     ctx.save(); ctx.globalCompositeOperation = "lighter"; const r = f.r * (.55 + .45 * k), g = ctx.createRadialGradient(f.x, f.y, 2, f.x, f.y, r); g.addColorStop(0, `rgba(${f.col},${.75 * (1 - k)})`); g.addColorStop(.4, `rgba(${f.col},${.3 * (1 - k)})`); g.addColorStop(1, `rgba(${f.col},0)`); ctx.fillStyle = g; ctx.fillRect(f.x - r, f.y - r, r * 2, r * 2); ctx.restore(); }
@@ -4866,7 +4857,8 @@ function drawWorldObjects(extra) {
   for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
-  for (const p0 of state.players.values()) { const p = V(p0); if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
+  for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, 260)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
+    if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
@@ -5059,6 +5051,7 @@ function pauseSync() {   // (Nov 12) the host's Esc menu = the whole game paused
   txt("pmTitle", host || paused ? "PAUSED" : "MENU");
 }
 function frame(t){
+  frameId++;
   gamePause(!!state?.paused); try { pauseSync(); } catch (e) { reportError(e, "pause"); }
   if (gnow() < hitStopUntil) { requestAnimationFrame(frame); return; }   // deflect hit-stop: freeze for a split second
   requestAnimationFrame(frame);
