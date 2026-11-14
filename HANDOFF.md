@@ -810,3 +810,12 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 13 — Every reload halved
 - WEAPONS reload (server) and WEAPON_INFO (client display): pistol 1.0 -> 0.5, SMG 1.4 -> 0.7, rifle 1.6 -> 0.8, shotgun 2.0 -> 1.0, sniper 2.2 -> 1.1, launcher 2.6 -> 1.3 s. Fast Hands still stacks on top (+15% per pick). Test 9: rifle reload 0.8s.
 - Cache `20261114i`; next `20261114j`.
+
+## Nov 15 — Live check + sound fix (cache 20261114j)
+- Render: both services were live on 292dfea; server healthy, people played Nov 13–14.
+- Client logs showed every sound and the music failing ("Failed to execute 'connect' on 'AudioNode'") since cache g (menu-music change).
+- Cause: makeAudio() runs at page load, but `let deafF` was declared ~700 lines lower (Screamer section) → TDZ ReferenceError after audioContext was set → sfxBus/musicBus stayed null.
+  The preview build hides this (it rewrites top-level `let` to `var`), so test audio against the REAL client (Playwright + page.route the jsdelivr colyseus import to a local UMD build).
+- Fix: deafF/deafUntil declared with the other audio vars (line ~663); makeAudio builds the graph in locals, then assigns all at once (try/catch).
+- Verified on the real client: 0 failed connects, charsel music starts on first click. Full tests ALL PASSED, MINE SIM OK.
+- Cache `20261114j`; next `20261114k`.
