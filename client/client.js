@@ -660,7 +660,7 @@ function aimAngle(me) { const v = V(me); return Math.atan2(mouse.y - v.y, mouse.
 function aimDist(me) { const v = V(me); return Math.round(Math.hypot(mouse.y - v.y, mouse.x - v.x)); }   // rockets fly to the mouse
 let mouse = { x: W / 2, y: H / 2, sx: W / 2, sy: H / 2 };
 const fx = [];
-let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus = null;
+let audioContext = null, sfxOn = true, musicOn = true, sfxBus = null, musicBus = null, deafF = null, deafUntil = 0;   // (Nov 15) deafF / deafUntil live HERE: makeAudio() runs at load, before the Screamer code further down
 // ===================== SOUND =====================
 // Sound effects + music (Web Audio). Files: assets/audio (the user's ChatGPT audio pack; originals in tools/art/audio).
 // The browser only allows sound after the first click/key, so the context starts then. Each sound has a voice limit (max
@@ -711,10 +711,14 @@ const MUSIC_VOL = .28, MUSIC_FADE = 1;
 let audioUnlocked = false;   // (Nov 13) the browser lets sound start only after the first click / key press on the page
 function makeAudio() {   // the context (it can be made and can DECODE before any click: it just stays silent until resumed)
   if (!audioContext) {
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; audioContext = new AC();
-    deafF = audioContext.createBiquadFilter(); deafF.type = "lowpass"; deafF.frequency.value = 22000; deafF.connect(audioContext.destination);   // the Screamer's wail muffles everything (deafen)
-    sfxBus = audioContext.createGain(); sfxBus.gain.value = sfxOn ? 1 : 0; sfxBus.connect(deafF);
-    musicBus = audioContext.createGain(); musicBus.gain.value = musicOn ? 1 : 0; musicBus.connect(deafF);
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    try {   // build every node first, then publish them together (a half-made graph left the buses null: every sound failed)
+      const ac = new AC();
+      const df = ac.createBiquadFilter(); df.type = "lowpass"; df.frequency.value = 22000; df.connect(ac.destination);   // the Screamer's wail muffles everything (deafen)
+      const sb = ac.createGain(); sb.gain.value = sfxOn ? 1 : 0; sb.connect(df);
+      const mb = ac.createGain(); mb.gain.value = musicOn ? 1 : 0; mb.connect(df);
+      deafF = df; sfxBus = sb; musicBus = mb; audioContext = ac;
+    } catch (e) { console.warn("[audio]", e); return null; }
   }
   return audioContext;
 }
@@ -1428,7 +1432,6 @@ for (const [k, url] of Object.entries({ walk: "assets/sprites/zombies/dir8/screa
 const SCR = { cw: 600, ch: 480, ax: 300, fy: 430, r: 2, sc: 2, step: 26,   /* (Nov 12) sc: drawn 2x; cw..fy are sheet pixels (cut at r = 2x), so draws scale by sc / r = 1 */ wind: .45, wail: 2.5, wailLen: 3.6, ringW: 30,
   fx: { ring: [104, .51], ring2: [118, .59], mark: [103, .6], burst: [105, .79], blast: [120, .72] } };
 const scrMove = new Map(), scrWail = new Map(), scrShriek = new Map(), scrMarks = new Map();   // per boss: walk cycle / wail wind-up / last shriek; per player: resonance mark
-let deafF = null, deafUntil = 0;
 function sFx(key, frame, x, y, scale, alpha = 1) {   // one additive effect frame, (x, y) = its ground point, scale fits its ring to a radius
   const im = scrImgs[key], F = SCR.fx[key]; if (!im?.naturalWidth || !F) return; const fw = im.naturalWidth / 8, fh = im.naturalHeight, f = Math.max(0, Math.min(7, frame)), f0 = Math.floor(f);
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
