@@ -841,3 +841,14 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: `BPUNCH = { cw 242, ch 218, tx 4, ty 113, ms [34,34,40,50,56,62,68,76] (420ms: fast impact, slower fade), drift 9 }`. drawBriggsFx punchCone: each frame holds 40% then smoothstep cross-fades into the next, last frame fades out, the blast drifts 9px forward (ease-out); row by f.hook.
 - Checked in the preview (video): jabs clean white, haymaker with rocks/dust, anchored on the fist, no errors.
 - Cache `20261114l`; next `20261114m`.
+
+## Nov 15 — Punch shockwave: the clean white sheet for every punch (cache 20261114m)
+- User: "i like this one better" (re-sent the clean white sheet, 1568 x 784, same art). The outlined/rocky row is gone: one row of 8 frames, haymaker just drawn bigger (k 1 vs 150/190 for jabs).
+- extract-briggs-punch.py: finds the 4 frame columns from the sheet width (any size); a SOFT dark halo (grow 5, blur 3, 50%) instead of the hard ink line, so it stays clean but still shows on snow / sand. Atlas 1904 x 210, cell 238 x 210, tip (4, 107), scale .603.
+- Client: `BPUNCH = { cw 238, ch 210, tx 4, ty 107, ms [...] , drift 9 }`, row 0 always.
+- Cache `20261114m`; next `20261114n`.
+
+## Nov 15 — Prompts sent: Manhole Frisbee -> a steel BOOMERANG (art pending)
+- User: "I want the manhole to be a boomerang". Sent 3 prompts + 3 reference images (throw-pose.png, manhole-art.png, manhole-card.png):
+  1 throw pose 8x4 (pull off back, wind-up, sidearm fling, CATCH on return), 2 the boomerang top-down (one object; code spins it), 3 card "STEEL BOOMERANG" (or WRECKING RANG / IRON RANG).
+- Open question to the user: keep the 12 Sivir-style bounces, or fly out and come back like a real boomerang (Sivir Q).
