@@ -698,7 +698,7 @@ const SFX = {
 const VOICE = { dispatcher: { Q: "vAstraQ", E: "vAstraE" } };
 function playVoice(id, key) { const p = state?.players?.get(id), name = p && VOICE[p.characterClass]?.[key]; if (!name) return; const v = V(p); playSfx(name, id === myId ? undefined : v.x, id === myId ? undefined : v.y); }
 // Music loops (the published preview fetches them as files next to the page). Crossfade 1s between scenes.
-const MUSIC = { charsel: "assets/audio/music_charsel.mp3", day: "assets/audio/music_day_exploration.mp3", night: "assets/audio/music_night_wave.mp3", boss: "assets/audio/music_boss_battle.mp3",
+const MUSIC = { charsel: "assets/audio/music_charsel.mp3", boss: "assets/audio/music_boss_battle.mp3",   // (Nov 15) the old day / night tracks are no longer used: charsel plays through every normal level
   pyre: "assets/audio/music_boss_pyre.mp3",   // (Nov 12) the Pyre Priest's own theme: a 3:00.8 loop cut from the user's first track (58 bars at 77 BPM, one-bar crossfade back to the start); the user tried a second track, then chose this one again
   abom: "assets/audio/music_boss_abom.mp3",   // (Nov 12) the Abomination's own theme: a 2:54 loop (29 six-second phrases at 120 BPM, 6/8) cut from the user's track, starting 6s before its big hit. (Nov 13: a guitar-ending version was tried; the user asked for this one back)
   butcher: "assets/audio/music_boss_butcher.mp3",   // (Nov 12) the Butcher's own theme: the user's 2:11 song (its 1-bar silence cut) with its build + big peak played twice: an 87-bar 3:10 loop at 110 BPM, starting a bar before the peak
@@ -763,7 +763,7 @@ addEventListener("pointerdown", sfxContext, { once: true }); addEventListener("k
 function turretSound(id, x, y) { playSfx("turret", x, y); }   // the server fires the turret once per clip length, so every attack = one burst sound
 const music = { want: "", cur: null };   // cur = { name, src, gain }
 function musicScene() {   // which music fits right now
-  if (!room || !state || state.phase === "lobby") return "charsel";   // (Nov 13) the main menu AND the lobby (character select): the user's track, 46-bar loop; it carries on (no restart) when you make / join a room
+  if (!room || !state || state.phase === "lobby") return "charsel";   // (Nov 13) the main menu AND the lobby (character select): the user's track, 46-bar loop; it carries on (no restart) when you make / join a room, and (Nov 15) on into the game
   if (state.phase === "defeat" || state.phase === "victory") return "";
   const pyre = [...state.zombies.values()].some(z => z.kind === "pyre" && z.boss) || (state.waveType === "boss" && state.bossIntro === "pyre");
   if (pyre) return "pyre";   // the Pyre Priest's own theme (card + fight)
@@ -774,7 +774,7 @@ function musicScene() {   // which music fits right now
   if ([...state.zombies.values()].some(z => z.kind === "hivemind") || (state.waveType === "boss" && state.bossIntro === "hivemind")) return "hive";   // (Nov 12) the Hivemind's own theme: the mini boss and the Alpha
   if (state.waveType === "boss" && (state.bossPhase === "intro" || state.bossPhase === "fight")) return "boss";
   if (state.mapSite === 5) return "refinery";   // (Nov 13) the Scorched Refinery has its own music until the Pyre Priest comes out
-  return state.isNight ? "night" : "day";
+  return "charsel";   // (Nov 15, user) every normal level, day AND night: the character-select track, carried on from the lobby without a restart
 }
 function updateMusic() {   // called every frame: crossfades to the scene's track
   const ac = audioContext; if (!ac || ac.state !== "running") return;

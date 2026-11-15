@@ -819,3 +819,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Fix: deafF/deafUntil declared with the other audio vars (line ~663); makeAudio builds the graph in locals, then assigns all at once (try/catch).
 - Verified on the real client: 0 failed connects, charsel music starts on first click. Full tests ALL PASSED, MINE SIM OK.
 - Cache `20261114j`; next `20261114k`.
+
+## Nov 15 — Character-select music in every normal level (cache 20261114k)
+- musicScene(): the fallback (normal waves, day AND night) now returns "charsel" instead of "day" / "night". Same key as the menu/lobby, so the track carries on into the game with no restart.
+- Boss themes unchanged (pyre, abom, scream, butcher, mine, hive mini boss + Alpha, generic boss). The Scorched Refinery (map 5) keeps its own map music.
+- day / night tracks removed from MUSIC (no longer downloaded); the mp3 files stay in assets/audio in case they're wanted back.
+- Checked in the preview: menu → lobby → playing = one charsel start; spawning the Hivemind switches to its theme.
+- Cache `20261114k`; next `20261114l`.
