@@ -2099,7 +2099,7 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
 // (Nov 13) MANHOLE FRISBEE: the cover in flight (spun flat, a shadow under it), the hole left in the street. Drawn in code until the user's art.
 const briggsCovers = new Map(), manholes = [];   // id -> { x, y, vx, vy, t (last update), t0, end }; holes: { x, y, t }
 const punchImg = new Image(); punchImg.src = "assets/sprites/fx/briggs-punch.webp";   // R's punch cone: 16 frames in a column, tip at (tx, ty)
-const BPUNCH = { cw: 267, ch: 122, tx: 6, ty: 61, n: 16, ms: 60 };
+const BPUNCH = { cw: 242, ch: 218, tx: 4, ty: 113, ms: [34, 34, 40, 50, 56, 62, 68, 76], drift: 9 };   // (Nov 15) v2 white punch-through shockwave (tools/extract-briggs-punch.py): row 0 haymaker (outlined, rocks + dust), row 1 jab (clean white, inked); 8 frames, fast impact then a slower fade, cross-faded
 const coverImg = new Image(); coverImg.src = "assets/sprites/fx/manhole.webp";   // the user's art (tools/extract-manhole.py): 96px cells: 0 = the cover from above, 1 = the open manhole
 function drawManholeCover(x, y, spin, al = 1) {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, .55); ctx.rotate(spin);
@@ -2171,12 +2171,16 @@ function briggsHeat(p, now) {   // (Nov 13) Unbreakable: the shield glows hotter
 }
 function drawBriggsFx(f, age) {   // false when finished
   const s = age / 1000;
-  if (f.k === "punchCone" && punchImg.naturalWidth) {   // (Nov 13) the user's cone GIF (tools/extract-briggs-fists.py): 16 frames x 60ms, its tip on the fist, pointing where he punched;
-    // squashed to the ground's 3/4 view, flipped (not upside down) when it points left; sized to the punch's reach (haymaker 190px, jab 150px)
-    const i = Math.floor(age / BPUNCH.ms); if (i >= BPUNCH.n) return false;
-    const k = f.hook ? 1 : 150 / 190, ax = f.x + Math.cos(f.a) * 16, ay = f.y + SPR.feet - 26 + Math.sin(f.a) * 9, ra = Math.atan2(Math.sin(f.a) / .82, Math.cos(f.a));
+  if (f.k === "punchCone" && punchImg.naturalWidth) {   // (Nov 15) the user's white punch-through sheets: its tip on the fist, pointing where he punched; squashed to the
+    // ground's 3/4 view, flipped (not upside down) when it points left; sized to the punch's reach (haymaker 190px, jab 150px). Smooth: each frame holds,
+    // then cross-fades into the next (smoothstep), the last one fades out, and the whole blast drifts a few px forward (ease-out) so it feels like it travels
+    const T = BPUNCH.ms, N = T.length; let i = 0, t0 = 0; while (i < N && age >= t0 + T[i]) t0 += T[i++]; if (i >= N) return false;
+    const u = (age - t0) / T[i], b0 = i < N - 1 ? Math.max(0, (u - .4) / .6) : 0, b = b0 * b0 * (3 - 2 * b0), fade = i === N - 1 ? 1 - u : 1, life = (t0 + u * T[i]) / T.reduce((x, y) => x + y, 0);
+    const k = f.hook ? 1 : 150 / 190, row = f.hook ? 0 : 1, ax = f.x + Math.cos(f.a) * 16, ay = f.y + SPR.feet - 26 + Math.sin(f.a) * 9, ra = Math.atan2(Math.sin(f.a) / .82, Math.cos(f.a));
     ctx.save(); ctx.translate(ax, ay); ctx.scale(1, .82); ctx.rotate(ra); if (Math.cos(f.a) < 0) ctx.scale(1, -1); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(punchImg, 0, i * BPUNCH.ch, BPUNCH.cw, BPUNCH.ch, -BPUNCH.tx * k, -BPUNCH.ty * k, BPUNCH.cw * k, BPUNCH.ch * k); ctx.restore(); return true; }
+    ctx.translate(BPUNCH.drift * k * (1 - (1 - life) * (1 - life)), 0);
+    const cell = (j, al) => { if (al <= .01) return; ctx.globalAlpha = al; ctx.drawImage(punchImg, j * BPUNCH.cw, row * BPUNCH.ch, BPUNCH.cw, BPUNCH.ch, -BPUNCH.tx * k, -BPUNCH.ty * k, BPUNCH.cw * k, BPUNCH.ch * k); };
+    cell(i, (1 - b) * fade); if (b > 0) cell(i + 1, b); ctx.restore(); return true; }
   if (f.k === "punchCone") {   // (fallback while the cone art loads) curved shockwave arcs rushing out in the cone, white-hot near the fist
     if (s > .3) return false; const q = s / .3, R = (f.hook ? 190 : 150), half = (f.hook ? 95 : 70) * Math.PI / 360, x0 = f.x + Math.cos(f.a) * 18, y0 = f.y - 8 + Math.sin(f.a) * 18;
     ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(x0, y0); ctx.scale(1, .8); ctx.lineCap = "round";

@@ -826,3 +826,18 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - day / night tracks removed from MUSIC (no longer downloaded); the mp3 files stay in assets/audio in case they're wanted back.
 - Checked in the preview: menu → lobby → playing = one charsel start; spawning the Hivemind switches to its theme.
 - Cache `20261114k`; next `20261114l`.
+
+## Nov 15 — Prompt sent: Bare Knuckle punch shockwave v2 ("like Vi's" punch-through)
+- User wants Briggs's punch cone to feel like Vi's (League of Legends) punch-through blast. Prompt describes the look (no champion name; Briggs's orange, not Vi's pink/blue): 2 x 4 = 8 frames, cone opens to the RIGHT from the middle of each frame's left edge, ~70°, magenta bg.
+  Frames: 1 starburst + shock ring pop at the knuckles · 2 ring snaps wide, speed lines · 3 narrow jet tears through and fans into the cone, angular shards · 4 full cone, bright wavefront + 2nd wave, ground cracks/rocks · 5 waves break into streaks · 6 shards scatter, dust · 7 embers · 8 last dust.
+- When it arrives: cut with a 2x4 sheet reader into client/assets/sprites/fx/briggs-punch.webp (tip at TX/TY, same unmix + sharpen as extract-briggs-fists.py), update BPUNCH n/ms (8 frames ≈ 45ms each for a snappier hit).
+- (Nov 15, user: "not fire-ish, just the white shockwave impact") prompt redone: pure white force + pale grey air ripples and grey dust/rocks, no fire, no embers, no orange.
+
+## Nov 15 — Bare Knuckle punch shockwave v2: white punch-through (cache 20261114l)
+- User sent 2 sheets (2x4, 8 frames): tools/art/briggs/punch/punch-outlined.png (white + dark outlines, grey rocks, dust) and punch-white.png (clean white, no outline).
+- Picked the outlined one as the main look = HAYMAKER (every 3rd punch); the clean white one = JABS, given a 4px dark outline in the cutter so it reads on sand / snow (alone it vanished on light ground). Rocks + dust on every 0.3s jab would bury the zombies.
+- New cutter tools/extract-briggs-punch.py -> client/assets/sprites/fx/briggs-punch.webp: 8 x 2 atlas (row 0 haymaker, row 1 jab), cell 242 x 218, tip (4, 113), scale .536 (frame 4's wavefront = 232 game px for the haymaker; jab drawn at 150/190). Unmix keying + purple-cast -> grey, premultiplied Lanczos, 2 unsharp passes.
+  extract-briggs-fists.py now only makes the card (its cone.gif cutter is in git history).
+- Client: `BPUNCH = { cw 242, ch 218, tx 4, ty 113, ms [34,34,40,50,56,62,68,76] (420ms: fast impact, slower fade), drift 9 }`. drawBriggsFx punchCone: each frame holds 40% then smoothstep cross-fades into the next, last frame fades out, the blast drifts 9px forward (ease-out); row by f.hook.
+- Checked in the preview (video): jabs clean white, haymaker with rocks/dust, anchored on the fist, no errors.
+- Cache `20261114l`; next `20261114m`.
