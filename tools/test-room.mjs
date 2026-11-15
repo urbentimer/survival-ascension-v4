@@ -957,23 +957,26 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(bug && bug[0] === "warn" && bug[2] === "the boss got stuck" && /boss/.test(JSON.stringify(bug)), "REPORT BUG: the note lands in the game log (kind bug) with its tags and context");
   send(A, "bugReport", { text: "x" }); ok(logged.filter(([, k]) => k === "bug").length === 1, "...an empty one is ignored");
   room._dispose(); }
-// 36. BRIGGS (juggernaut): shotgun, Manhole Frisbee (E, Nov 13: ricocheting cover), Unbreakable (Q, Nov 13: roar + 30s shield: 1000px taunt incl. bosses, zombies 0 dmg, a boss 15% once per 3s, stored damage blasts out at the end + 3s stun)
+// 36. BRIGGS (juggernaut): shotgun, Steel Boomerang (E, Nov 15; was the Manhole Frisbee: ricochets 12 times, slow, fades out on a miss / a wall / no next zombie), Unbreakable (Q, Nov 13: roar + 30s shield: 1000px taunt incl. bosses, zombies 0 dmg, a boss 15% once per 3s, stored damage blasts out at the end + 3s stun)
 { const { room, events, A, B, send, P } = makeRoom(); const p = P(A), q = P(B); const tick = (n, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
   room.state.phase = "lobby"; send(A, "chooseClass", { id: "juggernaut" }); send(A, "start", {}); room.state.phase = "playing";
   ok(p.maxHp === 160 && p.weapon === "shotgun", "Briggs: 160 HP, starts with the shotgun");
   p.x = 900; p.y = 900; q.x = 3000; q.y = 2000;
   { p.aim = 0; const z1 = placeZombie(room, p.x + 120, p.y, 9999), z2 = placeZombie(room, p.x + 260, p.y + 90, 9999), z3 = placeZombie(room, p.x + 380, p.y - 40, 9999), zb = placeZombie(room, p.x - 420, p.y, 9999);
     [z1, z2, z3, zb].forEach(w => { w.speed = 0; w.role = "tower"; });
-    send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 3.9 && p.abilityCooldown <= 4 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Manhole Frisbee: he rips up a manhole cover (4s cooldown)");
+    send(A, "ability", { a: 0 }); ok(room.covers.has("A") && p.abilityCooldown > 3.9 && p.abilityCooldown <= 4 && events.some(e => e.type === "briggs" && e.k === "rip"), "E: Steel Boomerang: he pulls it off his back and winds up (4s cooldown)");
+    tick(7); { const c = room.covers.get("A"), x0 = c.x, y0 = c.y; tick(2); const v = Math.hypot(c.x - x0, c.y - y0) / .1; ok(c.phase === "fly" && Math.abs(v - 340) < 25, `...it flies slowly (${Math.round(v)} px/s, was 600)`); }
     tick(120);
     ok(z1.hp < 9999 && z2.hp < 9999 && z3.hp < 9999 && zb.hp === 9999, `...it slices through a zombie and ricochets on to the next ones (${[z1, z2, z3].map(w => 9999 - Math.round(w.hp)).join(" / ")} dmg), not the one 420px behind him`);
-    ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend"), "...then it drops");
+    ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend" && e.why === "last"), "...then, with no zombie left to bounce to, it fades out");
     room.state.zombies.clear(); p.abilityCooldown = 0; tick(2);
     { const row = []; for (let i = 0; i < 20; i++) { const w = placeZombie(room, p.x + 100 + i * 55, p.y + (i % 2 ? 25 : -25), 9999); w.speed = 0; w.role = "tower"; row.push(w); }
-      send(A, "ability", { a: 0 }); tick(120); const hitN = row.filter(w => w.hp < 9999).length; ok(hitN === 13 && !room.covers.has("A"), `...it bounces 12 times: 13 zombies in a row get hit, then it drops (${hitN})`); }
-    room.state.zombies.clear(); p.abilityCooldown = 0; events.length = 0; const px0 = p.x; p.x = 70; p.aim = Math.PI; send(A, "ability", { a: Math.PI }); tick(14);
-    ok(events.some(e => e.type === "briggs" && e.k === "cv" && e.wall), "...and bounces off walls / the map's edge"); tick(120);
-    { const nb = events.filter(e => e.type === "briggs" && e.k === "cv" && (e.wall || e.hz)).length; ok(nb >= 1 && nb <= 12 && events.some(e => e.type === "briggs" && e.k === "cvend"), `...12 bounces at most (${nb} here), then it drops`); }
+      events.length = 0; send(A, "ability", { a: 0 }); tick(160); const hitN = row.filter(w => w.hp < 9999).length; ok(hitN === 13 && !room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend" && e.why === "hits"), `...it bounces 12 times: 13 zombies in a row get hit, then it fades out (${hitN})`); }
+    room.state.zombies.clear(); p.abilityCooldown = 0; events.length = 0; p.aim = 0; send(A, "ability", { a: 0 }); tick(7 + 28);
+    ok(room.covers.has("A"), "...a throw at nothing keeps flying for a bit"); tick(30);
+    { const e = events.find(e => e.type === "briggs" && e.k === "cvend"); ok(!room.covers.has("A") && e?.why === "miss" && Math.abs(e.x - (p.x + 26 + 560)) < 30, `...then it fades out ${Math.round((e?.x ?? 0) - p.x - 26)}px out (no hit = gone, it doesn't come back)`); }
+    const px0 = p.x; p.x = 70; p.abilityCooldown = 0; events.length = 0; p.aim = Math.PI; send(A, "ability", { a: Math.PI }); tick(30);
+    ok(!room.covers.has("A") && events.some(e => e.type === "briggs" && e.k === "cvend" && e.why === "wall") && !events.some(e => e.type === "briggs" && e.k === "cv" && e.wall), "...a wall (or the map's edge) stops it: it fades out there");
     p.x = px0; p.abilityCooldown = 0; }
   room.state.zombies.clear();
   { const bm = room.bmemOf(p); p.hp = 100; p.aim = 0; events.length = 0;   // R: Bare Knuckle
@@ -1109,7 +1112,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
     ok(!room.safeOf(p) && !room.safeBoxes.length, `6 hits in total break the walls (broke with ${st.hp} left)`); room.state.zombies.clear(); }
   tick(2); for (const r of room.unitsOf("A", "worker")) room.unitMem.get(r.id).leaveAt = 1; tick(1); ok(!room.unitsOf("A", "worker").length, "...and the workers go home");
   { const m2 = room.amemOf(p); m2.safeReady = 0; send(A, "skill2", {}); call(); const s2 = room.safeOf(p); tick(110); ok(s2 && s2.deploy === 0, "a new safehouse");
-    s2.life = 0.01; tick(1); ok(!room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together"); }
+    if (s2) s2.life = 0.01; tick(1); ok(s2 && !room.safeOf(p) && !room.safeBoxes.length, "after 45s the walls all disappear together"); }   // (Nov 15: guarded: a failed build above no longer crashes the whole run)
   { /* Nov 11: downed teammates inside a finished safehouse don't bleed out; cooldown reduction shortens the build; +2 wall hits per Body Armour pick */
     const m3 = room.amemOf(p); m3.safeReady = 0; room.state.zombies.clear(); p.cdr = 0.3; p.armorPct = 0.18; send(A, "skill2", {}); call(); const s3 = room.safeOf(p);
     ok(s3 && Math.abs(s3.deploy - 3.5) < .06 && s3.total === 3.5, `30% cooldown reduction: the safehouse builds in 3.5s, not 5s (${s3?.deploy?.toFixed(2)}s)`);

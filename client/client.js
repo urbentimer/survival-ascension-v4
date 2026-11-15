@@ -51,7 +51,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Manhole Frisbee", cd: 4, icon: "manholeFrisbee" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Steel Boomerang", cd: 4, icon: "steelBoomerang" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
@@ -486,7 +486,7 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "manholeFrisbee" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.skillT > 0 ? `DOME ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
@@ -1936,25 +1936,24 @@ function onBriggs(m) {
     if (m.heal > 0) fx.push({ type: "briggs", k: "heal", x: m.x, y: m.y, v: m.heal, t });
   }
   else if (m.k === "fistsEnd") { const b = briggsAnim.get(m.id); if (b) b.punchAt = 0; }
-  else if (m.k === "rip") {   // (Nov 13) Manhole Frisbee: he rips the cover up (the cast pose); a hole is left in the street for a while
-    briggsAnim.set(m.id, { ...a, k: "rip", t0: t, cast: m.cast || .34 }); const hx = m.x + Math.cos(m.a) * 22, hy = m.y + SPR.feet + Math.sin(m.a) * 12;
-    manholes.push({ x: hx, y: hy, t: t + 160 }); if (manholes.length > 12) manholes.shift();
-    setTimeout(() => { deepEmit("chip", hx, hy, 6, { sp: 150, up: 260, s: 4 }); deepEmit("dust", hx, hy, 2, { r: 14, sp: 60, s: 20, life: 600 }); if (near) { playSfx("stomp", m.x, m.y, .7); shake(4, 160); } }, 160); }
-  else if (m.k === "cv") {   // the cover in flight: where it is and where it's going (sent at the throw, every hit and every bounce)
-    const c = briggsCovers.get(m.id) || { t0: t, trail: [], n: 0, ang: 0 }; c.n++;
-    const ox = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.px : m.x, oy = c.px != null && Math.hypot(c.px - m.x, c.py - m.y) < 140 ? c.py : m.y;   // carry on from where it's drawn (no jump off an arc)
-    const seg = m.tx != null ? { x0: ox, y0: oy, tx: m.tx, ty: m.ty, t, dur: Math.max(.06, Math.hypot(m.tx - ox, m.ty - oy) / (Math.hypot(m.vx, m.vy) || 600)), side: c.n % 2 ? 1 : -1 } : null;
-    Object.assign(c, { x: ox, y: oy, vx: m.vx, vy: m.vy, t, end: 0, seg, kick: m.go ? 0 : t }); briggsCovers.set(m.id, c);
+  else if (m.k === "rip") briggsAnim.set(m.id, { ...a, k: "rip", t0: t, cast: m.cast || .34 });   // (Nov 15) Steel Boomerang: he pulls it off his back and winds up (the cast pose)
+  else if (m.k === "cv") {   // the boomerang in flight: sent at the throw (go), at every hit (hz, + the next zombie tx/ty/tid) and when its target is gone (re)
+    const c = briggsCovers.get(m.id) || { t0: t, trail: [], n: 0, ang: 0 };
+    if (m.go) Object.assign(c, { sx: m.x, sy: m.y, vx: m.vx, vy: m.vy, seg: null, tid: null });
+    else if (m.tx != null) { c.n++; const ox = c.px ?? m.x, oy = c.py ?? m.y;   // arc on from where it's drawn (no jump), to the next zombie (followed live: tid)
+      c.seg = { x0: ox, y0: oy, tx: m.tx, ty: m.ty, tid: m.tid, t, dur: Math.max(.08, Math.hypot(m.tx - ox, m.ty - oy) / (Math.hypot(m.vx, m.vy) || 340)), side: c.n % 2 ? 1 : -1 }; c.tid = m.tid; c.vx = m.vx; c.vy = m.vy; }
+    if (m.hz) c.kick = t;
+    Object.assign(c, { t, end: 0 }); briggsCovers.set(m.id, c);
     if (m.go && near) playSfx("shotgun", m.x, m.y, .25);
-    if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,225,170", 140); playSfx("zhit", m.zx, m.zy); fx.push({ type: "briggs", k: "ping", x: m.zx, y: m.zy, t }); }
-    if (m.wall) { deepEmit("spark", m.x, m.y, 9, { sp: 340, up: 150, z: 22, s: 5, life: 260 }); deepEmit("chip", m.x, m.y, 3, { sp: 140, up: 200, z: 20, s: 3 }); playSfx("zhit", m.x, m.y, 1.4); fx.push({ type: "briggs", k: "ping", x: m.x, y: m.y, t, wall: 1 }); }
+    if (m.hz) { deepEmit("spark", m.zx, m.zy, m.boss ? 10 : 6, { sp: 300, up: 160, z: 22, s: 5, life: 240 }); deepFlash(m.zx, m.zy - 20, m.boss ? 70 : 46, "255,240,215", 140); playSfx("zhit", m.zx, m.zy); fx.push({ type: "briggs", k: "ping", x: m.zx, y: m.zy, t }); }
   }
-  else if (m.k === "cvend") { const c = briggsCovers.get(m.id); if (c) { Object.assign(c, { x: m.x, y: m.y, vx: c.vx * .25, vy: c.vy * .25, t, end: t }); deepEmit("spark", m.x, m.y, 6, { sp: 200, up: 120, z: 18, s: 4, life: 220 }); } }
+  else if (m.k === "cvend") { const c = briggsCovers.get(m.id); if (c && !c.end) { c.end = t; c.why = m.why;   // (Nov 15, user) it never drops: it fades out where it is (a miss, the last zombie, all 12 bounces, a wall)
+    if (m.why === "wall") { deepEmit("spark", c.px ?? m.x, c.py ?? m.y, 8, { sp: 320, up: 150, z: 22, s: 5, life: 250 }); playSfx("zhit", m.x, m.y, 1.4); fx.push({ type: "briggs", k: "ping", x: c.px ?? m.x, y: c.py ?? m.y, t, wall: 1 }); } } }
 }
 function briggsCast(p, now) {   // fist slam (E) / roar (Q) poses, 4 frames each
   const a = briggsAnim.get(p.sessionId); if (!a?.k) return null; const s = (now - a.t0) / 1000;
   if (a.k === "fists" && s < (a.cast || .6)) { const bl = DIR8.juggernaut.blocks, pw = bl.indexOf("power"); return { block: pw, col: Math.min(3, Math.floor(s / (a.cast || .6) * 4)) }; }   // R power-up (stand-in: the roar)
-  if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: DIR8.juggernaut.blocks.indexOf("throw"), col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 13) the user's E pose: grip the cover, RIP it up, wind up, FLING (the cover leaves at the cast's end)
+  if (a.k === "rip" && s < (a.cast || .34) + .24) { const c = a.cast || .34; return { block: DIR8.juggernaut.blocks.indexOf("throw"), col: s < c * .35 ? 0 : s < c * .7 ? 1 : s < c ? 2 : 3 }; }   // (Nov 15) the user's E pose: pull the boomerang off his back, wind up (held), FLING (it leaves at the cast's end)
   if (a.k === "cry" && s < .75) return { block: DIR8.juggernaut.blocks.indexOf("slam"), col: s < .12 ? 0 : s < .3 ? 1 : s < .55 ? 2 : 3 };   // (Nov 13) Unbreakable: the ground-slam pose (crouch, SLAM, roar, braced)
   return null;
 }
@@ -2096,47 +2095,48 @@ function drawShield(s, hot, flash = 0, rise = 1, alpha = 1, z = 0) {   // one sh
   if (flash > 0) { ctx.globalCompositeOperation = "lighter"; layer(shieldImg, 1, alpha * flash * .85); }   // a hit / the blast: it flares white-hot
   ctx.restore();
 }
-// (Nov 13) MANHOLE FRISBEE: the cover in flight (spun flat, a shadow under it), the hole left in the street. Drawn in code until the user's art.
-const briggsCovers = new Map(), manholes = [];   // id -> { x, y, vx, vy, t (last update), t0, end }; holes: { x, y, t }
-const punchImg = new Image(); punchImg.src = "assets/sprites/fx/briggs-punch.webp";   // R's punch cone: 16 frames in a column, tip at (tx, ty)
+// (Nov 15) STEEL BOOMERANG (was the Manhole Frisbee: internal names still say "cover"): the boomerang in flight, spun flat, a shadow under it.
+const briggsCovers = new Map();   // id -> { sx, sy (where it flies, no arc), vx, vy, seg (arc to the next zombie), tid, px, py (where it's drawn), end, trail }
+const punchImg = new Image(); punchImg.src = "assets/sprites/fx/briggs-punch.webp";   // R's punch cone: 8 frames in a row, tip at (tx, ty)
 const BPUNCH = { cw: 238, ch: 210, tx: 4, ty: 107, ms: [34, 34, 40, 50, 56, 62, 68, 76], drift: 9 };   // (Nov 15) v2 clean white punch-through shockwave (tools/extract-briggs-punch.py; the user chose it over the outlined one with rocks): 8 frames in one row, fast impact then a slower fade, cross-faded; the haymaker is drawn bigger
-const coverImg = new Image(); coverImg.src = "assets/sprites/fx/manhole.webp";   // the user's art (tools/extract-manhole.py): 96px cells: 0 = the cover from above, 1 = the open manhole
-function drawManholeCover(x, y, spin, al = 1) {
-  ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, .55); ctx.rotate(spin);
-  if (coverImg.naturalWidth) { const r = 21; ctx.imageSmoothingEnabled = true; ctx.drawImage(coverImg, 0, 0, 96, 96, -r, -r, r * 2, r * 2); ctx.restore(); return; }
-  ctx.fillStyle = "#3a3e43"; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#17191c"; ctx.stroke();
-  ctx.strokeStyle = "#5c636b"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 12.5, 0, 7); ctx.stroke();
-  ctx.strokeStyle = "#24272b"; ctx.lineWidth = 1.4; for (let k = -2; k <= 2; k++) { const o = k * 4.5, h = Math.sqrt(Math.max(0, 140 - o * o)); ctx.beginPath(); ctx.moveTo(o, -h); ctx.lineTo(o, h); ctx.moveTo(-h, o); ctx.lineTo(h, o); ctx.stroke(); }
-  ctx.fillStyle = "#8a5a2e"; ctx.globalAlpha = al * .7; ctx.beginPath(); ctx.arc(5, -6, 2.2, 0, 7); ctx.arc(-7, 4, 1.6, 0, 7); ctx.fill(); ctx.restore();
+const coverImg = new Image(); coverImg.src = "assets/sprites/fx/boomerang.webp";   // the user's art (tools/extract-boomerang.py): one 112px cell, the boomerang's centre of mass in the middle
+const BOOM = { size: 50, flat: .6, spin: .019, kick: .04, fade: 380 };   // drawn 50px wide (its cell is 0.98 boomerang), squashed onto the ground's 3/4 view; spin rad/ms (+ a kick after a hit); fade-out ms
+function drawBoomerang(x, y, spin, al = 1) {
+  ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1, BOOM.flat); ctx.rotate(spin);
+  if (coverImg.naturalWidth) { const h = BOOM.size / 2; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(coverImg, -h, -h, h * 2, h * 2); ctx.restore(); return; }
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#17191c"; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-23, 12); ctx.lineTo(0, -8); ctx.lineTo(23, 12); ctx.stroke();   // (while the art loads)
+  ctx.strokeStyle = "#7a5a3a"; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
 }
+function liveZombie(id) { const z = id != null && state?.zombies?.get?.(id); return z && (z.hp ?? 1) > 0 ? z : null; }
 function drawBriggsCovers(items, now) {
-  for (let i = manholes.length - 1; i >= 0; i--) { const h = manholes[i], age = now - h.t; if (age > 9000) { manholes.splice(i, 1); continue; } if (age < 0 || !inView(h.x, h.y, 40)) continue;   // the open hole
-    const al = age > 8000 ? (9000 - age) / 1000 : 1; items.push({ y: -1e9 + 1, draw: () => { ctx.save(); ctx.globalAlpha = al; ctx.translate(h.x, h.y); ctx.scale(1, .58);
-      if (coverImg.naturalWidth) { ctx.imageSmoothingEnabled = true; ctx.drawImage(coverImg, 96, 0, 96, 96, -28, -28, 56, 56); ctx.restore(); return; }
-      ctx.fillStyle = "#2c2f33"; ctx.beginPath(); ctx.arc(0, 0, 19, 0, 7); ctx.fill(); ctx.fillStyle = "#050607"; ctx.beginPath(); ctx.arc(0, 1.5, 14.5, 0, 7); ctx.fill(); ctx.strokeStyle = "#4a4f55"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke(); ctx.restore(); } }); }
-  for (const [id, c] of briggsCovers) {   // (Nov 13, user: "bounce like Sivir's") each ricochet ARCS to the next zombie (curving out to alternate sides,
-    // hopping up a little), the cover spins faster right after a hit, a glowing ribbon trail + 2 afterimages follow it; "ping" fx at every bounce
-    if (c.end && now - c.end > 1300) { briggsCovers.delete(id); continue; }
-    const fdt = Math.min(50, now - (c.last || now)); c.last = now;
-    const land = c.end ? Math.min(1, (now - c.end) / 380) : 0; let x, y, z;
-    const sg = c.seg, u = sg ? (now - sg.t) / 1000 / sg.dur : 2;
-    if (c.end) { const k = Math.min((now - c.t) / 1000, .38) * (1 - land * .5); x = c.x + c.vx * k; y = c.y + c.vy * k; z = 22 * (1 - land) * (1 - land); }
-    else if (sg && u < 1) { const dx = sg.tx - sg.x0, dy = sg.ty - sg.y0, L = Math.hypot(dx, dy) || 1, bl = Math.min(70, L * .32) * sg.side, qx = (sg.x0 + sg.tx) / 2 - dy / L * bl, qy = (sg.y0 + sg.ty) / 2 + dx / L * bl * .6, v = 1 - u;
-      x = v * v * sg.x0 + 2 * v * u * qx + u * u * sg.tx; y = v * v * sg.y0 + 2 * v * u * qy + u * u * sg.ty; z = 22 + 14 * Math.sin(Math.PI * u); }
-    else if (sg) { const k = Math.min((now - sg.t) / 1000 - sg.dur, .25); x = sg.tx + c.vx * k; y = sg.ty + c.vy * k; z = 22; }
-    else { const k = Math.min((now - c.t) / 1000, .25); x = c.x + c.vx * k; y = c.y + c.vy * k; z = 22; }
-    c.px = x; c.py = y;
-    c.ang += fdt * (c.end ? .02 * (1 - land) : .02 + .045 * Math.exp(-(now - (c.kick || -1e9)) / 180));   // spins faster just after a bounce
-    const tr = c.trail; if (!c.end) tr.push({ x, y: y - z, t: now }); while (tr.length && now - tr[0].t > (c.end ? 0 : 150)) tr.shift();
-    const al = c.end && now - c.end > 900 ? 1 - (now - c.end - 900) / 400 : 1, spin = c.ang, X = x, Y = y, Z = z;
+  for (const [id, c] of briggsCovers) {   // (Nov 13, user: "bounce like Sivir's") each ricochet ARCS to the next zombie (curving out to alternate sides, hopping up a
+    // little), following it as it walks; it spins faster right after a hit; a white ribbon trail + 2 afterimages follow it. (Nov 15) At the end it fades out.
+    const fdt = Math.min(50, now - (c.last || now)) / 1000; c.last = now;
+    if (c.end && now - c.end > BOOM.fade) { briggsCovers.delete(id); continue; }
+    let x, y, z = 22;
+    if (c.end) { const k = c.why === "wall" ? 0 : 1 - (now - c.end) / BOOM.fade; x = (c.px ?? c.sx) + (c.dvx || 0) * fdt * k; y = (c.py ?? c.sy) + (c.dvy || 0) * fdt * k; }   // it glides on (slowing) while it fades
+    else {
+      const sg = c.seg, u = sg ? (now - sg.t) / 1000 / sg.dur : 2, tz = sg && liveZombie(sg.tid), Tx = tz ? tz.x : sg?.tx, Ty = tz ? tz.y : sg?.ty;
+      if (sg && u < 1) { const dx = Tx - sg.x0, dy = Ty - sg.y0, L = Math.hypot(dx, dy) || 1, bl = Math.min(70, L * .32) * sg.side, qx = (sg.x0 + Tx) / 2 - dy / L * bl, qy = (sg.y0 + Ty) / 2 + dx / L * bl * .6, v = 1 - u;
+        x = v * v * sg.x0 + 2 * v * u * qx + u * u * Tx; y = v * v * sg.y0 + 2 * v * u * qy + u * u * Ty; z = 22 + 14 * Math.sin(Math.PI * u); c.sx = x; c.sy = y; }
+      else { const tgt = liveZombie(c.tid), sp = Math.hypot(c.vx, c.vy) || 340;   // straight on (the throw), or homing on its zombie until the server says it hit
+        if (tgt) { const a = Math.atan2(tgt.y - c.sy, tgt.x - c.sx); c.vx = Math.cos(a) * sp; c.vy = Math.sin(a) * sp; }
+        c.sx += c.vx * fdt; c.sy += c.vy * fdt; x = c.sx; y = c.sy; }
+      if (c.px != null && fdt > 0) { c.dvx = (x - c.px) / fdt; c.dvy = (y - c.py) / fdt; }
+      c.px = x; c.py = y;
+    }
+    const fade = c.end ? 1 - (now - c.end) / BOOM.fade : 1, al = Math.max(0, fade * fade);
+    c.ang += fdt * 1000 * (BOOM.spin + BOOM.kick * Math.exp(-(now - (c.kick || -1e9)) / 180));   // spins faster just after a hit
+    const tr = c.trail; if (!c.end) tr.push({ x, y: y - z, t: now }); while (tr.length && now - tr[0].t > (c.end ? 60 : 150)) tr.shift();
+    const spin = c.ang, X = x, Y = y, Z = z;
     if (!inView(x, y, 80)) continue;
     items.push({ y, draw: () => {
-      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(X, Y + 2, 18, 7, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
-      if (tr.length > 1) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";   // the glowing ribbon
-        for (let i = 1; i < tr.length; i++) { const f = i / (tr.length - 1); ctx.strokeStyle = `rgba(255,${Math.round(170 + 70 * f)},${Math.round(80 + 100 * f)},${.55 * f})`; ctx.lineWidth = 2 + 13 * f; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
+      ctx.save(); ctx.globalAlpha = .3 * al; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(X, Y + 2, 20, 7, 0, 0, 7); ctx.fill(); ctx.restore();   // its shadow
+      if (tr.length > 1) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";   // the white ribbon (like the card's streaks)
+        for (let i = 1; i < tr.length; i++) { const f = i / (tr.length - 1); ctx.strokeStyle = `rgba(255,${Math.round(225 + 30 * f)},${Math.round(190 + 65 * f)},${.5 * f * al})`; ctx.lineWidth = 2 + 12 * f; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
         ctx.restore();
-        for (const [ago, ga] of [[90, .16], [45, .32]]) { let gp = null; for (const q of tr) if (now - q.t >= ago) gp = q; if (gp) drawManholeCover(gp.x, gp.y, spin - ago * .02, ga * al); } }   // afterimages
-      drawManholeCover(X, Y - Z, spin, al); } });
+        for (const [ago, ga] of [[90, .16], [45, .32]]) { let gp = null; for (const q of tr) if (now - q.t >= ago) gp = q; if (gp) drawBoomerang(gp.x, gp.y, spin - ago * BOOM.spin, ga * al); } }   // afterimages
+      drawBoomerang(X, Y - Z, spin, al); } });
   }
 }
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
@@ -4962,7 +4962,7 @@ function drawWorldObjects(extra) {
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
-  if (briggsCovers.size || manholes.length) drawBriggsCovers(items, gnow());   // (Nov 13) Briggs's Manhole Frisbee
+  if (briggsCovers.size) drawBriggsCovers(items, gnow());   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
@@ -5179,7 +5179,7 @@ const ROSTER = [
              { k: "Q", n: "Frag Barrage", cd: 20, t: "A blast shoves nearby zombies away, he hops back, and 3 grenades fan out to where you aim: big knockback blasts." }],
     trait: { n: "Veteran", t: "Years on the front line: +10% damage and +10% fire rate with every weapon." }, gear: ["rifle", "pistol", "knife"] },
   { id: "juggernaut", name: "BRIGGS", role: "JUGGERNAUT", cat: "tank", hp: 160, dmg: 14, spd: 150, def: 5, desc: "Shotgun tank who thrives in the thick of combat, protecting the team and crushing hordes.",
-    skills: [{ k: "E", n: "Manhole Frisbee", cd: 4, card: "manholeFrisbee", t: "Rips a manhole cover out of the street and flings it: it slices through zombies and bounces 12 times, ricocheting to the next zombie or off a wall each time. Knocks them back and stuns them for a moment." },
+    skills: [{ k: "E", n: "Steel Boomerang", cd: 4, card: "steelBoomerang", t: "Flings a huge steel boomerang: it slices through a zombie and bounces on to the next one, 12 times, chasing them down. Knocks them back and stuns them for a moment. If it hits nothing, or runs out of zombies, it fades away." },
              { k: "Q", n: "Unbreakable", cd: 60, card: "unbreakable", t: "A huge roar, then 30s inside 8 spinning steel shields: every zombie and boss within 1000px comes for him, and nothing gets past the shields. Zombies can't hurt him; a boss does 85% less, once every 3s. The shields store every hit and at the end blast it all back in a ring of fire: everything in it takes the lot and is stunned 3s. The roar's first 10s: shotgun spam, no ammo." },
              { k: "R", n: "Bare Knuckle", cd: 15, card: "bareKnuckle", t: "Two huge steel gauntlets for 12s: click to punch. Every punch blasts a shockwave cone that hurls zombies back; every 3rd is a bigger, wider haymaker. Every kill heals him 4% of his max HP." }],
     trait: { n: "Forceful Blast", card: "forcefulBlast", t: "Shotgun shots knock back every zombie, bosses too. Thick skin: every hit on him does 5 less damage." }, gear: ["shotgun", "pistol", "knife"] },

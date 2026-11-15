@@ -267,7 +267,7 @@ const SOFEA = {
 // shockwave cone, every 3rd is a haymaker, kills heal him). (The old E, Iron Bastion's dome, was deleted on Nov 13.)
 const BRIGGS = {
   fists: { cast: 0.6, life: 12, cd: 15,   /* (user, Nov 13: cooldown 15s) */ rate: 0.3, range: 150, cone: 70, dmg: 45, hookEvery: 3, hookMult: 1.6, hookRange: 190, hookCone: 95, push: 55, hookPush: 110, bossPush: 0.25, heal: 0.04 },   // R: dmg x stage scale; heal = share of max HP per kill
-  cover: { cast: 0.34, speed: 600, r: 20, dmg: 70, bossMult: 1.5, bounces: 12, life: 5, seek: 340, push: 30, stun: 0.5, cd: 4 },   // (user, Nov 13: cooldown 4s)
+  cover: { cast: 0.34, speed: 340, r: 22, dmg: 70, bossMult: 1.5, bounces: 12, life: 10, range: 560, seek: 340, push: 30, stun: 0.5, cd: 4 },   // E STEEL BOOMERANG (Nov 15; was the Manhole Frisbee: internal names stay "cover"). (user: cooldown 4s; Nov 15 "bouncing much slower": 600 -> 340 px/s; a miss (range px without a hit), a wall or no zombie left to bounce to = it fades out)
       // E: rip it up (cast), then it flies; each zombie once; it bounces 12 times (user, Nov 13): every zombie hit (-> on to the nearest one it hasn't hit: seek, line of sight) or wall; the 13th contact ends it
   blast: { push: 24, bossMult: 0.5 },
   rage: { rateMult: 3 },   // during War Cry: shotgun fires 3x faster and uses no ammo   // passive Forceful Blast: every shotgun pellet that hits shoves the zombie back (bosses too, less)
@@ -1268,7 +1268,7 @@ export class SurvivalRoom extends Room {
       const cls=p.characterClass;
       if (cls === "operator") { if (p.stunned <= 0) this.callVehicle(p, "tank"); return; }
       if (cls === "dispatcher") { this.astraCast(p, "E"); return; }   // cooldown starts on the press (refunded if the call fails)
-      if (cls === "juggernaut") { if (p.stunned > 0) return; const old = this.covers.get(p.sessionId); if (old?.phase === "rip") return; if (old) this.endCover(p.sessionId, old, "new"); this.ripCover(p); return; }   // (Nov 13) Manhole Frisbee (a cover still flying when the 4s cooldown is up drops: the new one goes)
+      if (cls === "juggernaut") { if (p.stunned > 0) return; const old = this.covers.get(p.sessionId); if (old?.phase === "rip") return; if (old) this.endCover(p.sessionId, old, "new"); this.ripCover(p); return; }   // (Nov 13) E: Steel Boomerang (Nov 15; was the Manhole Frisbee). One still flying when the 4s cooldown is up fades: the new one goes
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
@@ -1773,7 +1773,7 @@ export class SurvivalRoom extends Room {
   }
   endFists(p, now) { const m = this.bmemOf(p); m.fistsUntil = 0; m.fistsReady = now + BRIGGS.fists.cd * 1000; p.skillT = 0; this.broadcast("briggs", { k: "fistsEnd", id: p.sessionId }); }
   // ---------- BRIGGS: Manhole Frisbee (E) ----------
-  ripCover(p) {   // he rips a manhole cover out of the street (cast), then flings it where he's aiming
+  ripCover(p) {   // (Nov 15: the Steel Boomerang) he pulls it off his back and winds up (cast), then flings it where he's aiming
     const now = Date.now(), C = BRIGGS.cover, a = p.aim || 0;
     this.covers.set(p.sessionId, { phase: "rip", t0: now, x: p.x, y: p.y, vx: 0, vy: 0, hit: new Set(), hits: 0, b: 0 });
     p.abilityCooldown = C.cd; p.charging = false; this.bmemOf(p).castUntil = now + C.cast * 1000;   // he stands still while he rips it up
@@ -1793,16 +1793,17 @@ export class SurvivalRoom extends Room {
         this.coverMsg(id, c, { go: 1 }); continue;
       }
       if (c.el > C.life) { this.endCover(id, c, "time"); continue; }
+      if (c.tgt != null) {   // homing on the zombie it bounced toward (slow flight: they move); that one gone = the next nearest it can reach, none = it fades out
+        let t = this.state.zombies.get(c.tgt);
+        if (!t || (t.hp ?? 1) <= 0) { t = this.coverNext(c); c.tgt = t ? t.id : null; if (!t) { this.endCover(id, c, "last"); continue; } this.coverMsg(id, c, { tx: Math.round(t.x), ty: Math.round(t.y), tid: t.id, re: 1 }); }
+        const sp = Math.hypot(c.vx, c.vy) || C.speed, b = Math.atan2(t.y - c.y, t.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp;
+      }
       const len = Math.hypot(c.vx, c.vy) * dt, n = Math.max(1, Math.ceil(len / 12)); let ended = false;
       for (let i = 0; i < n && !ended; i++) {
         const nx = c.x + c.vx * dt / n, ny = c.y + c.vy * dt / n, out = nx < 10 || ny < 10 || nx > W - 10 || ny > H - 10;
-        if (out || this.coverWall(nx, ny, C.r * .5)) {   // a wall (or the map's edge): bounce off it
-          const bx = nx < 10 || nx > W - 10 || this.coverWall(nx, c.y, C.r * .5), by = ny < 10 || ny > H - 10 || this.coverWall(c.x, ny, C.r * .5);
-          if (bx || !by) c.vx = -c.vx; if (by || !bx) c.vy = -c.vy;
-          if (++c.b > C.bounces) { this.endCover(id, c, "wall"); ended = true; break; }
-          this.coverMsg(id, c, { wall: 1 }); continue;
-        }
-        c.x = nx; c.y = ny;
+        if (out || this.coverWall(nx, ny, C.r * .5)) { this.endCover(id, c, "wall"); ended = true; break; }   // (Nov 15) a wall: it stops there and fades out
+        c.x = nx; c.y = ny; c.free = (c.free || 0) + len / n;
+        if (c.tgt == null && c.free > C.range) { this.endCover(id, c, "miss"); ended = true; break; }   // (Nov 15, user) flew its range without hitting anything: fades out
         for (const z of this.state.zombies.values()) {
           if (c.hit.has(z.id) || (z.hp ?? 1) <= 0) continue;
           const dx = z.x - c.x, dy = z.y - c.y, rr = C.r + (z.radius || 14); if (dx * dx + dy * dy > rr * rr) continue;
@@ -1810,14 +1811,20 @@ export class SurvivalRoom extends Room {
           const sp = Math.hypot(c.vx, c.vy) || 1, a0 = Math.atan2(c.vy, c.vx);
           this.hitZombie(z, p, C.dmg * scale * (z.boss ? C.bossMult : 1));
           if (this.state.zombies.has(z.id) && !z.boss) { this.steerMove(z, z.id, a0, C.push, q => this.solveZombie(q)); this.stunZombie(z, C.stun, now); }
-          if (++c.b > C.bounces) { this.endCover(id, c, "hits"); ended = true; break; }
-          let best = null, bd = C.seek * C.seek;   // ricochet: on to the nearest zombie it hasn't hit (that it can reach)
-          for (const q of this.state.zombies.values()) { if (c.hit.has(q.id)) continue; const ex = q.x - c.x, ey = q.y - c.y, d2 = ex * ex + ey * ey; if (d2 < bd && this.lineClear(c, q, false)) { bd = d2; best = q; } }
-          if (best) { const b = Math.atan2(best.y - c.y, best.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp; }
-          this.coverMsg(id, c, { hz: 1, zx: Math.round(z.x), zy: Math.round(z.y), boss: z.boss ? 1 : 0, ...(best ? { tx: Math.round(best.x), ty: Math.round(best.y) } : {}) }); break;   // tx/ty: the next zombie (the client arcs the cover to it)
+          const hz = { hz: 1, zx: Math.round(z.x), zy: Math.round(z.y), boss: z.boss ? 1 : 0 };
+          if (++c.b > C.bounces) { this.coverMsg(id, c, hz); this.endCover(id, c, "hits"); ended = true; break; }   // all 12 bounces used: fades out
+          const best = this.coverNext(c);   // ricochet: on to the nearest zombie it hasn't hit (that it can reach)
+          if (!best) { this.coverMsg(id, c, hz); this.endCover(id, c, "last"); ended = true; break; }   // (Nov 15, user) the last target: fades out
+          const b = Math.atan2(best.y - c.y, best.x - c.x); c.vx = Math.cos(b) * sp; c.vy = Math.sin(b) * sp; c.tgt = best.id;
+          this.coverMsg(id, c, { ...hz, tx: Math.round(best.x), ty: Math.round(best.y), tid: best.id }); break;   // tx/ty/tid: the next zombie (the client arcs to it)
         }
       }
     }
+  }
+  coverNext(c) {   // the nearest zombie the boomerang hasn't hit yet, within seek range and in line of sight
+    const C = BRIGGS.cover; let best = null, bd = C.seek * C.seek;
+    for (const q of this.state.zombies.values()) { if (c.hit.has(q.id) || (q.hp ?? 1) <= 0) continue; const ex = q.x - c.x, ey = q.y - c.y, d2 = ex * ex + ey * ey; if (d2 < bd && this.lineClear(c, q, false)) { bd = d2; best = q; } }
+    return best;
   }
   updateBriggs(dt, now) {
     if (this.covers.size) this.updateCovers(dt, now);

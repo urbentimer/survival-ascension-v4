@@ -11,19 +11,21 @@ y0 = b * 8 * ch
 right = a[y0 + 2 * ch:y0 + 3 * ch].copy()
 for c in range(4):
     cell = right[:, c * cw:(c + 1) * cw][:, ::-1]; a[y0 + 6 * ch:y0 + 7 * ch, c * cw:(c + 1) * cw] = cell
-# (Nov 13) the E "throw" block: the art's left-facing rows fling the cover to the right too: rows UP-LEFT / LEFT / DOWN-LEFT = UP-RIGHT / RIGHT / DOWN-RIGHT mirrored
-if 'throw' in meta['blocks']:
-    t0 = meta['blocks'].index('throw') * 8 * ch
-    for dst, src in ((5, 3), (6, 2), (7, 1)):
-        rowpx = a[t0 + src * ch:t0 + (src + 1) * ch].copy()
-        for c in range(4): a[t0 + dst * ch:t0 + (dst + 1) * ch, c * cw:(c + 1) * cw] = rowpx[:, c * cw:(c + 1) * cw][:, ::-1]
-    print('throw block: left rows = mirrored right rows')
+# (Nov 15) the E "throw" block is the STEEL BOOMERANG pose now (tools/clean-briggs-throw.py): its art is drawn right in every row, so no mirroring
+# (the Manhole Frisbee art flung the cover to the right in the left-facing rows too: those rows were the right ones mirrored)
 # (Nov 13) the R "fists" block: the art's UP-LEFT / DOWN-LEFT rows throw their punches to the RIGHT: their jab / haymaker (cols 4-5) = UP-RIGHT / DOWN-RIGHT's mirrored
 if 'fists' in meta['blocks']:
     f0 = meta['blocks'].index('fists') * 8 * ch
     for dst, src in ((5, 3), (7, 1)):
         for c in (4, 5): a[f0 + dst * ch:f0 + (dst + 1) * ch, c * cw:(c + 1) * cw] = a[f0 + src * ch:f0 + (src + 1) * ch, c * cw:(c + 1) * cw][:, ::-1]
     print('fists block: up-left / down-left punches = mirrored up-right / down-right')
+# (Nov 15, user: "I don't like his walk for top-left and top-right") UP-RIGHT / UP-LEFT walking (cols 0-3: idle + 3 walk frames) = DOWN-RIGHT / DOWN-LEFT's,
+# for every weapon block (the art's back views looked off); the attack frames (cols 4-5) keep their own direction
+for name in ('shotgun', 'knife', 'bat', 'axe', 'fists'):
+    if name not in meta['blocks']: continue
+    w0 = meta['blocks'].index(name) * 8 * ch
+    for dst, src in ((3, 1), (5, 7)): a[w0 + dst * ch:w0 + (dst + 1) * ch, 0:4 * cw] = a[w0 + src * ch:w0 + (src + 1) * ch, 0:4 * cw]
+print('walk: up-right / up-left = down-right / down-left (idle + walk) for shotgun knife bat axe fists')
 # rock dust / sparks blended with the magenta background in the skill sheets: pinkish pixels -> warm brown / orange
 for name in ('slam', 'throw', 'fists', 'power'):
     if name not in meta['blocks']: continue

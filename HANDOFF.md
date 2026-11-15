@@ -852,3 +852,17 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - User: "I want the manhole to be a boomerang". Sent 3 prompts + 3 reference images (throw-pose.png, manhole-art.png, manhole-card.png):
   1 throw pose 8x4 (pull off back, wind-up, sidearm fling, CATCH on return), 2 the boomerang top-down (one object; code spins it), 3 card "STEEL BOOMERANG" (or WRECKING RANG / IRON RANG).
 - Open question to the user: keep the 12 Sivir-style bounces, or fly out and come back like a real boomerang (Sivir Q).
+
+## Nov 15 — Steel Boomerang in (replaces the Manhole Frisbee) + Briggs's up-diagonal walk (cache 20261114n)
+- Art (tools/art/briggs): throw-boomerang.png (8x4: pull off back, wind-up, fling + flying boomerang, catch), boomerang-art.png (top-down), boomerang-card.png.
+- tools/clean-briggs-throw.py rewritten: throw-pose-clean.png = [pull, wind-up, wind-up held, fling with Briggs only] (every body lifted out as its own piece + re-centred; the flying boomerang/speed lines removed; catch unused: it never comes back). fix-briggs-slam.py: no throw mirroring any more (new art faces right in every row).
+- tools/extract-boomerang.py (new): client/assets/sprites/fx/boomerang.webp, one 112px cell, centre of MASS in the middle (spins round it), drawn 50px wide; icons/card-steelBoomerang.png. Removed: fx/manhole.webp, icons/card-manholeFrisbee.png, tools/extract-manhole.py (git history).
+- User: "bouncing much slower"; "if it doesn't hit any zombie it fades away, same after the last target".
+  Server `BRIGGS.cover = { cast .34, speed 340 (was 600), r 22, dmg 70, bossMult 1.5, bounces 12, life 10, range 560, seek 340, push 30, stun .5, cd 4 }`.
+  Ends (cvend why): "miss" (560px with no hit), "last" (no unhit zombie within 340px / in sight after a hit), "hits" (13th zombie = 12 bounces), "wall" (walls no longer bounce it), "time".
+  It HOMES on its next zombie (c.tgt; slow flight, they walk); target gone -> next nearest (cv re + tx/ty/tid) or "last". New coverNext(c).
+- Client: drawBoomerang (BOOM { size 50, flat .6, spin .019, kick .04, fade 380 }); arcs follow the target live (tid); straight flight simulated per frame (no .25s cap); cvend = glides on, slows, fades (no drop); white ribbon trail; no manhole hole / stomp. Names: "Steel Boomerang" (SKILLS, roster text, HUD card steelBoomerang). HUD E sub for Briggs no longer says "DOME" while R is on (leftover).
+- Walk: fix-briggs-slam.py copies DOWN-RIGHT -> UP-RIGHT and DOWN-LEFT -> UP-LEFT for cols 0-3 (idle + walk) of shotgun, knife, bat, axe, fists (user didn't like the back-view walks). Attack frames keep their own direction.
+- Test 36 updated (slow speed, last / hits / miss / wall endings): passes. Blocks 39-end: ALL PASSED (269).
+- KNOWN, PRE-EXISTING: test 38 (Astra safehouse) fails 4 checks ONLY in a full run ("zombies can't get in" = the zombie ends with |dx| < 130, then wall hits 6 -> 6, repair, "a new safehouse"); it passes alone 3/3 and in 33-38 / 36-38 runs. The OLD code (HEAD before the boomerang) fails identically today, and this morning's full run passed -> environment / timing dependent (likely zombie detour logic on real Date.now under a big heap; every makeRoom also leaks a 50ms interval). The failed build used to CRASH the run (s2.life on undefined) so blocks 39+ never ran: guarded now. To look at: make that check test "outside the box" on both axes, and dispose rooms between blocks.
+- Cache `20261114n`; next `20261114o`.
