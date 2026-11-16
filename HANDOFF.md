@@ -912,3 +912,13 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - extract-directions.py: new TWOSTEP=1 option in place(): Lanczos to 2x the target, premultiplied unsharp (sigma 1, x0.9), BOX down, then the usual alpha cut / SHARPEN / ring. cut-briggs.sh: SHARPEN 110, TWOSTEP=1, ENHANCE 1.12,1.1,1.06,0. Other characters unchanged (opt-in).
 - Next big step if wanted: an HD canvas (2x backbuffer) for the whole game: global change, perf cost.
 - Cache `20261114s`; next `20261114t`.
+
+## Nov 16 — IRON replaces Briggs (new character, same skills) (cache 20261114t)
+- User disliked the Briggs remake; new character IRON designed (tools/art/iron/design.png: silver-grey spiky hair, grey beard, polished steel armour with glowing orange seams, navy suit, round orange-rimmed shield + serrated chrome boomerang on his back, pump shotgun). Prompts: tools/art/iron/PROMPTS-FULL.md (+ project doc claude/iron-prompts.md): one new ChatGPT chat per prompt, DESIGN LOCK paragraph in every prompt.
+- User rule (Nov 16): skill cards are SIMPLE from now on: just the object + a simple effect, no character, no zombies; orange octagon frame, title at the bottom.
+- All art came back on-design: every sheet's skin / armour within ~2 Lab of the design (no colour matching needed).
+- Pipeline: tools/cut-iron.sh = prep-iron.py (depink edges, cards magenta corners -> black 152x152, flying boomerang cut from the design sheet -> fx/boomerang.webp) -> extract-directions (5-row sheets mirrored, SPRITE_H 62, TWOSTEP, SHARPEN 110, ENHANCE) -> finish-briggs.py -> extract-briggs-wall.py. Then extract-heroes.py + extract-faces.py tools/art/faces (delete the commander / medic outputs they also make).
+  Removed: tools/cut-briggs.sh, tools/prep-briggs-remake.py (git history). Class id stays "juggernaut"; internal names (BRIGGS consts, onBriggs, briggs msgs) unchanged.
+- Client: roster name "IRON". Skill texts unchanged (no names in them).
+- Not yet matched to Iron: Unbreakable's 8 shield slabs (old gunmetal slabs) — optional turnaround of his round shield.
+- Cache `20261114t`; next `20261114u`.
