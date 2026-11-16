@@ -51,7 +51,7 @@ const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd:
 const SKILLS = {
   assault: { name: "Combat Rush", cd: 15 },
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
-  sniper: { name: "Dead Eye", cd: 24 }, juggernaut: { name: "Steel Boomerang", cd: 4, icon: "steelBoomerang" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
+  sniper: { name: "Cryo Grenade", cd: 3.5, icon: "cryoGrenade" }, juggernaut: { name: "Steel Boomerang", cd: 4, icon: "steelBoomerang" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
@@ -129,7 +129,7 @@ function connected() {
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = gnow(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
   awayIds.clear(); room.onMessage("away", m => { if (m.on) awayIds.add(m.id); else awayIds.delete(m.id); });   // a teammate's connection dropped / came back
-  room.onMessage("deadeye", m => { fx.push({ type: "deadeye", ...m, t: gnow() }); playSfx("rifle", m.x, m.y, 1); playSfx("boom", m.x, m.y, .35); if (m.id === myId) shake(4, 160); });   // Sienna's Dead Eye
+  room.onMessage("sienna", m => onSienna(m));   // (Nov 16) Sienna's grenade / decoy / perch / laser
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: gnow() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: gnow(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = gnow(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, gnow()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: gnow(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: gnow(), ...m }));
@@ -173,7 +173,8 @@ function connected() {
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
   room.onMessage("buildGone", m => { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 10, s: .8, t: gnow() }); playSfx("zap", m.x, m.y, .4); });   // your oldest deployable of a type was replaced (per-player cap)
-  room.onMessage("boom", m => { playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: gnow() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: gnow() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
+  room.onMessage("boom", m => { if (m.k === "cryo") { sfxList.push({ k: "burst", x: m.x, y: m.y, t: gnow() }); playSfx("boom", m.x, m.y, .45); playSfx("zhit", m.x, m.y, .8); shake(3, 160); return; }   // Sienna's Cryo Grenade: ice, no fire
+    playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: gnow() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: gnow() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
   room.onMessage("swing", m => { fx.push({ type: "swing", t: gnow(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: gnow() }); const a = anim.get(m.id); if (a) { a.swingAt = gnow(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
     const dropped = code !== 1000 && code !== 4000 && state && state.phase !== "lobby" && !SOLO_PREVIEW && room?.reconnectionToken;   // 1000 = you left on purpose, 4000 = kicked
@@ -477,18 +478,18 @@ let hotbarHtml = "";
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
-  const skill = SKILLS[me.characterClass] || SKILLS.assault, eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
+  const skill = SKILLS[me.characterClass] || SKILLS.assault, sie = me.characterClass === "sniper", eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
   const kk = me.katanaKills || 0, tier = Math.min(5, Math.floor(kk / 50));
   const cd = eng ? Math.ceil(ch < 1 ? me.chargeCd || 0 : me.abilityCooldown || 0) : Math.ceil(me.abilityCooldown || 0);
   const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / (me.reloadTotal || w.reload)) * 100 : 0;
   const slots = [
     { n: 1, name: (MELEE_INFO[me.melee] || MELEE_INFO.knife).name, sub: rav && me.melee === "katana" ? (tier >= 5 ? "T5 MAX" : `T${tier} · ${kk % 50}/50`) : "melee", ic: icon(me.melee || "knife") },
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
-    { n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) },
+    ...(sie && !me.secondary ? [] : [{ n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) }]),   // (Nov 16) Sienna: no second gun, no empty slot
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : "", name: skill.name, sub: ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : "", name: sie ? "Cryo Grenade: an ice bomb thrown where you aim: bursts in a circle, damage + 50% slower for 2s (bosses 25%). 3.5s cooldown" : skill.name, sub: sie ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -496,6 +497,7 @@ function renderHotbar(me) {
   const eS = slots[1], qS = slots[0];
   if (eng) eS.frac = ch < 1 ? (me.chargeCd || 0) / 25 : (me.abilityCooldown || 0) / 3;
   if (dan) eS.frac = (me.abilityCooldown || 0) / 8;
+  if (sie) { eS.frac = (me.abilityCooldown || 0) / 3.5; eS.cd = Math.ceil(me.abilityCooldown || 0); }
   if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (ast) { eS.active = me.skillT > 0 ? me.skillT / 20 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (op) { eS.active = myV?.kind === "tank" ? (myV.phase === "call" ? 1 : myV.left / 30) : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
@@ -513,6 +515,11 @@ function renderHotbar(me) {
   if (op) {   // R: Crimson Aegis mecha, beside E
     const mv = myV?.kind === "mecha" ? myV : null, rc = me.chargeCd || 0;
     slots.splice(2, 0, { n: 9, key: "R", card: "crimsonAegis", name: "Crimson Aegis: pilot a mecha for 30s. Hold click = flame jet, right click = lightsaber, R = step out. 100s cooldown", sub: mv ? (mv.phase === "call" ? "TRANSFORMING…" : `MECHA ${Math.ceil(mv.left)}s · R out`) : rc > 0 ? "cooldown" : "READY", active: mv ? (mv.phase === "call" ? 1 : mv.left / 30) : 0, frac: !mv && rc > 0 ? rc / 100 : 0, cd: !mv && rc > 0 ? Math.ceil(rc) : 0 });
+  }
+  if (sie) {   // (Nov 16) R: Ice Decoy, beside E; then her trait: the bar reads Q - E - R - TRAIT like Iron's
+    const hid = me.skillT > 0, rc = me.chargeCd || 0;
+    slots.splice(2, 0, { n: 9, key: "R", card: "iceDecoy", name: "Ice Decoy: dash toward your aim and leave an ice copy of you that zombies go for. You're hidden and nothing can hurt you for up to 10s; shooting or a skill shows you again. The 30s cooldown starts when you're seen", sub: hid ? `HIDDEN ${Math.ceil(me.skillT)}s` : rc > 0 ? "cooldown" : "READY", active: hid ? me.skillT / 10 : 0, frac: !hid && rc > 0 ? rc / 30 : 0, cd: !hid && rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(3, 0, { n: 8, key: "TRAIT", card: "coldPrecision", name: "Cold Precision: +43% damage; her sniper does +50% to bosses and brutes, and every sniper hit chills (30% slower for 1.5s)", sub: "ON" });
   }
   if (jug) slots.splice(3, 0, { n: 8, key: "TRAIT", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // (Nov 16, user) after R: the bar reads Q - E - R - TRAIT
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
@@ -564,7 +571,7 @@ function renderShop(me) {
   shopBought = "";
   box.innerHTML = `<div class="shop-top"><div class="wallet${goldChanged ? " bump" : ""}">${icon("gold")}<div><small>YOUR GOLD</small><b>${gold}</b></div></div>
     <div class="shop-timer"><b id="shopSecs">${secs}</b><small>seconds at most<br>until wave ${state.stage + 1}</small></div></div>` +
-    SHOP_ITEMS.map(([group, items]) => `<div class="shop-group"><span>${group.toUpperCase()}</span><div class="shop-items">${items.map(it => card(it, group)).join("")}</div></div>`).join("");
+    SHOP_ITEMS.filter(([group]) => !(group === "Weapons" && me.characterClass === "sniper")).map(([group, items]) => `<div class="shop-group"><span>${group.toUpperCase()}</span><div class="shop-items">${items.map(it => card(it, group)).join("")}</div></div>`).join("");   // (Nov 16) Sienna: her own sniper only
 }
 $("shop").addEventListener("click", e => { const b = e.target.closest("button[data-buy]"); if (b && !b.disabled) { shopBought = b.dataset.buy; room?.send("buy", { id: b.dataset.buy }); } });
 
@@ -936,7 +943,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
-  else if (k === "r") { if (["dispatcher", "operator", "juggernaut"].includes(me_()?.characterClass) && !e.repeat) room.send("skill2"); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
+  else if (k === "r") { const me = me_(); if (["dispatcher", "operator", "juggernaut", "sniper"].includes(me?.characterClass) && !e.repeat) room.send("skill2", { a: aimAngle(me) }); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
   else if (k === "f" && !e.repeat) { if (!tryRevive() && !deepUse() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
@@ -1137,7 +1144,7 @@ function sendControls(t) {
       if (me.melee !== "axe" && (firing || clicked) && t - lastMelee > cd) { room.send("attack", { a: aimAngle(me) }); lastMelee = t; clickShotAt = 0; }
     } else if (me.activeSlot === 2 || me.activeSlot === 3) {
       const rage = me.characterClass === "juggernaut" && me.weapon === "shotgun" && briggsRage(me) > 0;   // Unbreakable's first 10s: shotgun spam (hold to fire, 3x faster, no ammo)
-      const auto = WEAPON_INFO[me.weapon]?.auto || rage, ready = t - lastShoot >= Math.max(55, 1000 / ((me.fireRate || 1) * (rage ? 3 : 1)));
+      const auto = WEAPON_INFO[me.weapon]?.auto || rage || (me.characterClass === "sniper" && me.ultActive > 0), ready = t - lastShoot >= Math.max(55, 1000 / ((me.fireRate || 1) * (rage ? 3 : 1)));
       // full-auto (rifle, SMG): keep firing while held. Semi-auto: one shot per click.
       if (ready && ((auto && firing) || clicked)) { room.send("attack", { a: aimAngle(me), d: aimDist(me) }); lastShoot = t; clickShotAt = 0; }
     }
@@ -1155,7 +1162,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "unbreakable", life: 30, cd: 60, rage: 10 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
+const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "unbreakable", life: 30, cd: 60, rage: 10 }, sniper: { name: "Glacier Perch", icon: "glacierPerch", life: 20, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -3253,22 +3260,122 @@ function drawFeel(){
 function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.hurtUntil-now)/220;
  const g=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.75);g.addColorStop(0,'rgba(200,30,30,0)');g.addColorStop(1,`rgba(200,30,30,${.45*k})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 
-// SIENNA's DEAD EYE (Nov 9): a thick glacier-blue beam down the aimed line, a muzzle flare, and a burst on every zombie it went through
-function drawDeadEye(f, age) {
-  if (age > 520) return false;
-  const k = age / 520, c = Math.cos(f.a), s = Math.sin(f.a), x0 = f.x + c * 20, y0 = f.y + s * 20, x1 = f.x + c * f.len, y1 = f.y + s * f.len;
-  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
-  for (const [w, col] of [[18 * (1 - k) + 4, `rgba(120,200,255,${.35 * (1 - k)})`], [7 * (1 - k) + 2, `rgba(190,240,255,${.8 * (1 - k)})`], [2.5, `rgba(255,255,255,${1 - k})`]]) {
-    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+// ---------- SIENNA (Nov 16): Cold Precision chill, Cryo Grenade (E), Ice Decoy (R), Glacier Perch (Q). Server numbers: SIENNA ----------
+// Art: tools/cut-sienna.sh (her atlas: sniper / knife / throw / dash / perch) and tools/extract-sienna-fx.py: sienna-burst (5 frames: flash,
+// crystals + frost ring, the big burst, the frozen patch, fading), sienna-tower (8: ice spreads, crystals, rising, full + sparkle, full, cracking,
+// breaking, rubble), sienna-shatter (6: the ice block = her decoy, glowing cracks, bursting, shards, patch, fading), sienna-grenade (the canister).
+// Code-made: the cyan sniper tracer (TRACER), the map-length laser, the frost tint on slowed zombies, the decoy (her own sprite frozen pale inside
+// the ice block), the hidden shimmer, the dash streak.
+const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
+const SIEN = { burst: { cw: 245, ch: 146, gx: 123, gy: 101 }, tower: { cw: 78, ch: 84, gx: 37, gy: 73, top: 53, rise: 360 }, shatter: { cw: 73, ch: 73, gx: 37, gy: 65 } };
+const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
+const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
+const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam
+const sAnim = id => { let a = siennaAnim.get(id); if (!a) { a = {}; siennaAnim.set(id, a); } return a; };
+function onSienna(m) {
+  const now = gnow(), a = sAnim(m.id), mine = m.id === myId;
+  if (m.k === "nade") { a.throwAt = now; sfxList.push({ ...m, t: now }); playSfx("pistol", m.x0, m.y0, .35); }
+  else if (m.k === "decoy") { a.dashAt = now; a.dashA = m.a; siennaDecoys.set(m.id, { x: m.x, y: m.y, t0: now, until: now + m.t * 1000, a: m.a }); sfxList.push({ ...m, k: "dash", t: now }); playSfx("zap", m.x, m.y, .5); }
+  else if (m.k === "reveal") sfxList.push({ ...m, t: now });
+  else if (m.k === "shatter") { siennaDecoys.delete(m.id); sfxList.push({ ...m, t: now }); playSfx("zhit", m.x, m.y, .6); }
+  else if (m.k === "perch") { a.perchAt = now; playSfx("build", m.x, m.y, .8); if (mine) shake(4, 200); }
+  else if (m.k === "perchEnd") { a.perchAt = 0; sfxList.push({ ...m, k: "towerEnd", t: now }); playSfx("zhit", m.x, m.y, .8); }
+  else if (m.k === "beam") { a.beamAt = now; sfxList.push({ ...m, t: now }); playSfx("zap", m.x, m.y, 1); playSfx("rifle", m.x, m.y, .8); if (mine) shake(5, 180); }
+}
+function sienFrame(im, G, k, x, y, alpha = 1, sc = 1) {   // frame k of a one-row atlas, its ground point at (x, y)
+  if (!im?.naturalWidth) return; ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha *= alpha;
+  ctx.drawImage(im, k * G.cw, 0, G.cw, G.ch, Math.round(x - G.gx * sc), Math.round(y - G.gy * sc), G.cw * sc, G.ch * sc); ctx.restore();
+}
+const perchLift = (p, now) => { if (!(p.characterClass === "sniper" && p.ultActive > 0 && p.alive)) return 0; const t0 = siennaAnim.get(p.sessionId)?.perchAt; return t0 ? SIEN.tower.top * Math.min(1, Math.max(0, (now - t0) / SIEN.tower.rise)) : SIEN.tower.top; };
+function drawPerchTower(p, now) {   // the ice tower under her feet: it grows (frames 0-3), stands (4; its sparkle frame 3 now and then), cracks in the last 3s (5)
+  const t0 = siennaAnim.get(p.sessionId)?.perchAt, age = t0 ? now - t0 : 1e9;
+  const k = age < SIEN.tower.rise ? Math.min(3, Math.floor(age / (SIEN.tower.rise / 4))) : p.ultActive < 3 ? 5 : (now % 2400) < 160 ? 3 : 4;
+  sienFrame(sienImgs.tower, SIEN.tower, k, p.x, p.y + SPR.feet - 2);
+}
+function siennaCast(p, now, row) {   // the skill poses: { blk, col, row? } or null
+  const a = siennaAnim.get(p.sessionId) || {}, B = DIR8.sniper.blocks;
+  if (p.ultActive > 0) {   // up on the perch: aim / FIRE / smoke (straight up or down: her sniper block's own frames)
+    const sa = now - (a.beamAt || -1e9), c = sa < 120 ? 1 : sa < 560 ? 2 : 0;
+    return row === 0 || row === 4 ? { blk: B.indexOf("sniper"), col: [0, 4, 5][c] } : { blk: B.indexOf("perch"), col: c };
   }
-  if (age < 140) { const g = ctx.createRadialGradient(x0, y0, 2, x0, y0, 46); g.addColorStop(0, `rgba(255,255,255,${1 - age / 140})`); g.addColorStop(1, "rgba(120,200,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x0, y0, 46, 0, 7); ctx.fill(); }
-  for (const t of f.hits || []) {   // a burst of ice-blue shards on each zombie it hit
-    const hx = f.x + c * t, hy = f.y + s * t - 16, r = 10 + 34 * k;
-    ctx.fillStyle = `rgba(170,230,255,${.55 * (1 - k)})`; ctx.beginPath(); ctx.arc(hx, hy, r * .6, 0, 7); ctx.fill();
-    ctx.strokeStyle = `rgba(230,250,255,${1 - k})`; ctx.lineWidth = 2;
-    for (let q = 0; q < 8; q++) { const qa = q * Math.PI / 4 + f.a; ctx.beginPath(); ctx.moveTo(hx + Math.cos(qa) * r * .35, hy + Math.sin(qa) * r * .35); ctx.lineTo(hx + Math.cos(qa) * r, hy + Math.sin(qa) * r); ctx.stroke(); }
+  const da = now - (a.dashAt || -1e9);
+  if (da < 420) return { blk: B.indexOf("dash"), col: da < 50 ? 0 : da < 230 ? 1 : da < 340 ? 2 : 3, row: ROW_OF_OCT[((Math.round((a.dashA || 0) / (Math.PI / 4)) % 8) + 8) % 8] };   // crouch, leap, land in an ice puff, up
+  const ta = now - (a.throwAt || -1e9);
+  if (ta < 440) return { blk: B.indexOf("throw"), col: ta < 90 ? 0 : ta < 200 ? 1 : ta < 320 ? 2 : 3 };   // grenade in hand, wind-up, release, follow-through
+  return null;
+}
+function siennaHiddenLook(p) { ctx.globalAlpha = p.sessionId === myId ? .45 : .16; ctx.filter = "saturate(.25) brightness(1.45)"; }   // Ice Decoy: see-through and frost-pale (teammates barely see her)
+function siennaShimmer(p, now) {   // twinkling frost round a hidden Sienna (only her own screen shows it strongly)
+  const al = p.sessionId === myId ? .9 : .3; ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 5; i++) { const ph = now / 520 + i * 1.3, tw = (Math.sin(ph * 2.3) + 1) / 2, x = p.x + Math.sin(ph + i) * 15, y = p.y - 8 - ((now / 30 + i * 13) % 34);
+    ctx.globalAlpha = al * tw; ctx.fillStyle = "#dff8ff"; ctx.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); }
+  ctx.restore();
+}
+function drawDecoy(d, id, now) {   // her standing frame frozen pale inside the ice block (cracks glow in its last second)
+  const img = dir8.sniper, C = DIR8.sniper.cell, row = ROW_OF_OCT[((Math.round((d.a || 0) / (Math.PI / 4)) % 8) + 8) % 8], fy = d.y + SPR.feet;
+  ctx.save(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(d.x, d.y + 17, 17, 5, 0, 0, 7); ctx.fill(); ctx.restore();
+  if (img?.naturalWidth) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.filter = "saturate(.15) brightness(1.55) contrast(.85)"; ctx.globalAlpha = .9;
+    ctx.drawImage(img, 0, row * C.cellH, C.cellW, C.cellH, Math.round(d.x - C.anchorX), Math.round(d.y + SPR.feet - C.feetY), C.cellW, C.cellH); ctx.restore(); }
+  const left = d.until - now; sienFrame(sienImgs.shatter, SIEN.shatter, left < 1000 ? 1 : 0, d.x, fy + 2, .55);
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .25 + .15 * Math.sin(now / 240); ctx.fillStyle = "#bff3ff"; ctx.fillRect(Math.round(d.x) - 9, Math.round(fy) - 50, 3, 34); ctx.restore();   // a glint down the ice
+}
+function drawSiennaItems(items, now) {   // depth-sorted pieces: decoys, bursts, shatters, the tower breaking, the flying grenade, dash streaks
+  for (const [id, d] of siennaDecoys) { if (now > d.until + 1500) { siennaDecoys.delete(id); continue; } if (inView(d.x, d.y, 80)) items.push({ y: d.y + 12, draw: () => drawDecoy(d, id, now) }); }
+  for (let i = sfxList.length - 1; i >= 0; i--) {
+    const f = sfxList[i], age = now - f.t;
+    if (f.k === "burst") {   // flash, crystals, big burst, then the frozen patch stays for the slow (2s) and fades
+      if (age > 2300) { sfxList.splice(i, 1); continue; }
+      const k = age < 80 ? 0 : age < 200 ? 1 : age < 420 ? 2 : age < 1700 ? 3 : 4, al = age < 1700 ? 1 : 1 - (age - 1700) / 600;
+      items.push({ y: k >= 3 ? f.y - 60 : f.y + 8, draw: () => sienFrame(sienImgs.burst, SIEN.burst, k, f.x, f.y, al) });   // the patch lies under the zombies; the burst stands in front
+    } else if (f.k === "shatter") {
+      if (age > 900) { sfxList.splice(i, 1); continue; }
+      const k = Math.min(5, 2 + Math.floor(age / 150)), al = age < 600 ? 1 : 1 - (age - 600) / 300;
+      items.push({ y: f.y + 12, draw: () => sienFrame(sienImgs.shatter, SIEN.shatter, k, f.x, f.y + SPR.feet + 2, al) });
+    } else if (f.k === "towerEnd") {   // she hops down: the tower cracks, breaks, the rubble fades
+      if (age > 1300) { sfxList.splice(i, 1); continue; }
+      const k = age < 160 ? 5 : age < 360 ? 6 : 7, al = age < 800 ? 1 : 1 - (age - 800) / 500;
+      items.push({ y: f.y + 4, draw: () => sienFrame(sienImgs.tower, SIEN.tower, k, f.x, f.y + SPR.feet - 2, al) });   // behind her (she's back on the ground in front of it)
+    } else if (f.k === "nade") {   // the canister arcs to the spot (the burst comes with the server's "boom")
+      const T = f.fl * 1000; if (age > T) { sfxList.splice(i, 1); continue; }
+      const u = age / T, x = f.x0 + (f.x - f.x0) * u, gy = f.y0 + (f.y - f.y0) * u, h = 22 + Math.sin(u * Math.PI) * 90 * Math.min(1, Math.hypot(f.x - f.x0, f.y - f.y0) / 300);
+      items.push({ y: 1e7, draw: () => { ctx.save(); ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(x, gy + 14, 7, 3, 0, 0, 7); ctx.fill();
+        const im = sienImgs.grenade; if (im.naturalWidth) { ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(x), Math.round(gy - h)); ctx.rotate(age / 60); ctx.drawImage(im, -12, -12); }
+        ctx.restore(); } });
+    } else if (f.k === "dash") {   // a frosty streak along the dash + a few snowflakes
+      if (age > 650) { sfxList.splice(i, 1); continue; }
+      const k = age / 650, c = Math.cos(f.a), sn = Math.sin(f.a), x1 = f.x + c * f.d * Math.min(1, age / f.ms), y1 = f.y + sn * f.d * Math.min(1, age / f.ms);
+      items.push({ y: f.y, draw: () => { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+        for (const [w, col] of [[16, `rgba(120,215,255,${.25 * (1 - k)})`], [6, `rgba(200,245,255,${.6 * (1 - k)})`]]) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(f.x, f.y + 4); ctx.lineTo(x1, y1 + 4); ctx.stroke(); }
+        ctx.fillStyle = `rgba(235,250,255,${1 - k})`; for (let j = 0; j < 7; j++) { const u = (j + .5) / 7, px_ = f.x + (x1 - f.x) * u - sn * Math.sin(j * 2.1) * 10, py_ = f.y + (y1 - f.y) * u + c * Math.sin(j * 2.1) * 10 - k * 14; ctx.fillRect(Math.round(px_), Math.round(py_), 2, 2); }
+        ctx.restore(); } });
+    } else if (f.k === "reveal") {   // a puff of frost where she reappears
+      if (age > 450) { sfxList.splice(i, 1); continue; }
+      const k = age / 450; items.push({ y: f.y + 13, draw: () => { ctx.save(); ctx.globalAlpha = .7 * (1 - k); ctx.strokeStyle = "#dff8ff"; ctx.lineWidth = 3 * (1 - k) + 1; ctx.beginPath(); ctx.ellipse(f.x, f.y + 14, 12 + 26 * k, 5 + 9 * k, 0, 0, 7); ctx.stroke(); ctx.restore(); } });
+    }
   }
-  ctx.restore(); return true;
+}
+function drawSiennaBeams(now) {   // Glacier Perch: the ice-cyan laser across the whole map. It leaves her muzzle up on the tower and comes down to
+  // chest height over the first 220px (the zombies it hits are on the ground line), then runs straight on; frost glints along it
+  for (let i = sfxList.length - 1; i >= 0; i--) {
+    const f = sfxList[i]; if (f.k !== "beam") continue; const age = now - f.t, L = 600; if (age > L) { sfxList.splice(i, 1); continue; }
+    const k = age / L, c = Math.cos(f.a), s = Math.sin(f.a), x0 = f.x + c * 30, y0 = f.y + SPR.feet - SIEN.tower.top - 30 + s * 18;
+    const xq = f.x + c * 220, yq = f.y + s * 220 - 18, x1 = f.x + c * f.len, y1 = f.y + s * f.len - 18, fade = 1 - k * k;
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const [w, col] of [[34 * (1 - k) + 8, `rgba(40,170,255,${.42 * fade})`], [14 * (1 - k) + 4, `rgba(140,232,255,${.9 * fade})`], [5 * (1 - k) + 1.5, `rgba(255,255,255,${fade})`]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(xq, yq); ctx.lineTo(x1, y1); ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(230,250,255,${fade})`;
+    for (let j = 0; j < 46; j++) { const u = ((j * 0.618 + f.t * 0.0007) % 1) * 0.6, px_ = xq + (x1 - xq) * u, py_ = yq + (y1 - yq) * u, off = Math.sin(j * 7.3 + age / 50) * (4 + 12 * k); ctx.fillRect(Math.round(px_ - s * off), Math.round(py_ + c * off), 2, 2); }
+    if (age < 160) { const g = ctx.createRadialGradient(x0, y0, 2, x0, y0, 46); g.addColorStop(0, `rgba(255,255,255,${1 - age / 160})`); g.addColorStop(1, "rgba(120,220,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x0, y0, 46, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function frostOverlay(z, z0, now) {   // a slowed zombie (Cold Precision / Cryo Grenade): frost at its feet and twinkling ice on it; stronger for the grenade
+  const big = (z0.chill || 0) >= 40, r = z.radius || 14; ctx.save();
+  ctx.fillStyle = big ? "rgba(190,240,255,.45)" : "rgba(170,230,255,.28)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + r * .8, r * 1.1, 4.5, 0, 0, 7); ctx.fill();
+  ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = "rgba(200,245,255,.9)";
+  for (let i = 0; i < (big ? 4 : 2); i++) { const ph = now / 300 + i * 2.1 + (z.x % 7), tw = (Math.sin(ph) + 1) / 2; ctx.globalAlpha = .35 + .65 * tw; const x = z.x + Math.sin(i * 2.4 + z.y) * r * .7, y = z.y - r * (.2 + .5 * ((i * .37 + z.x * .01) % 1)); ctx.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); }
+  ctx.restore();
 }
 // SHOTGUN (Nov 9): a muzzle blast cone (a burst of fire the width of the spread + a puff of smoke) and a pellet spray
 // (5 glowing pellets that fly out to where each stopped - its last zombie or a wall - with a spark puff there, plus loose sparks in the cone)
@@ -3319,7 +3426,7 @@ function drawShotFx(){
   const now=gnow();
   drawPyreBurning();
   drawDeepParts();   // (Mine-Beast sparks / rocks / flashes: Briggs's shields use them on every map)
-  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','scream','abom','shotgun','deadeye'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
+  for(let i=fx.length-1;i>=0;i--){const f=fx[i],age=now-f.t;if(!['spit','chop','clang','deflect','wreck','laser','healfx','summon','raven','dante','hive','sofea','briggs','astra','pyre','scream','abom','shotgun'].includes(f.type)&&age>(f.type==='boom'?380:f.type==='slam'?520:f.type==='swing'?(f.m==='katana'?420:f.heavy?280:160):140)){fx.splice(i,1);continue;}
    if(f.type==='chop')continue;
    if(f.type==='wreck'||f.type==='laser'||f.type==='healfx'||f.type==='summon'){if(!drawViktorFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='raven'){if(!drawRavenFx(f,age))fx.splice(i,1);continue;}
@@ -3333,7 +3440,6 @@ function drawShotFx(){
    if(f.type==='scream'){if(!drawScreamerFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='abom'){if(!drawAbomFx(f,age))fx.splice(i,1);continue;}
    if(f.type==='shotgun'){if(!drawShotgunFx(f,age))fx.splice(i,1);continue;}
-   if(f.type==='deadeye'){if(!drawDeadEye(f,age))fx.splice(i,1);continue;}
    if(f.type==='deflect'){if(!drawDeflect(f,age))fx.splice(i,1);continue;}   // drawn on the ground (drawGroundFx)
    if(f.type==='clang'){if(age>320){fx.splice(i,1);continue;}const k=age/320;ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#fff6d0';ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j*1.05+f.x;ctx.beginPath();ctx.moveTo(f.x+Math.cos(a)*4,f.y+Math.sin(a)*4);ctx.lineTo(f.x+Math.cos(a)*(8+16*k),f.y+Math.sin(a)*(8+16*k));ctx.stroke();}ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillStyle='#d8e4ff';ctx.fillText('ARMOR',f.x,f.y-12-10*k);ctx.restore();continue;}
    if(f.type==='spit'){if(drawSpit(f,age))continue;fx.splice(i,1);continue;}
@@ -3412,7 +3518,7 @@ function drawSurvivorLabels(p) {
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 20, 8, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
     ctx.restore();
   }
-  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46 + (DIR8[p.characterClass]?.lift || 0);   // above Sofea's tank / helicopter / mecha
+  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46 + (DIR8[p.characterClass]?.lift || 0) + perchLift(p, gnow());   // above Sofea's tank / helicopter / mecha / Sienna's ice tower
   drawLabel(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift, "#f2ead9");
   if (awayIds.has(p.sessionId)) drawLabel("RECONNECTING…", p.x, p.y - nameLift - 13, "#9fd8ff");   // their connection dropped: the server holds the seat 30s
   if (!p.alive) { const safe = !p.bledOut && inSafehouse(p); drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : safe ? "DOWN · SAFE (PAUSED " + Math.ceil(p.bleedout || 0) + "s) · F TO REVIVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, safe ? "#8ff0ff" : "#ff7568"); }
@@ -3441,6 +3547,8 @@ const DIR8 = {
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "slam", "throw", "fists", "power"],   // IRON (v3, Nov 16): no bat / axe art (bat / axe use the knife block)
     walk: [1, 2, 3, 2], flashCol: 4 },   // his sheets: walk = left foot, passing, right foot, passing (no hitch); col 4 = muzzle flash, col 5 = pump. (A bigger character can add cell: {...} and lift.)   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  sniper: { url: "assets/sprites/dir8/sniper.webp", blocks: ["sniper", "knife", "throw", "dash", "perch"],   // SIENNA (Nov 16, tools/cut-sienna.sh): a wider cell (the perch's ice blast fits aiming left too);
+    cell: { cellW: 176, cellH: 88, anchorX: 88, feetY: 80 }, walk: [1, 2, 3, 2], flashCol: 4 },   // walk: left foot, passing, right foot, passing; col 4 = the cyan muzzle flash, 5 = smoke
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
     fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
@@ -3481,7 +3589,7 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "operator" && p.alive && drawSofea(p, img, now)) return true;
   const oct = ((Math.round(pose.aim / (Math.PI / 4)) % 8) + 8) % 8; let row = ROW_OF_OCT[oct];
   const holdingGun = p.activeSlot === 2 || p.activeSlot === 3, shotAge = now - a.shotAt;
-  const block = Math.max(0, dir8Block(p)), melee = p.activeSlot === 1 && !["gun", "launcher", "rifle", "shotgun"].includes(DIR8[p.characterClass].blocks[block]), swingAge = now - (a.swingAt || 0);
+  const block = Math.max(0, dir8Block(p)), melee = p.activeSlot === 1 && !["gun", "launcher", "rifle", "shotgun", "sniper"].includes(DIR8[p.characterClass].blocks[block]), swingAge = now - (a.swingAt || 0);
   let col = 0;                                                                   // idle
   if (melee && a.heavy && swingAge < 420) col = 5;                              // axe heavy swing: hold the hit frame longer
   else if (melee && swingAge < 300) col = swingAge < 120 ? 4 : 5;               // stab / wind-up, then slash / hit
@@ -3498,13 +3606,15 @@ function drawSurvivorDir8(p, pose, img) {
       if (pa < 240) col = ba.hook ? 5 : 4; else if (col >= 4) col = 0;
     }
   }
+  let lift = 0;
+  if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
   let flip = 0; const fix = DIR8[p.characterClass].fix, rowFix = fix && (fix[DIR8[p.characterClass].blocks[blk]] || fix.all);
   if (rowFix?.[row]) [row, flip] = rowFix[row];
-  ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
+  ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y - lift));
   if (!p.alive) { ctx.rotate(Math.PI / 2 * 0.9); ctx.globalAlpha = .55; ctx.filter = "grayscale(1)"; }
-  else if (p.shadow > 0) ravenHidden(p);
+  else if (p.shadow > 0) { if (p.characterClass === "sniper") siennaHiddenLook(p); else ravenHidden(p); }
   else if (awayIds.has(p.sessionId)) ctx.globalAlpha = .55;   // reconnecting: faded out, frozen where they stood
   if (flip) ctx.scale(-1, 1);   // mirrored diagonal (the cell is centred on the feet, so it flips in place)
   ctx.imageSmoothingEnabled = false;
@@ -3512,6 +3622,7 @@ function drawSurvivorDir8(p, pose, img) {
   ctx.drawImage(img, col * C.cellW, (blk * 8 + row) * C.cellH, C.cellW, C.cellH, -C.anchorX, SPR.feet - C.feetY, C.cellW, C.cellH);
   ctx.restore();
   if (rush) marcusRush(p, now, true);
+  if (p.characterClass === "sniper" && p.shadow > 0 && p.alive) siennaShimmer(p, now);
   return true;
 }
 
@@ -3770,7 +3881,7 @@ function predApply(p, inp, me) {   // one input -> moved position (mirrors the s
 }
 // not while the SERVER is moving you (Raven's dash) or holding you still (Briggs's slam / roar wind-up): then you're drawn from
 // the server's smooth updates instead, and prediction picks up again right after
-const serverDriven = me => gnow() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || gnow() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, gnow()));
+const serverDriven = me => (me.characterClass === "sniper" && (me.ultActive > 0 || gnow() - (siennaAnim.get(myId)?.dashAt ?? -1e9) < 380)) || gnow() - (ravenDash.get(myId)?.t0 ?? -1e9) < 450 || gnow() - (fragHop.get(myId) ?? -1e9) < 380 || (me.characterClass === "juggernaut" && !!briggsCast(me, gnow()));
 const predicting = me => !!(me && me.alive && (state?.phase === "playing" || state?.phase === "cleared") && !state.vehicles?.get(myId) && !(me.stunned > 0) && !(me.ride > 0) && !serverDriven(me));
 function predictInput(me, inp) {
   if (!predicting(me)) { PRED.ok = false; PRED.pending.length = 0; return; }
@@ -4959,12 +5070,13 @@ function drawWorldObjects(extra) {
   drawStompDust();
   drawHealRings();
   drawCorpses();
-  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { drawZombieAny(z); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
+  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { if (z0.chill > 0) { ctx.filter = z0.chill >= 40 ? "saturate(.3) brightness(1.3)" : "saturate(.55) brightness(1.15)"; } drawZombieAny(z); ctx.filter = "none"; if (z0.chill > 0) frostOverlay(z, z0, gnow()); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
-  if (briggsCovers.size) drawBriggsCovers(items, gnow());   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
+  if (briggsCovers.size) drawBriggsCovers(items, gnow());
+  if (siennaDecoys.size || sfxList.length) drawSiennaItems(items, gnow());   // (Nov 16) Sienna: decoys, ice bursts, shatters, the grenade in flight   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
@@ -4972,7 +5084,7 @@ function drawWorldObjects(extra) {
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
   const leader0 = [...state.players.values()].sort((a, b) => b.kills - a.kills || (a.killLeadSince || Number.MAX_SAFE_INTEGER) - (b.killLeadSince || Number.MAX_SAFE_INTEGER) || String(a.name).localeCompare(String(b.name)))[0], leader = V(leader0);
   if (leader && leader.kills > 0) ctx.drawImage(crownSprite(), Math.round(leader.x) - 24, Math.round(leader.y) - 60 - 30);   // the kill leader's glowing crown (rendered once: a blurred glyph per frame was a full blur pass)
-  drawShotFx();
+  drawShotFx(); if (sfxList.length) drawSiennaBeams(gnow());
   drawReviveRing(); drawAstraShield();
   drawCrosshair();
 }
@@ -5202,9 +5314,11 @@ const ROSTER = [
     skills: [{ k: "E", n: "Sky Barrage", card: "skyBarrage", cd: 8, t: "3 rockets up, 3 down around your mouse." },
              { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }],
     trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
-  { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, desc: "Precision long-range damage. Picks off the biggest threats first.",
-    skills: [{ k: "E", n: "Dead Eye", cd: 24, t: "One huge aimed shot where you point: 12x a shot of the gun you're holding. It goes through as many zombies as that gun does (sniper 3, shotgun 2, launcher explodes). Holding melee? It uses your gun." }],
-    trait: { n: "Marksman", t: "Every shot counts: +43% damage with every weapon, but she fires slower (×0.65). Her sniper also does +50% to bosses and brutes." }, gear: ["sniper", "pistol", "knife"] },
+  { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, isNew: true, desc: "Ice-cold sharpshooter. One shot every 2 seconds that goes through three zombies and freezes them in their tracks.",
+    skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: it bursts in a circle, damaging every zombie in it and making them 50% slower for 2s (bosses 25%)." },
+             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage. Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo." },
+             { k: "R", n: "Ice Decoy", cd: 30, card: "iceDecoy", t: "Dash toward your aim and leave an ice copy of yourself that the zombies around it go after. You're hidden and nothing can hurt you for up to 10s; shooting or using a skill shows you again. The cooldown starts when you're seen." }],
+    trait: { n: "Cold Precision", card: "coldPrecision", t: "+43% damage. Her sniper does +50% to bosses and brutes, and every sniper hit chills: 30% slower for 1.5s (bosses 15%)." }, gear: ["sniper", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
     skills: [{ k: "E", n: "Emergency Medics", card: "medicTeam", cd: 30, t: "A medic arrives: everyone within 300px of you heals 30% of their max HP at once. For 20s he revives downed teammates first (2.5s each), then heals the injured (5 HP/s)." },
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s. Each Heavy Weapon pick: +15% officer damage." },
@@ -5212,7 +5326,7 @@ const ROSTER = [
     trait: { n: "Field Commander", t: "Trained for emergencies: she revives downed teammates twice as fast (2.5s instead of 5s)." }, gear: ["rifle", "pistol", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
-const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, pierces 3, +50% vs bosses & brutes", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
+const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, one shot every 2s, pierces 3, +50% vs bosses & brutes, chills", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };

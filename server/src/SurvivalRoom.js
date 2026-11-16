@@ -193,7 +193,7 @@ const CLASS_STATS = {
   engineer:      { hp: 110, speed: 175, defence: 1, dmgMult: 0.97, rateMult: 1.00 },
   scout:         { hp:  90, speed: 225, defence: 0, dmgMult: 1.03, rateMult: 1.20 },
   demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
-  sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.65 },
+  sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.625 },   // (Nov 16) 0.8 x 0.625 = one sniper shot every 2.0s (the user's pick)
   operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   dispatcher:    { hp: 120, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
@@ -333,7 +333,7 @@ const DANTE = {
     flat: 0.62, bossMult: 0.5, push: 22 },
 };
 function danteLoadout(p) { p.owned = "launcher,pistol"; p.primary = "launcher"; p.secondary = "pistol"; p.weapon = "launcher"; p.activeSlot = 2; }
-function siennaLoadout(p) { p.owned = "sniper,pistol"; p.primary = "sniper"; p.secondary = "pistol"; p.weapon = "sniper"; p.activeSlot = 2; }   // Nov 9: her own gun (was the rifle)
+function siennaLoadout(p) { p.owned = "sniper"; p.primary = "sniper"; p.secondary = ""; p.weapon = "sniper"; p.melee = "knife"; p.activeSlot = 2; p.perch = false; }   // (Nov 16) her own gun ONLY + knife (user: "each character will have a unique gun, no more picking up of guns")
 function sofeaLoadout(p) { p.owned = "smg,pistol"; p.primary = ""; p.secondary = "smg"; p.weapon = "smg"; p.activeSlot = 3; }   // Nov 9: SMG instead of the rifle (the shop still sells primaries)
 function ravenLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "katana"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
 function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.katanaKills = 0; p.katanaTier = 0; }
@@ -361,7 +361,19 @@ const nearFoot = (st, z, pa, pt) => {   // z within pa (along the line) / pt (ac
   return Math.abs(dx * l.c + dy * l.s) < l.L + pa && Math.abs(dy * l.c - dx * l.s) < l.T + pt;
 };
 const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the tower and is solid too
-const DEAD_EYE = { mult: 12 };   // Sienna's E: 12x one shot of the gun she holds (see deadEye)
+// SIENNA (Nov 16, the user's new kit: project doc claude/sienna-kit.md). Sniper ONLY (2.0s a shot, pierces 3) + knife: no pistol, no shop
+// guns, she leaves weapon drops for the others. COLD PRECISION (trait): +43% damage (dmgMult), sniper +50% to bosses / brutes (bigMult), and
+// every sniper hit CHILLS (slower for a moment; bosses half as much). E CRYO GRENADE: thrown where she aims, bursts in a circle: damage + a
+// strong slow. R ICE DECOY: a quick dash toward the aim, leaving an ice copy of her that nearby zombies go for; she is hidden + nothing can
+// hurt her for up to 10s; shooting / a skill reveals her early, and the 30s cooldown starts when she's revealed. Q GLACIER PERCH: 20s on an
+// ice tower (can't move, half damage taken): click / hold = a cyan laser across the WHOLE map every 1.5s, through EVERY zombie (bosses too),
+// 3x a sniper hit, no ammo; the 60s cooldown starts when she comes down.
+const SIENNA = {
+  chill: { f: 0.7, boss: 0.85, t: 1.5 },   // every sniper hit (the perch laser too): 30% slower for 1.5s (bosses 15%)
+  nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.5, boss: 0.75, t: 2 },   // E: lands where she aims (60-450px), 120px burst, 80 (x wave scaling), 50% slower for 2s (bosses 25%)
+  decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
+  perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q
+};
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
 const TOWER_HALF = 34;      // the radio tower's concrete base in the centre of the map
@@ -382,6 +394,7 @@ function applyLoadout(p) {
   // bonusDamage / buffDamage are percentages (+20 = +20% damage)
   p.damage = Math.round(w.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * 10) / 10;
   p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1) * (p.buffRate || 1));
+  if (p.perch) p.fireRate = 1 / SIENNA.perch.gap;   // Sienna up on her Glacier Perch: one laser every 1.5s (the client paces its clicks by this)
 }
 function applyClassBase(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
@@ -461,7 +474,7 @@ export class SurvivalRoom extends Room {
     this.state.players = new MapSchema();
     this.state.zombies = new MapSchema();
     this.state.structures = new MapSchema();
-    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.zStun = new Map(); this.covers = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
+    this.state.robots = new MapSchema(); this.robotSeq = 0; this.robotFire = new Map(); this.supportMem = new Map(); this.shadowDash = new Map(); this.stormTick = new Map(); this.dots = new Map(); this.katanaMark = new Set(); this.slashCount = new Map(); this.ripples = []; this.hiveMem = new Map(); this.ultInfo = new Map(); this.state.vehicles = new MapSchema(); this.vmemory = new Map(); this.downHp = new Map(); this.briggs = new Map(); this.taunt = new Map(); this.zStun = new Map(); this.zSlow = new Map(); this.sienna = new Map(); this.covers = new Map(); this.hooks = new Map(); this.spins = new Map(); this.astra = new Map(); this.docRes = new Map(); this.unitMem = new Map(); this.safeBoxes = []; this.safeHit = new Map(); this.moveBudget = new Map(); this.inQ = new Map();
     this.state.noCd = true;   // test mode: Q unlocked from the start (no 100 kills needed). Cooldowns always apply (Nov 6). Host can switch it off in the Esc menu
     this.state.loot = new MapSchema();
     this.state.hookSpeed = BUTCHER.hook.speed;   // the preview starts at the real speed too (toggle: slow practice speed)
@@ -718,10 +731,12 @@ export class SurvivalRoom extends Room {
       p.xp += xpForLevel(L) - banked; this.state.message = `Test: ${p.name} has XP for level ${L + 1}`;
     });
     this.onMessage("debugGold", client => { const p = this.state.players.get(client.sessionId); if (this.solo && p) { p.currency += 200; this.state.message = "Test: +200 gold (G)"; } });
-    this.onMessage("skill2", client => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
+    this.onMessage("skill2", (client, data) => { const p = this.state.players.get(client.sessionId); if (!p?.alive || this.state.phase !== "playing") return;
+      const a = Number(data?.a); if (data?.a != null && Number.isFinite(a)) { p.aim = a; this.lastAimAt.set(client.sessionId, Date.now()); }   // (Nov 16) R can be aimed (Sienna's dash)
       if (p.characterClass === "dispatcher") this.astraCast(p, "R");   // Astra's R: safehouse
       else if (p.characterClass === "operator") this.mechaKey(p);   // Sofea's R: get in / out of the mecha
-      else if (p.characterClass === "juggernaut") this.bareKnuckle(p); });   // (Nov 13) Briggs's R: Bare Knuckle
+      else if (p.characterClass === "juggernaut") this.bareKnuckle(p);   // (Nov 13) Briggs's R: Bare Knuckle
+      else if (p.characterClass === "sniper") this.iceDecoy(p); });   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
     // Sofea's mecha: right click = lightsaber swing
     this.onMessage("mechaSlash", (client, data) => { const p = this.state.players.get(client.sessionId), a = Number(data?.a);
       if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
@@ -820,6 +835,7 @@ export class SurvivalRoom extends Room {
       const id = String(data?.id || ""), item = SHOP[id];
       if (!p || !item || this.state.phase !== "cleared") return;
       if (item.type === "weapon" && p.owned.split(",").includes(id)) return;
+      if (item.type === "weapon" && p.characterClass === "sniper") { this.state.message = `${p.name} only uses her own sniper.`; return; }   // (Nov 16) one unique gun per character (Sienna first)
       if (item.max && p.armor >= item.max) return;
       if (id === "medkit" && p.medkits >= MAX_MEDKITS) return;
       if (p.currency < item.price) { this.state.message = `${p.name} needs ${item.price - p.currency} more gold for ${item.label}.`; return; }
@@ -865,7 +881,7 @@ export class SurvivalRoom extends Room {
 
   travel(site) {   // (Nov 12) on to the next map in the order: what the team built and anything on the ground stay behind (an unclaimed Pyre Plate is handed out first)
     const s = this.state; this.handOutPlates(); this.dismountAll();
-    s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.zombies.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = []; this.pBurn.clear();
+    s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.zombies.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = []; this.sienna?.forEach(m => { m.decoy = null; m.dash = null; }); this.pBurn.clear();
     this.loadSite(site); s.towerHp = s.towerMaxHp; s.generatorHp = s.generatorMaxHp;
     for (const p of s.players.values()) if (!p.alive) { p.alive = true; p.bledOut = false; p.bleedout = 0; p.hp = Math.round(p.maxHp * .5); }   // the downed are carried along
     const ch = chapterOf(s.stage + (s.phase === "cleared" ? 1 : 0)), n = CHAPTERS.indexOf(ch) + 1;
@@ -922,7 +938,7 @@ export class SurvivalRoom extends Room {
     s.scrap = 100; s.electronics = 20; s.explosives = 10; s.fuel = 100;
     s.generatorHp = s.generatorMaxHp; s.generatorFuel = 100;
     s.dayTime = 0; s.isNight = false; s.explore = false; s.bossPhase = ""; s.bossIntro = "";
-    s.zombies.clear(); this.covers?.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
+    s.zombies.clear(); this.covers?.clear(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn.clear(); s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); s.vehicles.clear(); this.vmemory.clear(); this.briggs.clear(); this.sienna.clear(); this.zSlow.clear(); this.taunt.clear(); this.hooks.clear(); this.spins.clear(); this.astra.clear(); this.docRes.clear(); this.unitMem.clear(); this.safeBoxes = []; this.ultInfo.clear(); this.spits = []; this.ripples = [];
     this.enraged.clear(); this.spawnClock = 0; this.downs.clear(); this.inBreak = false; s.countdown = 0;
     for (const p of s.players.values()) {
       p.x = this.A.sx + rand(-170, 170); p.y = this.A.sy + rand(-this.A.sh, this.A.sh); this.solveCollisions(p);
@@ -1101,17 +1117,19 @@ export class SurvivalRoom extends Room {
   // One shot from player p toward angle aim. Used by humans and AI bots alike.
   fireWeapon(p, aim, dist) {
     if (p.characterClass === "juggernaut" && this.fistsOn(p)) return this.briggsPunch(p, aim);   // Bare Knuckle: the click punches
+    if (p.characterClass === "sniper" && this.perchOn(p)) return this.perchShot(p, aim);   // Glacier Perch: the click fires the map-length laser
     const now = Date.now();
     if (p.stunned > 0 || !WEAPONS[p.weapon] || p.storm > 0 || this.shadowDash.has(p.sessionId) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
-    if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility
+    if (p.shadow > 0) { if (p.characterClass === "sniper") this.iceReveal(p); else this.breakShadow(p); }   // attacking ends Raven's invisibility / Sienna's hiding
     const rage = this.shotgunRage(p, now);   // Briggs's War Cry: shotgun spam, no ammo
     if (rage && p.reloadLeft > 0) p.reloadLeft = 0;
     if (p.reloadLeft > 0) return;
     if (now - p.lastShot < 1000 / (p.fireRate * (rage ? BRIGGS.rage.rateMult : 1))) return;
     const w = WEAPONS[p.weapon] || WEAPONS.rifle;
     if (p.mag <= 0 && !rage) {
-      if (!w.infinite && p.ammo <= 0) { // out of spare ammo: fall back to the pistol
-        p.secondary = "pistol"; this.setSlot(p, 3); this.event(`${p.name} is out of ammo, switching to pistol.`);
+      if (!w.infinite && p.ammo <= 0) { // out of spare ammo: fall back to the pistol (Sienna has none: her knife)
+        if (p.characterClass === "sniper") { this.setSlot(p, 1); this.event(`${p.name} is out of sniper ammo: knife out!`); }
+        else { p.secondary = "pistol"; this.setSlot(p, 3); this.event(`${p.name} is out of ammo, switching to pistol.`); }
       } else this.startReload(p);
       return;
     }
@@ -1142,6 +1160,7 @@ export class SurvivalRoom extends Room {
           }
           const fo = w.falloff ? 1 - (1 - w.falloff.min) * Math.max(0, Math.min(1, (h.t - w.falloff.near) / (w.range - w.falloff.near))) : 1;   // shotgun: full up close
           const big = w.bigMult && (h.z.boss || h.z.kind === "brute") ? w.bigMult : 1;   // sniper: bosses + brutes take more
+          if (p.characterClass === "sniper" && p.weapon === "sniper") this.chillZombie(h.z, SIENNA.chill, now);   // Cold Precision
           this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1) * fo * big);
         }
         if (hits.length) end = hits[hits.length - 1].t;
@@ -1166,6 +1185,7 @@ export class SurvivalRoom extends Room {
   // Pressing 1/2/3 again while already on it cycles to your next owned melee/primary/secondary.
   setSlot(p, n, cycle = false) {
     if (![1, 2, 3, 5].includes(n)) return;
+    if (n !== 2 && p.characterClass === "sniper" && this.perchOn?.(p)) return;   // up on the perch: sniper only
     const owned = p.owned.split(",");
     if (cycle && n === p.activeSlot) {
       if (n === 1) p.melee = MELEE_ORDER[(MELEE_ORDER.indexOf(p.melee) + 1) % MELEE_ORDER.length];
@@ -1216,7 +1236,7 @@ export class SurvivalRoom extends Room {
     if (now - (this.lastMelee.get(p.sessionId) || 0) < m.cd * 1000 / (p.buffRate || 1)) return;   // Combat Rush: swings 25% faster
     this.lastMelee.set(p.sessionId, now);
     p.aim = aim; this.lastAimAt.set(p.sessionId, now);
-    if (p.shadow > 0) this.breakShadow(p);   // attacking ends Raven's invisibility (and lights her katana)
+    if (p.shadow > 0) { if (p.characterClass === "sniper") this.iceReveal(p); else this.breakShadow(p); }   // attacking ends Raven's invisibility (and lights her katana) / Sienna's hiding
     if (p.melee === "axe") {   // fire axe: can deflect the Butcher's hook
       this.axeSwing.set(p.sessionId, { t: now, aim, heavy });
       for (const z of this.state.zombies.values()) {
@@ -1272,13 +1292,14 @@ export class SurvivalRoom extends Room {
       if (cls === "slasher") { if (!this.arshanBusy(p) && p.stunned <= 0) this.throwHook(p); return; }   // cooldown set when the hook ends   // cooldown starts when the dome breaks   // cooldown starts when she gets out
       if (cls === "demolitionist") { if (p.stunned > 0) return; p.abilityCooldown = DANTE.sky.cd; this.skyBarrage(p, Number(data?.d)); return; }
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
+      if (cls === "sniper") { if (p.stunned > 0 || this.sienna.get(p.sessionId)?.dash) return; if (p.shadow > 0) this.iceReveal(p); }   // a skill reveals her (the throw happens below)
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
-      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?24:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
+      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?SIENNA.nade.cd:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
     p.abilityCooldown=cooldown;
     if(cls==="engineer") this.summonRobot(p, data?.kind);
     else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
-    else if(cls==="sniper") this.deadEye(p);
+    else if(cls==="sniper") this.cryoGrenade(p, Number(data?.d));
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
     else {p.buffDamage=MARCUS.rush.dmg;p.buffRate=MARCUS.rush.rate;p.skillT=MARCUS.rush.t;applyLoadout(p);this.broadcast("rush",{id:p.sessionId});}   // ends in updateMarcus
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
@@ -1365,7 +1386,7 @@ export class SurvivalRoom extends Room {
         if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
       }
     }
-    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) * (p.characterClass === "sniper" && this.perchOn(p) ? SIENNA.perch.taken : 1); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
   separateZombies() {   // keep the crowd from stacking: 64px buckets (integer keys), plain numbers read once per zombie
@@ -1399,6 +1420,7 @@ export class SurvivalRoom extends Room {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: Math.max(0, (info.readyAt || 0) - now) }; }   // Q cooldown counts from the press (Nov 6)
     if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
+    if (p.characterClass === "sniper") { const m = this.sienna.get(p.sessionId), active = m ? Math.max(0, m.perchUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + SIENNA.perch.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // the perch: Q blocked while up; 60s cooldown from when she comes down
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.fort.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "operator") {   // Sofea's helicopter: Q can't be used while it's up; the 60s cooldown starts when she lands
@@ -1416,7 +1438,12 @@ export class SurvivalRoom extends Room {
       const now = Date.now(), { info, left } = this.ultState(p, now); if ((p.ultKills || 0) < ULT_KILLS || left > 0 || p.stunned > 0 || !p.alive) return;
       info.summonedAt = now; info.readyAt = now + MARCUS.frag.cd * 1000; this.ultInfo.set(p.sessionId, info); this.fragBarrage(p, Number(data?.d)); return;
     }
-    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher", "sniper"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "sniper") {   // Sienna: Glacier Perch (the cooldown starts when she comes down)
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !p.alive || this.sienna.get(p.sessionId)?.dash) return;
+      if (p.shadow > 0) this.iceReveal(p, now);
+      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startPerch(p, now); return;
+    }
     if (p.characterClass === "dispatcher") {   // police: Q is blocked while the squad is out; the 60s cooldown starts when the last officer leaves
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0) return;
       if (this.unitsOf(p.sessionId, "police").length) return;   // one squad at a time
@@ -1498,6 +1525,7 @@ export class SurvivalRoom extends Room {
           const d = hyp(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
           if (e.wallSafe && !this.lineClear(ep, z)) continue;   // rocket blasts don't go through walls
           if (!z.boss && d > 0.1 && e.push) this.steerMove(z, z.id, Math.atan2(z.y - e.y, z.x - e.x), e.push, q => this.solveZombie(q));
+          if (e.frost) this.chillZombie(z, e.frost, now);   // Sienna's Cryo Grenade
           const dmg = (e.fall != null ? e.dmg - (e.dmg - e.fall) * Math.min(1, d / e.r) : e.dmg) * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);   // fall: damage at the edge
           if (owner) this.hitZombie(z, owner, dmg); else { z.hp -= dmg; if (z.hp <= 0) this.killZombie(z, null); }
         }
@@ -2613,7 +2641,7 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: alpha ? 1 : 0 });
     return z;
   }
-  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
+  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); if (p.characterClass === "sniper" && this.perchOn(p)) raw *= SIENNA.perch.taken; return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
   hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000, brood: 0 }; this.hiveMem.set(z.id, m);
@@ -3015,20 +3043,82 @@ export class SurvivalRoom extends Room {
     if (d > z.radius + 30) this.bossMove(z, near, z.speed * dt);
     this.pushOut(z, [{ x: this.A.cx, y: this.A.cy, hw: TOWER_HALF, hh: TOWER_HALF }], z.radius * .7);   // walks round the radio tower, not through it
   }
-  // SIENNA's DEAD EYE (E, Nov 9): one huge AIMED shot where the mouse points = 12x a shot of her gun. Its damage, reach and how many zombies it
-  // goes through come from the gun: sniper pierces 3 (+50% on bosses / brutes), shotgun fires a slug worth all 5 pellets that pierces 2,
-  // launcher a round that blows up on the first zombie (12x its blast), others hit 1. Holding a melee weapon: it uses her gun (primary first).
-  deadEye(p) {
-    const held = WEAPONS[p.weapon] && p.activeSlot !== 1 ? p.weapon : WEAPONS[p.primary] ? p.primary : WEAPONS[p.secondary] ? p.secondary : "pistol";
-    const w = WEAPONS[held], c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault, a = p.aim || 0, now = Date.now();
-    const dmg = w.dmg * (w.pellets || 1) * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * DEAD_EYE.mult;
-    const wall = this.wallDist(p.x, p.y, a, w.range), hits = this.rayHits(p, a, wall).slice(0, w.splash ? 1 : (w.pierce || 1));
-    for (const h of hits) {
-      if (w.splash) { this.ripples.push({ kind: "rocket", owner: p.sessionId, x: h.z.x, y: h.z.y, t: now, at: 0, dmg, r: w.splash, flat: 1, push: 14, wallSafe: true }); continue; }
-      this.hitZombie(h.z, p, dmg * (w.bigMult && (h.z.boss || h.z.kind === "brute") ? w.bigMult : 1));
+  // ---------- SIENNA (Nov 16): Cold Precision, Cryo Grenade (E), Ice Decoy (R), Glacier Perch (Q). Numbers: SIENNA ----------
+  siennaMem(p) { let m = this.sienna.get(p.sessionId); if (!m) { m = { hideUntil: 0, decoy: null, dash: null, rReady: 0, perchUntil: 0, beamAt: 0 }; this.sienna.set(p.sessionId, m); } return m; }
+  perchOn(p) { const m = this.sienna.get(p.sessionId); return !!m && m.perchUntil > Date.now(); }
+  liveDecoys(now) { let out = null; for (const m of this.sienna.values()) if (m.decoy && m.decoy.until > now) (out || (out = [])).push(m.decoy); return out; }
+  chillZombie(z, C, now = Date.now()) {   // slow a zombie (C = { f, boss, t }): the strongest slow running wins; z.chill = % slower (the client tints it icy)
+    if (!this.state.zombies.has(z.id) || z.kind === "minebeast") return;
+    const k = z.boss ? C.boss : C.f, until = now + C.t * 1000, e = this.zSlow.get(z.id);
+    if (!e || e.until <= now || k < e.k - 1e-6) this.zSlow.set(z.id, { k, until });
+    else if (Math.abs(k - e.k) < 1e-6) e.until = Math.max(e.until, until);
+    z.chill = Math.round((1 - this.zSlow.get(z.id).k) * 100);
+  }
+  slowOf(z) { const e = this.zSlow.get(z.id); return e && e.until > Date.now() ? e.k : 1; }
+  cryoGrenade(p, dist) {   // E: lobbed to the aimed spot (over walls), bursts after the flight (a ripple, see updateDante): damage + frost
+    const N = SIENNA.nade, a = p.aim || 0, now = Date.now(), d = clamp(Number.isFinite(dist) && dist > 0 ? dist : N.range * .7, N.min, N.range);
+    const x = clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20), y = clamp(p.y + Math.sin(a) * d, 20, this.A.height - 20);
+    this.ripples.push({ kind: "cryo", owner: p.sessionId, x, y, t: now, at: N.flight, dmg: N.dmg, r: N.r, flat: 1, scaled: true, frost: N });
+    this.broadcast("sienna", { k: "nade", id: p.sessionId, x0: Math.round(p.x), y0: Math.round(p.y), x: Math.round(x), y: Math.round(y), fl: N.flight });
+  }
+  iceDecoy(p) {   // R: dash toward the aim, an ice copy left behind, hidden + untouchable up to 10s (cooldown from the reveal)
+    const S = SIENNA.decoy, m = this.siennaMem(p), now = Date.now();
+    if (!p.alive || p.stunned > 0 || m.rReady > now || m.hideUntil > now || m.dash || this.perchOn(p) || this.state.vehicles.has(p.sessionId) || p.ride > 0) return false;
+    const a = p.aim || 0;
+    m.decoy = { x: p.x, y: p.y, until: now + S.hide * 1000, decoy: true, id: p.sessionId };
+    m.dash = { a, left: S.dash, t0: now }; m.hideUntil = now + S.hide * 1000; p.shadow = S.hide;
+    this.broadcast("sienna", { k: "decoy", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: +a.toFixed(3), d: S.dash, ms: S.time * 1000, t: S.hide });
+    this.state.message = `${p.name} left an ICE DECOY and vanished!`;
+    return true;
+  }
+  iceReveal(p, now = Date.now()) {   // shot / skill / 10s up / went down: she's back in sight, the R cooldown starts
+    const m = this.siennaMem(p); p.shadow = 0; if (!m.hideUntil) return;
+    m.hideUntil = 0; m.rReady = now + SIENNA.decoy.cd * (1 - (p.cdr || 0)) * 1000;
+    this.broadcast("sienna", { k: "reveal", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+  }
+  startPerch(p, now) {   // Q: up on the ice tower for 20s, sniper in hand (full mag, no reload, no ammo used)
+    const m = this.siennaMem(p); m.perchUntil = now + SIENNA.perch.life * 1000; m.beamAt = 0;
+    if (p.activeSlot !== 2 && p.primary) this.setSlot(p, 2);
+    p.reloadLeft = 0; p.mag = Math.max(p.mag, 1); p.perch = true; applyLoadout(p);
+    this.broadcast("sienna", { k: "perch", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), t: SIENNA.perch.life });
+    this.state.message = `${p.name}: GLACIER PERCH!`;
+  }
+  endPerch(p, now) {
+    const m = this.siennaMem(p); m.perchUntil = 0; p.perch = false; applyLoadout(p);
+    const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + SIENNA.perch.cd * 1000; this.ultInfo.set(p.sessionId, info);
+    this.broadcast("sienna", { k: "perchEnd", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+  }
+  perchShot(p, aim) {   // the map-length laser: every zombie on the line (bosses too), 3x her sniper hit, chills them all
+    const P = SIENNA.perch, m = this.siennaMem(p), now = Date.now();
+    if (p.stunned > 0 || now - m.beamAt < P.gap * 1000 - 60) return;   // (60ms slack for the network)
+    m.beamAt = now; p.lastShot = now; p.aim = aim; this.lastAimAt.set(p.sessionId, now);
+    if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
+    const len = Math.ceil(hyp(this.A.width, this.A.height)), hits = this.rayHits(p, aim, len), dmg = p.damage * P.mult;
+    for (const h of hits) { this.chillZombie(h.z, SIENNA.chill, now); this.hitZombie(h.z, p, dmg); }
+    this.broadcast("sienna", { k: "beam", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: +aim.toFixed(3), len, n: hits.length });
+  }
+  updateSienna(dt, now) {
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "sniper") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const m = this.sienna.get(p.sessionId);
+      if (m) {
+        if (m.dash) {   // the R dash: 250px in 0.2s (walls stop it)
+          const S = SIENNA.decoy, d = m.dash, step = Math.min(d.left, S.dash * dt / S.time);
+          if (p.alive) this.moveWithCollision(p, Math.cos(d.a) * step, Math.sin(d.a) * step);
+          d.left -= step; if (d.left <= .5 || !p.alive || now - d.t0 > S.time * 1000 + 250) m.dash = null;
+        }
+        if (m.hideUntil) { if (!p.alive || now >= m.hideUntil) this.iceReveal(p, now); else p.shadow = Math.ceil((m.hideUntil - now) / 100) / 10; }
+        if (m.decoy && now >= m.decoy.until) { this.broadcast("sienna", { k: "shatter", id: p.sessionId, x: Math.round(m.decoy.x), y: Math.round(m.decoy.y) }); m.decoy = null; }
+        if (m.perchUntil && (now >= m.perchUntil || !p.alive)) this.endPerch(p, now);
+      }
+      if (p.perch && !this.perchOn(p)) { p.perch = false; applyLoadout(p); }
+      p.skillT = m && m.hideUntil > now ? Math.ceil((m.hideUntil - now) / 100) / 10 : 0;   // HUD: R hidden time left
+      p.chargeCd = m && m.rReady > now ? Math.ceil((m.rReady - now) / 100) / 10 : 0;   // HUD: R cooldown
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? SIENNA.perch.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
-    const len = hits.length ? hits[hits.length - 1].t : wall;
-    this.broadcast("deadeye", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), a: +a.toFixed(3), len: Math.round(len), w: held, hits: hits.map(h => Math.round(h.t)) });
   }
   nearGen(p) { return hyp(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
   // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)
@@ -3073,7 +3163,7 @@ export class SurvivalRoom extends Room {
       if (!p || !p.alive || now >= b.until) { this.pBurn.delete(sid); continue; }
       if (this.untouchable(p)) continue;
       if (p.armor === 2) { this.pBurn.delete(sid); continue; }   // the Pyre Plate: fireproof
-      const dealt = b.dps * dt * (1 - (p.armorPct || 0)); p.hp -= dealt; p.damageTaken += dealt;
+      const dealt = b.dps * dt * (1 - (p.armorPct || 0)) * (p.characterClass === "sniper" && this.perchOn(p) ? SIENNA.perch.taken : 1); p.hp -= dealt; p.damageTaken += dealt;
       if (p.hp <= 0) { this.pBurn.delete(sid); this.downPlayer(p); }
     }
   }
@@ -3199,7 +3289,7 @@ export class SurvivalRoom extends Room {
     const s = this.state; this.dismountAll();
     if (SITES[s.mapSite].style !== "mine") {   // onto the mine map for this wave; what the team built is put away and comes back afterwards
       this.mineBack = { site: s.mapSite, structures: [...s.structures.values()].filter(st => !(st.life > 0)).map(st => ({ id: st.id, kind: st.kind, x: st.x, y: st.y, hp: st.hp, maxHp: st.maxHp, ownerId: st.ownerId, aim: st.aim || 0, deploy: st.deploy || 0 })) };
-      s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = [];
+      s.structures.clear(); s.loot.clear(); s.puddles.clear(); s.robots.clear(); this.astra.clear(); this.unitMem.clear(); this.safeBoxes = []; this.spits = []; this.ripples = []; this.sienna?.forEach(m => { m.decoy = null; m.dash = null; });
       this.loadSite(DEEP.site);
     } else this.loadSite(s.mapSite);   // already on the mine: everyone back to camp, the carts back at the station
     const P = this.minePieces, hpRef = 38 * (1 + (s.stage - 1) * .08) * (DIFFICULTY[s.difficulty] || DIFFICULTY.normal).hp;
@@ -3452,7 +3542,7 @@ export class SurvivalRoom extends Room {
     for (const z of this.state.zombies.values()) if (z.kind !== "minebeast" && inside(z)) { out(z); this.solveZombie(z); }
   }
   inCordon(e) { const K = this.cordon; return !!K && e.x > K.x + 25 && e.y > K.y + 10; }   // inside the mine's boss dungeon: nothing outside can reach you (and you can't be chased in)
-  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (this.inCordon(p) && !(this.mine && (this.mine.step === "fight" || this.mine.step === "flee"))) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && (!this.bossUp || this.mine?.shield)) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId); }   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
+  untouchable(p) { const v = this.state.vehicles.get(p.sessionId); return (this.inCordon(p) && !(this.mine && (this.mine.step === "fight" || this.mine.step === "flee"))) || (v?.kind === "heli" && v.phase === "ride" && !this.bossUp) || (p.ride > 0 && (!this.bossUp || this.mine?.shield)) || this.sheltered(p) || (this.dodgeUntil.get(p.sessionId) || 0) > Date.now() || this.away.has(p.sessionId) || (p.characterClass === "sniper" && p.shadow > 0); }   // ... / Sienna hidden (Ice Decoy)   // up in the helicopter / inside a safehouse / mid-dash / reconnecting
   boxRayDist(x, y, a, range, boxes) {   // distance along the ray to the first box, or range
     const dx = Math.cos(a), dy = Math.sin(a); let best = range;
     for (const b of boxes || []) {
@@ -3705,7 +3795,7 @@ export class SurvivalRoom extends Room {
     // Swap strafe direction when hugging a wall.
     if (b.x < 40 || b.x > this.A.width - 40 || b.y < 40 || b.y > this.A.height - 40) brain.strafe *= -1;
     const mag = hyp(mx, my);
-    if (mag > 0.01) {
+    if (mag > 0.01 && !(b.characterClass === "sniper" && (this.perchOn(b) || this.sienna.get(b.sessionId)?.dash))) {   // (Sienna bot up on her perch / dashing: stays put)
       this.steerMove(b, b.sessionId, Math.atan2(my, mx), b.speed * 0.9 * (b.slowed > 0 ? 0.5 : 1) * dt, e => this.solveCollisions(e));
       if (Math.abs(mx) > 0.05) { b.facing = mx > 0 ? 1 : -1; this.lastMoveAt.set(b.sessionId, now); }
     }
@@ -3721,7 +3811,7 @@ export class SurvivalRoom extends Room {
       brain.wobble = (brain.wobble || 0) * 0.88 + rand(-0.09, 0.09);
       diff = Math.atan2(Math.sin(want - brain.aim), Math.cos(want - brain.aim));
       const ready = now >= (brain.reactAt || 0) && Math.abs(diff) < 0.25;
-      if (ready && nearD < w.range && seen.includes(near) && !b.reviveTargetId && now - b.lastShot >= 1000 / b.fireRate && Math.random() < 0.6) {
+      if (ready && nearD < w.range && seen.includes(near) && !b.reviveTargetId && now - b.lastShot >= 1000 / b.fireRate && Math.random() < 0.6 && !(b.characterClass === "sniper" && b.shadow > 7)) {   // (a hidden Sienna bot holds fire for 3s)
         this.fireWeapon(b, brain.aim + brain.wobble + rand(-0.2, 0.2), nearD);
       }
     }
@@ -3741,6 +3831,12 @@ export class SurvivalRoom extends Room {
       else if (b.abilityCooldown <= 0 && near && nearD < 420 && this.lineClear(b, near)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
       if (b.skillT > 0 && near && nearD < 190) this.briggsPunch(b, Math.atan2(near.y - b.y, near.x - b.x));   // ...and punches what's in reach
     }
+    if (b.characterClass === "sniper") {   // Sienna bot: perch when the horde builds up, decoy-dash away when they crowd her, grenade the nearest in reach
+      const crowd = zs.filter(z => distance(b, z) < 600).length;
+      if (b.ultReady && crowd >= 8 && !(b.shadow > 0)) this.useUlt(b);
+      else if (!(b.chargeCd > 0) && !(b.shadow > 0) && !this.perchOn(b) && near && (zs.filter(z => distance(b, z) < 140).length >= 3 || (b.hp < b.maxHp * .4 && nearD < 200))) { b.aim = Math.atan2(b.y - near.y, b.x - near.x); this.iceDecoy(b); }
+      else if (b.abilityCooldown <= 0 && near && nearD > 70 && nearD < SIENNA.nade.range && !(b.shadow > 0) && seen.includes(near)) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
+    }
     if (b.characterClass === "dispatcher") {   // Astra bot: medics when someone's hurt, police in a crowd, safehouse when it gets bad
       const crowd = zs.filter(z => distance(b, z) < 450).length, m = this.amemOf(b);
       if (b.ultReady && crowd >= 5) this.useUlt(b);
@@ -3752,7 +3848,7 @@ export class SurvivalRoom extends Room {
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
       else if (!this.state.vehicles.has(b.sessionId) && this.mechaReadyIn(b) <= 0 && nearD < 220 && zs.filter(z => distance(b, z) < 300).length >= 4) this.mechaKey(b);
     }
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && b.characterClass !== "sniper" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -3926,7 +4022,7 @@ export class SurvivalRoom extends Room {
     }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
-      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "sniper"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
       if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
         killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
@@ -3983,7 +4079,7 @@ export class SurvivalRoom extends Room {
   }
   applyMove(sid, p, data) {
     if (!p.alive || !["playing", "cleared"].includes(this.state.phase) || this.state.vehicles.has(sid)) return;   // the break: walk around and build
-    if (p.stunned > 0 || this.shadowDash.has(sid) || this.hooks?.has(sid)) { this.lastInputs.set(sid, Date.now()); return; }   // stunned / mid-dash / Arshan's hook pull: can't steer
+    if (p.stunned > 0 || this.shadowDash.has(sid) || this.hooks?.has(sid) || (p.characterClass === "sniper" && (this.perchOn(p) || this.sienna.get(sid)?.dash))) { this.lastInputs.set(sid, Date.now()); return; }   // ... / Sienna dashing or up on her perch   // stunned / mid-dash / Arshan's hook pull: can't steer
     const dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0));
     const dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
     const mag = hyp(dx, dy) || 1;
@@ -4003,7 +4099,7 @@ export class SurvivalRoom extends Room {
     if ((dx !== 0 || dy !== 0) && now - (this.lastAimAt.get(sid) || 0) > 400) p.aim = Math.atan2(dy, dx);
   }
   applyDash(sid, p, data) {
-    if (!p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(sid) || (p.characterClass === "slasher" && this.arshanBusy(p))) return;
+    if (!p.alive || this.state.phase !== "playing" || p.stunned > 0 || this.state.vehicles.has(sid) || (p.characterClass === "slasher" && this.arshanBusy(p)) || (p.characterClass === "sniper" && (this.perchOn(p) || this.sienna.get(sid)?.dash))) return;
     const now = Date.now();
     if (now - (this.lastDashAt.get(sid) || 0) < DASH_COOLDOWN * 1000) return;
     let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
@@ -4086,7 +4182,7 @@ export class SurvivalRoom extends Room {
     this.updateRaven(dt, now);
     this.updateDante(dt, now);
     this.updateSofea(dt, now);
-    this.updateMarcus(dt); this.updateBriggs(dt, now);
+    this.updateMarcus(dt); this.updateBriggs(dt, now); this.updateSienna(dt, now);
     this.updateArshan(dt, now);
     this.updateAstra(dt, now);
     this.separateZombies();
@@ -4099,7 +4195,7 @@ export class SurvivalRoom extends Room {
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0&&!this.sheltered(p)){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){   // Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){ if(p.characterClass==="sniper")continue;   // (Nov 16) Sienna uses only her own gun: she leaves drops for the others. Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);
         p.ammo+=30; this.unlockWeapon(p,found); const slotN=slot==="primary"?2:3; if(!had&&p.activeSlot!==slotN) p[slot]=found;
@@ -4154,7 +4250,9 @@ export class SurvivalRoom extends Room {
     const seenXY = seen.map(p => [p.x, p.y, p]), seenBossXY = seenBoss.map(p => [p.x, p.y, p]), machXY = machines.map(m => [m.x, m.y, m]);   // plain numbers: the nearest-survivor search below runs once per zombie per tick
     const fortP = this.fortressList(now); this._guard = guard;
     if (this.zStun.size) for (const [id, t] of this.zStun) if (t <= now || !this.state.zombies.has(id)) this.zStun.delete(id);
-    for (const z of [...this.state.zombies.values()]) { const fsnap = fortP ? this.fortSnap(fortP) : null; try {   // (Nov 13) Unbreakable: what each zombie does to Briggs is sorted out after its turn (finally)
+    if (this.zSlow.size) for (const [id, e] of this.zSlow) if (e.until <= now || !this.state.zombies.has(id)) { this.zSlow.delete(id); const q = this.state.zombies.get(id); if (q) q.chill = 0; }   // Sienna's chills / frost run out
+    const decoys = this.liveDecoys(now);   // Sienna's ice decoys: ordinary zombies near one go for it
+    for (const z of [...this.state.zombies.values()]) { const fsnap = fortP ? this.fortSnap(fortP) : null; const slow = this.zSlow.size && z.kind !== "minebeast" ? this.slowOf(z) : 1; if (slow < 1) z.speed *= slow; try {   // slowed: its speed is scaled for its turn only   // (Nov 13) Unbreakable: what each zombie does to Briggs is sorted out after its turn (finally)
       if (this.zStun.size && (this.zStun.get(z.id) || 0) > now) continue;   // stunned (Briggs's deflect): no move, no attack
       if (z.kind === "minebeast") { if (this.mine?.step === "fight") this.beastThink(z, dt, now); continue; }   // the Mine Beast: its own fight; in the chase the mission drives it (mineTick)
       const taunted = this.tauntTarget(z, now);
@@ -4175,6 +4273,7 @@ export class SurvivalRoom extends Room {
         let bd = (target.x - zx) ** 2 + (target.y - zy) ** 2;
         for (const m of machXY) { const dx = m[0] - zx, dy = m[1] - zy, md = dx * dx + dy * dy; if (md < bd) { bd = md; target = m[2]; } }
       }
+      if (decoys && !z.boss && !taunted) { let bd = SIENNA.decoy.pull * SIENNA.decoy.pull; for (const dc of decoys) { const dx = dc.x - zx, dy = dc.y - zy, md = dx * dx + dy * dy; if (md < bd) { bd = md; target = dc; } } }   // the ice decoy wins over everything nearby
       const isMachine = !!target.maxHp && !target.sessionId;
       z.targetId = target.sessionId || "";
       const tv = target.sessionId && this.state.vehicles.get(target.sessionId), d = distance(z, target) - (tv?.phase === "ride" ? SOFEA[tv.kind].reach || 0 : 0) - (fortP && target.sessionId && fortP.includes(target) ? this.fortReach(z, target) : 0);   // the tank / mecha is big: they hit its side; Briggs's shields: they hit him from the ring
@@ -4224,6 +4323,8 @@ export class SurvivalRoom extends Room {
           if (this.state.robots.has(target.id) || this.state.structures.has(target.id)) this.damageMachine(target, z.damage * (z.kind === "mutant" ? 1.6 : 1));
         } else if (z.kind === "mutant" && target.sessionId) {
           // mutants only hurt survivors with their charged whip (above)
+        } else if (target.decoy) {
+          // clawing at Sienna's ice decoy: it can't break (it shatters when its time is up)
         } else if (target.sessionId) {
           if (!target.alive) continue;   // went down a moment ago (another zombie got them this tick): pick a new target next tick
           if (this.untouchable(target) || (!z.boss && flying(target.sessionId))) { z.attackCooldown = .25; continue; }   // dodged (mid-dash) / sheltered / up in the helicopter (only bosses reach it): the bite misses
@@ -4236,9 +4337,9 @@ export class SurvivalRoom extends Room {
         z.attackCooldown = z.boss ? 0.8 : 1.0;
       }
       if (z.kind === "spitter" && d >= ACID.minRange && d < ACID.maxRange && z.attackCooldown <= 0 && this.lineClear(z, target) && !(target.sessionId && this.sheltered(target))) {
-        this.spit(z, target.x, target.y, !target.sessionId && !isMachine); z.attackCooldown = ACID.cooldown;
+        this.spit(z, target.x, target.y, !target.sessionId && !isMachine && !target.decoy); z.attackCooldown = ACID.cooldown;
       }
-      } finally { if (fortP) this.fortPush(z, fortP); if (fsnap) this.fortAbsorb(fsnap, z, now, guard); }
+      } finally { if (slow < 1) z.speed /= slow; if (fortP) this.fortPush(z, fortP); if (fsnap) this.fortAbsorb(fsnap, z, now, guard); }
     }
     this.keepOutOfSafehouses(); this.applyShelter(shelter);
     this.applyVehicleGuard(guard);

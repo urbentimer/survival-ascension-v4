@@ -1388,24 +1388,64 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "slot", { n: 2 }); ok(p.weapon === "smg", "2 (no primary) keeps the SMG");
   send(A, "slot", { n: 3, cycle: true }); ok(p.weapon === "pistol", "3 again swaps to the pistol");
   room._dispose(); }
-// 54d. Sienna starts with the sniper; it hits 80 base and +50% on bosses / brutes
-{ const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "chooseClass", { id: "sniper" }); send(A, "start", {}); room.state.phase = "playing";
-  ok(p.weapon === "sniper" && p.activeSlot === 2 && p.owned.includes("sniper") && !p.owned.includes("rifle") && p.mag === 5, `Sienna starts with the sniper rifle (${p.weapon}, mag ${p.mag}, ${p.damage} dmg)`);
+// 54d. SIENNA (Nov 16 kit): sniper only (2.0s, +50% bosses / brutes, chills), Cryo Grenade (E), Ice Decoy (R), Glacier Perch (Q), no other guns
+{ const { room, A, send, P, events } = makeRoom(); const p = P(A); room.state.phase = "lobby"; send(A, "chooseClass", { id: "sniper" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.weapon === "sniper" && p.activeSlot === 2 && p.owned === "sniper" && p.secondary === "" && p.melee === "knife" && p.mag === 5, `Sienna: her sniper + knife only, no pistol (${p.owned} / "${p.secondary}", mag ${p.mag}, ${p.damage} dmg)`);
+  ok(Math.abs(1000 / p.fireRate - 2000) < 1, `one sniper shot every 2.0s (${Math.round(1000 / p.fireRate)}ms)`);
   room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true; room.state.zombies.clear(); room.spawnClock = 1e9; freeze(p); p.x = 1000; p.y = 1000;
-  const mk = (kind, x) => { room.spawnZombie(false, kind); const z = [...room.state.zombies.values()].pop(); z.x = x; z.y = 1000; z.hp = z.maxHp = 9999; z.speed = 0; return z; };
-  const w1 = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); const dw = 9999 - w1.hp; room.state.zombies.clear();
+  const mk = (kind, x, y = 1000, boss = false) => { room.spawnZombie(boss, kind); const z = [...room.state.zombies.values()].pop(); z.x = x; z.y = y; z.hp = z.maxHp = 9999; z.speed = 0; z.damage = 0; return z; };
+  const tick = () => { room.lastTick = Date.now() - 50; room.tick(); };
+  const w1 = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); const dw = 9999 - w1.hp, cw = w1.chill; room.state.zombies.clear();
   const b1 = mk("brute", 1200); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); const db = 9999 - b1.hp;
   ok(Math.abs(dw - p.damage) < .6 && Math.abs(db - p.damage * 1.5) < .6, `walker takes ${Math.round(dw)}, a brute takes x1.5 (${Math.round(db)})`);
-  // Dead Eye (E): aimed, 12x the held gun's shot, pierce from the gun
-  room.state.zombies.clear(); const z1 = mk("walker", 1200), z2 = mk("walker", 1260), z3 = mk("walker", 1320), z4 = mk("walker", 1380), off = mk("walker", 1000); off.y = 800;
-  let de = 0; const ob = room.broadcast; room.broadcast = (t, m) => { if (t === "deadeye") de++; return ob.call(room, t, m); };
-  p.abilityCooldown = 0; send(A, "ability", { a: 0 });
-  const per = 9999 - z1.hp;
-  ok(de === 1 && Math.abs(per - p.damage * 12) < 2 && z2.hp < 9999 && z3.hp < 9999 && z4.hp === 9999 && off.hp === 9999, `Dead Eye: aimed (the zombie off to the side is safe), 12x the sniper (${Math.round(per)}), through 3 like the sniper`);
-  for (const z of [z1, z2, z3]) z.hp = 9999; send(A, "slot", { n: 3 }); p.abilityCooldown = 0; send(A, "ability", { a: 0 });
-  ok(p.weapon === "pistol" && Math.abs((9999 - z1.hp) - p.damage * 12) < 2 && z2.hp === 9999, `holding the pistol: 12x the pistol (${Math.round(9999 - z1.hp)}), hits just 1`);
-  z1.hp = 9999; send(A, "slot", { n: 1 }); p.abilityCooldown = 0; send(A, "ability", { a: 0 });
-  ok(p.activeSlot === 1 && Math.abs((9999 - z1.hp) - per) < 2, `holding the knife: it uses her sniper (${Math.round(9999 - z1.hp)})`);
+  ok(cw === 30, `Cold Precision: a sniper hit chills it 30% (chill ${cw})`);
+  room.state.zombies.clear(); const bz = mk("butcher", 1200, 1000, true); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); ok(bz.chill === 15, `...a boss only 15% (${bz.chill})`);
+  // a chilled zombie walks 30% slower, and its speed comes back exactly
+  room.state.zombies.clear(); room.zSlow.clear(); const f1 = mk("walker", 400, 300), f2 = mk("walker", 400, 1700); f1.speed = f2.speed = 100; f1.role = f2.role = "walker";
+  room.chillZombie(f1, { f: .5, boss: .75, t: 2 }); const d0 = [Math.hypot(f1.x - room.A.cx, f1.y - room.A.cy), Math.hypot(f2.x - room.A.cx, f2.y - room.A.cy)];
+  for (let i = 0; i < 4; i++) tick();
+  const m1 = d0[0] - Math.hypot(f1.x - room.A.cx, f1.y - room.A.cy), m2 = d0[1] - Math.hypot(f2.x - room.A.cx, f2.y - room.A.cy);
+  ok(m2 > 5 && Math.abs(m1 / m2 - .5) < .12 && f1.speed === 100 && f1.chill === 50, `frosted: it covers half the ground (${m1.toFixed(1)} vs ${m2.toFixed(1)}px), speed still ${f1.speed}`);
+  // E: Cryo Grenade where she aims: 80 damage + 50% slow (bosses 25%) in 120px, after its flight
+  room.state.zombies.clear(); room.zSlow.clear(); room.ripples = []; p.x = 1000; p.y = 1000;
+  const g1 = mk("walker", 1300, 1000), g2 = mk("walker", 1300, 1100), g3 = mk("walker", 1300, 1200), gb = mk("butcher", 1260, 1000, true);
+  p.abilityCooldown = 0; send(A, "ability", { a: 0, d: 300 });
+  ok(Math.abs(p.abilityCooldown - 3.5) < .01 && room.ripples.some(r => r.kind === "cryo") && g1.hp === 9999 && events.some(e => e.type === "sienna" && e.k === "nade" && e.x === 1300), `E: grenade thrown to the aimed spot (cooldown ${p.abilityCooldown}s), bursts after its flight`);
+  room.ripples.forEach(r => r.t -= 2000); room.updateDante(.05, Date.now());
+  ok(Math.abs((9999 - g1.hp) - 80) < 1 && g2.hp < 9999 && g3.hp === 9999 && g1.chill === 50 && gb.chill === 25 && !(g3.chill > 0), `burst: ${Math.round(9999 - g1.hp)} damage in 120px, 50% slower (boss ${gb.chill}%), the zombie 200px away is fine`);
+  // R: Ice Decoy: dash 250px, hidden + untouchable, the decoy pulls zombies, a shot reveals her, the 30s cooldown starts then
+  room.state.zombies.clear(); room.zSlow.clear(); p.x = 1000; p.y = 1000; p.aim = 0; p.hp = p.maxHp; p.abilityCooldown = 0;
+  send(A, "skill2"); for (let i = 0; i < 6; i++) tick();
+  const m = room.sienna.get("A");
+  ok(Math.abs(p.x - 1250) < 3 && p.shadow > 9 && room.untouchable(p) && m.decoy && m.decoy.x === 1000 && p.chargeCd === 0 && p.skillT > 9, `R: dashed to x ${Math.round(p.x)}, hidden (${p.shadow}s), untouchable, decoy left at ${m.decoy?.x}; no cooldown yet`);
+  const zd = mk("runner", 1300, 1200); zd.speed = 120; zd.role = "hunter"; zd.damage = 30; const bite = mk("walker", p.x + 8, p.y); bite.damage = 30; bite.role = "hunter"; bite.speed = 50;
+  const dd0 = Math.hypot(zd.x - 1000, zd.y - 1000); for (let i = 0; i < 8; i++) tick();
+  ok(Math.hypot(zd.x - 1000, zd.y - 1000) < dd0 - 20 && Math.hypot(zd.x - p.x, zd.y - p.y) > 150 && p.hp === p.maxHp, `the hunter goes for the decoy, not her (${Math.round(dd0)} -> ${Math.round(Math.hypot(zd.x - 1000, zd.y - 1000))}px from it); she takes nothing (${Math.round(p.hp)})`);
+  const hu0 = m.hideUntil; send(A, "skill2"); ok(m.hideUntil === hu0 && m.decoy.x === 1000, "R again while hidden: nothing");
+  room.state.zombies.clear(); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); tick();
+  ok(p.shadow === 0 && !room.untouchable(p) && Math.abs(p.chargeCd - 30) < .2 && m.decoy, `a shot reveals her: cooldown ${p.chargeCd}s from now (the decoy stays its 10s)`);
+  m.decoy.until = Date.now() - 1; tick(); ok(!m.decoy && events.some(e => e.type === "sienna" && e.k === "shatter"), "the decoy shatters when its 10s are up");
+  m.rReady = 0; tick(); send(A, "skill2"); for (let i = 0; i < 6; i++) tick(); m.hideUntil = Date.now() - 1; tick();
+  ok(p.shadow === 0 && Math.abs(p.chargeCd - 30) < .2, `10s hidden run out: revealed, cooldown ${p.chargeCd}s`);
+  // Q: Glacier Perch: 20s, can't move, half damage, map-length laser every 1.5s through everything (3x), no ammo
+  room.state.zombies.clear(); p.x = 1000; p.y = 1000; p.ultKills = 100; send(A, "slot", { n: 1 }); send(A, "ult", { a: 0 }); tick();
+  ok(room.perchOn(p) && p.activeSlot === 2 && Math.abs(p.ultActive - 20) < .2 && Math.abs(1000 / p.fireRate - 1500) < 1, `Q: up on the perch (${p.ultActive}s), sniper in hand, one shot / 1.5s`);
+  const x0 = p.x; send(A, "input", { dx: 1, dy: 0, s: 1, dt: 50 }); send(A, "dash", { dx: 1, dy: 0, s: 2 }); send(A, "slot", { n: 1 });
+  ok(p.x === x0 && p.activeSlot === 2, "can't move, dash or switch weapons up there");
+  ok(Math.abs(room.armorHit(p, 100) - 50) <= 1, `half damage on the perch (${room.armorHit(p, 100)} of 100)`);
+  const far = mk("walker", 2900, 1000), boss = mk("butcher", 2000, 1000, true), side = mk("walker", 2000, 1300), mag0 = p.mag;
+  send(A, "shoot", { a: 0 });
+  ok(Math.abs((9999 - far.hp) - p.damage * 3) < 1 && Math.abs((9999 - boss.hp) - p.damage * 3) < 1 && side.hp === 9999 && p.mag === mag0 && far.chill === 30, `laser: through the boss to the far side of the map (${Math.round(9999 - far.hp)} = 3x ${p.damage}), chills, no ammo`);
+  far.hp = 9999; send(A, "shoot", { a: 0 }); ok(far.hp === 9999, "the next laser needs 1.5s");
+  const info = room.ultInfo.get("A"); room.sienna.get("A").perchUntil = Date.now() - 1; tick();
+  ok(!room.perchOn(p) && !p.perch && Math.abs(1000 / p.fireRate - 2000) < 1 && Math.abs(p.ultCd - 60) < .2 && Math.abs(room.armorHit(p, 100) - 100) <= 1, `down after 20s: normal sniper again, Q cooldown ${p.ultCd}s from now, full damage taken`);
+  // no other guns: the shop won't sell her one and she leaves weapon drops for the others
+  room.state.phase = "cleared"; p.currency = 999; send(A, "buy", { id: "shotgun" }); ok(p.owned === "sniper" && p.currency === 999, "the shop won't sell her another gun");
+  room.state.phase = "playing"; room.state.loot.clear(); room.state.zombies.clear(); const zl = mk("walker", p.x + 5, p.y);
+  { const rnd = Math.random, seq = [.1, .95]; let ri = 0; Math.random = () => ri < seq.length ? seq[ri++] : .5; try { room.killZombie(zl, p); } finally { Math.random = rnd; } }   // .95 = a Rare weapon drop
+  const lw = [...room.state.loot.values()].find(l => l.kind === "weapon"); if (lw) { lw.x = p.x; lw.y = p.y; } tick();
+  ok(lw && room.state.loot.has(lw.id) && p.owned === "sniper", "she walks over a gun drop: it stays for a teammate");
+  room.state.loot.clear(); p.ammo = 0; p.mag = 0; p.reloadLeft = 0; p.lastShot = 0; send(A, "shoot", { a: 0 }); ok(p.activeSlot === 1, "out of sniper ammo: knife (no pistol to fall back on)");
   room._dispose(); }
 // 54e. repair / refuel only next to the tower / generator (the client's F prompt)
 { const { room, A, send, P } = makeRoom(); const p = P(A); room.state.phase = "playing"; room.state.scrap = room.state.fuel = 999;

@@ -324,5 +324,36 @@
    "attack1/windup",
    "attack2/hit"
   ]
+ },
+ "sniper": {
+  "cellW": 176,
+  "cellH": 88,
+  "anchorX": 88,
+  "feetY": 80,
+  "blocks": [
+   "sniper",
+   "knife",
+   "throw",
+   "dash",
+   "perch"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
  }
 }

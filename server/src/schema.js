@@ -28,7 +28,8 @@ defineTypes(ZombieState, {
   id: "string", kind: "string", x: "float32", y: "float32", hp: "number",
   maxHp: "number", speed: "number", damage: "number", radius: "number",
   attackCooldown: "number", targetId: "string", boss: "boolean", role: "string", slam: "number",
-  act: "string", actLen: "number", aim: "number", hookId: "string", hookD: "number", enraged: "boolean", burn: "number" });
+  act: "string", actLen: "number", aim: "number", hookId: "string", hookD: "number", enraged: "boolean", burn: "number",
+  chill: "number" });   // (Nov 16) chill: % slower right now (Sienna's Cold Precision / Cryo Grenade), 0 = not slowed; the client tints it icy
 
 export class LootState extends Schema {}
 defineTypes(LootState, { id: "string", kind: "string", x: "number", y: "number", amount: "number", rarity: "string" });
