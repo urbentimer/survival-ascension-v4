@@ -928,3 +928,12 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Name tag: DIR8[cls].lift (Iron 14) added to nameLift. Punch cone anchor: SPR.feet - 32 (was -26: his fists sit higher).
 - No frames nudged (everything fits the bigger cell). Checked in the preview next to Marcus / Sofea / Astra bots.
 - Cache `20261114u`; next `20261114v`.
+
+## Nov 16 — IRON v3: chibi military look, Juno's size, smoother animation (cache 20261114v)
+- User redesigned Iron cute/chibi like Marcus (tools/art/iron/v3/design.png: silver spiky hair, black beard + white chin tuft, olive T-shirt with skull patches, black vest + red shells, camo scarf / trousers, round orange-rimmed shield + serrated boomerang on his back). Prompts tools/art/iron/PROMPTS-V3.md (project doc claude/iron-prompts-v3.md). "No need for bat and axe"; "make the animation smooth"; earlier "same size as Juno".
+- Sheets (v3/): 1-shotgun 2-knife 7-gauntlets (5x6), 5-slam 6-throw 8-power (5x4), 9-hero, 10-face. The 4 simple cards stay (tools/art/iron/card-*.png).
+- prep-iron.py: sources v3; new unpurple(): ChatGPT tinted his hair / steel lavender in most sheets -> soft purple tints (Lab a>2, b<-2, chroma<40) lose 85% colour. Boomerang sprite cut from the v3 design.
+- cut-iron.sh: SPRITE_H 54 (idle 54-56px = engineer 53-55), normal 112x88 cell (the big-cell override is gone; client keeps the generic cell / lift support), ENHANCE 1.08,1.06,1.03. Blocks: shotgun knife slam throw fists power (bat / axe fall back to the knife block via dir8Block).
+- Smoothness: (1) finish-briggs.py walk stabiliser: walk frames (cols 1-3) of shotgun / knife / fists shifted sideways so the head lines up with the idle frame (head x spread 2.8px -> 0.8px). (2) Client: DIR8.juggernaut.walk [1,2,3,2] (ping-pong at 115ms: no left-foot / right-foot jump) and flashCol 4 (his col 4 = muzzle flash, col 5 = pump: was shown pump-first).
+- Punch cone anchor SPR.feet - 24 (smaller Iron).
+- Cache `20261114v`; next `20261114w`.
