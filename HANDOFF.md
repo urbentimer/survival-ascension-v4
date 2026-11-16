@@ -945,3 +945,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 16 — Iron's skill bar order Q - E - R - TRAIT (cache 20261114x)
 - User: "at the bottom it should be Q-E-R-Traits". The Forceful Blast TRAIT slot is spliced at index 3 (after R) instead of 2. (Only Iron has a TRAIT slot.)
 - Cache `20261114x`; next `20261114y`.
+
+## Nov 16 — Iron simplified for his small on-screen size (cache 20261114y)
+- User: detailed designs look choppy this small (Marcus / Sofea read best: simpler). Decision: keep everyone's size; future characters get simpler art (big flat shapes, few colours, thick outline); Iron simplified in code now.
+- extract-directions.py: new SMOOTH=1 option in place(): two bilateral passes (cv2, d9, sigmaColor 40, sigmaSpace 7) on the big art before shrinking (camo, scratches, tiny straps -> flat areas; outlines kept). Tested vs mean-shift / median / k-means colour cuts (24-48 colours turned his olive shirt brown).
+- cut-iron.sh: SMOOTH=1 SHARPEN 60 ENHANCE 1.18,1.08,1.04,0 (TWOSTEP off).
+- Next: Sienna (sniper) — simple-style prompts.
+- Cache `20261114y`; next `20261114z`.

@@ -20,6 +20,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 COLS = 6
 TARGET_H = int(os.environ.get('SPRITE_H', 54))   # body height in game pixels (SPRITE_H=60 for a slim, tall character)
 ENHANCE = os.environ.get('ENHANCE', '')
+SMOOTH = os.environ.get('SMOOTH', '') not in ('', '0')   # (Nov 16) SMOOTH=1: simplify detailed art before the shrink (see place())
 TWOSTEP = os.environ.get('TWOSTEP', '') not in ('', '0')   # (Nov 16) TWOSTEP=1: the two-step shrink in place() (Briggs)
 SHARPEN = float(os.environ.get('SHARPEN', 0) or 0)   # (Nov 12) e.g. SHARPEN=80: crisper detail when a sheet is cut bigger than before
 CELL_W, CELL_H, ANCHOR_X, FEET_Y = [int(v) for v in os.environ.get('CELL', '112,88,56,80').split(',')]   # FEET_Y: feet line inside a cell (room below for slash arcs). (Nov 16) CELL=w,h,anchorX,feetY for a bigger character (Iron: 136,108,68,100; the client reads it from DIR8[cls].cell)
@@ -151,6 +152,12 @@ def cut_sheet(src, want_rows=None, col_pitch=None, row_pitch=None, vlook=False):
 
 def place(sheet, img, bc, feet, scale, row, col, flip=False):
     if flip: img = img.transpose(Image.FLIP_LEFT_RIGHT); bc = img.width - bc
+    if SMOOTH:   # (Nov 16, Iron: "detailed designs look choppy at this size") SMOOTH=1: two edge-preserving (bilateral) passes on the big art before
+        # shrinking: camo / scratches / tiny straps melt into flat areas, outlines and big shapes stay. Tested against mean-shift, median and
+        # colour-count cuts (those turned his olive shirt brown); use with a lower SHARPEN (60) and a little more saturation (ENHANCE 1.18,...).
+        import cv2
+        a_ = np.array(img); rgb_ = np.ascontiguousarray(a_[..., :3]); rgb_ = cv2.bilateralFilter(cv2.bilateralFilter(rgb_, 9, 40, 7), 9, 40, 7)
+        img = Image.fromarray(np.dstack([rgb_, a_[..., 3]]))
     if ENHANCE:   # e.g. ENHANCE=1.3,1.15,1.1,1  saturation, contrast, brightness, sharpen-before-shrink (for art that reads too dark/flat in game)
         from PIL import ImageEnhance, ImageFilter
         sat, con, bri, shp = (list(map(float, ENHANCE.split(','))) + [1, 1, 1, 0])[:4]
