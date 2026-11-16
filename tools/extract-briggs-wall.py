@@ -122,9 +122,4 @@ slabs.save(os.path.join(A, 'sprites', 'fx', 'briggs-slab.webp'), quality=92, alp
 print('wall atlas', atlas.size, 'cell', cw, ch, 'anchor', round(AX * SC, 1), round(AY * SC, 1))
 print('slab tex', tw, th, '(TEX %.2f) ground at y %.1f; ring rx %.1f ry %.1f h %.1f (game px)' % (TEX, (489 - REF['top']) * TEX, REF['rx'] * SC, REF['ry'] * SC, REF['h'] * SC))
 
-# the Q card
-c = np.array(Image.open(os.path.join(ART, 'unbreakable-card-a.png')).convert('RGB')).astype(int)
-fg = ~((c[..., 0] > 200) & (c[..., 2] > 200) & (c[..., 1] < 90)); ys, xs = np.where(ndimage.binary_opening(fg, iterations=3))
-card = np.dstack([c, fg * 255]).astype(np.uint8)[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-im = resize_sharp(card, 152 / max(card.shape[:2]), 55); out = Image.new('RGBA', (152, 152)); out.alpha_composite(im, ((152 - im.width) // 2, (152 - im.height) // 2))
-out.save(os.path.join(A, 'icons', 'card-unbreakable.png')); print('card', im.size)
+# (Nov 16) the Q card is made by tools/prep-briggs-remake.py now (the remake's card).

@@ -1,13 +1,14 @@
 #!/bin/sh
-# Briggs (juggernaut) sprite atlas. Nov 13: cut 62px tall (SPRITE_H; everyone else is 54: the user found him small next to the others,
-# a stocky build reads small at the same height), sharpened hard (SHARPEN). Blocks: his 4 weapons, the Q "slam" pose, the E "throw" pose,
-# the R "fists" moveset (gauntlets: guard, walk x3, jab, haymaker) and the R "power" pose. (The old E / Q cast poses, bastion / warcry, are gone.)
-# "^3" = size that block by its column 3 (a standing frame; those sheets start crouched).
-# (Steel Boomerang, Nov 15: python3 tools/clean-briggs-throw.py first: builds throw-pose-clean.png from throw-boomerang.png, the flying boomerang taken out.)
-B=tools/art/briggs
-SPRITE_H=${SPRITE_H:-62} SHARPEN=${SHARPEN:-140} python3 tools/extract-directions.py juggernaut shotgun=$B/shotgun.png%218x149.875 knife=$B/knife.png%218x149.875 \
-  bat=$B/bat.png%199.83x164 axe=$B/axe.png%199.83x164 slam=$B/slam-pose.png!4^3%443.5x110.875 throw=$B/throw-pose-clean.png!4^3%271.5x181 \
-  fists=$B/fists/gauntlets.png%181x181 power=$B/fists/power.png!4%221.75x221.75
-python3 tools/fix-briggs-slam.py
+# Briggs (juggernaut) sprite atlas. Nov 16: the REMAKE (a new person, same skills: tools/art/briggs/REMAKE-PROMPTS.md, art in
+# tools/art/briggs/remake). Cut 62px tall (SPRITE_H; everyone else is 54: he's the stocky tank), sharpened (SHARPEN).
+# Blocks: his 4 weapons (the axe uses the bat sheet until it has its own), the Q "slam" cast, the E "throw" (Steel Boomerang: pull it from
+# behind the shield, wind-up, fling, follow-through), the R "fists" moveset (gauntlets: guard, walk x3, jab, haymaker) and the R "power" pose.
+# Every sheet has 5 directions (DOWN, DOWN-RIGHT, RIGHT, UP-RIGHT, UP): the left side is mirrored. "^3" = size by column 3 (a standing frame).
+# Also writes the lobby art / face sources (then: python3 tools/extract-heroes.py; python3 tools/extract-faces.py tools/art/faces) and the 4 cards.
+B=tools/art/briggs/remake/prep
+python3 tools/prep-briggs-remake.py
+SPRITE_H=${SPRITE_H:-62} SHARPEN=${SHARPEN:-140} python3 tools/extract-directions.py juggernaut shotgun=$B/D-shotgun.png%229x229 knife=$B/E-knife.png%229x229 \
+  bat=$B/F-bat.png%229x229 axe=$B/F-bat.png%229x229 slam=$B/H-slam.png!4^3%192x256 throw=$B/I-throw.png!4%280.5x280.4 \
+  fists=$B/J-gauntlets.png%229x229 power=$B/K-power.png!4%280.5x280.4
+python3 tools/finish-briggs.py
 python3 tools/extract-briggs-wall.py
-python3 tools/fix-briggs-upright.py

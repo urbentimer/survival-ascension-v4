@@ -1,9 +1,9 @@
 # Briggs's E "STEEL BOOMERANG" (Nov 15; it replaced the Manhole Frisbee): the user's boomerang (seen from straight above) + the skill card.
 #   python3 tools/extract-boomerang.py
-# Sources (tools/art/briggs): boomerang-art.png (1254 x 1254, magenta), boomerang-card.png. (The throw pose: tools/clean-briggs-throw.py + cut-briggs.sh.)
+# Sources (tools/art/briggs): boomerang-art.png (1254 x 1254, magenta), boomerang-card.png. (The throw pose: tools/cut-briggs.sh.)
 # Writes client/assets/sprites/fx/boomerang.webp: ONE square cell (CELL px) with the boomerang's CENTRE OF MASS in the middle (a boomerang spins
 # round its centre of mass, which sits inside the V, not at its bounding box's centre), drawn at 2x the size the game shows it (it's rotated
-# every frame: the extra pixels keep it crisp), and client/assets/icons/card-steelBoomerang.png (152 x 152).
+# every frame: the extra pixels keep it crisp), and client/assets/(its card: tools/prep-briggs-remake.py).
 import os
 import numpy as np
 from PIL import Image, ImageFilter
@@ -26,5 +26,4 @@ img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).filter(ImageFilter.
 out = Image.fromarray(np.dstack([np.array(img), (np.clip((al[..., 0] - .12) / .76, 0, 1) * 255).astype(np.uint8)]), 'RGBA')
 out.save(os.path.join(A, 'sprites', 'fx', 'boomerang.webp'), quality=94, alpha_quality=100, method=6)
 w = (xs.max() - xs.min()) / side * CELL; print('boomerang cell', CELL, 'from', side, 'px; its width in the cell %.1f px (%.2f of the cell)' % (w, w / CELL))
-card = Image.open(os.path.join(ART, 'boomerang-card.png')).convert('RGB').resize((152, 152), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=60, threshold=2))
-card.save(os.path.join(A, 'icons', 'card-steelBoomerang.png')); print('card 152x152')
+# (Nov 16) the card is made by tools/prep-briggs-remake.py now (the remake's card).
