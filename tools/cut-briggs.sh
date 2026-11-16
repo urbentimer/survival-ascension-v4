@@ -10,3 +10,4 @@ SPRITE_H=${SPRITE_H:-62} SHARPEN=${SHARPEN:-140} python3 tools/extract-direction
   fists=$B/fists/gauntlets.png%181x181 power=$B/fists/power.png!4%221.75x221.75
 python3 tools/fix-briggs-slam.py
 python3 tools/extract-briggs-wall.py
+python3 tools/fix-briggs-upright.py

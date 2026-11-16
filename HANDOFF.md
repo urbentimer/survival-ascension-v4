@@ -872,3 +872,14 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Cause of the original complaint: the art's UP-LEFT row is a proper back 3/4 view, its UP-RIGHT row is almost a side profile (face showing) -> mismatched.
 - fix-briggs-slam.py now: UP-RIGHT row (all 6 cols: idle, walk x3, attack) = UP-LEFT mirrored, for shotgun knife bat axe fists; UP-LEFT = the art's own. (The Nov 15 down-row copy is gone.)
 - Cache `20261114o`; next `20261114p`.
+
+## Nov 16 — Prompts sent: new UP-RIGHT walk art for Briggs (pending)
+- User: "he looks so stupid when he runs top right and top left". Sent refs (tools/art/briggs/shotgun.png, fists/gauntlets.png) + prompts for ONE direction, UP-RIGHT, as 2 rows x 3 cols = 6 frames (idle, run x3, fire, pump / guard, walk x3, jab, haymaker); UP-LEFT will be it mirrored.
+- When it arrives: cut the 6 frames into the block's row 3 (UP-RIGHT) and mirrored into row 5 (UP-LEFT) in fix-briggs-slam.py (replacing the Nov 16 "UP-RIGHT = UP-LEFT mirrored" step for that block), same SPRITE_H 62 / SHARPEN as the rest.
+
+## Nov 16 — New TOP-RIGHT / TOP-LEFT art for Briggs (shotgun + gauntlets), widened (cache 20261114p)
+- User sent the UP-RIGHT sheets (tools/art/briggs/upright/shotgun-upright.png, gauntlets-upright.png: 2 x 3, 512px cells) and: "feels like chatgpt made him thinner".
+  Measured vs his other back views (median width over the hips / shoulders bands, per height): ~8-13% slimmer with the shotgun at the hips, ~8% at the shoulders with the gauntlets.
+- New tools/fix-briggs-upright.py (last step of cut-briggs.sh): cuts each frame (biggest piece + flash / smoke within 45px), widens x1.12 (WIDEN), sizes his standing height to the old UP-LEFT standing height (62 / 63.2px), places with extract-directions' place() (one resize, SHARPEN 140, dark edge ring) into row 3 (UP-RIGHT) and mirrored into row 5 (UP-LEFT) of the shotgun and fists blocks.
+  Knife / bat / axe still use "UP-RIGHT = UP-LEFT mirrored" (fix-briggs-slam.py) until they get art.
+- Cache `20261114p`; next `20261114q`.
