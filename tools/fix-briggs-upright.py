@@ -19,6 +19,36 @@ spec = importlib.util.spec_from_file_location('ed', os.path.join(here, 'extract-
 d8 = os.path.join(here, '..', 'client', 'assets', 'sprites', 'dir8'); ART = os.path.join(here, 'art', 'briggs')
 meta = json.load(open(os.path.join(d8, 'dir8.json')))['juggernaut']; cw, ch = meta['cellW'], meta['cellH']
 WIDEN = 1.12
+# (Nov 16, user: "why is it a different shade") ChatGPT's new frames came back warmer / redder (reddish-brown trousers and vest, a brown cap)
+# than his original sheet (dark grey-brown trousers, near-black vest and cap). So the new frames are recoloured to his own palette: in Lab,
+# each group is matched to the same group in the old sheet's back views (UP + UP-LEFT rows): SKIN (peach: mean / spread) and CLOTHES /
+# gear (everything else: each channel's whole distribution, quantile matching, so the reddish trousers / brown cap land on his own tones); the bright accents (orange headphones, hazard stripes, glowing knuckles, muzzle flash: chroma > ACC) and the
+# dark outline are left as they are.
+ACC = 62   # (headphones / hazard stripes / glowing knuckles / muzzle flash are 65+)
+def srgb2lab(rgb):
+    c = rgb / 255.0; c = np.where(c > .04045, ((c + .055) / 1.055) ** 2.4, c / 12.92)
+    M = np.array([[.4124, .3576, .1805], [.2126, .7152, .0722], [.0193, .1192, .9505]]); xyz = c @ M.T / np.array([.95047, 1., 1.08883])
+    f = np.where(xyz > .008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
+def lab2srgb(lab):
+    fy = (lab[..., 0] + 16) / 116; fx = fy + lab[..., 1] / 500; fz = fy - lab[..., 2] / 200; f = np.stack([fx, fy, fz], -1)
+    xyz = np.where(f > .2069, f ** 3, (f - 16 / 116) / 7.787) * np.array([.95047, 1., 1.08883])
+    M = np.array([[3.2406, -1.5372, -.4986], [-.9689, 1.8758, .0415], [.0557, -.2040, 1.0570]]); c = xyz @ M.T
+    c = np.where(c > .0031308, 1.055 * np.clip(c, 0, None) ** (1 / 2.4) - .055, 12.92 * c); return np.clip(c * 255, 0, 255)
+def groups(lab):   # 0 = outline (leave), 1 = skin, 2 = clothes / gear, 3 = bright accent (leave)
+    L, A, B = lab[..., 0], lab[..., 1], lab[..., 2]; chroma = np.hypot(A, B); hue = np.degrees(np.arctan2(B, A)); g = np.full(L.shape, 2)
+    g[(L > 45) & (chroma > 24) & (chroma <= ACC) & (hue > 25) & (hue < 70)] = 1   # skin: warm, light (ChatGPT's skin is more saturated: up to ~58)
+    g[chroma > ACC] = 3; g[L < 12] = 0; return g
+Q = np.linspace(0, 100, 101)
+def palette_stats(imgs):   # per group: mean / spread (skin) and the full distribution, 101 percentiles per Lab channel (clothes)
+    px = np.concatenate([np.array(i.convert('RGBA')).reshape(-1, 4) for i in imgs]); px = px[px[:, 3] > 200][:, :3].astype(float); lab = srgb2lab(px); g = groups(lab)
+    return {k: (lab[g == k].mean(0), lab[g == k].std(0) + 1e-3, np.percentile(lab[g == k], Q, axis=0)) for k in (1, 2)}
+def recolour(img, new_st, old_st):
+    a = np.array(img.convert('RGBA')).astype(float); lab = srgb2lab(a[..., :3]); g = groups(lab); out = lab.copy()
+    mn, sn, _ = new_st[1]; mo, so, _ = old_st[1]; m = g == 1; out[m] = (lab[m] - mn) * np.clip(so / sn, .6, 1.25) + mo   # skin: mean / spread
+    m = g == 2; qn, qo = new_st[2][2], old_st[2][2]   # clothes / gear: each Lab channel's distribution mapped onto the old one (quantile matching)
+    for ch in range(3): out[m, ch] = np.interp(lab[m, ch], qn[:, ch], qo[:, ch])
+    a[..., :3] = lab2srgb(out); return Image.fromarray(a.astype(np.uint8), 'RGBA')
 JOBS = [('shotgun', 'upright/shotgun-upright.png', 'shotgun.png', (218, 149.875)), ('fists', 'upright/gauntlets-upright.png', 'fists/gauntlets.png', (181, 181))]
 path = os.path.join(d8, 'juggernaut.webp'); sheet = Image.open(path).convert('RGBA')
 for block, new, old, pitch in JOBS:
@@ -43,6 +73,9 @@ for block, new, old, pitch in JOBS:
         mm = lab[fy0:fy1, fx0:fx1] == main + 1; colh = mm.sum(0); body = np.where(colh >= colh.max() * .5)[0]; rows_ = np.where(mm[:, body.min():body.max() + 1].any(1))[0]
         nf[(k // 3, k % 3)] = (Image.fromarray(rgba), (body.min() + body.max()) / 2, rows_.max() + 1, rows_.max() + 1 - rows_.min())
     scale = ref / nf[(0, 0)][3]
+    old_st = palette_stats([of[(r, c)][0] for r in (4, 5) for c in range(4)]); new_st = palette_stats([nf[(k // 3, k % 3)][0] for k in range(4)])
+    for k in range(6): img, bc, feet, hh = nf[(k // 3, k % 3)]; nf[(k // 3, k % 3)] = (recolour(img, new_st, old_st), bc, feet, hh)
+    print(f'  {block} recolour: skin L/a/b {new_st[1][0].round(1)} -> {old_st[1][0].round(1)}; clothes {new_st[2][0].round(1)} -> {old_st[2][0].round(1)}')
     for r in (3, 5):   # clear both rows
         sheet.paste((0, 0, 0, 0), (0, (b * 8 + r) * ch, 6 * cw, (b * 8 + r + 1) * ch))
     for k in range(6):

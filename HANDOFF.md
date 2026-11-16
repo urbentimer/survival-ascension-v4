@@ -883,3 +883,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - New tools/fix-briggs-upright.py (last step of cut-briggs.sh): cuts each frame (biggest piece + flash / smoke within 45px), widens x1.12 (WIDEN), sizes his standing height to the old UP-LEFT standing height (62 / 63.2px), places with extract-directions' place() (one resize, SHARPEN 140, dark edge ring) into row 3 (UP-RIGHT) and mirrored into row 5 (UP-LEFT) of the shotgun and fists blocks.
   Knife / bat / axe still use "UP-RIGHT = UP-LEFT mirrored" (fix-briggs-slam.py) until they get art.
 - Cache `20261114p`; next `20261114q`.
+
+## Nov 16 — New top-right art recoloured to his own palette (cache 20261114q)
+- User: "why is it a different shade colour". ChatGPT's frames were warmer / redder: reddish-brown trousers + vest, brown cap, more saturated skin (mean RGB 145/83/68 vs his old back views ~126/84/78).
+- fix-briggs-upright.py now recolours the new frames before placing (Lab): groups = outline (L<12, untouched), skin (L>45, chroma 24-62, hue 25-70: mean/spread matched), bright accents (chroma>62: headphones, hazard stripes, knuckle glow, muzzle flash: untouched), clothes/gear (the rest: per-channel QUANTILE matching to the old sheet's UP + UP-LEFT rows).
+  (First try counted ChatGPT's saturated skin as an accent, chroma ~51: hardly changed. ACC raised to 62 + hue-based skin.) Result: new UP-RIGHT mean 134/88/80, old UP-LEFT 126/84/79.
+- Cache `20261114q`; next `20261114r`.
