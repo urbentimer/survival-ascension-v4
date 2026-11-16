@@ -981,3 +981,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - extract-sienna-fx.py: frames cut along the emptiest line near each grid line (soft glow haze joins the frames); new key: solid art (no magenta tint) stays solid, tinted pixels use "colour to alpha" against #FF00FF (blended over 20 levels), so cyan glow over magenta comes back cyan instead of lavender; bluish pixels get red pulled to 0.8x green (no purple). Ground points per frame from the solid bottom. Same game sizes (burst 240px wide, tower top 52px, block 62px).
 - Client SIEN cells: burst 254x440 @129,255; tower 73x142 @33,92 top 52; shatter 70x124 @34,89.
 - Cache `20261115c`; next `20261115d`.
+
+## Nov 16 — VEX planned (next character; build tomorrow)
+- Kit locked with the user: project doc claude/vex-kit.md. Toxin stacks (max 5, damage over time); gun TOXIN DART RIFLE only (+ knife, one-gun rule); trait CHAIN REACTION (poisoned deaths burst: 2 stacks around); E TOXIC VIAL (~4s, poison cloud); R ANTIDOTE MIST (~25s, team heal 30% max HP over 3s within ~350px + clears slows / stuns); Q PANDEMIC (20s toxic aura, ends in a Catalyst pop: remaining poison x2).
+- Next: numbers, design sheet prompt (simple chibi military), sprite / effect / card prompts.
