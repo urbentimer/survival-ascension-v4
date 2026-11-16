@@ -952,3 +952,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - cut-iron.sh: SMOOTH=1 SHARPEN 60 ENHANCE 1.18,1.08,1.04,0 (TWOSTEP off).
 - Next: Sienna (sniper) — simple-style prompts.
 - Cache `20261114y`; next `20261114z`.
+
+## Nov 16 — Iron sized to Marcus (cache 20261114z)
+- User: "scale Iron the same size as exactly Marcus". At SPRITE_H 54 the heights already matched (55 vs 54) but Iron had ~10% less body on screen (Marcus's bigger head + backpack). SPRITE_H 57: median opaque area over the idle + walk frames 1685 px vs Marcus 1679 (height 57). No frame touches its cell edge. Checked side by side in the preview.
+- Cache `20261114z`; next `20261115a`.
