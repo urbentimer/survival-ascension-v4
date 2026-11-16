@@ -941,3 +941,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 16 — Q: the red crack ring on the floor removed (cache 20261114w)
 - User: "remove this red circle on the floor when he does his Q". briggsShields no longer draws the floor-crack ring (wallFrame row 0) for the first 1.2s; wallImg no longer loaded (wallFrame kept). The end-of-Q fire-ring shockwave (shieldBlast, the user's GIF) is unchanged.
 - Cache `20261114w`; next `20261114x`.
+
+## Nov 16 — Iron's skill bar order Q - E - R - TRAIT (cache 20261114x)
+- User: "at the bottom it should be Q-E-R-Traits". The Forceful Blast TRAIT slot is spliced at index 3 (after R) instead of 2. (Only Iron has a TRAIT slot.)
+- Cache `20261114x`; next `20261114y`.
