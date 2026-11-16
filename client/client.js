@@ -2037,7 +2037,7 @@ function briggsFire(p, now, front) {
 // depth-sorted with everything else (one draw item per shield). They punch up out of the ground at the slam (a wave around the circle, the
 // rise sheet's crack ring under them), a hit sends Mine-Beast sparks off the shield facing the attacker, the last seconds cross-fade to the
 // overcharged views with sparks jumping off the tops, and the end throws them outward white-hot (fx "shieldBlast").
-const wallImg = new Image(); wallImg.src = "assets/sprites/fx/briggs-wall.webp";   // (the v2 ring sheets: the crack rings at the rise and after the blast)
+const wallImg = new Image();   // (Nov 16) not loaded any more: its only use, the crack ring at the Q rise, was removed (user). wallFrame() kept: src = "assets/sprites/fx/briggs-wall.webp" brings it back
 const BW = { cw: 203, ch: 224, ax: 101.4, ay: 146.7, rx: 74.5, sparkGap: 420 };
 const shieldImg = new Image(); shieldImg.src = "assets/sprites/fx/briggs-shield.webp";
 const shockImg = new Image(); shockImg.src = "assets/sprites/fx/briggs-shock.webp";   // the deflect's shockwave (tools/extract-briggs-shock.py): the user's fire ring GIF, 8 frames (4 x 2) on black: drawn ADDITIVELY
@@ -2142,7 +2142,7 @@ function drawBriggsCovers(items, now) {
 function briggsShields(p0, p, items, now) {   // (drawWorldObjects) one depth-sorted item per shield + the crack ring as they rise
   const id = p0.sessionId, a = briggsAnim.get(id); if (!a || (a.blastAt && a.blastAt >= (a.t0 || 0))) return;   // blasting: the fx takes over
   const X = p.x, Y = p.y + SPR.feet, el = now - ((a.t0 || 0) + 150); if (el < 0) return;
-  if (el < 1200) items.push({ y: -1e9, draw: () => wallFrame(0, 0, X, Y, BS.R / BW.rx * (.82 + .18 * clamp01(el / 160)), el < 600 ? 1 : 1 - (el - 600) / 600) });   // the ring of cracks they burst out of (on the floor)
+  // (Nov 16, user: "remove this red circle on the floor when he does his Q") the ring of floor cracks the shields burst out of is gone
   const left = p0.ultActive || 0, hot = clamp01((3.6 - left) / 1.2), set = shieldSet(X, Y, shieldRot(id, a, now));
   if (a.hits?.length) { for (const h of a.hits) if (!h.done) { h.done = 1;   // a hit: Mine-Beast sparks off the shield facing the attacker, a flash, a starburst
       const ph = h.x != null ? Math.atan2((h.y - Y) * BS.R / BS.RY, h.x - X) : Math.random() * 6.283; let best = set[0], bd = 9;

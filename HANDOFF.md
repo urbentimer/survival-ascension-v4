@@ -937,3 +937,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Smoothness: (1) finish-briggs.py walk stabiliser: walk frames (cols 1-3) of shotgun / knife / fists shifted sideways so the head lines up with the idle frame (head x spread 2.8px -> 0.8px). (2) Client: DIR8.juggernaut.walk [1,2,3,2] (ping-pong at 115ms: no left-foot / right-foot jump) and flashCol 4 (his col 4 = muzzle flash, col 5 = pump: was shown pump-first).
 - Punch cone anchor SPR.feet - 24 (smaller Iron).
 - Cache `20261114v`; next `20261114w`.
+
+## Nov 16 — Q: the red crack ring on the floor removed (cache 20261114w)
+- User: "remove this red circle on the floor when he does his Q". briggsShields no longer draws the floor-crack ring (wallFrame row 0) for the first 1.2s; wallImg no longer loaded (wallFrame kept). The end-of-Q fire-ring shockwave (shieldBlast, the user's GIF) is unchanged.
+- Cache `20261114w`; next `20261114x`.
