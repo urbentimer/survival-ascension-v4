@@ -889,3 +889,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - fix-briggs-upright.py now recolours the new frames before placing (Lab): groups = outline (L<12, untouched), skin (L>45, chroma 24-62, hue 25-70: mean/spread matched), bright accents (chroma>62: headphones, hazard stripes, knuckle glow, muzzle flash: untouched), clothes/gear (the rest: per-channel QUANTILE matching to the old sheet's UP + UP-LEFT rows).
   (First try counted ChatGPT's saturated skin as an accent, chroma ~51: hardly changed. ACC raised to 62 + hue-based skin.) Result: new UP-RIGHT mean 134/88/80, old UP-LEFT 126/84/79.
 - Cache `20261114q`; next `20261114r`.
+
+## Nov 16 — Briggs REMAKE (new person, same skills): prompts A-O sent, art pending
+- User: "remake all of Briggs animation, a different person, his skills stay the same". Prompts in tools/art/briggs/REMAKE-PROMPTS.md (+ project doc claude/briggs-remake-prompts.md).
+- Default new look (user can swap): demolition foreman, shaved head, handlebar moustache, welding visor up, orange hi-vis vest over gunmetal plates + hazard band, tool belt, steel knee pads, pump shotgun.
+- Order: A design sheet -> D shotgun (locks the sprite look) -> E knife, F bat, G axe, H Q slam cast, I E boomerang throw, J R gauntlets, K R power-up (each attaches A + D) -> B lobby art, C face -> L-O cards (redraw the existing cards with the new man).
+- Sprite sheets are 5 rows (DOWN, DR, R, UR, UP): extract-directions mirrors the left side. When the art lands: drop the old left-row / UP-RIGHT fixes (fix-briggs-slam.py mirror steps, fix-briggs-upright.py), cut throw as [pull, wind-up, wind-up, fling].
