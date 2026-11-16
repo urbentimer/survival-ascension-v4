@@ -905,3 +905,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Throw block = the sheet as drawn: 0 pull from behind the shield, 1 wind-up, 2 fling (boomerang in hand), 3 follow-through (client plays 0-1-2 over the cast, 3 after).
 - Checked in the preview: lobby art + face + cards, shooting, Q (slam -> shields), E, R (power-up, jab/haymaker), no errors.
 - Cache `20261114r`; next `20261114s`.
+
+## Nov 16 — New Briggs sharper (cache 20261114s)
+- User: "sharpen his graphics, increase quality". Limit: the canvas is a fixed 1200x760 backbuffer CSS-scaled (pixelated) to the screen; he is 62px tall, so quality = how the ~190px art survives the shrink.
+- Tested side by side (A now / colour pop / box / pre-sharpen / local contrast / two-step): pre-sharpen + local contrast gave halos and colour fringes (blue in the hazard stripes). Picked: colour pop + TWO-STEP shrink.
+- extract-directions.py: new TWOSTEP=1 option in place(): Lanczos to 2x the target, premultiplied unsharp (sigma 1, x0.9), BOX down, then the usual alpha cut / SHARPEN / ring. cut-briggs.sh: SHARPEN 110, TWOSTEP=1, ENHANCE 1.12,1.1,1.06,0. Other characters unchanged (opt-in).
+- Next big step if wanted: an HD canvas (2x backbuffer) for the whole game: global change, perf cost.
+- Cache `20261114s`; next `20261114t`.

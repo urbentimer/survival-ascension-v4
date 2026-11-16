@@ -20,6 +20,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 COLS = 6
 TARGET_H = int(os.environ.get('SPRITE_H', 54))   # body height in game pixels (SPRITE_H=60 for a slim, tall character)
 ENHANCE = os.environ.get('ENHANCE', '')
+TWOSTEP = os.environ.get('TWOSTEP', '') not in ('', '0')   # (Nov 16) TWOSTEP=1: the two-step shrink in place() (Briggs)
 SHARPEN = float(os.environ.get('SHARPEN', 0) or 0)   # (Nov 12) e.g. SHARPEN=80: crisper detail when a sheet is cut bigger than before
 CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside a cell (room below for slash arcs)
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
@@ -158,7 +159,15 @@ def place(sheet, img, bc, feet, scale, row, col, flip=False):
         if shp: rgb = rgb.filter(ImageFilter.UnsharpMask(radius=2 / max(scale, .05) * .5, percent=int(120 * shp), threshold=2))
         img = rgb.convert('RGBA'); img.putalpha(a)
     sw, sh = max(1, round(img.width * scale)), max(1, round(img.height * scale))
-    small = img.resize((sw, sh), Image.LANCZOS)
+    if TWOSTEP:   # (Nov 16, Briggs remake: "sharpen his graphics, increase quality") Lanczos to 2x the target, unsharp there (fine detail survives
+        # the last halving), then box down. Premultiplied, as tested side by side against plain Lanczos / box / stronger sharpening (those
+        # gave halos and colour fringes); then the usual alpha cut + SHARPEN + dark ring below.
+        from scipy.ndimage import gaussian_filter
+        mid = np.array(img.resize((sw * 2, sh * 2), Image.LANCZOS)).astype(np.float32); mid[..., :3] *= mid[..., 3:4] / 255
+        bl = np.dstack([gaussian_filter(mid[..., i], 1.0) for i in range(3)]); mid[..., :3] = np.clip(mid[..., :3] + (mid[..., :3] - bl) * .9, 0, 255)
+        s = np.array(Image.fromarray(mid.clip(0, 255).astype(np.uint8), 'RGBA').resize((sw, sh), Image.BOX)).astype(np.float32); a_ = s[..., 3:4] / 255
+        s[..., :3] = np.where(a_ > .02, s[..., :3] / np.maximum(a_, .02), 0); small = Image.fromarray(s.clip(0, 255).astype(np.uint8), 'RGBA')
+    else: small = img.resize((sw, sh), Image.LANCZOS)
     arr = np.array(small); al = arr[..., 3] > 110; arr[..., 3] = al * 255
     if SHARPEN:   # (Nov 12) SHARPEN=<percent>: unsharp mask after the resize, blurring only the figure's own pixels (no magenta / halo pulled in at the edge)
         from scipy.ndimage import gaussian_filter
