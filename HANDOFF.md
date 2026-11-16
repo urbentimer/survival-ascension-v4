@@ -971,3 +971,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: DIR8.sniper (cell 176, walk [1,2,3,2], flashCol 4); siennaCast (throw 440ms, dash 420ms facing the dash, perch: perch block for R / L / diagonals, the sniper block's own frames straight up / down); her sprite lifted onto the tower (perchLift, also the name tag); decoy = her idle frame frozen pale inside the ice block; hidden = see-through pale + frost twinkles; laser from the muzzle, down to chest height over 220px, then straight across the map; frost tint + ice at the feet of chilled zombies. Hotbar Q - E - R - TRAIT; no empty slot 3. Roster text rewritten. build-preview keeps dir8/sniper lossless.
 - Tests: block 54d rewritten (23 checks: loadout, 2.0s, chill, slow movement, grenade, decoy pull / no damage / reveal / cooldown, perch move lock / half damage / map laser / gap / end, shop, drops, out of ammo).
 - Cache `20261115a`; next `20261115b`.
+
+## Nov 16 — Sienna's sniper range x4 (cache 20261115b)
+- User: "her normal shot with her sniper should at least be 3-4 times the range". SIENNA.range 3040 (4x the sniper's 760) for Sienna holding her sniper (fireWeapon's wall ray + her bot's firing check). Walls still stop it. Other classes' sniper (Epic drops) unchanged. Test 54d: 2950px hit, 3150px not.
+- Cache `20261115b`; next `20261115c`.

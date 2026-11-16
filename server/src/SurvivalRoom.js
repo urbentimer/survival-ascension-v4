@@ -369,6 +369,7 @@ const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the towe
 // ice tower (can't move, half damage taken): click / hold = a cyan laser across the WHOLE map every 1.5s, through EVERY zombie (bosses too),
 // 3x a sniper hit, no ammo; the 60s cooldown starts when she comes down.
 const SIENNA = {
+  range: 3040,   // (Nov 16, user: "at least 3-4 times the range") her sniper shot reaches 4x the sniper's 760 (walls still stop it)
   chill: { f: 0.7, boss: 0.85, t: 1.5 },   // every sniper hit (the perch laser too): 30% slower for 1.5s (bosses 15%)
   nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.5, boss: 0.75, t: 2 },   // E: lands where she aims (60-450px), 120px burst, 80 (x wave scaling), 50% slower for 2s (bosses 25%)
   decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
@@ -1143,7 +1144,7 @@ export class SurvivalRoom extends Room {
       ? Array.from({ length: w.pellets }, (_, i) => aim + (i / (w.pellets - 1) - 0.5) * 2 * w.spread)
       : [aim + (w.jitter ? rand(-w.jitter, w.jitter) : 0)];
     for (const a of angles) {
-      const wall = this.wallDist(p.x, p.y, a, w.range);          // buildings, cars... stop bullets
+      const wall = this.wallDist(p.x, p.y, a, p.characterClass === "sniper" && p.weapon === "sniper" ? SIENNA.range : w.range);          // buildings, cars... stop bullets (Sienna's sniper reaches 4x as far)
       const along = this.rayHits(p, a, wall);
       let end = wall;
       if (w.splash) {   // rocket: flies straight to the aimed spot (or max range / a wall), then explodes there
@@ -3811,7 +3812,7 @@ export class SurvivalRoom extends Room {
       brain.wobble = (brain.wobble || 0) * 0.88 + rand(-0.09, 0.09);
       diff = Math.atan2(Math.sin(want - brain.aim), Math.cos(want - brain.aim));
       const ready = now >= (brain.reactAt || 0) && Math.abs(diff) < 0.25;
-      if (ready && nearD < w.range && seen.includes(near) && !b.reviveTargetId && now - b.lastShot >= 1000 / b.fireRate && Math.random() < 0.6 && !(b.characterClass === "sniper" && b.shadow > 7)) {   // (a hidden Sienna bot holds fire for 3s)
+      if (ready && nearD < (b.characterClass === "sniper" && b.weapon === "sniper" ? SIENNA.range : w.range) && seen.includes(near) && !b.reviveTargetId && now - b.lastShot >= 1000 / b.fireRate && Math.random() < 0.6 && !(b.characterClass === "sniper" && b.shadow > 7)) {   // (a hidden Sienna bot holds fire for 3s)
         this.fireWeapon(b, brain.aim + brain.wobble + rand(-0.2, 0.2), nearD);
       }
     }

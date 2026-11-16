@@ -1398,6 +1398,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   const w1 = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); const dw = 9999 - w1.hp, cw = w1.chill; room.state.zombies.clear();
   const b1 = mk("brute", 1200); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); const db = 9999 - b1.hp;
   ok(Math.abs(dw - p.damage) < .6 && Math.abs(db - p.damage * 1.5) < .6, `walker takes ${Math.round(dw)}, a brute takes x1.5 (${Math.round(db)})`);
+  room.state.zombies.clear(); const fr = mk("walker", 1000 + 2950), tooFar = mk("walker", 1000 + 3150, 1003); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 });
+  ok(fr.hp < 9999 && tooFar.hp === 9999, `her sniper reaches 4x as far: a zombie 2950px away is hit, 3150px isn't (map ${room.A.width}px wide)`);
   ok(cw === 30, `Cold Precision: a sniper hit chills it 30% (chill ${cw})`);
   room.state.zombies.clear(); const bz = mk("butcher", 1200, 1000, true); p.lastShot = 0; p.mag = 5; send(A, "shoot", { a: 0 }); ok(bz.chill === 15, `...a boss only 15% (${bz.chill})`);
   // a chilled zombie walks 30% slower, and its speed comes back exactly
