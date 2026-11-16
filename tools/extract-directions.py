@@ -22,7 +22,7 @@ TARGET_H = int(os.environ.get('SPRITE_H', 54))   # body height in game pixels (S
 ENHANCE = os.environ.get('ENHANCE', '')
 TWOSTEP = os.environ.get('TWOSTEP', '') not in ('', '0')   # (Nov 16) TWOSTEP=1: the two-step shrink in place() (Briggs)
 SHARPEN = float(os.environ.get('SHARPEN', 0) or 0)   # (Nov 12) e.g. SHARPEN=80: crisper detail when a sheet is cut bigger than before
-CELL_W, CELL_H, ANCHOR_X, FEET_Y = 112, 88, 56, 80   # FEET_Y: feet line inside a cell (room below for slash arcs)
+CELL_W, CELL_H, ANCHOR_X, FEET_Y = [int(v) for v in os.environ.get('CELL', '112,88,56,80').split(',')]   # FEET_Y: feet line inside a cell (room below for slash arcs). (Nov 16) CELL=w,h,anchorX,feetY for a bigger character (Iron: 136,108,68,100; the client reads it from DIR8[cls].cell)
 ROW_NAMES = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft']
 TIGHT = os.environ.get('PINK_HAIR') == '1'   # pink-haired characters: only key out near-exact magenta (keeps hair edges)
 MIRROR_OF = {5: 3, 6: 2, 7: 1}      # up-left <- up-right, left <- right, down-left <- down-right

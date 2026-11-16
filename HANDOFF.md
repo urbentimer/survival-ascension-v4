@@ -922,3 +922,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: roster name "IRON". Skill texts unchanged (no names in them).
 - Not yet matched to Iron: Unbreakable's 8 shield slabs (old gunmetal slabs) — optional turnaround of his round shield.
 - Cache `20261114t`; next `20261114u`.
+
+## Nov 16 — Iron bigger (cache 20261114u)
+- User: "he looks too tiny" (he was 62px; others 51-60). Now 76px tall (+23%) in his OWN cell: extract-directions.py takes CELL=w,h,anchorX,feetY (default 112,88,56,80); cut-iron.sh CELL=136,108,68,100 SPRITE_H 76. dir8.json stores it; the client reads DIR8.juggernaut.cell { cellW 136, cellH 108, anchorX 68, feetY 100 } in drawSurvivorDir8 + the lobby sprite preview (other classes still use D8).
+- Name tag: DIR8[cls].lift (Iron 14) added to nameLift. Punch cone anchor: SPR.feet - 32 (was -26: his fists sit higher).
+- No frames nudged (everything fits the bigger cell). Checked in the preview next to Marcus / Sofea / Astra bots.
+- Cache `20261114u`; next `20261114v`.

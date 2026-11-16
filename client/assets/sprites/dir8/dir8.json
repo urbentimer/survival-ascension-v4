@@ -150,10 +150,10 @@
   ]
  },
  "juggernaut": {
-  "cellW": 112,
-  "cellH": 88,
-  "anchorX": 56,
-  "feetY": 80,
+  "cellW": 136,
+  "cellH": 108,
+  "anchorX": 68,
+  "feetY": 100,
   "blocks": [
    "shotgun",
    "knife",

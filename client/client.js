@@ -2176,7 +2176,7 @@ function drawBriggsFx(f, age) {   // false when finished
     // then cross-fades into the next (smoothstep), the last one fades out, and the whole blast drifts a few px forward (ease-out) so it feels like it travels
     const T = BPUNCH.ms, N = T.length; let i = 0, t0 = 0; while (i < N && age >= t0 + T[i]) t0 += T[i++]; if (i >= N) return false;
     const u = (age - t0) / T[i], b0 = i < N - 1 ? Math.max(0, (u - .4) / .6) : 0, b = b0 * b0 * (3 - 2 * b0), fade = i === N - 1 ? 1 - u : 1, life = (t0 + u * T[i]) / T.reduce((x, y) => x + y, 0);
-    const k = f.hook ? 1 : 150 / 190, row = 0, ax = f.x + Math.cos(f.a) * 16, ay = f.y + SPR.feet - 26 + Math.sin(f.a) * 9, ra = Math.atan2(Math.sin(f.a) / .82, Math.cos(f.a));
+    const k = f.hook ? 1 : 150 / 190, row = 0, ax = f.x + Math.cos(f.a) * 16, ay = f.y + SPR.feet - 32 + Math.sin(f.a) * 9, ra = Math.atan2(Math.sin(f.a) / .82, Math.cos(f.a));
     ctx.save(); ctx.translate(ax, ay); ctx.scale(1, .82); ctx.rotate(ra); if (Math.cos(f.a) < 0) ctx.scale(1, -1); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     ctx.translate(BPUNCH.drift * k * (1 - (1 - life) * (1 - life)), 0);
     const cell = (j, al) => { if (al <= .01) return; ctx.globalAlpha = al; ctx.drawImage(punchImg, j * BPUNCH.cw, row * BPUNCH.ch, BPUNCH.cw, BPUNCH.ch, -BPUNCH.tx * k, -BPUNCH.ty * k, BPUNCH.cw * k, BPUNCH.ch * k); };
@@ -3412,7 +3412,7 @@ function drawSurvivorLabels(p) {
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 14, 20, 8, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
     ctx.restore();
   }
-  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46;   // above Sofea's tank / helicopter / mecha
+  const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46 + (DIR8[p.characterClass]?.lift || 0);   // above Sofea's tank / helicopter / mecha
   drawLabel(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift, "#f2ead9");
   if (awayIds.has(p.sessionId)) drawLabel("RECONNECTING…", p.x, p.y - nameLift - 13, "#9fd8ff");   // their connection dropped: the server holds the seat 30s
   if (!p.alive) { const safe = !p.bledOut && inSafehouse(p); drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : safe ? "DOWN · SAFE (PAUSED " + Math.ceil(p.bleedout || 0) + "s) · F TO REVIVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, safe ? "#8ff0ff" : "#ff7568"); }
@@ -3439,7 +3439,8 @@ const DIR8 = {
   assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
-  juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "bat", "axe", "slam", "throw", "fists", "power"] },   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
+  juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "bat", "axe", "slam", "throw", "fists", "power"],
+    cell: { cellW: 136, cellH: 108, anchorX: 68, feetY: 100 }, lift: 14 },   // (Nov 16) IRON: cut 76px tall (user: "too tiny" at 62) in his own bigger cell (tools/cut-iron.sh CELL); name tag 14px higher   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
     fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
@@ -3507,7 +3508,8 @@ function drawSurvivorDir8(p, pose, img) {
   else if (awayIds.has(p.sessionId)) ctx.globalAlpha = .55;   // reconnecting: faded out, frozen where they stood
   if (flip) ctx.scale(-1, 1);   // mirrored diagonal (the cell is centred on the feet, so it flips in place)
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, col * D8.cellW, (blk * 8 + row) * D8.cellH, D8.cellW, D8.cellH, -D8.anchorX, SPR.feet - D8.feetY, D8.cellW, D8.cellH);
+  const C = DIR8[p.characterClass].cell || D8;   // (Nov 16) a bigger character has its own cell size
+  ctx.drawImage(img, col * C.cellW, (blk * 8 + row) * C.cellH, C.cellW, C.cellH, -C.anchorX, SPR.feet - C.feetY, C.cellW, C.cellH);
   ctx.restore();
   if (rush) marcusRush(p, now, true);
   return true;
@@ -5372,7 +5374,8 @@ function lsFrame(t) {
   if (!c.hidden && img?.naturalWidth) {
     const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); g.imageSmoothingEnabled = false;
     const col = lsAnimOn ? [0, 0, 1, 2, 3, 0][Math.floor(t / 380) % 6] : 0, row = 7, sc = 5;   // facing down-left, idle with a few steps
-    g.drawImage(img, col * D8.cellW, row * D8.cellH, D8.cellW, D8.cellH, c.width / 2 - D8.anchorX * sc, c.height - D8.feetY * sc - 6, D8.cellW * sc, D8.cellH * sc);
+    const C = DIR8[r.id]?.cell || D8;
+    g.drawImage(img, col * C.cellW, row * C.cellH, C.cellW, C.cellH, c.width / 2 - C.anchorX * sc, c.height - C.feetY * sc - 6, C.cellW * sc, C.cellH * sc);
   }
   const e = $("lsEmbers"); if (!lsAnimOn) { if (e.width) { e.getContext("2d").clearRect(0, 0, e.width, e.height); } return; }
   if (e.width !== innerWidth || e.height !== innerHeight) { e.width = innerWidth; e.height = innerHeight; }
