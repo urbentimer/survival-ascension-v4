@@ -3267,7 +3267,7 @@ function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.
 // Code-made: the cyan sniper tracer (TRACER), the map-length laser, the frost tint on slowed zombies, the decoy (her own sprite frozen pale inside
 // the ice block), the hidden shimmer, the dash streak.
 const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
-const SIEN = { burst: { cw: 245, ch: 146, gx: 123, gy: 101 }, tower: { cw: 78, ch: 84, gx: 37, gy: 73, top: 53, rise: 360 }, shatter: { cw: 73, ch: 73, gx: 37, gy: 65 } };
+const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 } };   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
 const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
 const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
 const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam

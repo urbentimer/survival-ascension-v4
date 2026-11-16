@@ -975,3 +975,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 16 — Sienna's sniper range x4 (cache 20261115b)
 - User: "her normal shot with her sniper should at least be 3-4 times the range". SIENNA.range 3040 (4x the sniper's 760) for Sienna holding her sniper (fireWeapon's wall ray + her bot's firing check). Walls still stop it. Other classes' sniper (Epic drops) unchanged. Test 54d: 2950px hit, 3150px not.
 - Cache `20261115b`; next `20261115c`.
+
+## Nov 16 — Sienna's effects v2: the user's "ultra realistic" set (cache 20261115c)
+- New tools/art/sienna/6-grenade-burst.png / 7-tower.png / 8-shatter.png (same layouts); the first set kept in tools/art/sienna/old/*-v1.png.
+- extract-sienna-fx.py: frames cut along the emptiest line near each grid line (soft glow haze joins the frames); new key: solid art (no magenta tint) stays solid, tinted pixels use "colour to alpha" against #FF00FF (blended over 20 levels), so cyan glow over magenta comes back cyan instead of lavender; bluish pixels get red pulled to 0.8x green (no purple). Ground points per frame from the solid bottom. Same game sizes (burst 240px wide, tower top 52px, block 62px).
+- Client SIEN cells: burst 254x440 @129,255; tower 73x142 @33,92 top 52; shatter 70x124 @34,89.
+- Cache `20261115c`; next `20261115d`.
