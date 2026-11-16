@@ -19,13 +19,15 @@ if 'fists' in meta['blocks']:
     for dst, src in ((5, 3), (7, 1)):
         for c in (4, 5): a[f0 + dst * ch:f0 + (dst + 1) * ch, c * cw:(c + 1) * cw] = a[f0 + src * ch:f0 + (src + 1) * ch, c * cw:(c + 1) * cw][:, ::-1]
     print('fists block: up-left / down-left punches = mirrored up-right / down-right')
-# (Nov 15, user: "I don't like his walk for top-left and top-right") UP-RIGHT / UP-LEFT walking (cols 0-3: idle + 3 walk frames) = DOWN-RIGHT / DOWN-LEFT's,
-# for every weapon block (the art's back views looked off); the attack frames (cols 4-5) keep their own direction
+# (Nov 16) Top-right / top-left: the art's UP-LEFT row is a proper back 3/4 view, but its UP-RIGHT row is nearly a side profile (face showing),
+# so the two top diagonals didn't match. UP-RIGHT = UP-LEFT mirrored (all 6 columns: idle, walk x3, attack), for every weapon block.
+# (Nov 15 first try, user: "I don't like his walk for top-left and top-right": they copied DOWN-RIGHT / DOWN-LEFT; then he faced DOWN while
+# walking up: "he should be facing top left and top right".) Cells are centred on the feet, so a mirrored cell keeps its anchor.
 for name in ('shotgun', 'knife', 'bat', 'axe', 'fists'):
     if name not in meta['blocks']: continue
-    w0 = meta['blocks'].index(name) * 8 * ch
-    for dst, src in ((3, 1), (5, 7)): a[w0 + dst * ch:w0 + (dst + 1) * ch, 0:4 * cw] = a[w0 + src * ch:w0 + (src + 1) * ch, 0:4 * cw]
-print('walk: up-right / up-left = down-right / down-left (idle + walk) for shotgun knife bat axe fists')
+    w0 = meta['blocks'].index(name) * 8 * ch; src = a[w0 + 5 * ch:w0 + 6 * ch].copy()
+    for c in range(6): a[w0 + 3 * ch:w0 + 4 * ch, c * cw:(c + 1) * cw] = src[:, c * cw:(c + 1) * cw][:, ::-1]
+print('top diagonals: UP-RIGHT = UP-LEFT mirrored (shotgun knife bat axe fists)')
 # rock dust / sparks blended with the magenta background in the skill sheets: pinkish pixels -> warm brown / orange
 for name in ('slam', 'throw', 'fists', 'power'):
     if name not in meta['blocks']: continue

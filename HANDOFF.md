@@ -866,3 +866,9 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Test 36 updated (slow speed, last / hits / miss / wall endings): passes. Blocks 39-end: ALL PASSED (269).
 - KNOWN, PRE-EXISTING: test 38 (Astra safehouse) fails 4 checks ONLY in a full run ("zombies can't get in" = the zombie ends with |dx| < 130, then wall hits 6 -> 6, repair, "a new safehouse"); it passes alone 3/3 and in 33-38 / 36-38 runs. The OLD code (HEAD before the boomerang) fails identically today, and this morning's full run passed -> environment / timing dependent (likely zombie detour logic on real Date.now under a big heap; every makeRoom also leaks a 50ms interval). The failed build used to CRASH the run (s2.life on undefined) so blocks 39+ never ran: guarded now. To look at: make that check test "outside the box" on both axes, and dispose rooms between blocks.
 - Cache `20261114n`; next `20261114o`.
+
+## Nov 16 — Briggs top-right / top-left fixed properly (cache 20261114o)
+- User: after Nov 15's change he faced DOWN-right/left while walking up ("he should be facing top left and top right").
+- Cause of the original complaint: the art's UP-LEFT row is a proper back 3/4 view, its UP-RIGHT row is almost a side profile (face showing) -> mismatched.
+- fix-briggs-slam.py now: UP-RIGHT row (all 6 cols: idle, walk x3, attack) = UP-LEFT mirrored, for shotgun knife bat axe fists; UP-LEFT = the art's own. (The Nov 15 down-row copy is gone.)
+- Cache `20261114o`; next `20261114p`.
