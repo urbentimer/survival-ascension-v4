@@ -374,7 +374,7 @@ const SIENNA = {
   nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.5, boss: 0.75, t: 2 },   // E: lands where she aims (60-450px), 120px burst, 80 (x wave scaling), 50% slower for 2s (bosses 25%)
   decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
   perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there)
-  floor: { r: 300, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 300px round her tower, spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
+  floor: { r: 200, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 200px round her tower (was 300: "the ice is massive"), spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
 };
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)

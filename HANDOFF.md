@@ -993,3 +993,7 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: iceFloorLayout(seed) (mulberry32): staggered rows of patches over the circle (flat ones 70%), 18 small ones round the rim, back to front, the radial patch last; spreads by distance over 0.5s (pop-in), then one cached canvas at 90% alpha; frost twinkles; melts rim-first in 0.75s on "perchEnd". Drawn right after the puddles (ground layer). Throw pose shows on the tower; Q key sends "ult" while perched; HUD "PERCH 14s · Q: down".
 - Tests 54d +4: floor slows 80 / boss 20 / not at 330px; E from the tower; Q again jumps down; R on the perch leaps off.
 - Cache `20261115d`; next `20261115e`.
+
+## Nov 17 — Sienna's ice floor 300 -> 200px (cache 20261115e)
+- User: "the ice is massive. maybe 200px". SIENNA.floor.r 200 (server) + SIEN.floor.R 200 (client). iceFloorLayout now scales everything by k = R / 300 (row / column spacing, jitter, patch size, centre hole) and packs denser (columns every 115k, 24 rim patches at 0.5-0.66k) so the patches' edges end about at R. Test 54d floor check moved to 160 / 230px.
+- Cache `20261115e`; next `20261115f`.

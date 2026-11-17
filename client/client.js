@@ -3268,7 +3268,7 @@ function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.
 // the ice block), the hidden shimmer, the dash streak.
 const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp", floor: "assets/sprites/fx/sienna-floor.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
 const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 },
-  floor: { cw: 275, ch: 434, mx: 137, my: 217, R: 300, spread: 500 } };   // (Nov 17) the Q ice floor: 5 frozen patches 230px across (middle at mx,my); R = the server's SIENNA.floor.r   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
+  floor: { cw: 275, ch: 434, mx: 137, my: 217, R: 200, spread: 500 } };   // (Nov 17) the Q ice floor: 5 frozen patches 230px across (middle at mx,my); R = the server's SIENNA.floor.r   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
 const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
 const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
 const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam
@@ -3375,13 +3375,13 @@ function drawSiennaBeams(now) {   // Glacier Perch: the ice-cyan laser across th
 function iceFloorLayout(seed) {   // (Nov 17) a fresh shuffle every cast: frozen patches packed in staggered rows over the 300px circle (flipped,
   // 0.8-1.15x, random piece), small ones round the rim, drawn back to front; the radial-crack patch last, under her tower. d = how far out (0-1)
   let t = seed >>> 0; const rnd = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
-  const R = SIEN.floor.R, out = [], pick = () => { const u = rnd(); return u < .15 ? 1 : u < .5 ? 2 : u < .65 ? 3 : 4; };   // mostly the flat patches (it should read as a floor), now and then crystals / chunks
-  for (let y = -R + 50, row = 0; y <= R - 40; y += 54, row++) {
-    const half = Math.sqrt(Math.max(0, (R - 70) ** 2 - y * y));
-    for (let x = -half + (row & 1) * 70; x <= half + 1; x += 140) { if (Math.hypot(x, y) < 95) continue; out.push({ x: x + (rnd() - .5) * 50, y: y + (rnd() - .5) * 18, k: pick(), s: .8 + rnd() * .35, f: rnd() < .5 ? -1 : 1 }); }
+  const R = SIEN.floor.R, k = R / 300, out = [], pick = () => { const u = rnd(); return u < .15 ? 1 : u < .5 ? 2 : u < .65 ? 3 : 4; };   // mostly the flat patches (it should read as a floor), now and then crystals / chunks
+  for (let y = -R + 50 * k, row = 0; y <= R - 40 * k; y += 54 * k, row++) {   // (everything scales with the radius: k = R / 300; the patches' edges end about at R)
+    const half = Math.sqrt(Math.max(0, (R - 125 * k) ** 2 - y * y));
+    for (let x = -half + (row & 1) * 57 * k; x <= half + 1; x += 115 * k) { if (Math.hypot(x, y) < 95 * k) continue; out.push({ x: x + (rnd() - .5) * 50 * k, y: y + (rnd() - .5) * 18 * k, k: pick(), s: (.8 + rnd() * .35) * k, f: rnd() < .5 ? -1 : 1 }); }
   }
-  for (let i = 0; i < 18; i++) { const a = (i + rnd() * .6) / 18 * Math.PI * 2, rr = R - 34 - rnd() * 14; out.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, k: 1 + Math.floor(rnd() * 4), s: .4 + rnd() * .16, f: rnd() < .5 ? -1 : 1 }); }
-  out.sort((a, b) => a.y - b.y); out.push({ x: 0, y: 0, k: 0, s: 1.15, f: rnd() < .5 ? -1 : 1 });
+  for (let i = 0; i < 24; i++) { const a = (i + rnd() * .6) / 24 * Math.PI * 2, rr = R - (58 + rnd() * 14) * k; out.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, k: 1 + Math.floor(rnd() * 4), s: (.5 + rnd() * .16) * k, f: rnd() < .5 ? -1 : 1 }); }
+  out.sort((a, b) => a.y - b.y); out.push({ x: 0, y: 0, k: 0, s: 1.15 * k, f: rnd() < .5 ? -1 : 1 });
   for (const q of out) q.d = Math.min(1, Math.hypot(q.x, q.y) / R);
   return out;
 }
@@ -5359,7 +5359,7 @@ const ROSTER = [
     trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, isNew: true, desc: "Ice-cold sharpshooter. One shot every 2 seconds from far across the map: it goes through three zombies and freezes them in their tracks.",
     skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: it bursts in a circle, damaging every zombie in it and making them 50% slower for 2s (bosses 25%)." },
-             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage, and an ice floor spreads out round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
+             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage, and an ice floor spreads out 200px round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
              { k: "R", n: "Ice Decoy", cd: 30, card: "iceDecoy", t: "Dash toward your aim and leave an ice copy of yourself that the zombies around it go after. You're hidden and nothing can hurt you for up to 10s; shooting or using a skill shows you again. The cooldown starts when you're seen." }],
     trait: { n: "Cold Precision", card: "coldPrecision", t: "+43% damage. Her sniper does +50% to bosses and brutes, and every sniper hit chills: 30% slower for 1.5s (bosses 15%)." }, gear: ["sniper", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
