@@ -1004,3 +1004,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 - Client: chill >= 90 on a non-boss = frozen: paler filter + the decoy's ice block (shatter frame 0, scaled to the zombie) over it; frozenZ tracks them and plays the shatter when the ice goes or it dies. Hotbar / roster text updated.
 - Tests 54d: walker + brute frozen, no damage; Butcher 25% slower, no damage, not frozen; Abomination + Pyre Priest take 80 + 25% slower.
 - Cache `20261115f`; next `20261115g`.
+
+## Nov 17 — Sienna's perch: the TOWER takes the hits (cache 20261115g)
+- User: on the platform she takes NO damage; the platform has its own HP bar and when it runs out it breaks and the perch ends. Start at 600.
+- Server: SIENNA.perch.hp 600 (x (1 + 0.08 x (stage - 1)), set in startPerch: m.towerHp / towerMax). armorHit on a perched Sienna -> perchHit(p, raw) and returns 0 (raw after the ordinary-zombie HIT_CAP, before her armour); acid puddles and the Pyre fire dps do the same. perchHit at 0 -> endPerch(p, now, true) (cooldown 60s from then, "perchEnd" carries broke). Tower HP is broadcast ("sienna" k "tower", 10x/s max) instead of a schema field (PlayerState is at 62 of 64 fields). (Named perchHit: towerHit is the base tower.) The old half-damage `taken` is gone.
+- Client: a.tower from "perch" / "tower"; the tower shows its cracked frame under 35%; a cyan bar under her name; HUD row "ICE TOWER" above HEALTH while perched (#towerRow); broken: a big shatter + shake. Roster text updated.
+- Tests 54d: a 100 hit leaves her HP alone and takes the tower 600 -> 500; 650 breaks it (perch over, cooldown 60, perchEnd broke).
+- Cache `20261115g`; next `20261115h`.

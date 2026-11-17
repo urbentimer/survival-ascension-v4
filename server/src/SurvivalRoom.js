@@ -375,7 +375,8 @@ const SIENNA = {
   // (Nov 17, user) NO damage: ordinary zombies FREEZE solid for 2s (stunned; f 0.05 = the client's "frozen" look), bosses 25% slower for 2s;
   // only the fire bosses (burns: the Abomination, the Pyre Priest) take damage from it: 80 x wave scaling. "She is ice and they are fire."
   decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
-  perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there)
+  perch: { life: 20, gap: 1.5, mult: 3, cd: 60, hp: 600 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there).
+  // (Nov 17, user) up there SHE takes no damage: every hit goes into the TOWER (hp 600, +8% a wave like the other scaled numbers); at 0 it breaks and the perch ends
   floor: { r: 200, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 200px round her tower (was 300: "the ice is massive"), spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
 };
 const STATION_R = { tower: 125, gen: 90 };
@@ -1390,7 +1391,7 @@ export class SurvivalRoom extends Room {
         if (dx * dx + dy * dy <= 1 && dps > (burn.get(p) || 0)) burn.set(p, dps);
       }
     }
-    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) * (p.characterClass === "sniper" && this.perchOn(p) ? SIENNA.perch.taken : 1); p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
+    for (const [p, dps] of burn) { if (this.untouchable(p)) continue; const dealt = dps * dt * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, dealt); continue; } p.hp -= dealt; p.damageTaken += dealt; this.acidTouch.set(p.sessionId, now); if (p.hp <= 0) this.downPlayer(p); }
   }
   // Zombies gently push apart so packs spread out instead of stacking into one blob (spatial grid keeps it cheap).
   separateZombies() {   // keep the crowd from stacking: 64px buckets (integer keys), plain numbers read once per zombie
@@ -2649,7 +2650,7 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: alpha ? 1 : 0 });
     return z;
   }
-  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); if (p.characterClass === "sniper" && this.perchOn(p)) raw *= SIENNA.perch.taken; return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
+  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, raw); return 0; } return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
   hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000, brood: 0 }; this.hiveMem.set(z.id, m);
@@ -3087,15 +3088,21 @@ export class SurvivalRoom extends Room {
   }
   startPerch(p, now) {   // Q: up on the ice tower for 20s, sniper in hand (full mag, no reload, no ammo used)
     const m = this.siennaMem(p); m.perchUntil = now + SIENNA.perch.life * 1000; m.beamAt = 0;
+    m.towerMax = m.towerHp = Math.round(SIENNA.perch.hp * (1 + (this.state.stage - 1) * 0.08)); m.towerSent = m.towerHp;
     if (p.activeSlot !== 2 && p.primary) this.setSlot(p, 2);
     p.reloadLeft = 0; p.mag = Math.max(p.mag, 1); p.perch = true; applyLoadout(p);
-    this.broadcast("sienna", { k: "perch", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), t: SIENNA.perch.life, seed: 1 + Math.floor(Math.random() * 1e9) });   // seed: the ice floor's shuffle (the same on every screen)
+    this.broadcast("sienna", { k: "perch", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), t: SIENNA.perch.life, seed: 1 + Math.floor(Math.random() * 1e9), hp: m.towerHp });   // seed: the ice floor's shuffle (the same on every screen)
     this.state.message = `${p.name}: GLACIER PERCH!`;
   }
-  endPerch(p, now) {
-    const m = this.siennaMem(p); m.perchUntil = 0; p.perch = false; applyLoadout(p);
+  perchHit(p, dmg) {   // a hit on Sienna up on her perch: the tower takes it; at 0 it shatters and she's back on the ground
+    const m = this.siennaMem(p); if (!(m.perchUntil > Date.now())) return;
+    m.towerHp = Math.max(0, (m.towerHp ?? 0) - dmg);
+    if (m.towerHp <= 0) { this.endPerch(p, Date.now(), true); this.state.message = `${p.name}'s ice tower broke!`; }
+  }
+  endPerch(p, now, broke = false) {
+    const m = this.siennaMem(p); m.perchUntil = 0; m.towerHp = 0; p.perch = false; applyLoadout(p);
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + SIENNA.perch.cd * 1000; this.ultInfo.set(p.sessionId, info);
-    this.broadcast("sienna", { k: "perchEnd", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) });
+    this.broadcast("sienna", { k: "perchEnd", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), broke });
   }
   perchShot(p, aim) {   // the map-length laser: every zombie on the line (bosses too), 3x her sniper hit, chills them all
     const P = SIENNA.perch, m = this.siennaMem(p), now = Date.now();
@@ -3120,6 +3127,7 @@ export class SurvivalRoom extends Room {
         if (m.hideUntil) { if (!p.alive || now >= m.hideUntil) this.iceReveal(p, now); else p.shadow = Math.ceil((m.hideUntil - now) / 100) / 10; }
         if (m.decoy && now >= m.decoy.until) { this.broadcast("sienna", { k: "shatter", id: p.sessionId, x: Math.round(m.decoy.x), y: Math.round(m.decoy.y) }); m.decoy = null; }
         if (m.perchUntil && (now >= m.perchUntil || !p.alive)) this.endPerch(p, now);
+        if (m.perchUntil > now && m.towerHp !== m.towerSent && now - (m.towerAt || 0) >= 100) { m.towerSent = m.towerHp; m.towerAt = now; this.broadcast("sienna", { k: "tower", id: p.sessionId, hp: Math.ceil(m.towerHp), max: m.towerMax }); }   // the tower's bar (10x a second at most)
         if (m.perchUntil > now) {   // the ice floor round her tower: every zombie on it crawls (re-applied each tick, wears off 0.3s after it steps off)
           const F = SIENNA.floor, r = F.r * Math.min(1, (now - (m.perchUntil - SIENNA.perch.life * 1000)) / (F.grow * 1000)), r2 = r * r, C = { f: F.f, boss: F.boss, t: 0.3 };
           for (const z of this.state.zombies.values()) { const dx = z.x - p.x, dy = z.y - p.y; if (dx * dx + dy * dy <= r2) this.chillZombie(z, C, now); }
@@ -3176,7 +3184,7 @@ export class SurvivalRoom extends Room {
       if (!p || !p.alive || now >= b.until) { this.pBurn.delete(sid); continue; }
       if (this.untouchable(p)) continue;
       if (p.armor === 2) { this.pBurn.delete(sid); continue; }   // the Pyre Plate: fireproof
-      const dealt = b.dps * dt * (1 - (p.armorPct || 0)) * (p.characterClass === "sniper" && this.perchOn(p) ? SIENNA.perch.taken : 1); p.hp -= dealt; p.damageTaken += dealt;
+      const dealt = b.dps * dt * (1 - (p.armorPct || 0)); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, dealt); continue; } p.hp -= dealt; p.damageTaken += dealt;
       if (p.hp <= 0) { this.pBurn.delete(sid); this.downPlayer(p); }
     }
   }

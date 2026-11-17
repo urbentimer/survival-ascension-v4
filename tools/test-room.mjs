@@ -1436,7 +1436,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   ok(room.perchOn(p) && p.activeSlot === 2 && Math.abs(p.ultActive - 20) < .2 && Math.abs(1000 / p.fireRate - 1500) < 1, `Q: up on the perch (${p.ultActive}s), sniper in hand, one shot / 1.5s`);
   const x0 = p.x; send(A, "input", { dx: 1, dy: 0, s: 1, dt: 50 }); send(A, "dash", { dx: 1, dy: 0, s: 2 }); send(A, "slot", { n: 1 });
   ok(p.x === x0 && p.activeSlot === 2, "can't move, dash or switch weapons up there");
-  ok(Math.abs(room.armorHit(p, 100) - 50) <= 1, `half damage on the perch (${room.armorHit(p, 100)} of 100)`);
+  { const ms = room.sienna.get("A"), h0 = ms.towerHp, hp0 = p.hp, dealt = room.armorHit(p, 100);
+    ok(h0 === 600 && dealt === 0 && ms.towerHp === h0 - 100 && p.hp === hp0, `she takes nothing up there, the tower does (${h0} -> ${ms.towerHp}); her HP ${Math.round(p.hp)}`); ms.towerHp = h0; }
   const far = mk("walker", 2900, 1000), boss = mk("butcher", 2000, 1000, true), side = mk("walker", 2000, 1300), mag0 = p.mag;
   send(A, "shoot", { a: 0 });
   ok(Math.abs((9999 - far.hp) - p.damage * 3) < 1 && Math.abs((9999 - boss.hp) - p.damage * 3) < 1 && side.hp === 9999 && p.mag === mag0 && far.chill === 30, `laser: through the boss to the far side of the map (${Math.round(9999 - far.hp)} = 3x ${p.damage}), chills, no ammo`);
@@ -1451,6 +1452,8 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "ult", { a: 0 }); tick(); ok(up2 && !room.perchOn(p) && Math.abs(p.ultCd - 60) < .2, `Q again: she jumps down, cooldown ${p.ultCd}s from now`);
   room.ultInfo.get("A").readyAt = 0; tick(); send(A, "ult", { a: 0 }); tick(); { const ms2 = room.sienna.get("A"); ms2.rReady = 0; ms2.hideUntil = 0; } const px0 = p.x, up3 = room.perchOn(p);
   send(A, "skill2", { a: 0 }); for (let i = 0; i < 6; i++) tick(); ok(up3 && !room.perchOn(p) && p.shadow > 0 && p.x > px0 + 200, `R up on the perch: she leaps off into the decoy dash (x +${Math.round(p.x - px0)})`);
+  room.ultInfo.get("A").readyAt = 0; tick(); send(A, "ult", { a: 0 }); tick(); const up4 = room.perchOn(p);
+  room.armorHit(p, 650); tick(); ok(up4 && !room.perchOn(p) && Math.abs(p.ultCd - 60) < .2 && events.some(e => e.type === "sienna" && e.k === "perchEnd" && e.broke), `600 damage breaks the tower: she's back on the ground, Q cooldown ${p.ultCd}s`);
   // no other guns: the shop won't sell her one and she leaves weapon drops for the others
   room.state.phase = "cleared"; p.currency = 999; send(A, "buy", { id: "shotgun" }); ok(p.owned === "sniper" && p.currency === 999, "the shop won't sell her another gun");
   room.state.phase = "playing"; room.state.loot.clear(); room.state.zombies.clear(); const zl = mk("walker", p.x + 5, p.y);

@@ -466,6 +466,7 @@ function renderHud(me, players) {
   if (!me) return;
   // bottom left: you
   txt("hpText", Math.ceil(me.hp) + " / " + me.maxHp); sty("hpBar", "width", pct(me.hp, me.maxHp));
+  { const tw = me.characterClass === "sniper" && me.ultActive > 0 ? siennaAnim.get(myId)?.tower : null; $("towerRow")?.classList.toggle("hidden", !tw); if (tw) { txt("towerText", Math.ceil(tw.hp) + " / " + tw.max); sty("towerBar", "width", pct(tw.hp, tw.max)); } } /* (Nov 17) Sienna's ice tower */
   { const bt = $("betaTag"); if (bt && bt.classList.contains("hidden") === !!state.beta) bt.classList.toggle("hidden", !state.beta); }   // BETA MODE: 100x health badge
   const maxLv = me.level >= MAX_LEVEL; txt("hudLevel", "LV " + me.level); txt("xpText", maxLv ? "MAX LEVEL" : me.xp + " / " + me.xpNext + " XP"); sty("xpBar", "width", maxLv ? "100%" : pct(me.xp, me.xpNext));
   html("hudGold", icon("gold") + (me.currency || 0) + "g"); txt("hudDef", "DEF " + (me.defence || 0)); txt("hudClass", String(me.characterClass).toUpperCase());
@@ -3279,8 +3280,9 @@ function onSienna(m) {
   else if (m.k === "decoy") { a.dashAt = now; a.dashA = m.a; siennaDecoys.set(m.id, { x: m.x, y: m.y, t0: now, until: now + m.t * 1000, a: m.a }); sfxList.push({ ...m, k: "dash", t: now }); playSfx("zap", m.x, m.y, .5); }
   else if (m.k === "reveal") sfxList.push({ ...m, t: now });
   else if (m.k === "shatter") { siennaDecoys.delete(m.id); sfxList.push({ ...m, t: now }); playSfx("zhit", m.x, m.y, .6); }
-  else if (m.k === "perch") { a.perchAt = now; a.floor = { seed: m.seed || 1, t0: now, x: m.x, y: m.y, list: iceFloorLayout(m.seed || 1) }; playSfx("build", m.x, m.y, .8); if (mine) shake(4, 200); }
-  else if (m.k === "perchEnd") { a.perchAt = 0; if (a.floor) sfxList.push({ k: "floorEnd", x: a.floor.x, y: a.floor.y, list: a.floor.list, t: now }); a.floor = null; sfxList.push({ ...m, k: "towerEnd", t: now }); playSfx("zhit", m.x, m.y, .8); }
+  else if (m.k === "tower") a.tower = { hp: m.hp, max: m.max };   // (Nov 17) the tower's HP (it takes every hit meant for her)
+  else if (m.k === "perch") { a.perchAt = now; a.tower = { hp: m.hp || 600, max: m.hp || 600 }; a.floor = { seed: m.seed || 1, t0: now, x: m.x, y: m.y, list: iceFloorLayout(m.seed || 1) }; playSfx("build", m.x, m.y, .8); if (mine) shake(4, 200); }
+  else if (m.k === "perchEnd") { a.perchAt = 0; a.tower = null; if (m.broke) { sfxList.push({ k: "shatter", x: m.x, y: m.y - SIEN.tower.top * .6, sc: 1.4, t: now }); if (mine) shake(7, 260); } /* broken: the ice bursts */ if (a.floor) sfxList.push({ k: "floorEnd", x: a.floor.x, y: a.floor.y, list: a.floor.list, t: now }); a.floor = null; sfxList.push({ ...m, k: "towerEnd", t: now }); playSfx("zhit", m.x, m.y, .8); }
   else if (m.k === "beam") { a.beamAt = now; sfxList.push({ ...m, t: now }); playSfx("zap", m.x, m.y, 1); playSfx("rifle", m.x, m.y, .8); if (mine) shake(5, 180); }
 }
 function sienFrame(im, G, k, x, y, alpha = 1, sc = 1) {   // frame k of a one-row atlas, its ground point at (x, y)
@@ -3290,7 +3292,8 @@ function sienFrame(im, G, k, x, y, alpha = 1, sc = 1) {   // frame k of a one-ro
 const perchLift = (p, now) => { if (!(p.characterClass === "sniper" && p.ultActive > 0 && p.alive)) return 0; const t0 = siennaAnim.get(p.sessionId)?.perchAt; return t0 ? SIEN.tower.top * Math.min(1, Math.max(0, (now - t0) / SIEN.tower.rise)) : SIEN.tower.top; };
 function drawPerchTower(p, now) {   // the ice tower under her feet: it grows (frames 0-3), stands (4; its sparkle frame 3 now and then), cracks in the last 3s (5)
   const t0 = siennaAnim.get(p.sessionId)?.perchAt, age = t0 ? now - t0 : 1e9;
-  const k = age < SIEN.tower.rise ? Math.min(3, Math.floor(age / (SIEN.tower.rise / 4))) : p.ultActive < 3 ? 5 : (now % 2400) < 160 ? 3 : 4;
+  const tw = siennaAnim.get(p.sessionId)?.tower, low = tw && tw.hp < tw.max * .35;   // badly hurt: it shows its cracks (a warning before it breaks)
+  const k = age < SIEN.tower.rise ? Math.min(3, Math.floor(age / (SIEN.tower.rise / 4))) : p.ultActive < 3 || low ? 5 : (now % 2400) < 160 ? 3 : 4;
   sienFrame(sienImgs.tower, SIEN.tower, k, p.x, p.y + SPR.feet - 2);
 }
 function siennaCast(p, now, row) {   // the skill poses: { blk, col, row? } or null
@@ -3566,6 +3569,8 @@ function drawSurvivorLabels(p) {
   }
   const rideV = state?.vehicles?.get(p.sessionId), nameLift = rideV?.kind === "mecha" ? 46 + 26 * (rideV.phase === "ride" ? 1 : Math.max(0, 1 - rideV.left)) : rideV?.phase === "ride" ? (rideV.kind === "heli" ? 116 : 76) : 46 + (DIR8[p.characterClass]?.lift || 0) + perchLift(p, gnow());   // above Sofea's tank / helicopter / mecha / Sienna's ice tower
   drawLabel(p.name + (p.sessionId === myId ? " (YOU)" : ""), p.x, p.y - nameLift, "#f2ead9");
+  if (p.characterClass === "sniper" && p.ultActive > 0 && p.alive) { const tw = siennaAnim.get(p.sessionId)?.tower; if (tw) { const f = Math.max(0, Math.min(1, tw.hp / tw.max)), bx = Math.round(p.x - 22), by = Math.round(p.y - nameLift + 8);   // (Nov 17) her ice tower's HP under her name
+    ctx.fillStyle = "rgba(6,14,20,.75)"; ctx.fillRect(bx - 1, by - 1, 46, 6); ctx.fillStyle = f < .35 ? "#d9f6ff" : "#69dcff"; ctx.fillRect(bx, by, Math.round(44 * f), 4); } }
   if (awayIds.has(p.sessionId)) drawLabel("RECONNECTING…", p.x, p.y - nameLift - 13, "#9fd8ff");   // their connection dropped: the server holds the seat 30s
   if (!p.alive) { const safe = !p.bledOut && inSafehouse(p); drawLabel(p.bledOut ? "BLED OUT · BACK NEXT WAVE" : safe ? "DOWN · SAFE (PAUSED " + Math.ceil(p.bleedout || 0) + "s) · F TO REVIVE" : "DOWN " + Math.ceil(p.bleedout || 0) + "s · F TO REVIVE", p.x, p.y + 32, safe ? "#8ff0ff" : "#ff7568"); }
 }
@@ -5363,7 +5368,7 @@ const ROSTER = [
     trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, isNew: true, desc: "Ice-cold sharpshooter. One shot every 2 seconds from far across the map: it goes through three zombies and freezes them in their tracks.",
     skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: every zombie in the burst freezes solid for 2s and bosses are 25% slower. It does no damage, except to the fire bosses (the Abomination and the Pyre Priest): ice beats fire." },
-             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage, and an ice floor spreads out 200px round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
+             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move, and nothing hurts you: the tower takes every hit (600 HP; when it breaks you're back on the ground). An ice floor spreads out 200px round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
              { k: "R", n: "Ice Decoy", cd: 30, card: "iceDecoy", t: "Dash toward your aim and leave an ice copy of yourself that the zombies around it go after. You're hidden and nothing can hurt you for up to 10s; shooting or using a skill shows you again. The cooldown starts when you're seen." }],
     trait: { n: "Cold Precision", card: "coldPrecision", t: "+43% damage. Her sniper does +50% to bosses and brutes, and every sniper hit chills: 30% slower for 1.5s (bosses 15%)." }, gear: ["sniper", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",
