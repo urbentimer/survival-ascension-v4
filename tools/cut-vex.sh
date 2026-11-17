@@ -9,6 +9,6 @@ python3 tools/prep-vex.py
 CELL=176,88,88,80 SPRITE_H=${SPRITE_H:-57} SMOOTH=1 SHARPEN=${SHARPEN:-60} ENHANCE=${ENHANCE:-1.18,1.08,1.04,0} python3 tools/extract-directions.py toxicologist \
   dartrifle=$B/1-rifle.png%229x229 knife=$B/2-knife.png%229x229 throw=$B/3-throw.png!4%280.5x280.4 mist=$B/4-mist.png!4%280.5x280.4 pandemic=$B/5-pandemic.png%229x229
 python3 tools/finish-briggs.py toxicologist dartrifle knife pandemic
-python3 tools/extract-vex-fx.py
+python3 tools/extract-vex-v2.py   # (kit v2: smoke kit, burst, rise, the E / R / Q cards)
 python3 tools/extract-heroes.py tools/art/hero && python3 tools/extract-faces.py tools/art/faces
 rm -f client/assets/hero/commander.webp client/assets/hero/medic.webp client/assets/portraits/commander.webp client/assets/portraits/medic.webp

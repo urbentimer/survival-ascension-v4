@@ -383,19 +383,21 @@ const SIENNA = {
   // (Nov 17, user) up there SHE takes no damage: every hit goes into the TOWER (hp 600, +8% a wave like the other scaled numbers); at 0 it breaks and the perch ends
   floor: { r: 200, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 200px round her tower (was 300: "the ice is massive"), spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
 };
-// VEX (Nov 17, the user's kit: project doc claude/vex-kit.md). The toxicologist: TOXIN DART RIFLE only (+ knife; no pistol, no shop guns, he
-// leaves weapon drops for the others). TOXIN: every poison hit adds a stack to the zombie (max 5); each stack does damage over time (refreshed
-// by every new stack, gone 4s after the last) and the zombie glows green. CHAIN REACTION (trait): a poisoned zombie that dies bursts into a
-// puff: 2 stacks on every zombie round it. E TOXIC VIAL: thrown where he aims, a poison cloud for 4s (2 stacks when it bursts, +1 every 0.5s
-// inside). R ANTIDOTE MIST: a green-gold mist round him: every teammate in it (him too) heals 30% of their max HP over 3s and stuns, slows and
-// burning are cleared (works while stunned). Q PANDEMIC (100 kills, 60s cooldown from when it ends): gas mask on, a 20s toxic aura follows him
-// (+1 stack every 0.5s on everything in it); when it ends, CATALYST: every poisoned zombie pops for all its poison left x2 (stacks used up).
+// VEX (Nov 17; kit v2 the same evening, project doc claude/vex-kit.md). The toxicologist: TOXIN DART RIFLE only (+ knife; no pistol, no shop
+// guns, he leaves weapon drops for the others). TOXIN: every poison hit adds a stack to the zombie (max 5); each stack does damage over time
+// (refreshed by every new stack, gone 4s after the last) and the zombie glows green. CHAIN REACTION (trait): a poisoned zombie that dies bursts:
+// 2 stacks on every zombie round it. R POISON TRAIL (like Singed): for 30s he leaves toxic smoke behind him (a puff every 25px he walks, or every
+// 0.6s standing still; each lasts 3s): zombies in it +1 stack every 0.5s, teammates in it heal 2% max HP a second; 30s cooldown from when it ends.
+// E MUTAGEN SYRINGE: into the first zombie on his aim line: it swells (can't move) 2s then BURSTS: 5 stacks on everything within 150px (it dies
+// early = it bursts early); a boss takes a big hit + the burst instead. A miss only costs 1.5s. Q PATIENT ZERO (100 kills, 60s cooldown from when
+// it ends): for 20s every poisoned zombie that dies gets back up INFECTED (0.7s later): it hunts and bites the horde (damage + a stack) for 8s,
+// at most 10 per Vex, never a boss. The infected are robots (kind "infected", look = the zombie kind they were); zombies attack them.
 const VEX = {
   tox: { max: 5, dps: 4, len: 4 },   // per stack: 4 damage a second (x the wave scaling, like the skills): 5 stacks = 20/s
   chain: { r: 100, stacks: 2 },
-  vial: { cd: 4, range: 420, min: 60, flight: 0.45, r: 110, life: 4, every: 0.5, burst: 2 },
-  mist: { cd: 25, r: 350, heal: 0.3, time: 3 },
-  pan: { life: 20, cd: 60, r: 220, every: 0.5, catalyst: 2 },
+  trail: { life: 30, cd: 30, step: 25, still: 0.6, puff: 3, r: 45, every: 0.5, heal: 0.02 },
+  syr: { cd: 8, miss: 1.5, range: 450, swell: 2, r: 150, stacks: 5, boss: 250 },
+  pz: { life: 20, cd: 60, inf: 8, max: 10, rise: 0.7, bite: 18, rate: 0.8, hp: 0.6, speed: 1.15, reach: 34 },
 };
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
@@ -559,7 +561,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set(); this.zStuck = new Map(); this.away = new Set();   // away: survivors whose connection dropped (30s to reconnect)
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.gearLoot = new Map(); this.tox = new Map(); this.vex = new Map(); this.vexClouds = []; this.vexHeals = []; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.gearLoot = new Map(); this.tox = new Map(); this.vex = new Map(); this.vexPuffs = []; this.vexPuffNext = 0; this.vexSyr = new Map(); this.vexRise = []; this.vexInf = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -574,6 +576,7 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) if (p.characterClass === "slasher") { arshanLoadout(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "sniper") { siennaLoadout(p); this.mags.delete(p.sessionId + ":sniper"); this.loadMag(p); applyLoadout(p); }
+      this.vexPuffs = []; this.vexSyr.clear(); this.vexRise = []; this.vexInf.clear();
       for (const p of this.state.players.values()) if (p.characterClass === "toxicologist") { vexLoadout(p); this.mags.delete(p.sessionId + ":dartrifle"); this.loadMag(p); applyLoadout(p); this.vex.delete(p.sessionId); }
       for (const p of this.state.players.values()) if (p.characterClass === "operator") { sofeaLoadout(p); this.mags.delete(p.sessionId + ":smg"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
@@ -768,7 +771,7 @@ export class SurvivalRoom extends Room {
       else if (p.characterClass === "operator") this.mechaKey(p);   // Sofea's R: get in / out of the mecha
       else if (p.characterClass === "juggernaut") this.bareKnuckle(p);   // (Nov 13) Briggs's R: Bare Knuckle
       else if (p.characterClass === "sniper") this.iceDecoy(p);   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
-      else if (p.characterClass === "toxicologist") this.antidoteMist(p); });   // (Nov 17) Vex's R: Antidote Mist (the team heal)   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
+      else if (p.characterClass === "toxicologist") this.poisonTrail(p); });   // (Nov 17 v2) Vex's R: Poison Trail
     // Sofea's mecha: right click = lightsaber swing
     this.onMessage("mechaSlash", (client, data) => { const p = this.state.players.get(client.sessionId), a = Number(data?.a);
       if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
@@ -1333,13 +1336,13 @@ export class SurvivalRoom extends Room {
       if (cls === "sniper") { if (p.stunned > 0 || this.sienna.get(p.sessionId)?.dash) return; if (p.shadow > 0) this.iceReveal(p); }   // a skill reveals her (the throw happens below)
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
       if (cls === "toxicologist" && p.stunned > 0) return;
-      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?SIENNA.nade.cd:cls==="toxicologist"?VEX.vial.cd:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
+      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?SIENNA.nade.cd:cls==="toxicologist"?VEX.syr.cd:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
     p.abilityCooldown=cooldown;
     if(cls==="engineer") this.summonRobot(p, data?.kind);
     else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="sniper") this.cryoGrenade(p, Number(data?.d));
-    else if(cls==="toxicologist") this.toxicVial(p, Number(data?.d));
+    else if(cls==="toxicologist") this.mutagenSyringe(p);
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
     else {p.buffDamage=MARCUS.rush.dmg;p.buffRate=MARCUS.rush.rate;p.skillT=MARCUS.rush.t;applyLoadout(p);this.broadcast("rush",{id:p.sessionId});}   // ends in updateMarcus
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
@@ -1460,7 +1463,7 @@ export class SurvivalRoom extends Room {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: Math.max(0, (info.readyAt || 0) - now) }; }   // Q cooldown counts from the press (Nov 6)
     if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
-    if (p.characterClass === "toxicologist") { const m = this.vex.get(p.sessionId), active = m ? Math.max(0, m.panUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + VEX.pan.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // Pandemic: the cooldown starts when it ends
+    if (p.characterClass === "toxicologist") { const m = this.vex.get(p.sessionId), active = m ? Math.max(0, m.pzUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + VEX.pz.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // Patient Zero: the cooldown starts when it ends
     if (p.characterClass === "sniper") { const m = this.sienna.get(p.sessionId), active = m ? Math.max(0, m.perchUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + SIENNA.perch.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // the perch: Q blocked while up; 60s cooldown from when she comes down
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.fort.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
@@ -1480,9 +1483,9 @@ export class SurvivalRoom extends Room {
       info.summonedAt = now; info.readyAt = now + MARCUS.frag.cd * 1000; this.ultInfo.set(p.sessionId, info); this.fragBarrage(p, Number(data?.d)); return;
     }
     if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher", "sniper", "toxicologist"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
-    if (p.characterClass === "toxicologist") {   // Vex: Pandemic (20s aura, then the Catalyst; the cooldown starts when it ends)
+    if (p.characterClass === "toxicologist") {   // Vex: Patient Zero (20s; the cooldown starts when it ends)
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !p.alive) return;
-      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startPandemic(p, now); return;
+      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startPatientZero(p, now); return;
     }
     if (p.characterClass === "sniper") {   // Sienna: Glacier Perch (the cooldown starts when she comes down)
       if (this.perchOn(p)) { this.endPerch(p, Date.now()); return; }   // (Nov 17) Q again while up there: she jumps down (cooldown from now)
@@ -2547,6 +2550,7 @@ export class SurvivalRoom extends Room {
   // A turret or robot breaks: wreck animation, and robots start the owner's ult timer when the last one goes.
   destroyMachine(m, type) {
     if (ASTRA_UNITS.has(m.kind)) { this.removeUnit(m); return; }
+    if (m.kind === "infected") { this.state.robots.delete(m.id); this.vexInf.delete(m.id); this.broadcast("vex", { k: "infEnd", x: Math.round(m.x), y: Math.round(m.y) }); return; }
     if (type === "turret") this.state.structures.delete(m.id); else this.state.robots.delete(m.id);
     this.broadcast("wreck", { kind: type === "turret" ? "turret" : m.kind, x: Math.round(m.x), y: Math.round(m.y) });
     if (type === "turret") { const info = this.ultInfo.get(m.ownerId) || { summonedAt: 0 }; info.readyAt = Date.now() + ULT_CD * 1000; this.ultInfo.set(m.ownerId, info); }
@@ -2587,6 +2591,7 @@ export class SurvivalRoom extends Room {
     for (const r of [...this.state.robots.values()]) {
       const owner = this.state.players.get(r.ownerId);
       if (!owner) { this.state.robots.delete(r.id); continue; }
+      if (r.kind === "infected") { this.infectedThink(r, owner, dt, now); continue; }   // (Nov 17) Vex's Patient Zero
       if (ASTRA_UNITS.has(r.kind)) continue;   // Astra's people have their own brains (updateAstra)
       const R = ROBOT[r.kind], home = { x: r.hx, y: r.hy };
       let goal = home; r.act = "";
@@ -3183,8 +3188,9 @@ export class SurvivalRoom extends Room {
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
-  // ---------- VEX (Nov 17): Toxin stacks, Chain Reaction, Toxic Vial (E), Antidote Mist (R), Pandemic + Catalyst (Q). Numbers: VEX ----------
-  vexMem(p) { let m = this.vex.get(p.sessionId); if (!m) { m = { rReady: 0, panUntil: 0, panNext: 0 }; this.vex.set(p.sessionId, m); } return m; }
+  // ---------- VEX (Nov 17, kit v2): Toxin stacks, Chain Reaction, Poison Trail (R), Mutagen Syringe (E), Patient Zero (Q). Numbers: VEX ----------
+  vexMem(p) { let m = this.vex.get(p.sessionId); if (!m) { m = { trailUntil: 0, trailReady: 0, drop: null, pzUntil: 0 }; this.vex.set(p.sessionId, m); } return m; }
+  vexCdr(p) { return (1 - (p.cdr || 0)) * (1 - Math.min(.5, (p.gearSt?.cdr || 0) / 100)); }
   addTox(z, p, n, now = Date.now()) {   // n Toxin stacks on a zombie (max 5); every new stack refreshes them all for 4s; the last poisoner gets the credit
     if (!p || !this.state.zombies.has(z.id) || z.kind === "minebeast" && z.act === "under") return;
     let t = this.tox.get(z.id); if (!t || t.until <= now) { t = { n: 0, until: 0, owner: p.sessionId }; this.tox.set(z.id, t); }
@@ -3196,43 +3202,61 @@ export class SurvivalRoom extends Room {
     if ((this.vexPuffN = now - (this.vexPuffAt || 0) > 250 ? 1 : (this.vexPuffN || 0) + 1) === 1) this.vexPuffAt = now;
     if (this.vexPuffN <= 10) this.broadcast("vex", { k: "puff", x: Math.round(z.x), y: Math.round(z.y) });   // (at most 10 puffs a quarter second on screen)
   }
-  toxicVial(p, dist) {   // E: lobbed to the aimed spot (over walls); after the flight a poison cloud sits there for 4s
-    const V = VEX.vial, a = p.aim || 0, now = Date.now(), d = clamp(Number.isFinite(dist) && dist > 0 ? dist : V.range * .7, V.min, V.range);
-    const x = clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20), y = clamp(p.y + Math.sin(a) * d, 20, this.A.height - 20), start = now + V.flight * 1000;
-    this.vexClouds.push({ x, y, r: V.r, start, until: start + V.life * 1000, next: start, first: true, owner: p.sessionId });
-    this.broadcast("vex", { k: "vial", id: p.sessionId, x0: Math.round(p.x), y0: Math.round(p.y), x: Math.round(x), y: Math.round(y), fl: V.flight, life: V.life, r: V.r });
+  poisonTrail(p) {   // R: 30s of toxic smoke behind him; the cooldown starts when it ends
+    const m = this.vexMem(p), now = Date.now(); if (!p.alive || m.trailUntil > now || m.trailReady > now) return false;
+    m.trailUntil = now + VEX.trail.life * 1000; m.drop = { x: p.x, y: p.y, t: 0 };
+    this.broadcast("vex", { k: "trail", id: p.sessionId, t: VEX.trail.life });
+    this.state.message = `${p.name}: POISON TRAIL!`; return true;
   }
-  antidoteMist(p) {   // R: the team heal. Works while stunned (it clears the stun)
-    const M = VEX.mist, m = this.vexMem(p), now = Date.now(); if (!p.alive || m.rReady > now || this.state.vehicles.has(p.sessionId)) return false;
-    m.rReady = now + M.cd * (1 - (p.cdr || 0)) * (1 - Math.min(.5, (p.gearSt?.cdr || 0) / 100)) * 1000;
-    let n = 0;
-    for (const q of this.state.players.values()) {
-      if (!q.alive || distance(p, q) > M.r) continue;
-      this.vexHeals = this.vexHeals.filter(h => h.sid !== q.sessionId); this.vexHeals.push({ sid: q.sessionId, per: q.maxHp * M.heal / M.time, until: now + M.time * 1000 });
-      q.stunned = 0; q.slowed = 0; this.pBurn.delete(q.sessionId); n++;
-      this.broadcast("heal", { id: q.sessionId });
+  mutagenSyringe(p) {   // E: into the first zombie on his aim line: it swells 2s (can't move), then bursts; a boss takes a big hit instead
+    const S = VEX.syr, a = p.aim || 0, now = Date.now(), wall = this.wallDist(p.x, p.y, a, S.range), x0 = Math.round(p.x), y0 = Math.round(p.y);
+    const hit = this.rayHits(p, a, wall).find(h => !(h.z.kind === "minebeast" && h.z.act === "under") && !this.vexSyr.has(h.z.id));
+    if (!hit) { p.abilityCooldown = S.miss; this.broadcast("vex", { k: "syr", id: p.sessionId, x0, y0, x: Math.round(p.x + Math.cos(a) * wall), y: Math.round(p.y + Math.sin(a) * wall), miss: true }); return; }   // a miss only costs 1.5s
+    const z = hit.z, big = !!z.boss || z.kind === "minebeast";
+    this.vexSyr.set(z.id, { until: now + S.swell * 1000, owner: p.sessionId, big });
+    if (!big) this.stunZombie(z, S.swell + .3, now);
+    this.broadcast("vex", { k: "syr", id: p.sessionId, zid: z.id, x0, y0, x: Math.round(z.x), y: Math.round(z.y), big, t: S.swell });
+  }
+  vexBurst(z, ownerId) {   // the Mutagen burst: 5 Toxin stacks on every zombie round it
+    const p = this.state.players.get(ownerId); if (!p) return; const S = VEX.syr, now = Date.now();
+    for (const o of [...this.state.zombies.values()]) if (hyp(o.x - z.x, o.y - z.y) < S.r + (o.radius || 14) * .5) this.addTox(o, p, S.stacks, now);
+    this.broadcast("vex", { k: "burst", x: Math.round(z.x), y: Math.round(z.y) });
+  }
+  startPatientZero(p, now) {
+    const m = this.vexMem(p); m.pzUntil = now + VEX.pz.life * 1000;
+    this.broadcast("vex", { k: "pz", id: p.sessionId, t: VEX.pz.life });
+    this.state.message = `${p.name}: PATIENT ZERO! The poisoned dead get back up.`;
+  }
+  endPatientZero(p, now) {
+    const m = this.vexMem(p); m.pzUntil = 0;
+    const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + VEX.pz.cd * 1000; this.ultInfo.set(p.sessionId, info);
+    this.broadcast("vex", { k: "pzEnd", id: p.sessionId });
+  }
+  vexInfect(z, tx) {   // PATIENT ZERO: a poisoned zombie that dies while a Vex's Q is on gets back up INFECTED (never a boss)
+    if (z.boss || z.kind === "minebeast" || !this.vex.size) return; const now = Date.now();
+    let p = this.state.players.get(tx.owner); if (!(this.vex.get(tx.owner)?.pzUntil > now)) { p = null; for (const [sid, m] of this.vex) if (m.pzUntil > now) { p = this.state.players.get(sid); break; } }
+    if (!p) return;
+    let n = this.vexRise.filter(r => r.owner === p.sessionId).length; for (const r of this.state.robots.values()) if (r.kind === "infected" && r.ownerId === p.sessionId) n++;
+    if (n >= VEX.pz.max) return;
+    this.vexRise.push({ x: z.x, y: z.y, look: z.kind, r: z.radius || 14, hp: z.maxHp, speed: z.speed, at: now + VEX.pz.rise * 1000, owner: p.sessionId });
+    this.broadcast("vex", { k: "rise", x: Math.round(z.x), y: Math.round(z.y), look: z.kind });
+  }
+  spawnInfected(p, s, now) {
+    const r = new RobotState(); r.id = `v${++this.robotSeq}`; r.kind = "infected"; r.look = s.look; r.ownerId = p.sessionId;
+    r.x = s.x; r.y = s.y; r.hx = s.x; r.hy = s.y; r.hp = r.maxHp = clamp((s.hp || 100) * VEX.pz.hp, 60, 600); r.aim = 0; r.face = 0; r.act = ""; r.tgt = ""; r.uses = 0;
+    this.state.robots.set(r.id, r);
+    this.vexInf.set(r.id, { until: now + VEX.pz.inf * 1000, next: now + 250, speed: clamp(s.speed || 80, 60, 170) * VEX.pz.speed, reach: VEX.pz.reach + Math.max(0, (s.r || 14) - 14) });
+  }
+  infectedThink(r, p, dt, now) {   // the infected: chase the nearest zombie, bite it (damage + a Toxin stack); gone after 8s
+    const m = this.vexInf.get(r.id);
+    if (!m || now >= m.until) { this.state.robots.delete(r.id); this.vexInf.delete(r.id); this.broadcast("vex", { k: "infEnd", x: Math.round(r.x), y: Math.round(r.y) }); return; }
+    r.act = ""; const z = this.nearestZombie(r.x, r.y, 900, false); if (!z) { r.tgt = ""; return; }
+    const d = distance(r, z), a = Math.atan2(z.y - r.y, z.x - r.x), reach = m.reach + (z.radius || 14) * .6; r.aim = a; r.face = a; r.tgt = z.id;
+    if (d > reach) { r.act = "walk"; this.steerMove(r, r.id, a, Math.min(d - reach * .8, m.speed * dt), e => this.solveRobot(e)); }
+    else if (now >= m.next) {
+      m.next = now + VEX.pz.rate * 1000; r.act = "bite"; r.uses = (r.uses || 0) + 1;   // (uses: the client plays a bite each time it changes)
+      this.hitZombie(z, p, VEX.pz.bite * (1 + (this.state.stage - 1) * .08)); if (this.state.zombies.has(z.id)) this.addTox(z, p, 1, now);
     }
-    this.broadcast("vex", { k: "mist", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: M.r });
-    this.state.message = `${p.name}: ANTIDOTE MIST! (${n} healed)`;
-    return true;
-  }
-  startPandemic(p, now) {
-    const m = this.vexMem(p); m.panUntil = now + VEX.pan.life * 1000; m.panNext = now;
-    this.broadcast("vex", { k: "pandemic", id: p.sessionId, t: VEX.pan.life, r: VEX.pan.r });
-    this.state.message = `${p.name}: PANDEMIC!`;
-  }
-  endPandemic(p, now) {   // CATALYST: every poisoned zombie pops for all the poison it has left x2; the stacks are used up
-    const m = this.vexMem(p); m.panUntil = 0;
-    const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + VEX.pan.cd * 1000; this.ultInfo.set(p.sessionId, info);
-    const scale = 1 + (this.state.stage - 1) * .08, pops = [];
-    for (const [id, t] of [...this.tox]) {
-      const z = this.state.zombies.get(id); this.tox.delete(id); if (!z) continue; z.tox = 0; if (now >= t.until) continue;
-      pops.push([z, t.n * VEX.tox.dps * scale * (t.until - now) / 1000 * VEX.pan.catalyst]);
-    }
-    const was = this.inDot; this.inDot = true;
-    try { for (const [z, dmg] of pops) if (this.state.zombies.has(z.id)) this.hitZombie(z, p, dmg); } finally { this.inDot = was; }
-    this.broadcast("vex", { k: "catalyst", id: p.sessionId, pts: pops.slice(0, 40).map(([z]) => [Math.round(z.x), Math.round(z.y)]) });
-    if (pops.length) this.state.message = `CATALYST! ${pops.length} poisoned zombies popped`;
   }
   updateVex(dt, now) {
     const scale = 1 + (this.state.stage - 1) * .08;
@@ -3242,27 +3266,36 @@ export class SurvivalRoom extends Room {
       if (z.tox !== t.n) z.tox = t.n;
       const was = this.inDot; this.inDot = true; try { this.hitZombie(z, owner, t.n * VEX.tox.dps * scale * dt); } finally { this.inDot = was; }
     }
-    if (this.vexClouds.length) this.vexClouds = this.vexClouds.filter(c => {   // the vials' clouds: 2 stacks when one bursts, +1 every 0.5s on everything inside
-      if (now >= c.until) return false; if (now < c.start || now < c.next) return true;
-      const p = this.state.players.get(c.owner); if (!p) return false;
-      for (const z of [...this.state.zombies.values()]) if (hyp(z.x - c.x, z.y - c.y) < c.r + (z.radius || 14) * .5) this.addTox(z, p, c.first ? VEX.vial.burst : 1, now);
-      c.first = false; c.next = now + VEX.vial.every * 1000; return true;
-    });
-    if (this.vexHeals.length) this.vexHeals = this.vexHeals.filter(h => { const q = this.state.players.get(h.sid); if (!q || now >= h.until) return false; if (q.alive) q.hp = Math.min(q.maxHp, q.hp + h.per * dt); return true; });
+    if (this.vexSyr.size) for (const [id, sy] of [...this.vexSyr]) {   // the syringes: the swelling is over -> BURST (a boss: the big hit + the burst)
+      const z = this.state.zombies.get(id); if (!z) { this.vexSyr.delete(id); continue; } if (now < sy.until) continue;
+      const p = this.state.players.get(sy.owner); if (!p) { this.vexSyr.delete(id); continue; }
+      if (sy.big) { this.vexSyr.delete(id); this.vexBurst(z, sy.owner); this.hitZombie(z, p, VEX.syr.boss * scale); }
+      else this.killZombie(z, p);   // (killZombie bursts it)
+    }
+    if (this.vexPuffs.length) {   // the trail's smoke: +1 stack every 0.5s on zombies in it; teammates in it heal a little
+      this.vexPuffs = this.vexPuffs.filter(f => f.until > now && this.state.players.has(f.owner));
+      const R = VEX.trail.r;
+      if (now >= this.vexPuffNext && this.vexPuffs.length) {
+        this.vexPuffNext = now + VEX.trail.every * 1000;
+        for (const z of [...this.state.zombies.values()]) { const rr = R + (z.radius || 14) * .5; for (const f of this.vexPuffs) if (Math.abs(z.x - f.x) < rr && Math.abs(z.y - f.y) < rr && hyp(z.x - f.x, z.y - f.y) < rr) { this.addTox(z, this.state.players.get(f.owner), 1, now); break; } }
+      }
+      for (const q of this.state.players.values()) { if (!q.alive || q.hp >= q.maxHp) continue; for (const f of this.vexPuffs) if (hyp(q.x - f.x, q.y - f.y) < R) { q.hp = Math.min(q.maxHp, q.hp + q.maxHp * VEX.trail.heal * dt); break; } }
+    }
+    if (this.vexRise.length) this.vexRise = this.vexRise.filter(r => { if (now < r.at) return true; const p = this.state.players.get(r.owner); if (p) this.spawnInfected(p, r, now); return false; });
+    if (this.vexInf.size) for (const id of this.vexInf.keys()) if (!this.state.robots.has(id)) this.vexInf.delete(id);
     for (const p of this.state.players.values()) {
       if (p.characterClass !== "toxicologist") continue;
       if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
       const m = this.vex.get(p.sessionId);
-      if (m?.panUntil) {
-        if (now >= m.panUntil || !p.alive) this.endPandemic(p, now);
-        else if (now >= m.panNext) {   // the aura round him: +1 stack every 0.5s
-          const r = VEX.pan.r; for (const z of [...this.state.zombies.values()]) if (hyp(z.x - p.x, z.y - p.y) < r + (z.radius || 14) * .5) this.addTox(z, p, 1, now);
-          m.panNext = now + VEX.pan.every * 1000;
-        }
+      if (m?.trailUntil) {
+        if (now >= m.trailUntil || !p.alive) { m.trailUntil = 0; m.trailReady = now + VEX.trail.cd * this.vexCdr(p) * 1000; this.broadcast("vex", { k: "trailEnd", id: p.sessionId }); }
+        else { const T = VEX.trail; if (hyp(p.x - m.drop.x, p.y - m.drop.y) >= T.step || now - m.drop.t >= T.still * 1000) { m.drop = { x: p.x, y: p.y, t: now }; this.vexPuffs.push({ x: p.x, y: p.y, until: now + T.puff * 1000, owner: p.sessionId }); } }
       }
-      p.chargeCd = m && m.rReady > now ? Math.ceil((m.rReady - now) / 100) / 10 : 0;   // HUD: R cooldown
+      if (m?.pzUntil && (now >= m.pzUntil || !p.alive)) this.endPatientZero(p, now);
+      p.skillT = m && m.trailUntil > now ? Math.ceil((m.trailUntil - now) / 100) / 10 : 0;   // HUD: R trail time left
+      p.chargeCd = m && !(m.trailUntil > now) && m.trailReady > now ? Math.ceil((m.trailReady - now) / 100) / 10 : 0;   // HUD: R cooldown
       const { left, active, alive } = this.ultState(p, now);
-      p.ultCd = alive ? VEX.pan.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultCd = alive ? VEX.pz.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
@@ -3990,11 +4023,11 @@ export class SurvivalRoom extends Room {
       else if (b.abilityCooldown <= 0 && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .7)) this.useAbility(b);
       else if (!this.safeOf(b) && (Date.now() >= m.safeReady) && b.hp < b.maxHp * .5 && zs.filter(z => distance(b, z) < 250).length >= 4) this.astraCast(b, "R");
     }
-    if (b.characterClass === "toxicologist") {   // Vex bot: Pandemic in a crowd, the mist when someone near him is hurt, vials at whatever's coming
-      const crowd = zs.filter(z => distance(b, z) < 250).length, m = this.vexMem(b);
+    if (b.characterClass === "toxicologist") {   // Vex bot: Patient Zero in a crowd, the trail when they come close, the syringe at the nearest
+      const crowd = zs.filter(z => distance(b, z) < 300).length, m = this.vexMem(b), now = Date.now();
       if (b.ultReady && crowd >= 6) this.useUlt(b);
-      else if (m.rReady <= Date.now() && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .5 && distance(b, q) < VEX.mist.r)) this.antidoteMist(b);
-      else if (near && b.abilityCooldown <= 0 && nearD < VEX.vial.range && nearD > 70) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
+      else if (!(m.trailUntil > now) && m.trailReady <= now && crowd >= 3) this.poisonTrail(b);
+      else if (near && b.abilityCooldown <= 0 && nearD < VEX.syr.range) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b); }
     }
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
@@ -4156,17 +4189,18 @@ export class SurvivalRoom extends Room {
     return q;
   }
   forgetZombie(id) {   // per-zombie bookkeeping that would otherwise pile up for the life of the room (7,000+ kills a match)
-    this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.tox?.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);
+    this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.tox?.delete(id); this.vexSyr?.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);
   }
   sweepZombieMemory() {   // after zombies.clear(): drop every id that's gone
-    for (const m of [this.steer, this.slamReady, this.lungeAng, this.bossMem, this.bossPath, this.zStuck, this.hiveMem, this.dots, this.taunt, this.tox]) if (m) for (const k of m.keys()) if (typeof k === "string" && k[0] === "z" && !this.state.zombies.has(k)) m.delete(k);
+    for (const m of [this.steer, this.slamReady, this.lungeAng, this.bossMem, this.bossPath, this.zStuck, this.hiveMem, this.dots, this.taunt, this.tox, this.vexSyr]) if (m) for (const k of m.keys()) if (typeof k === "string" && k[0] === "z" && !this.state.zombies.has(k)) m.delete(k);
     for (const k of this.enraged) if (!this.state.zombies.has(k)) this.enraged.delete(k);
   }
   killZombie(z, killer) {
     if (z.kind === "minebeast") { z.hp = 1; return; }   // it can't be killed: at 1 HP the fight ends and it drops to a knee (beastThink)
     if (z.kind === "abomination") { z.hp = Math.max(1, Math.min(z.maxHp * ABOM.splitAt * .98, z.hp > 0 ? z.hp : Infinity)); return; }   // damage that skipped hitZombie (traps, blasts): he never dies as one, the Sundering always plays first (abomThink starts it)
     this.state.zombies.delete(z.id);
-    { const tx = this.tox.get(z.id); if (tx) { this.tox.delete(z.id); if (tx.n > 0 && Date.now() < tx.until) this.vexChain(z, tx); } }   // (Nov 17) Vex's Chain Reaction
+    { const tx = this.tox.get(z.id); if (tx) { this.tox.delete(z.id); if (tx.n > 0 && Date.now() < tx.until) { this.vexChain(z, tx); this.vexInfect(z, tx); } } }   // (Nov 17) Vex's Chain Reaction, Patient Zero
+    if (this.vexSyr.size && this.vexSyr.has(z.id)) { const sy = this.vexSyr.get(z.id); this.vexSyr.delete(z.id); this.vexBurst(z, sy.owner); }   // a zombie with his syringe in it bursts when it dies
     const bossKill = z.boss && !(z.kind === "abomSpawn" && [...this.state.zombies.values()].some(o => o.kind === "abomSpawn"));   // the Five: only the last one is the boss kill
     if (z.kind === "abomSpawn" && !bossKill) { const left = [...this.state.zombies.values()].filter(o => o.kind === "abomSpawn"); for (const o of left) o.speed *= 1 + ABOM.spawn.rage; if (left.length === 1) left[0].enraged = true; this.state.message = `${left.length} of the Five left${left.length === 1 ? ": it's ENRAGED" : ": they're getting faster"}!`; } this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
     if (this.pyreFx.wheel?.owner === z.id) this.pyreFx.wheel = null;   // the Wheel of Flame dies with him
@@ -4483,7 +4517,7 @@ export class SurvivalRoom extends Room {
     this.updateSofea(dt, now);
     this.updateMarcus(dt); this.updateBriggs(dt, now); this.updateSienna(dt, now);
     this.gearTick(dt, now, true);   // boss gear: regen, auras, trails, screams, resistances, pickups
-    this.updateVex(dt, now);   // (Nov 17) Vex: Toxin stacks, vial clouds, the mist's heals, Pandemic
+    this.updateVex(dt, now);   // (Nov 17) Vex: Toxin stacks, the trail, the syringes, Patient Zero
     this.updateArshan(dt, now);
     this.updateAstra(dt, now);
     this.separateZombies();

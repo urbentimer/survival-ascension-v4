@@ -45,7 +45,7 @@ defineTypes(StructureState, {
 });
 // Viktor's combat robots (his ultimate)
 export class RobotState extends Schema {}
-defineTypes(RobotState, { id: "string", kind: "string", x: "float32", y: "float32", hp: "number", maxHp: "number", ownerId: "string", aim: "number", act: "string", hx: "number", hy: "number", uses: "number", face: "number", tgt: "string" });
+defineTypes(RobotState, { id: "string", kind: "string", look: "string", x: "float32", y: "float32", hp: "number", maxHp: "number", ownerId: "string", aim: "number", act: "string", hx: "number", hy: "number", uses: "number", face: "number", tgt: "string" });
 
 // Sofea's tank / helicopter (one per Sofea, id = her sessionId). phase: "call" (radio call) then "ride".
 export class VehicleState extends Schema {}

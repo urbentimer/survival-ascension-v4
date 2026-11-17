@@ -1,6 +1,6 @@
 # VEX (Nov 17, the user's chibi toxicologist, class id "toxicologist"; prompts tools/art/vex/PROMPTS.md, kit project doc claude/vex-kit.md)
 #   python3 tools/prep-vex.py   (first step of tools/cut-vex.sh)
-# The 4 skill cards (already on black) -> client/assets/icons/card-*.png (152 x 152); the lobby art + face -> tools/art/hero / faces
+# The trait card (already on black) -> client/assets/icons/card-*.png (152 x 152); the lobby art + face -> tools/art/hero / faces
 # (tools/extract-heroes.py / extract-faces.py key them); the TOXIN DART RIFLE cut off the design sheet -> client/assets/icons/dartrifle.png
 # (the hotbar icon, 64 x 64 like the other gun icons).
 import os, shutil
@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
 here = os.path.dirname(os.path.abspath(__file__)); R = os.path.join(here, 'art', 'vex'); A = os.path.join(here, '..', 'client', 'assets')
-for src, dst in (('card-vial.png', 'card-toxicVial'), ('card-mist.png', 'card-antidoteMist'), ('card-pandemic.png', 'card-pandemic'), ('card-passive.png', 'card-chainReaction')):
+for src, dst in (('card-passive.png', 'card-chainReaction'),):   # (kit v2: the E / R / Q cards come from extract-vex-v2.py)
     Image.open(os.path.join(R, src)).convert('RGB').resize((152, 152), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=70, threshold=2)).save(os.path.join(A, 'icons', dst + '.png'))
 for src, dst in (('9-hero.png', os.path.join('hero', 'toxicologist.png')), ('10-face.png', os.path.join('faces', 'toxicologist.png'))):
     shutil.copy(os.path.join(R, src), os.path.join(here, 'art', dst))

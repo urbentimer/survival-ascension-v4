@@ -1837,7 +1837,7 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.loot.clear(); events.length = 0; const tb = mk("screamer", 1400, 1000, true, 10); tb.boss = true; send(A, "debugBossHp", { kill: true });
   ok(![...room.state.loot.values()].some(l => l.kind === "gear") && events.some(e => e.type === "gearBurst" && e.test), "online, a boss killed with a host test command drops no gear");
   room._dispose(); }
-// 54g. (Nov 17) VEX (toxicologist): dart rifle only, Toxin stacks, Chain Reaction, Toxic Vial (E), Antidote Mist (R), Pandemic + Catalyst (Q)
+// 54g. (Nov 17, kit v2) VEX (toxicologist): dart rifle only, Toxin stacks, Chain Reaction, Poison Trail (R), Mutagen Syringe (E), Patient Zero (Q)
 { const { room, A, B, send, P, events } = makeRoom(); const p = P(A), q = P(B); room.state.phase = "lobby"; send(A, "chooseClass", { id: "toxicologist" }); send(A, "start", {}); room.state.phase = "playing";
   ok(p.weapon === "dartrifle" && p.activeSlot === 2 && p.owned === "dartrifle" && p.secondary === "" && p.melee === "knife" && p.maxHp === 105, `Vex: his dart rifle + knife only, 105 HP (${p.owned} / "${p.secondary}", ${p.maxHp} HP)`);
   room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true; room.state.zombies.clear(); room.spawnClock = 1e9; p.x = 1000; p.y = 1000; q.x = 1100; q.y = 1000;
@@ -1849,22 +1849,45 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.tox.get(w.id).until = Date.now() - 1; tick(1); ok(!w.tox && !room.tox.has(w.id), "the stacks wear off 4s after the last one");
   room.state.zombies.clear(); const c0 = mk("walker", 1300, 1000, false, 1), c1 = mk("walker", 1360), c2 = mk("walker", 1700);
   room.addTox(c0, p, 3); room.hitZombie(c0, p, 50); ok(!room.state.zombies.has(c0.id) && c1.tox === 2 && !c2.tox && events.some(e => e.type === "vex" && e.k === "puff"), "CHAIN REACTION: a poisoned zombie that dies puffs 2 stacks onto the ones round it");
-  // E
-  room.state.zombies.clear(); const v = mk("walker", 1250); p.abilityCooldown = 0; send(A, "ability", { a: 0, d: 250 });
-  const cl = room.vexClouds[0]; ok(cl && Math.abs(cl.x - 1250) < 2 && p.abilityCooldown === 4 && events.some(e => e.type === "vex" && e.k === "vial"), `E: a Toxic Vial lands where he aims (cooldown ${p.abilityCooldown}s)`);
-  cl.start = cl.next = Date.now() - 1; tick(1); ok(v.tox === 2, `its cloud bursts: 2 stacks (${v.tox})`); cl.next = Date.now() - 1; tick(1); ok(v.tox === 3, `...+1 every 0.5s inside (${v.tox})`);
-  cl.until = Date.now() - 1; tick(1); ok(!room.vexClouds.length, "the cloud is gone after 4s");
-  // R
-  q.hp = 20; q.stunned = 2; q.slowed = 2; p.hp = 50; send(A, "skill2", {}); ok(q.stunned === 0 && q.slowed === 0 && events.some(e => e.type === "vex" && e.k === "mist"), "R: ANTIDOTE MIST clears stuns and slows on teammates in it");
-  tick(60); ok(Math.abs(q.hp - (20 + q.maxHp * .3)) < 2 && p.hp > 50 + p.maxHp * .28, `...and heals 30% of max HP over 3s (friend ${Math.round(q.hp)}, Vex ${Math.round(p.hp)})`);
-  ok(p.chargeCd > 20 && !room.antidoteMist(p), `...25s cooldown (${p.chargeCd}s)`);
-  q.x = 1500; q.hp = 20; room.vexHeals = []; room.vexMem(p).rReady = 0; send(A, "skill2", {}); tick(60); ok(q.hp === 20, "a teammate outside the 350px mist gets nothing");
-  // Q
-  room.state.zombies.clear(); const pz = mk("walker", 1150); p.ultKills = 100; tick(1); send(A, "ult", {}); tick(1); ok(p.ultActive > 19 && events.some(e => e.type === "vex" && e.k === "pandemic"), `Q: PANDEMIC for 20s (${p.ultActive}s)`);
-  room.vexMem(p).panNext = 0; tick(1); ok(pz.tox >= 1, `the aura poisons zombies round him (${pz.tox})`); send(A, "ult", {}); ok(room.vexMem(p).panUntil > Date.now(), "...Q again does nothing while it's on");
-  room.addTox(pz, p, 5); const hp1 = pz.hp; room.vexMem(p).panUntil = Date.now() - 1; tick(1);
-  ok(hp1 - pz.hp > 100 && !pz.tox && events.some(e => e.type === "vex" && e.k === "catalyst"), `CATALYST: when it ends every poisoned zombie pops (${Math.round(hp1 - pz.hp)}) and its stacks are used up`);
-  ok(p.ultActive === 0 && p.ultCd > 58, `...then the 60s cooldown (${p.ultCd}s)`);
+  // R: POISON TRAIL
+  room.state.zombies.clear(); p.x = 1000; p.y = 1000; send(A, "skill2", {}); const vm = room.vexMem(p);
+  ok(vm.trailUntil > Date.now() + 29000 && events.some(e => e.type === "vex" && e.k === "trail"), "R: POISON TRAIL starts (30s)");
+  tick(1); ok(room.vexPuffs.length >= 1 && p.skillT > 29, `...a puff of smoke at his feet (${room.vexPuffs.length}), HUD ${p.skillT}s`);
+  const np = room.vexPuffs.length; p.x = 1030; tick(1); ok(room.vexPuffs.length === np + 1, "...and another every 25px he walks");
+  p.x = 1300; const tz = mk("walker", 1000); room.vexPuffNext = 0; tick(1); ok(tz.tox === 1, `zombies in the smoke get a Toxin stack every 0.5s (${tz.tox})`);
+  room.state.zombies.clear(); q.x = 1010; q.y = 1000; q.hp = 50; tick(20); ok(q.hp - 50 > 1.5 && q.hp - 50 < 3.5, `teammates in it heal a little: 2% max HP a second (+${(q.hp - 50).toFixed(1)} in 1s)`);
+  const tu = vm.trailUntil; send(A, "skill2", {}); ok(vm.trailUntil === tu, "...R again does nothing while it's on");
+  vm.trailUntil = Date.now() - 1; tick(1); ok(p.skillT === 0 && p.chargeCd > 29 && events.some(e => e.type === "vex" && e.k === "trailEnd"), `...after 30s it stops; then the 30s cooldown (${p.chargeCd}s)`);
+  send(A, "skill2", {}); ok(!(vm.trailUntil > Date.now()), "...and R can't start it again until then");
+  for (const f of room.vexPuffs) f.until = Date.now() - 1; tick(1); ok(!room.vexPuffs.length, "each puff is gone after 3s");
+  // E: MUTAGEN SYRINGE
+  room.state.zombies.clear(); p.x = 1000; p.y = 1000; p.aim = 0; const s1 = mk("walker", 1200), s2 = mk("walker", 1290), s3 = mk("walker", 1600, 1200); p.abilityCooldown = 0; events.length = 0; send(A, "ability", { a: 0 });
+  ok(room.vexSyr.has(s1.id) && p.abilityCooldown === 8 && events.some(e => e.type === "vex" && e.k === "syr" && e.zid === s1.id), `E: the syringe sticks in the first zombie on his line (cooldown ${p.abilityCooldown}s)`);
+  ok((room.zStun.get(s1.id) || 0) > Date.now() + 1500, "...it swells up and can't move");
+  tick(1); ok(room.state.zombies.has(s1.id), "...for 2s");
+  const k0 = p.kills; room.vexSyr.get(s1.id).until = Date.now() - 1; tick(1);
+  ok(!room.state.zombies.has(s1.id) && p.kills > k0 && s2.tox === 5 && !s3.tox && events.some(e => e.type === "vex" && e.k === "burst"), `...then BURSTS: 5 stacks on everything within 150px (${s2.tox}), not further (${s3.tox || 0})`);
+  const s4 = mk("walker", 1200); p.abilityCooldown = 0; send(A, "ability", { a: 0 }); const nb = events.filter(e => e.type === "vex" && e.k === "burst").length;
+  room.hitZombie(s4, q, 1e6); ok(!room.vexSyr.has(s4.id) && events.filter(e => e.type === "vex" && e.k === "burst").length === nb + 1, "...killed early: it bursts right away");
+  room.state.zombies.clear(); p.abilityCooldown = 0; send(A, "ability", { a: 0 }); ok(p.abilityCooldown === 1.5 && events.some(e => e.type === "vex" && e.k === "syr" && e.miss), "...a miss only costs 1.5s");
+  const sb = mk("butcher", 1200, 1000, true, 50000); p.abilityCooldown = 0; send(A, "ability", { a: 0 }); const bh = sb.hp;
+  ok(sb.boss && room.vexSyr.get(sb.id)?.big && !((room.zStun.get(sb.id) || 0) > Date.now()), "a boss: no swelling (it keeps fighting)");
+  room.vexSyr.get(sb.id).until = Date.now() - 1; tick(1); ok(room.state.zombies.has(sb.id) && bh - sb.hp >= 200 && sb.tox === 5, `...after 2s it takes a big hit (${Math.round(bh - sb.hp)}) and the burst's 5 stacks`);
+  // Q: PATIENT ZERO
+  room.state.zombies.clear(); room.tox.clear(); p.ultKills = 100; tick(1); send(A, "ult", {}); tick(1);
+  ok(p.ultActive > 19 && events.some(e => e.type === "vex" && e.k === "pz"), `Q: PATIENT ZERO for 20s (${p.ultActive}s)`);
+  const v1 = mk("walker", 1300, 1000, false, 1); room.addTox(v1, p, 2); room.hitZombie(v1, p, 50);
+  ok(room.vexRise.length === 1 && events.some(e => e.type === "vex" && e.k === "rise"), "a poisoned zombie that dies gets back up...");
+  const v2 = mk("walker", 1350, 1000, false, 1); room.hitZombie(v2, p, 50); ok(room.vexRise.length === 1, "...(not one that wasn't poisoned)");
+  room.vexRise[0].at = Date.now() - 1; tick(1); const inf = room.unitsOf("A", "infected")[0];
+  ok(inf && inf.look === "walker" && room.vexInf.has(inf.id), `...0.7s later, INFECTED, on our side (${inf?.look})`);
+  const vt = mk("walker", inf.x + 40, inf.y, false, 9999); room.vexInf.get(inf.id).next = 0; tick(1);
+  ok(vt.hp < 9999 && vt.tox >= 1 && inf.uses === 1, `...it bites the horde (${Math.round(9999 - vt.hp)} + a Toxin stack)`);
+  for (let i = 0; i < 12; i++) { const z = mk("walker", 1400 + i * 5, 1200, false, 1); room.addTox(z, p, 1); room.hitZombie(z, p, 50); }
+  ok(room.vexRise.length + room.unitsOf("A", "infected").length === 10, `...at most 10 infected at once (${room.vexRise.length + room.unitsOf("A", "infected").length})`);
+  room.vexInf.get(inf.id).until = Date.now() - 1; tick(1); ok(!room.state.robots.has(inf.id) && events.some(e => e.type === "vex" && e.k === "infEnd"), "...each one drops after 8s");
+  room.vexMem(p).pzUntil = Date.now() - 1; tick(1); ok(p.ultActive === 0 && p.ultCd > 58 && events.some(e => e.type === "vex" && e.k === "pzEnd"), `after 20s it ends, then the 60s cooldown (${p.ultCd}s)`);
+  room.vexRise.length = 0; const v3 = mk("walker", 1300, 900, false, 1); room.addTox(v3, p, 2); room.hitZombie(v3, p, 50); ok(!room.vexRise.length, "...and the dead stay dead again");
   // one gun
   room.state.phase = "cleared"; p.currency = 999; send(A, "buy", { id: "shotgun" }); ok(p.owned === "dartrifle", "he can't buy other guns"); room.state.phase = "playing";
   p.ammo = 0; p.mag = 0; p.lastShot = 0; send(A, "shoot", { a: 0 }); ok(p.activeSlot === 1, "out of darts: knife out");
