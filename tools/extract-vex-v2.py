@@ -64,3 +64,25 @@ def strip(path, want, key, name, gy_of):
 # burst: the ground point = the middle of the gas ring (frame 4: halfway down its solid part); rise: the base ring (frame 2's lowest solid band)
 strip('v2-burst.png', 300, 3, 'vex-burst.webp', lambda fr: (fr[3][1][2] + fr[3][1][3]) / 2)
 strip('v2-rise.png', 110, 1, 'vex-rise.webp', lambda fr: fr[1][1][3] - (fr[1][1][3] - fr[1][1][2]) * .32)
+
+# ---- the props (v2-props.png, pixel art on MAGENTA): 1 the syringe flying (needle right), 2 stuck in the ground (a miss), 3 the biohazard badge,
+# 4 broken glass shards -> client/assets/sprites/fx/vex-props.webp at 2x their in-game size (drawn at half size, smoothed). Rects + anchors printed.
+from scipy import ndimage
+a = np.array(Image.open(os.path.join(R, 'v2-props.png')).convert('RGB')).astype(int); r, g, b = a[..., 0], a[..., 1], a[..., 2]
+bg = (r > 170) & (b > 170) & (g < 120); fg = ndimage.binary_opening(~bg, iterations=1); col = fg.sum(axis=0)
+runs, inr = [], False
+for x, c in enumerate(col):
+    if c > 3 and not inr: s0, inr = x, True
+    elif c <= 3 and inr: inr = False; runs.append((s0, x)) if x - s0 > 20 else None
+want = [92, 84, 38, 56]   # 2x in-game widths: syringe 46px long, the stuck one 42px, badge 19px, shards 28px
+out, rects, x = [], [], 0
+for (x0, x1), W2 in zip(runs, want):
+    m = ndimage.binary_fill_holes(fg[:, x0:x1]); ys, xs = np.where(m); y0, y1, c0, c1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    sub = m[y0:y1, c0:c1]; rgb = a[y0:y1, x0 + c0:x0 + c1].copy(); rr, gg, bb = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    pink = sub & (rr > gg + 40) & (bb > gg + 40); rgb[pink] = (rgb[pink] * .25).astype(int)   # magenta fringe -> outline dark
+    im = Image.fromarray(np.dstack([np.clip(rgb, 0, 255), sub * 255]).astype(np.uint8), 'RGBA'); k = W2 / im.width
+    im = im.resize((W2, max(1, round(im.height * k))), Image.LANCZOS); out.append(im); rects.append([x, 0, im.width, im.height]); x += im.width + 2
+atlas = Image.new('RGBA', (x, max(i.height for i in out)))
+for im, rc in zip(out, rects): atlas.alpha_composite(im, (rc[0], 0))
+atlas.save(os.path.join(A, 'sprites', 'fx', 'vex-props.webp'), 'WEBP', quality=92, alpha_quality=95, method=6)
+print('client VEXFX.props =', json.dumps(rects), '(2x size: draw at half)')

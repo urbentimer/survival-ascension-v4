@@ -1876,13 +1876,13 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   // Q: PATIENT ZERO
   room.state.zombies.clear(); room.tox.clear(); p.ultKills = 100; tick(1); send(A, "ult", {}); tick(1);
   ok(p.ultActive > 19 && events.some(e => e.type === "vex" && e.k === "pz"), `Q: PATIENT ZERO for 20s (${p.ultActive}s)`);
-  const v1 = mk("walker", 1300, 1000, false, 1); room.addTox(v1, p, 2); room.hitZombie(v1, p, 50);
+  const v1 = mk("walker", 1300, 1000, false, 200); v1.damage = 10; v1.speed = 60; room.addTox(v1, p, 2); room.hitZombie(v1, p, 1e6);
   ok(room.vexRise.length === 1 && events.some(e => e.type === "vex" && e.k === "rise"), "a poisoned zombie that dies gets back up...");
   const v2 = mk("walker", 1350, 1000, false, 1); room.hitZombie(v2, p, 50); ok(room.vexRise.length === 1, "...(not one that wasn't poisoned)");
   room.vexRise[0].at = Date.now() - 1; tick(1); const inf = room.unitsOf("A", "infected")[0];
-  ok(inf && inf.look === "walker" && room.vexInf.has(inf.id), `...0.7s later, INFECTED, on our side (${inf?.look})`);
+  ok(inf && inf.look === "walker" && room.vexInf.has(inf.id) && inf.maxHp === 140, `...0.7s later, INFECTED, on our side, 0.7x the zombie's HP (${inf?.look}, 200 -> ${inf?.maxHp})`);
   const vt = mk("walker", inf.x + 40, inf.y, false, 9999); room.vexInf.get(inf.id).next = 0; tick(1);
-  ok(vt.hp < 9999 && vt.tox >= 1 && inf.uses === 1, `...it bites the horde (${Math.round(9999 - vt.hp)} + a Toxin stack)`);
+  ok(Math.abs(9999 - vt.hp - 7) < .3 && vt.tox >= 1 && inf.uses === 1, `...it bites the horde for 0.7x the zombie's damage (10 -> ${(9999 - vt.hp).toFixed(1)}) + a Toxin stack`);
   for (let i = 0; i < 12; i++) { const z = mk("walker", 1400 + i * 5, 1200, false, 1); room.addTox(z, p, 1); room.hitZombie(z, p, 50); }
   ok(room.vexRise.length + room.unitsOf("A", "infected").length === 10, `...at most 10 infected at once (${room.vexRise.length + room.unitsOf("A", "infected").length})`);
   room.vexInf.get(inf.id).until = Date.now() - 1; tick(1); ok(!room.state.robots.has(inf.id) && events.some(e => e.type === "vex" && e.k === "infEnd"), "...each one drops after 8s");

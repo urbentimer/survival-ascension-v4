@@ -390,14 +390,15 @@ const SIENNA = {
 // 0.6s standing still; each lasts 3s): zombies in it +1 stack every 0.5s, teammates in it heal 2% max HP a second; 30s cooldown from when it ends.
 // E MUTAGEN SYRINGE: into the first zombie on his aim line: it swells (can't move) 2s then BURSTS: 5 stacks on everything within 150px (it dies
 // early = it bursts early); a boss takes a big hit + the burst instead. A miss only costs 1.5s. Q PATIENT ZERO (100 kills, 60s cooldown from when
-// it ends): for 20s every poisoned zombie that dies gets back up INFECTED (0.7s later): it hunts and bites the horde (damage + a stack) for 8s,
+// it ends): for 20s every poisoned zombie that dies gets back up INFECTED (0.7s later): 0.7x the zombie it was (HP and damage), it hunts and
+// bites the horde (damage + a stack) for 8s,
 // at most 10 per Vex, never a boss. The infected are robots (kind "infected", look = the zombie kind they were); zombies attack them.
 const VEX = {
   tox: { max: 5, dps: 4, len: 4 },   // per stack: 4 damage a second (x the wave scaling, like the skills): 5 stacks = 20/s
   chain: { r: 100, stacks: 2 },
   trail: { life: 30, cd: 30, step: 25, still: 0.6, puff: 3, r: 45, every: 0.5, heal: 0.02 },
   syr: { cd: 8, miss: 1.5, range: 450, swell: 2, r: 150, stacks: 5, boss: 250 },
-  pz: { life: 20, cd: 60, inf: 8, max: 10, rise: 0.7, bite: 18, rate: 0.8, hp: 0.6, speed: 1.15, reach: 34 },
+  pz: { life: 20, cd: 60, inf: 8, max: 10, rise: 0.7, mult: 0.7, rate: 1.0, reach: 34 },   // (user) an infected is 0.7x the zombie it was: HP and bite damage (same speed, a bite a second like theirs)
 };
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
@@ -3238,14 +3239,14 @@ export class SurvivalRoom extends Room {
     if (!p) return;
     let n = this.vexRise.filter(r => r.owner === p.sessionId).length; for (const r of this.state.robots.values()) if (r.kind === "infected" && r.ownerId === p.sessionId) n++;
     if (n >= VEX.pz.max) return;
-    this.vexRise.push({ x: z.x, y: z.y, look: z.kind, r: z.radius || 14, hp: z.maxHp, speed: z.speed, at: now + VEX.pz.rise * 1000, owner: p.sessionId });
+    this.vexRise.push({ x: z.x, y: z.y, look: z.kind, r: z.radius || 14, hp: z.maxHp, dmg: z.damage || 0, speed: z.speed, at: now + VEX.pz.rise * 1000, owner: p.sessionId });
     this.broadcast("vex", { k: "rise", x: Math.round(z.x), y: Math.round(z.y), look: z.kind });
   }
   spawnInfected(p, s, now) {
     const r = new RobotState(); r.id = `v${++this.robotSeq}`; r.kind = "infected"; r.look = s.look; r.ownerId = p.sessionId;
-    r.x = s.x; r.y = s.y; r.hx = s.x; r.hy = s.y; r.hp = r.maxHp = clamp((s.hp || 100) * VEX.pz.hp, 60, 600); r.aim = 0; r.face = 0; r.act = ""; r.tgt = ""; r.uses = 0;
+    r.x = s.x; r.y = s.y; r.hx = s.x; r.hy = s.y; r.hp = r.maxHp = Math.max(20, (s.hp || 100) * VEX.pz.mult); r.aim = 0; r.face = 0; r.act = ""; r.tgt = ""; r.uses = 0;
     this.state.robots.set(r.id, r);
-    this.vexInf.set(r.id, { until: now + VEX.pz.inf * 1000, next: now + 250, speed: clamp(s.speed || 80, 60, 170) * VEX.pz.speed, reach: VEX.pz.reach + Math.max(0, (s.r || 14) - 14) });
+    this.vexInf.set(r.id, { until: now + VEX.pz.inf * 1000, next: now + 250, dmg: (s.dmg || 0) * VEX.pz.mult, speed: clamp(s.speed || 80, 40, 200), reach: VEX.pz.reach + Math.max(0, (s.r || 14) - 14) });
   }
   infectedThink(r, p, dt, now) {   // the infected: chase the nearest zombie, bite it (damage + a Toxin stack); gone after 8s
     const m = this.vexInf.get(r.id);
@@ -3255,7 +3256,7 @@ export class SurvivalRoom extends Room {
     if (d > reach) { r.act = "walk"; this.steerMove(r, r.id, a, Math.min(d - reach * .8, m.speed * dt), e => this.solveRobot(e)); }
     else if (now >= m.next) {
       m.next = now + VEX.pz.rate * 1000; r.act = "bite"; r.uses = (r.uses || 0) + 1;   // (uses: the client plays a bite each time it changes)
-      this.hitZombie(z, p, VEX.pz.bite * (1 + (this.state.stage - 1) * .08)); if (this.state.zombies.has(z.id)) this.addTox(z, p, 1, now);
+      if (m.dmg > 0) this.hitZombie(z, p, m.dmg); if (this.state.zombies.has(z.id)) this.addTox(z, p, 1, now);
     }
   }
   updateVex(dt, now) {

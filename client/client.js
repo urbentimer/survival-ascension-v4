@@ -3773,9 +3773,11 @@ function drawShotgunFx(f, age) {   // false when finished
 // Art: tools/extract-vex-v2.py (the user's realistic gas on black): vex-smoke = the SMOKE KIT (16 separate pieces: 4 puffs, 4 wisps, 2 clumps,
 // 2 haze, 2 bubbles, droplets, ground mist) that the code animates as particles (drift, swell, fade: smooth, any length, never repeats), vex-burst
 // (6 frames: glow, flash, blast, gas ring, thinning, wisps), vex-rise (6: a leak, a ring, the column, tallest, falling, wisps). Code-made: the
-// syringe, the swelling zombie, the biohazard signs, the infected look, the heal sparkles, the dart tracer (TRACER). Numbers: the server's VEX.
-const vexImgs = {}; for (const [k, url] of Object.entries({ smoke: "assets/sprites/fx/vex-smoke.webp", burst: "assets/sprites/fx/vex-burst.webp", rise: "assets/sprites/fx/vex-rise.webp" })) { const im = new Image(); im.src = url; vexImgs[k] = im; }   // (whole strings: the preview build finds them)
+// swelling zombie, the glowing biohazard on the ground, the infected look, the heal sparkles, the dart tracer (TRACER). vex-props (the user's
+// painted pieces): the syringe, the syringe stuck in the ground (a miss), the biohazard badge over the infected, the glass shards. Numbers: the server's VEX.
+const vexImgs = {}; for (const [k, url] of Object.entries({ smoke: "assets/sprites/fx/vex-smoke.webp", burst: "assets/sprites/fx/vex-burst.webp", rise: "assets/sprites/fx/vex-rise.webp", props: "assets/sprites/fx/vex-props.webp" })) { const im = new Image(); im.src = url; vexImgs[k] = im; }   // (whole strings: the preview build finds them)
 const VEXFX = { burst: { cw: 316, ch: 208, gx: 158, gy: 116 }, rise: { cw: 124, ch: 156, gx: 62, gy: 131 },   // cells + ground points printed by tools/extract-vex-v2.py
+  props: [[0, 0, 92, 40], [94, 0, 84, 90], [180, 0, 38, 37], [220, 0, 56, 49]],   // the painted props at 2x (drawn at half): syringe (needle right), stuck in the ground, biohazard badge, glass shards
   smoke: [[0, 0, 72, 62], [74, 0, 150, 106], [226, 0, 152, 91], [380, 0, 126, 143], [0, 145, 68, 126], [70, 145, 106, 148], [178, 145, 94, 136], [274, 145, 117, 154], [0, 301, 135, 121], [137, 301, 156, 132], [295, 301, 136, 77], [433, 301, 144, 69], [0, 435, 110, 118], [112, 435, 73, 74], [187, 435, 136, 112], [325, 435, 152, 76]] };
 const VP = { puff: [0, 1, 2, 3], wisp: [4, 5, 6, 7], clump: [8, 9], haze: [10, 11], bubble: [12, 13], drops: 14, mist: 15 };   // the kit's pieces
 const TRAIL_R = 45;   // the server's VEX.trail.r
@@ -3796,7 +3798,7 @@ function vexPuffRing(x, y, n, sp, sc, life) {   // gas blown outward in a ring (
 function onVex(m) {
   const now = gnow(), mine = m.id === myId, p = m.id ? state?.players?.get(m.id) : null, near = (x, y) => { const me = me_(); return me && Math.hypot(me.x - x, me.y - y) < 420; };
   if (m.k === "syr") { vAnim(m.id).throwAt = now; const d = Math.hypot(m.x - m.x0, m.y - m.y0); vexFx.push({ k: "syr", x0: m.x0, y0: m.y0 - 16, x: m.x, y: m.y - 14, t0: now + 160, land: now + 160 + Math.max(90, d / 1.3), zid: m.zid, big: m.big, miss: m.miss, t: m.t || 2 }); playSfx("pistol", m.x0, m.y0, .4); }
-  else if (m.k === "burst") { vexFx.push({ k: "burst", x: m.x, y: m.y, t0: now, sc: 1 }); vexPuffRing(m.x, m.y, 12, 230, .62, 1900);
+  else if (m.k === "burst") { vexFx.push({ k: "burst", x: m.x, y: m.y, t0: now, sc: 1 }, { k: "shards", x: m.x, y: m.y, t0: now, vx: vrand(-90, 90) }); vexPuffRing(m.x, m.y, 12, 230, .62, 1900);
     for (let i = 0; i < 6; i++) { const a = vrand(0, 7); vexPart({ k: VP.drops, x: m.x, y: m.y, vx: Math.cos(a) * 320, vy: Math.sin(a) * 170, drag: 4, h: 14, vh: vrand(30, 70), s0: .22, s1: .26, a: .95, life: 520, rot: a }); }
     vexPart({ k: vpick(VP.haze), gnd: true, x: m.x, y: m.y + 10, s0: .9, s1: 1.35, a: .5, life: 2400 });
     playSfx("boom", m.x, m.y, .5); playSfx("zhit", m.x, m.y, .7); if (near(m.x, m.y)) shake(4, 170); }
@@ -3822,7 +3824,12 @@ function drawToxic(z, z0, now) {   // a poisoned zombie (Toxin stacks): green at
   for (let i = 0; i <= n; i++) { const ph = ((now + off) / 900 + i / (n + 1)) % 1; ctx.globalAlpha = .8 * (1 - ph); ctx.beginPath(); ctx.arc(z.x + Math.sin(i * 2.7 + off) * r * .6, z.y + r * .3 - ph * r * 2.2, 1.6 + 1.8 * ph, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
-function drawSyringe(x, y, a, sc = 1, full = 1) {   // the mutagen syringe (needle pointing along a)
+function drawProp(i, x, y, a = 0, sc = 1, ax = .5, ay = .5, al = 1) {   // one painted prop (2x art, drawn at half size, smoothed), anchor (ax, ay) of its box at (x, y)
+  const im = vexImgs.props; if (!im.naturalWidth) return false; const [sx, sy, sw, sh] = VEXFX.props[i], w = sw * sc / 2, h = sh * sc / 2;
+  ctx.save(); ctx.globalAlpha *= al; ctx.translate(Math.round(x), Math.round(y)); if (a) ctx.rotate(a); ctx.imageSmoothingEnabled = true; ctx.drawImage(im, sx, sy, sw, sh, -w * ax, -h * ay, w, h); ctx.restore(); return true;
+}
+function drawSyringe(x, y, a, sc = 1, full = 1) {   // the mutagen syringe (needle pointing along a): the painted one, or drawn in code until it loads
+  if (drawProp(0, x, y, a, sc)) return;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(a); ctx.scale(sc, sc);
   ctx.strokeStyle = "#dfe5e8"; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(18, 0); ctx.stroke();
   ctx.fillStyle = "rgba(225,255,225,.6)"; ctx.fillRect(-9, -3.5, 17, 7);
@@ -3832,7 +3839,8 @@ function drawSyringe(x, y, a, sc = 1, full = 1) {   // the mutagen syringe (need
   ctx.fillStyle = "#9aa4aa"; ctx.fillRect(-11, -6, 2, 12); ctx.fillRect(-17, -1.5, 6.5, 3); ctx.fillRect(-18.5, -4, 2, 8);
   ctx.restore();
 }
-function drawBio(x, y, R, al = 1, flat = false) {   // a biohazard sign: 3 rings round a centre (on the infected, and glowing on the ground where one rises)
+function drawBio(x, y, R, al = 1, flat = false) {   // a biohazard sign: the painted badge over the infected; drawn in code glowing on the ground where one rises
+  if (!flat && drawProp(2, x, y, 0, R / 9.5, .5, .5, al)) return;
   ctx.save(); ctx.globalAlpha *= al; ctx.translate(x, y); if (flat) ctx.scale(1, .55);
   if (!flat) { ctx.fillStyle = "rgba(14,22,8,.8)"; ctx.beginPath(); ctx.arc(0, 0, R * 1.3, 0, 7); ctx.fill(); }
   else ctx.globalCompositeOperation = "lighter";
@@ -3890,7 +3898,7 @@ function drawInfected(r) {   // Patient Zero's infected: the zombie it was, sick
   const z = { id: r.id, kind: look, x: r.x, y: r.y, radius: rad, hp: r.hp, maxHp: r.maxHp, attackCooldown: ba < cd ? cd - ba : 0 };
   ctx.save(); ctx.translate(r.x, fy); ctx.scale(1, .45 + .55 * up); ctx.translate(-r.x, -fy);   // it climbs up out of the gas
   ctx.filter = "sepia(.45) hue-rotate(55deg) saturate(2.6) brightness(1.18)"; drawZombieAny(z); ctx.filter = "none"; ctx.restore();
-  if (up >= 1) drawBio(r.x, r.y - (ZTYPE[look]?.h || 58) * .78 - 8, 5.5, .95);
+  if (up >= 1) drawBio(r.x, r.y - (ZTYPE[look]?.h || 58) * .78 - 9, 9.5, .95);   // the painted badge, 19px
   if (now - st.w > 320) { st.w = now; vexPart({ k: vpick(VP.wisp), x: r.x + vrand(-8, 8), y: fy, h: 6, vh: vrand(12, 22), s0: .14, s1: .24, a: .4, life: 1000 }); }
 }
 function drawVexItems(items, now) {   // depth-sorted: the smoke particles, syringes in flight, bursts, rises, heal sparkles
@@ -3904,11 +3912,17 @@ function drawVexItems(items, now) {   // depth-sorted: the smoke particles, syri
       if (now >= f.land) {   // lands: sticks in its zombie (it swells), or shatters on the ground
         vexFx.splice(i, 1);
         if (f.zid) vexSwell.set(f.zid, { t0: f.t0, until: f.t0 + (f.t || 2) * 1000, big: f.big, a: Math.atan2(f.y - f.y0, f.x - f.x0) });
-        else { vexPart({ k: VP.drops, x: f.x, y: f.y + 14, h: 6, vh: 30, s0: .2, s1: .26, a: .9, life: 420 }); vexPuffRing(f.x, f.y + 14, 3, 60, .25, 700); playSfx("zhit", f.x, f.y, .25); }
+        else { vexFx.push({ k: "stuck", x: f.x, y: f.y + 14, t0: now, flip: f.x < f.x0 }); vexPuffRing(f.x, f.y + 14, 3, 60, .25, 700); playSfx("zhit", f.x, f.y, .25); }   // a miss: it sticks in the ground
         continue;
       }
       const u = (now - f.t0) / (f.land - f.t0), x = f.x0 + (f.x - f.x0) * u, y = f.y0 + (f.y - f.y0) * u, a = Math.atan2(f.y - f.y0, f.x - f.x0);
       if (inView(x, y, 60)) items.push({ y: 1e6 + y, draw: () => { ctx.save(); ctx.globalAlpha = .35; ctx.strokeStyle = "#b8ff6a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * 26, y - Math.sin(a) * 26); ctx.lineTo(x, y); ctx.stroke(); ctx.restore(); drawSyringe(x, y, a, 1, 1); } });
+    } else if (f.k === "stuck") {
+      if (age > 1500) { vexFx.splice(i, 1); continue; }
+      if (inView(f.x, f.y, 60)) items.push({ y: f.y, draw: () => { ctx.save(); if (f.flip) { ctx.translate(f.x, 0); ctx.scale(-1, 1); ctx.translate(-f.x, 0); } drawProp(1, f.x, f.y, 0, 1, .55, .9, age > 1100 ? (1500 - age) / 400 : 1); ctx.restore(); } });
+    } else if (f.k === "shards") {   // the syringe's glass flies out of a burst
+      if (age > 650) { vexFx.splice(i, 1); continue; } const t = age / 1000;
+      if (inView(f.x, f.y, 120)) items.push({ y: f.y + 30, draw: () => drawProp(3, f.x + f.vx * t, f.y - 20 - (260 * t - 520 * t * t), f.vx * t * .02, .9, .5, .5, age > 450 ? (650 - age) / 200 : 1) });
     } else if (f.k === "burst") {
       if (age > 520) { vexFx.splice(i, 1); continue; }
       if (inView(f.x, f.y, 200)) items.push({ y: f.y + 20, draw: () => sienFrame(vexImgs.burst, VEXFX.burst, Math.min(5, Math.floor(age / 80)), f.x, f.y + 12, age > 420 ? (520 - age) / 100 : 1, f.sc) });
@@ -5841,7 +5855,7 @@ const ROSTER = [
     trait: { n: "Field Commander", t: "Trained for emergencies: she revives downed teammates twice as fast (2.5s instead of 5s)." }, gear: ["rifle", "pistol", "knife"] },
   { id: "toxicologist", name: "VEX", role: "TOXICOLOGIST", cat: "support", hp: 105, dmg: 14, spd: 175, def: 0, isNew: true, desc: "Mad-scientist poisoner. His darts stack toxin on everything they hit, his trail gasses the horde (and patches up the team), and the poisoned dead get back up on his side.",
     skills: [{ k: "E", n: "Mutagen Syringe", cd: 8, card: "mutagenSyringe", t: "Fires a big syringe into the first zombie where you aim. It swells up for 2s (it can't move), then BURSTS: 5 Toxin stacks on every zombie within 150px. Killed early, it bursts early. A boss takes a big hit instead. A miss only costs 1.5s." },
-             { k: "Q", n: "Patient Zero", cd: 60, card: "patientZero", t: "For 20s every poisoned zombie that dies gets back up INFECTED and fights the horde for 8s: it bites zombies (damage + a Toxin stack). Up to 10 at once; bosses can't be infected. The 60s cooldown starts when it ends." },
+             { k: "Q", n: "Patient Zero", cd: 60, card: "patientZero", t: "For 20s every poisoned zombie that dies gets back up INFECTED and fights the horde for 8s, at 0.7x the zombie it was (its HP and bite): it bites zombies (damage + a Toxin stack). Up to 10 at once; bosses can't be infected. The 60s cooldown starts when it ends." },
              { k: "R", n: "Poison Trail", cd: 30, card: "poisonTrail", t: "For 30s you leave toxic smoke behind you as you walk (each puff lasts 3s). Zombies in it pick up a Toxin stack every 0.5s; teammates in it heal 2% of their max HP a second. 30s cooldown after it ends." }],
     trait: { n: "Chain Reaction", card: "chainReaction", t: "Every dart adds a Toxin stack (max 5; each stack does 4 damage a second for 4s, new stacks refresh the timer). A poisoned zombie that dies bursts: 2 stacks on every zombie within 100px." }, gear: ["dartrifle", "knife"] },
 ];
