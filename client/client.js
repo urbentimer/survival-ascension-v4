@@ -1,5 +1,6 @@
 import { Client } from "https://cdn.jsdelivr.net/npm/colyseus.js@0.16.19/+esm";
 import { GAME_CONFIG } from "./configs.js";
+import * as G from "./gearData.js";   // (Nov 17) boss gear: the shared item table (copy of server/src/gearData.js)
 import { GAME_SERVER } from "./config.js";
 import { mapBoxes, statueBodyBoxes, trackNearest, MAP_KINDS, MAP_FLAT, PAINTED, paintedLayout, dynastyGround, whiteoutGround, refineryGround, carnivalGround, mineGround, crucibleGround, crucibleRivers, mineTrack, MN_SPOT, coasterTrack, coasterAt, coasterCart, coasterSeat, COASTER } from "./mapLayout.js";
 import { MN_ART, MN_TILES, MN_CART, MN_FX } from "./mineArt.js";
@@ -94,7 +95,7 @@ function showOverlay(title, text) {
 }
 function hideOverlay() { $("overlay").classList.add("hidden"); }
 function playerName() { return $("name").value.trim().slice(0, 18) || "Survivor"; }
-function joinOptions() { return { name: playerName(), profile: { ...loadProfile(), characterClass: selectedClass } }; }
+function joinOptions() { return { name: playerName(), profile: { ...loadProfile(), characterClass: selectedClass }, gear: gearLoadout() }; }   // gear: what you have equipped (boss gear, kept in this browser)
 // The free Render server sleeps when nobody has played for ~15 min and takes up to a minute to wake up:
 // keep retrying for ~90s (with a message) before giving up. A wrong room code fails straight away.
 async function withWakeUp(label, attempt) {
@@ -129,7 +130,8 @@ function connected() {
   toast("Room created. Press INVITE to send your friends the link."); renderLobbyRoom();
   room.onStateChange(s => { state = s; lastStateAt = gnow(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
   awayIds.clear(); room.onMessage("away", m => { if (m.on) awayIds.add(m.id); else awayIds.delete(m.id); });   // a teammate's connection dropped / came back
-  room.onMessage("sienna", m => onSienna(m));   // (Nov 16) Sienna's grenade / decoy / perch / laser
+  room.onMessage("sienna", m => onSienna(m));
+  room.onMessage("gearGet", m => { try { onGearGet(m); } catch (e) { reportError(e, "gear"); } }); room.onMessage("gearBurst", m => onGearBurst(m)); room.onMessage("gearFx", m => onGearFx(m)); room.onMessage("gearLooks", m => onGearLooks(m)); gearSend();   // (Nov 17) boss gear   // (Nov 16) Sienna's grenade / decoy / perch / laser
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: gnow() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: gnow(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = gnow(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, gnow()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: gnow(), ...m }));
   room.onMessage("laser", m => fx.push({ type: "laser", t: gnow(), ...m }));
@@ -393,7 +395,7 @@ function renderState() {
   const playingNow = state.phase !== "lobby";
   document.body.classList.toggle("in-match", playingNow);
   $("gameArea").classList.toggle("hidden", !playingNow);
-  if (!playingNow) { closePanels(); mapCardKey = -1; return; }
+  if (!playingNow) { closePanels(true); mapCardKey = -1; return; }
   if (state.phase === "playing" && state.stage) showMapCard(state.stage);   // (Nov 12) the map's title at the start of the match / on arrival
   renderHud(me, players);
   renderScoreboard(players);
@@ -577,8 +579,8 @@ function renderShop(me) {
 $("shop").addEventListener("click", e => { const b = e.target.closest("button[data-buy]"); if (b && !b.disabled) { shopBought = b.dataset.buy; room?.send("buy", { id: b.dataset.buy }); } });
 
 // ===================== PANELS: level-up (U), equipment (E), menu (Esc) =====================
-const PANELS = ["levelUp", "equip", "menu"];
-function closePanels() { PANELS.forEach(id => $(id).classList.add("hidden")); }
+const PANELS = ["levelUp", "equip", "menu", "inv"];
+function closePanels(keepInv = false) { PANELS.forEach(id => { if (!(keepInv && id === "inv")) $(id).classList.add("hidden"); }); if (!keepInv) invHideTip(); }   // keepInv: the lobby keeps the inventory (I) open
 function togglePanel(id) {
   const opening = $(id).classList.contains("hidden");
   closePanels();
@@ -586,10 +588,295 @@ function togglePanel(id) {
   if (id === "levelUp") { const me = state?.players.get(myId); if (!me || me.xp < me.xpNext || me.level >= MAX_LEVEL) return; levelUpBuiltFor = ""; }
   $(id).classList.remove("hidden"); firing = false;
   if (id === "equip") { equipKey = ""; renderEquip(state?.players.get(myId)); }
+  if (id === "inv") renderInv(); else invHideTip?.();
   if (id === "levelUp") renderLevelUp(state?.players.get(myId));
   if (id === "menu") { $("pmCtl").classList.add("hidden"); $("pmBug").classList.add("hidden"); pmTab(pmTabNow); pmRender(true); }
 }
 function anyPanelOpen() { return PANELS.some(id => !$(id).classList.contains("hidden")); }
+
+// ===================== BOSS GEAR (Nov 17): the inventory (I), Equipment + Stats tabs, enhancing, loot bursts on the map =====================
+// The user's plan (tools/boss-gear-plan.md) + screen designs (tools/art/equipment). gearData.js = the shared item table (server/src/gearData.js copy).
+// Kept in THIS browser (localStorage "sa-gear"): one loadout for whichever survivor you play. The server gets what's equipped ("bossGear") and applies it.
+const GEAR_KEY = "sa-gear";
+const MAT_KEYS = ["gold", "iron", "silver", "titanium"], ESS_KEYS = Object.keys(G.BOSSES).map(b => "ess:" + b);
+const MAT_URL = { gold: "assets/icons/mat-gold.png", iron: "assets/icons/mat-iron.png", silver: "assets/icons/mat-silver.png", titanium: "assets/icons/mat-titanium.png",   // (whole strings: the preview build packs them)
+  "ess:butcher": "assets/icons/mat-ess-butcher.png", "ess:hivemind": "assets/icons/mat-ess-hivemind.png", "ess:screamer": "assets/icons/mat-ess-screamer.png", "ess:pyre": "assets/icons/mat-ess-pyre.png", "ess:minebeast": "assets/icons/mat-ess-minebeast.png", "ess:abomination": "assets/icons/mat-ess-abomination.png" };
+const matIconUrl = m => MAT_URL[m] || "";
+const MAT_IMG = {}; for (const m of [...MAT_KEYS, ...ESS_KEYS]) { const im = new Image(); im.src = matIconUrl(m); MAT_IMG[m] = im; }
+const MAT_GLOW = { gold: "255,200,80", iron: "190,200,210", silver: "230,240,255", titanium: "120,220,240" };
+const SLOT_PATH = {   // simple line icons per slot (48x48), drawn in the item's rarity colour (DOM: <svg>, map: Path2D)
+  head: "M10 30c0-9 6-16 14-16s14 7 14 16v4H10z M8 34h32 M18 22h12",
+  outfit: "M17 10l-7 5 3 9 4-2v18h14V22l4 2 3-9-7-5c-1 3-4 5-7 5s-6-2-7-5z M24 15v25",
+  gloves: "M16 38V22l-3-6c-1-2 2-4 3-2l3 5V10c0-2 3-2 3 0v8-10c0-2 3-2 3 0v10-8c0-2 3-2 3 0v9-6c0-2 3-2 3 0v13c0 5-3 9-8 9h-2c-3 0-5-1-6-3z",
+  boots: "M15 8h10v20l10 4c3 1 4 3 4 6v2H13v-6l2-4z M13 34h26",
+  gunmod: "M35 24a11 11 0 1 1-22 0a11 11 0 1 1 22 0z M27 24a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M24 7v8 M24 33v8 M7 24h8 M33 24h8",
+  trophy: "M16 9h16v9a8 8 0 0 1-16 0z M16 12h-5c0 5 2 8 6 8 M32 12h5c0 5-2 8-6 8 M24 26v7 M17 39h14l-2-6H19z",
+};
+const SLOT_P2D = {}; const slotPath = s => SLOT_P2D[s] || (SLOT_P2D[s] = new Path2D(SLOT_PATH[s]));
+const slotSvg = (slot, col, sz = 40) => `<svg viewBox="0 0 48 48" width="${sz}" height="${sz}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="${SLOT_PATH[slot]}"/></svg>`;
+const bandOf = it => G.BAND(it.t), colOf = it => G.BAND_COLOR[G.BAND(it.t)];
+
+function gearBlank() { return { v: 1, seq: 0, bag: [], eq: {}, pouch: {}, found: {} }; }
+function gearLoad() {   // anything odd in the saved data (old ids, impossible levels) is dropped
+  let g = null; try { g = JSON.parse(localStorage.getItem(GEAR_KEY) || "null"); } catch {}
+  const out = gearBlank(); if (!g || g.v !== 1 || !Array.isArray(g.bag)) return out;
+  out.seq = Math.max(0, Math.round(Number(g.seq) || 0));
+  for (const b of g.bag.slice(0, 2000)) if (b && G.ITEM[b.id]) { let u = Math.round(Number(b.u)); if (!(u > 0) || out.bag.some(q => q.u === u)) u = ++out.seq; out.seq = Math.max(out.seq, u); out.bag.push({ u, id: b.id, l: Math.max(0, Math.min(10, Math.round(Number(b.l) || 0))), at: Number(b.at) || 0 }); }
+  for (const s of G.SLOTS) { const e = out.bag.find(b => b.u === g.eq?.[s]); if (e && G.ITEM[e.id].slot === s) out.eq[s] = e.u; }
+  for (const k of [...MAT_KEYS, ...ESS_KEYS]) { const n = Math.max(0, Math.round(Number(g.pouch?.[k]) || 0)); if (n) out.pouch[k] = n; }
+  for (const id of Object.keys(g.found || {})) if (G.ITEM[id]) out.found[id] = 1;
+  return out;
+}
+let gear = gearLoad();
+function gearSave() { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gear)); } catch {} }
+addEventListener("storage", e => { if (e.key === GEAR_KEY) { gear = gearLoad(); myGearTot = G.gearTotals(gearLoadout()); gearSend(); if (invOpen()) renderInv(); } });   // another tab changed it
+const gearEntry = u => gear.bag.find(b => b.u === u);
+function gearEquipped() { return G.SLOTS.map(s => gearEntry(gear.eq[s])).filter(Boolean); }
+function gearLoadout() { return gearEquipped().map(b => ({ id: b.id, l: b.l })); }
+function gearSend() { try { room?.send("bossGear", { items: gearLoadout() }); } catch {} }
+let myGearTot = G.gearTotals(gearLoadout());
+function gearChanged() { gearSave(); myGearTot = G.gearTotals(gearLoadout()); gearSend(); if (invOpen()) renderInv(); }
+const isEquipped = u => G.SLOTS.some(s => gear.eq[s] === u);
+function feedLine(text) { feed.unshift({ text, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
+
+// ---- picking things up ----
+function onGearGet(m) {
+  if (m.to !== myId) { const it = G.ITEM[m.ref]; if (m.k === "gear" && it && it.t >= 8) feedLine(`${m.name} picked up ${it.name}`); return; }
+  if (m.k === "gear" && G.ITEM[m.ref]) { const isNew = !gear.found[m.ref]; gear.bag.push({ u: ++gear.seq, id: m.ref, l: 0, at: Date.now() }); gear.found[m.ref] = 1; lootPop({ it: G.ITEM[m.ref], isNew }); if (G.ITEM[m.ref].t >= 8) uiSound("gold"); }   // (the pickup sound itself comes from audioWatch)
+  else if (m.k === "mat") { const n = Math.max(0, Math.round(Number(m.n) || 0)); if (!n || !(MAT_KEYS.includes(m.ref) || ESS_KEYS.includes(m.ref))) return; gear.pouch[m.ref] = (gear.pouch[m.ref] || 0) + n; lootPop({ mat: m.ref, n }); }
+  gearSave(); if (invOpen()) renderInv();
+}
+let popSeq = 0;
+function lootPop(o) {   // the pickup card at the top right: icon, rarity, name
+  const box = $("lootPop"); if (!box) return;
+  const el = document.createElement("div"); el.className = "lp"; const id = "lp" + (++popSeq);
+  if (o.it) { const c = colOf(o.it); el.style.setProperty("--bc", c); el.innerHTML = `<i class="lp-ic">${slotSvg(o.it.slot, c, 30)}</i><span><small>${bandOf(o.it).toUpperCase()}${o.isNew ? ' · <em>NEW</em>' : ""}</small><b>${escapeHtml(o.it.name)}</b></span>`; if (o.it.t >= 10) el.classList.add("leg"); }
+  else { el.style.setProperty("--bc", "#9fb5bb"); el.innerHTML = `<i class="lp-ic"><img src="${matIconUrl(o.mat)}" alt=""></i><span><small>MATERIAL</small><b>+${o.n} ${escapeHtml(G.matName(o.mat))}</b></span>`; }
+  el.id = id; box.prepend(el); while (box.children.length > 6) box.lastChild.remove();
+  setTimeout(() => el.classList.add("out"), 3600); setTimeout(() => el.remove(), 4100);
+}
+const gearBursts = [];
+function onGearBurst(m) {
+  if (m.test) { feedLine("Test kill: no boss gear from this one"); return; }
+  gearBursts.push({ x: m.x, y: m.y, t: gnow() }); while (gearBursts.length > 4) gearBursts.shift();
+  feedLine(`LOOT BURST: ${m.n} items! Grab them before they fade (30s)`); shake(7, 420);
+}
+
+// ---- boss gear on the map ----
+const lootSeen = new Map(); let lootSweepAt = 0;   // loot id -> when this browser first saw it (+ where it flew out from)
+function drawGearLoot(item) {
+  const now = gnow(); let s = lootSeen.get(item.id);
+  if (!s) { const b = gearBursts.find(q => now - q.t < 1600 && Math.hypot(q.x - item.x, q.y - item.y) < 460); s = { t: now, ox: b ? b.x : item.x, oy: b ? b.y : item.y - 30, fly: !!b }; lootSeen.set(item.id, s); }
+  if (now - lootSweepAt > 3000) { lootSweepAt = now; for (const id of lootSeen.keys()) if (!state.loot.has(id)) lootSeen.delete(id); }
+  const f = s.fly ? Math.min(1, (now - s.t) / 620) : 1, e = 1 - (1 - f) ** 3, x = s.ox + (item.x - s.ox) * e, gy = s.oy + (item.y - s.oy) * e, hop = s.fly ? Math.sin(f * Math.PI) * 80 : 0;
+  const life = G.LOOT_LIFE * 1000 - (now - s.t), al = life < 5000 && Math.floor(now / 170) % 2 === 0 ? .35 : 1;
+  const bob = Math.sin(now / 320 + item.x) * 3, y = gy - 22 - bob - hop;
+  ctx.save(); ctx.globalAlpha = al;
+  if (item.kind === "gear") {
+    const it = G.ITEM[item.ref]; if (!it) { ctx.restore(); return; }
+    const c = colOf(it), rgb = hexRgb(c), k = .7 + .3 * Math.sin(now / 230 + item.y);
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    if (it.t >= 8 && f >= 1) { const h = it.t >= 10 ? 210 : 120, beam = ctx.createLinearGradient(0, gy - h, 0, gy + 8); beam.addColorStop(0, `rgba(${rgb},0)`); beam.addColorStop(.75, `rgba(${rgb},${.2 * k})`); beam.addColorStop(1, `rgba(${rgb},${.42 * k})`); ctx.fillStyle = beam; ctx.fillRect(x - (it.t >= 10 ? 15 : 10), gy - h, it.t >= 10 ? 30 : 20, h + 8); }
+    ctx.translate(x, gy + 6); ctx.scale(1, .38); const ring = ctx.createRadialGradient(0, 0, 4, 0, 0, 40); ring.addColorStop(0, `rgba(${rgb},${.5 * k})`); ring.addColorStop(1, `rgba(${rgb},0)`); ctx.fillStyle = ring; ctx.beginPath(); ctx.arc(0, 0, 40, 0, 7); ctx.fill(); ctx.restore();
+    const S = 30; ctx.save(); ctx.translate(x, y);   // the item: a small card with its slot icon
+    ctx.fillStyle = "rgba(8,13,16,.92)"; ctx.strokeStyle = c; ctx.lineWidth = 2; roundRectPath(-S / 2, -S / 2, S, S, 5); ctx.fill(); ctx.stroke();
+    ctx.scale(S / 56, S / 56); ctx.translate(-24, -24); ctx.strokeStyle = c; ctx.lineWidth = 3.2; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.stroke(slotPath(it.slot)); ctx.restore();
+    const me = me_(); if (f >= 1 && me && Math.hypot(me.x - item.x, me.y - item.y) < 190) { ctx.font = "800 11px 'Barlow Condensed',Inter,sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(it.name.toUpperCase(), x, y - 22); ctx.fillStyle = c; ctx.fillText(it.name.toUpperCase(), x, y - 22); }
+  } else {
+    const glow = MAT_GLOW[item.ref] || "255,150,80", k = .6 + .4 * Math.sin(now / 260 + item.x);
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(x, gy + 6); ctx.scale(1, .38); const ring = ctx.createRadialGradient(0, 0, 3, 0, 0, 30); ring.addColorStop(0, `rgba(${glow},${.4 * k})`); ring.addColorStop(1, `rgba(${glow},0)`); ctx.fillStyle = ring; ctx.beginPath(); ctx.arc(0, 0, 30, 0, 7); ctx.fill(); ctx.restore();
+    const im = MAT_IMG[item.ref]; if (im?.complete && im.naturalWidth) ctx.drawImage(im, x - 16, y - 16, 32, 32); else { ctx.fillStyle = `rgb(${glow})`; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); }
+    if (item.amount > 1) { ctx.font = "800 11px 'Barlow Condensed',Inter,sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText("×" + item.amount, x + 12, y + 17); ctx.fillStyle = "#fff"; ctx.fillText("×" + item.amount, x + 12, y + 17); }
+  }
+  ctx.restore();
+}
+function hexRgb(h) { const n = parseInt(h.slice(1), 16); return `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`; }
+function roundRectPath(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+// ---- gear effects on the map: what teammates' gear looks like + the specials going off ----
+const gearLooks = new Map();   // sessionId -> Set of "aura" | "trail" | "runes" | "light"
+const gearTrails = new Map();   // sessionId -> [{ x, y, t }] (Glacier Boots frost, drawn from where we saw them walk)
+const gearFxList = [];
+function onGearLooks(m) { gearLooks.clear(); for (const [id, fx] of m.list || []) gearLooks.set(id, new Set(fx)); }
+function onGearFx(m) {
+  gearFxList.push({ ...m, t: gnow() }); while (gearFxList.length > 40) gearFxList.shift();
+  if (m.k === "heart" && m.id === myId) { flashUntil = gnow() + 160; feedLine("The Abomination's Heart: back on your feet!"); }
+  if (m.k === "block" && m.id === myId) shake(3, 120);
+}
+function drawGearGround(now) {   // under everyone: cold auras, rune circles, frost trails
+  if (!gearLooks.size) return;
+  for (const [id, set] of gearLooks) {
+    const p0 = state.players.get(id); if (!p0?.alive) { gearTrails.delete(id); continue; } const p = V(p0);
+    if (set.has("trail")) { let tr = gearTrails.get(id); if (!tr) gearTrails.set(id, tr = []); const last = tr[tr.length - 1]; if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 14) tr.push({ x: p.x, y: p.y + 12, t: now }); while (tr.length && now - tr[0].t > 2000) tr.shift();
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; for (const q of tr) { const a = 1 - (now - q.t) / 2000; if (!inView(q.x, q.y, 60)) continue; ctx.fillStyle = `rgba(170,225,255,${.22 * a})`; ctx.beginPath(); ctx.ellipse(q.x, q.y, 26, 10, 0, 0, 7); ctx.fill(); ctx.fillStyle = `rgba(235,250,255,${.35 * a})`; ctx.beginPath(); ctx.ellipse(q.x + Math.sin(q.t) * 6, q.y, 8, 3, 0, 0, 7); ctx.fill(); } ctx.restore(); }
+    if (!inView(p.x, p.y, 220)) continue;
+    if (set.has("aura")) { ctx.save(); const r = 170, k = .5 + .5 * Math.sin(now / 600); ctx.translate(p.x, p.y + 12); ctx.scale(1, .5); const g = ctx.createRadialGradient(0, 0, r * .55, 0, 0, r); g.addColorStop(0, "rgba(160,220,255,0)"); g.addColorStop(1, `rgba(170,225,255,${.1 + .06 * k})`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.strokeStyle = `rgba(200,240,255,${.18 + .1 * k})`; ctx.lineWidth = 2; ctx.setLineDash([10, 12]); ctx.lineDashOffset = -now / 60; ctx.stroke(); ctx.restore(); }
+    if (set.has("runes")) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.translate(p.x, p.y + 12); ctx.scale(1, .45); ctx.rotate(now / 1800); const k = .6 + .4 * Math.sin(now / 300); ctx.strokeStyle = `rgba(90,230,210,${.45 * k})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, 42, 0, 7); ctx.stroke();
+      for (let i = 0; i < 6; i++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(34, -5); ctx.lineTo(42, 0); ctx.lineTo(34, 5); ctx.moveTo(46, -6); ctx.lineTo(50, 6); ctx.stroke(); } ctx.restore(); }
+  }
+}
+function drawGearAir(now) {   // on top: fire rings, screams, blocks, chain hits, splashes, rock spikes, the Heart
+  for (let i = gearFxList.length - 1; i >= 0; i--) {
+    const f = gearFxList[i], age = now - f.t, len = f.k === "heart" ? 1100 : f.k === "chain" ? 260 : 520; if (age > len) { gearFxList.splice(i, 1); continue; }
+    const k = age / len, p = f.id && state.players.get(f.id) ? V(state.players.get(f.id)) : null, x = p ? p.x : f.x, y = p ? p.y : f.y;
+    ctx.save();
+    if (f.k === "ring" || f.k === "phoenix" || f.k === "molten") { const r = (f.r || 100) * (.25 + .75 * (1 - (1 - k) ** 2)), col = f.k === "molten" ? "255,120,30" : "255,150,40"; ctx.globalCompositeOperation = "lighter"; ctx.translate(x, y + 10); ctx.scale(1, .55);
+      const g = ctx.createRadialGradient(0, 0, r * .6, 0, 0, r); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(.8, `rgba(${col},${.5 * (1 - k)})`); g.addColorStop(1, `rgba(255,230,140,${.7 * (1 - k)})`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); }
+    else if (f.k === "shout") { ctx.translate(x, y - 10); for (let j = 0; j < 3; j++) { const kk = Math.min(1, k * 1.2 - j * .15); if (kk <= 0) continue; ctx.strokeStyle = `rgba(230,245,255,${.75 * (1 - kk)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, 0, (f.r || 190) * kk, (f.r || 190) * kk * .6, 0, 0, 7); ctx.stroke(); } }
+    else if (f.k === "block") { ctx.translate(x, y - 18); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(190,225,255,${.9 * (1 - k)})`; ctx.lineWidth = 4; ctx.beginPath(); for (let j = 0; j < 6; j++) { const a = j * Math.PI / 3 + Math.PI / 6, r = 30 + 8 * k; ctx[j ? "lineTo" : "moveTo"](Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.stroke(); ctx.fillStyle = `rgba(150,200,255,${.18 * (1 - k)})`; ctx.fill(); }
+    else if (f.k === "chain" && f.pts?.length > 1) { ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = `rgba(120,255,170,${1 - k})`; ctx.lineWidth = 3; ctx.shadowColor = "#5dffa0"; ctx.shadowBlur = 8; const [x0, y0] = f.pts[0];
+      for (const [x1, y1] of f.pts.slice(1)) { ctx.beginPath(); ctx.moveTo(x0, y0 - 20); for (let j = 1; j < 6; j++) { const t = j / 6; ctx.lineTo(x0 + (x1 - x0) * t + Math.sin(f.t + j * 7) * 9, y0 - 20 + (y1 - y0) * t + Math.cos(f.t + j * 5) * 9); } ctx.lineTo(x1, y1 - 20); ctx.stroke(); } }
+    else if (f.k === "spike") { ctx.translate(x, y + 8); ctx.fillStyle = `rgba(150,120,90,${1 - k})`; ctx.strokeStyle = `rgba(40,28,20,${1 - k})`; ctx.lineWidth = 2; const h = 46 * Math.min(1, k * 4) * (1 - k * .4);
+      for (const [dx, sc] of [[-14, .7], [0, 1], [13, .8]]) { ctx.beginPath(); ctx.moveTo(dx - 8 * sc, 0); ctx.lineTo(dx, -h * sc); ctx.lineTo(dx + 8 * sc, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+    else if (f.k === "heart") { ctx.translate(x, y - 30 - k * 40); ctx.globalAlpha = 1 - k; ctx.font = "900 18px 'Barlow Condensed',Inter,sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText("BACK UP!", 0, 0); ctx.fillStyle = "#7dff8e"; ctx.fillText("BACK UP!", 0, 0);
+      ctx.globalCompositeOperation = "lighter"; const g = ctx.createRadialGradient(0, 40, 4, 0, 40, 70); g.addColorStop(0, "rgba(255,90,90,.6)"); g.addColorStop(1, "rgba(255,40,40,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 40, 70, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+}
+const gearLightMult = () => myGearTot.sp.light ? 1.3 : 1;   // Miner's / Foreman's Helmet: a bigger light at night (only yours)
+
+// ---- the inventory window ----
+let invTab = "equip", bagTab = "gear", invSort = "rarity", invSel = 0, invEnhOpen = false, invEnhMsg = null;
+try { const s = JSON.parse(localStorage.getItem("sa-inv") || "{}"); if (["rarity", "slot", "boss", "new"].includes(s.sort)) invSort = s.sort; } catch {}
+const invOpen = () => !$("inv").classList.contains("hidden");
+function invToggle(force) { const open = force ?? !invOpen(); if (open && inMatch()) { togglePanel("inv"); return; } if (!open) { $("inv").classList.add("hidden"); invHideTip(); return; } $("inv").classList.remove("hidden"); renderInv(); }
+function invClass() { const me = me_(); return (inMatch() && me?.characterClass) || selectedClass || "assault"; }
+const INV_HERO = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", operator: "assets/hero/operator.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp", demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", slasher: "assets/portraits/slasher.webp" };
+function invHero(cls) { return INV_HERO[cls] || INV_HERO.assault; }
+const INV_BOSS_FACE = { butcher: "assets/portraits/butcher.webp", hivemind: "assets/portraits/hivemind.webp", screamer: "assets/portraits/screamer.webp", pyre: "assets/portraits/pyre.webp", minebeast: "assets/portraits/minebeast.webp", abomination: "assets/portraits/abomination.webp" };
+function sortBag(list) {
+  const by = { rarity: (a, b) => G.ITEM[b.id].t - G.ITEM[a.id].t || b.l - a.l || b.at - a.at, slot: (a, b) => G.SLOTS.indexOf(G.ITEM[a.id].slot) - G.SLOTS.indexOf(G.ITEM[b.id].slot) || G.ITEM[b.id].t - G.ITEM[a.id].t,
+    boss: (a, b) => Object.keys(G.BOSSES).indexOf(G.ITEM[a.id].boss) - Object.keys(G.BOSSES).indexOf(G.ITEM[b.id].boss) || G.ITEM[b.id].t - G.ITEM[a.id].t, new: (a, b) => b.at - a.at || b.u - a.u }[invSort];
+  return list.slice().sort(by);
+}
+function cellHtml(e, extra = "") {
+  const it = G.ITEM[e.id], c = colOf(it);
+  return `<button class="ic-cell${invSel === e.u ? " sel" : ""}${it.t >= 10 ? " leg" : ""}" style="--bc:${c}" data-u="${e.u}" ${extra}>${slotSvg(it.slot, c, 34)}${e.l ? `<em>+${e.l}</em>` : ""}</button>`;
+}
+function renderInv() {
+  if (!invOpen()) return;
+  const cls = invClass(), R = ROSTER.find(r => r.id === cls) || { name: cls.toUpperCase(), role: "", hp: 100 }, T = myGearTot, st = T.st;
+  if (invSel && !gearEntry(invSel)) invSel = 0;
+  for (const b of document.querySelectorAll(".inv-tabs button")) b.classList.toggle("on", b.dataset.tab === invTab);
+  for (const p of document.querySelectorAll(".inv-pane")) p.classList.toggle("hidden", p.dataset.pane !== invTab);
+  // EQUIPMENT tab
+  const slot = s => { const e = gearEntry(gear.eq[s]); return `<div class="inv-slot" data-slot="${s}">${e ? cellHtml(e, `data-eq="${s}"`) : `<button class="ic-cell empty" data-eq="${s}">${slotSvg(s, "#5c6d73", 30)}</button>`}<span>${G.SLOT_NAME[s].toUpperCase()}</span></div>`; };
+  html("invSlotsL", ["head", "outfit", "gloves"].map(slot).join("")); html("invSlotsR", ["boots", "gunmod", "trophy"].map(slot).join(""));
+  const hero = invHero(cls); if ($("invHero").getAttribute("src") !== hero) $("invHero").src = hero; if ($("invHero2").getAttribute("src") !== hero) $("invHero2").src = hero;
+  html("invName", `${escapeHtml(R.name)} · <em>${escapeHtml(R.role)}</em>`); html("invName2", `${escapeHtml(R.name)} · <em>${escapeHtml(R.role)}</em>`);
+  const tot = [["hp", "HP", R.hp + (st.hp || 0), "#ff5d5d"], ["arm", "ARMOUR", st.arm || 0, "#5fd0ff"], ["dmg", "DAMAGE", "+" + (st.dmg || 0) + "%", "#ff9a3c"], ["spd", "SPEED", "+" + (st.spd || 0) + "%", "#dfe7ea"]];
+  html("invTot", tot.map(([k, n, v, c]) => `<div><i style="--c:${c}">${STAT_ICON[k]}</i><span>${n}</span><b>${v}</b></div>`).join(""));
+  for (const b of document.querySelectorAll(".inv-btabs button")) b.classList.toggle("on", b.dataset.btab === bagTab);
+  $("invSort").value = invSort; $("invSort").classList.toggle("hidden", bagTab !== "gear");
+  if (bagTab === "gear") {
+    const list = sortBag(gear.bag.filter(b => !isEquipped(b.u))), cells = list.map(e => cellHtml(e)), n = Math.max(30, Math.ceil((cells.length + 1) / 6) * 6);
+    while (cells.length < n) cells.push(`<i class="ic-cell blank"></i>`);
+    html("invGrid", cells.join("")); $("invGrid").classList.remove("mats");
+  } else {
+    html("invGrid", [...MAT_KEYS, ...ESS_KEYS].map(m => `<div class="mat-row${gear.pouch[m] ? "" : " none"}"><img src="${matIconUrl(m)}" alt=""><span><b>${escapeHtml(G.matName(m))}</b><small>${m.startsWith("ess:") ? "Enhances " + escapeHtml(G.BOSSES[m.slice(4)].name) + "'s epics + legendaries from +8" : G.MATS[m].use}</small></span><em>${(gear.pouch[m] || 0).toLocaleString()}</em></div>`).join("")); $("invGrid").classList.add("mats");
+  }
+  html("invCount", `${gear.bag.length} ITEM${gear.bag.length === 1 ? "" : "S"}`);
+  const essN = ESS_KEYS.reduce((a, k) => a + (gear.pouch[k] || 0), 0);
+  html("invPouch", [["gold", "GOLD"], ["iron", "IRON ORE"], ["silver", "SILVER ORE"], ["titanium", "TITANIUM ORE"]].map(([m, n]) => `<div title="${escapeHtml(G.MATS[m].use)}"><img src="${matIconUrl(m)}" alt=""><span>${n}</span><b>${m === "gold" ? (gear.pouch.gold || 0).toLocaleString() : "×" + (gear.pouch[m] || 0)}</b></div>`).join("") +
+    `<div title="${ESS_KEYS.map(k => G.matName(k) + ": " + (gear.pouch[k] || 0)).join(" · ")}"><span class="ess6">${ESS_KEYS.map(k => `<img src="${matIconUrl(k)}" alt="" class="${gear.pouch[k] ? "" : "dim"}">`).join("")}</span><span>BOSS ESSENCE</span><b>×${essN}</b></div>`);
+  // footer buttons
+  const sel = gearEntry(invSel), selEq = sel && isEquipped(sel.u);
+  $("invEquip").textContent = selEq ? "UNEQUIP" : "EQUIP"; $("invEquip").disabled = !sel; $("invEnh").disabled = !sel || sel.l >= 10;
+  // STATS tab
+  html("invMini", G.SLOTS.map(s => { const e = gearEntry(gear.eq[s]); return e ? cellHtml(e, `data-eq="${s}"`) : `<button class="ic-cell empty" data-eq="${s}">${slotSvg(s, "#5c6d73", 26)}<small>${G.SLOT_NAME[s].toUpperCase()}</small></button>`; }).join(""));
+  html("invFilled", `${gearEquipped().length} / 6 SLOTS FILLED`);
+  const rows = [["hp", "MAX HP", R.hp, st.hp || 0, "", 320], ["arm", "ARMOUR", 0, st.arm || 0, "", 27], ["dmg", "DAMAGE", 100, st.dmg || 0, "%", 200], ["rate", "FIRE RATE", 100, st.rate || 0, "%", 200], ["spd", "MOVE SPEED", 100, st.spd || 0, "%", 200], ["cdr", "SKILL RECHARGE", 100, st.cdr || 0, "%", 200]];
+  if (st.mel) rows.push(["mel", "MELEE DAMAGE", 100, st.mel, "%", 200]); if (st.rng) rows.push(["rng", "RANGE", 100, st.rng, "%", 200]);
+  html("invStats", rows.map(([k, n, b, g, u, cap]) => `<div class="sr"><i>${STAT_ICON[k]}</i><span>${n}${k === "arm" && g ? `<small>${Math.round(G.armourCut(g) * 100)}% less damage</small>` : ""}</span><em>${b}${u}</em><strong>${g ? "+" + g + u : "—"}</strong><b>${b + g}${u}</b><div class="bar"><i style="width:${Math.min(100, b / cap * 100)}%"></i><i class="g" style="width:${Math.min(100 - Math.min(100, b / cap * 100), g / cap * 100)}%"></i></div></div>`).join(""));
+  const specials = []; for (const e of gearEquipped()) { const it = G.ITEM[e.id]; for (const [k, v] of Object.entries(it.sp)) { if (k === "soon") specials.push({ n: G.SOON[v] || v, it, soon: true }); else if (G.SPECIALS[k]) specials.push({ n: G.SPECIALS[k](v), it }); } }
+  html("invSpecials", specials.length ? specials.map(s => `<div class="spc${s.soon ? " soon" : ""}" style="--bc:${colOf(s.it)}"><i>${slotSvg(s.it.slot, colOf(s.it), 26)}</i><span><b>${escapeHtml(s.n)}</b><small>${escapeHtml(s.it.name)}${s.soon ? " · COMING SOON" : ""}</small></span></div>`).join("") : `<p class="inv-none">No specials yet. Epic and legendary gear from bosses have them.</p>`);
+  html("invColl", Object.entries(G.BOSSES).map(([b, B]) => { const n = G.ITEMS.filter(it => it.boss === b && gear.found[it.id]).length; return `<div class="co" title="${escapeHtml(B.name)}: ${n} of 15 found"><img src="${INV_BOSS_FACE[b]}" alt=""><div class="bar"><i style="width:${n / 15 * 100}%"></i></div><b>${n}/15</b></div>`; }).join(""));
+  renderEnh();
+}
+const STAT_ICON = {
+  hp: `<svg viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z" fill="#ff5d5d"/></svg>`,
+  arm: `<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z" fill="#5fd0ff"/><path d="M12 2v20" stroke="#0b2a3a" stroke-width="1.5"/></svg>`,
+  dmg: `<svg viewBox="0 0 24 24"><path d="M12 2l2.5 6 5-3-2 6.5 4.5 2-5.5 1.5 1 6-5.5-4-5.5 4 1-6L2 13.5l4.5-2-2-6.5 5 3z" fill="#ff7a2c"/></svg>`,
+  rate: `<svg viewBox="0 0 24 24"><g fill="#e8b84a"><rect x="3" y="8" width="4" height="13" rx="2"/><rect x="10" y="5" width="4" height="16" rx="2"/><rect x="17" y="8" width="4" height="13" rx="2"/></g></svg>`,
+  spd: `<svg viewBox="0 0 24 24"><path d="M4 6h11l5 6-5 6H4l4-6z" fill="#dfe7ea"/><path d="M1 9h5M1 15h5" stroke="#dfe7ea" stroke-width="2"/></svg>`,
+  cdr: `<svg viewBox="0 0 24 24" fill="none" stroke="#dfe7ea" stroke-width="2.2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>`,
+  mel: `<svg viewBox="0 0 24 24"><path d="M14 3l7 0 0 7-9 9-3-3-3 3-2-2 3-3-3-3z" fill="#e0e6ea"/></svg>`,
+  rng: `<svg viewBox="0 0 24 24" fill="none" stroke="#9fd0ff" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5"/></svg>`,
+};
+// the hover card (same as the gear tab of the progress infographic)
+function itemCard(e) {
+  const it = G.ITEM[e.id], c = colOf(it), s = G.itemStats(it, e.l), base = it.st, cur = gearEntry(gear.eq[it.slot]), mine = cur && cur.u !== e.u ? cur : null;
+  const label = { hp: ["Max HP", ""], arm: ["Armour", ""], dmg: ["Damage", "%"], mel: ["Melee damage", "%"], rate: ["Fire rate", "%"], spd: ["Move speed", "%"], cdr: ["Skill recharge", "%"], rng: ["Range", "%"] };
+  const rows = Object.keys(base).map(k => `<div class="tt-s"><span>${label[k][0]}</span><b>+${s[k]}${label[k][1]}</b><small>${base[k]}${label[k][1]}${e.l ? ` <em>+${s[k] - base[k]}</em>` : ""}</small></div>`).join("");
+  let cmp = "";
+  if (!isEquipped(e.u)) {
+    const ms = mine ? G.itemStats(G.ITEM[mine.id], mine.l) : {}, lines = [];
+    for (const k of new Set([...Object.keys(s), ...Object.keys(ms)])) { const d = (s[k] || 0) - (ms[k] || 0); if (d) lines.push(`<li class="${d > 0 ? "up" : "dn"}">${d > 0 ? "▲ +" : "▼ "}${d}${label[k][1]} ${label[k][0].toLowerCase()}</li>`); }
+    const spNew = Object.keys(it.sp).filter(k => k !== "soon"), spOld = mine ? Object.keys(G.ITEM[mine.id].sp).filter(k => k !== "soon") : [];
+    for (const k of spNew) if (!spOld.includes(k) && G.SPECIALS[k]) lines.push(`<li class="up">▲ ${escapeHtml(G.SPECIALS[k](it.sp[k]).toLowerCase())}</li>`);
+    for (const k of spOld) if (!spNew.includes(k) && G.SPECIALS[k]) lines.push(`<li class="dn">▼ ${escapeHtml(G.SPECIALS[k](G.ITEM[mine.id].sp[k]).toLowerCase())}</li>`);
+    cmp = `<div class="tt-vs"><small>${mine ? "vs your " + escapeHtml(G.ITEM[mine.id].name) + (mine.l ? " +" + mine.l : "") : "your " + G.SLOT_NAME[it.slot].toLowerCase() + " slot is empty"}</small><ul>${lines.join("") || '<li class="eq">same stats</li>'}</ul></div>`;
+  } else cmp = `<div class="tt-vs"><small>equipped</small><ul><li class="eq">worn by every survivor you play</li></ul></div>`;
+  const spTxt = it.t >= 8 || Object.keys(it.sp).length ? `<div class="tt-sp${it.sp.soon ? " soon" : ""}"><b>${it.sp.soon ? "SPECIAL · COMING SOON" : "SPECIAL"}</b>${escapeHtml(it.txt)}</div>` : "";
+  const ec = G.enhanceCost(it, e.l);
+  const enh = ec ? `<div class="tt-en"><div><b>ENHANCE</b><span>+${e.l} → +${e.l + 1}</span><em>${ec.chance}% chance</em></div><small>${costList(ec)}</small></div>` : `<div class="tt-en"><div><b>ENHANCE</b><span>+10 · MAXED</span></div></div>`;
+  return `<div class="tt" style="--bc:${c}"><div class="tt-top"><span class="tb">${bandOf(it).toUpperCase()} · T${it.t}</span><span class="pips">${Array.from({ length: 10 }, (_, i) => `<i class="${i < e.l ? "on" : ""}"></i>`).join("")}</span></div>
+    <h4>${escapeHtml(it.name)}${e.l ? ` <span>+${e.l}</span>` : ""}</h4><div class="tt-meta">${G.SLOT_NAME[it.slot]} · ${G.KIND_NAME[it.kind]} · from ${escapeHtml(G.BOSSES[it.boss].name)}</div>
+    <div class="tt-mid"><div class="tt-ic">${slotSvg(it.slot, c, 40)}</div>${cmp}</div>${rows ? `<div class="tt-st">${rows}</div>` : ""}${spTxt}${enh}</div>`;
+}
+function costList(ec) { return Object.entries(ec).filter(([k]) => k !== "chance").map(([k, v]) => `${k === "gold" ? v + " Gold" : v + " " + escapeHtml(G.matName(k))}`).join(" · "); }
+function invShowTip(u, ev) {
+  const e = gearEntry(u); if (!e) return invHideTip(); const tip = $("invTip"); tip.innerHTML = itemCard(e); tip.classList.remove("hidden");
+  const r = tip.getBoundingClientRect(), W = innerWidth, H = innerHeight; let x = ev.clientX + 18, y = ev.clientY - 20;
+  if (x + r.width > W - 8) x = ev.clientX - r.width - 18; if (y + r.height > H - 8) y = H - r.height - 8; tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+function invHideTip() { $("invTip")?.classList.add("hidden"); }
+function invEquipToggle(u) {
+  const e = gearEntry(u); if (!e) return; const it = G.ITEM[e.id];
+  if (gear.eq[it.slot] === u) delete gear.eq[it.slot]; else gear.eq[it.slot] = u;
+  invSel = u; uiSound("click"); invHideTip(); gearChanged();
+}
+// enhancing: costs ores + gold (+ that boss's essence for epics / legendaries from +8); a fail uses the materials, the item keeps its level
+function renderEnh() {
+  const box = $("invEnhBox"), e = gearEntry(invSel); box.classList.toggle("hidden", !invEnhOpen || !e); if (!invEnhOpen || !e) return;
+  const it = G.ITEM[e.id], c = colOf(it), ec = G.enhanceCost(it, e.l);
+  const need = ec ? Object.entries(ec).filter(([k]) => k !== "chance") : [], can = ec && need.every(([k, v]) => (gear.pouch[k] || 0) >= v);
+  box.innerHTML = `<div class="enh" style="--bc:${c}"><h3>ENHANCE</h3><div class="enh-it">${cellHtml(e)}<span><b>${escapeHtml(it.name)}</b><small>${ec ? `+${e.l} → <em>+${e.l + 1}</em> · each + adds 5% of its stats` : "MAXED AT +10"}</small></span></div>
+    ${ec ? `<div class="enh-chance"><span>SUCCESS CHANCE</span><b>${ec.chance}%</b></div><ul class="enh-cost">${need.map(([k, v]) => `<li class="${(gear.pouch[k] || 0) >= v ? "ok" : "no"}"><img src="${matIconUrl(k)}" alt=""><span>${escapeHtml(k === "gold" ? "Gold" : G.matName(k))}</span><b>${(gear.pouch[k] || 0).toLocaleString()} / ${v}</b></li>`).join("")}</ul>` : ""}
+    ${invEnhMsg ? `<p class="enh-msg ${invEnhMsg.ok ? "ok" : "no"}">${invEnhMsg.text}</p>` : ""}
+    <p class="enh-note">A fail uses the materials, but the item never loses a level.</p>
+    <div class="enh-btns"><button class="inv-btn ghost" data-enh="close">CLOSE</button><button class="inv-btn" data-enh="go" ${can ? "" : "disabled"}>${!ec ? "MAXED" : can ? `ENHANCE (${ec.chance}%)` : "NOT ENOUGH MATERIALS"}</button></div></div>`;
+}
+function invEnhance() {
+  const e = gearEntry(invSel); if (!e) return; const it = G.ITEM[e.id], ec = G.enhanceCost(it, e.l); if (!ec) return;
+  const need = Object.entries(ec).filter(([k]) => k !== "chance"); if (!need.every(([k, v]) => (gear.pouch[k] || 0) >= v)) return;
+  for (const [k, v] of need) { gear.pouch[k] -= v; if (!gear.pouch[k]) delete gear.pouch[k]; }
+  if (Math.random() * 100 < ec.chance) { e.l++; invEnhMsg = { ok: true, text: `SUCCESS! ${it.name} is now +${e.l}` }; uiSound("gold"); }
+  else { invEnhMsg = { ok: false, text: `FAILED. The materials are used up; it stays +${e.l}.` }; uiSound("click"); }
+  gearChanged();
+}
+function invWire() {
+  const win = $("inv");
+  win.addEventListener("click", ev => {
+    const t = ev.target;
+    if (t.closest(".inv-x") || t === win) return invToggle(false);
+    const tab = t.closest(".inv-tabs button"); if (tab) { invTab = tab.dataset.tab; uiSound("click"); renderInv(); return; }
+    const bt = t.closest(".inv-btabs button"); if (bt) { bagTab = bt.dataset.btab; uiSound("click"); renderInv(); return; }
+    const enh = t.closest("[data-enh]"); if (enh) { if (enh.dataset.enh === "close") { invEnhOpen = false; invEnhMsg = null; renderInv(); } else invEnhance(); return; }
+    if (t.closest("#invEquip")) { if (invSel) invEquipToggle(invSel); return; }
+    if (t.closest("#invEnh")) { if (invSel) { invEnhOpen = true; invEnhMsg = null; renderInv(); } return; }
+    const cell = t.closest(".ic-cell[data-u]"); if (cell) { invSel = Number(cell.dataset.u); invEnhMsg = null; uiSound("click"); renderInv(); return; }
+  });
+  win.addEventListener("dblclick", ev => { const cell = ev.target.closest(".ic-cell[data-u]"); if (cell && !ev.target.closest(".enh")) invEquipToggle(Number(cell.dataset.u)); });
+  win.addEventListener("mousemove", ev => { const cell = ev.target.closest(".ic-cell[data-u]"); if (cell && !ev.target.closest(".enh")) invShowTip(Number(cell.dataset.u), ev); else invHideTip(); });
+  win.addEventListener("mouseleave", invHideTip);
+  $("invSort").addEventListener("change", e => { invSort = e.target.value; try { localStorage.setItem("sa-inv", JSON.stringify({ sort: invSort })); } catch {} renderInv(); });
+  $("lsInvBtn")?.addEventListener("click", () => invToggle(true));
+}
+invWire();
+window.__saGear = { get: () => gear, inv: () => ({ open: invOpen(), tab: invTab, sel: invSel }),   // test hook (the gear lives in localStorage anyway)
+  give(list) { for (const [id, l, eq] of list) if (G.ITEM[id]) { const e = { u: ++gear.seq, id, l: l || 0, at: Date.now() }; gear.bag.push(e); gear.found[id] = 1; if (eq) gear.eq[G.ITEM[id].slot] = e.u; } gearChanged(); },
+  mats(o) { for (const [k, n] of Object.entries(o)) gear.pouch[k] = (gear.pouch[k] || 0) + n; gearChanged(); }, reset() { gear = gearBlank(); gearChanged(); }, tab(t) { invTab = t; renderInv(); }, sel(u) { invSel = u; renderInv(); }, enh(on) { invEnhOpen = on; renderInv(); } };
 
 let levelUpBuiltFor = "", levelUpWaitUntil = 0;
 const MAX_LEVEL = 30, xpForLevel = L => 30 + 72 * (L - 1);   // matches the server (shared team XP, cap 30)
@@ -927,6 +1214,8 @@ $("gameArea").addEventListener("wheel", e => {
 window.addEventListener("keydown", e => {
   if (e.target.closest?.("input,select,textarea")) return;
   const k = e.key.toLowerCase();
+  if (k === "i" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); invToggle(); return; }   // (Nov 17) the inventory: boss gear, in the lobby and in a match
+  if (k === "escape" && invOpen() && (invEnhOpen || !inMatch())) { e.preventDefault(); if (invEnhOpen) { invEnhOpen = false; invEnhMsg = null; renderInv(); } else invToggle(false); return; }
   if (!inMatch()) return;
   if (k === "enter" && state?.bossPhase === "intro" && !introAcked) { e.preventDefault(); ackBoss(); return; }
   if (k === "escape" && placing) { e.preventDefault(); placing = null; return; }   // stop placing a deployable
@@ -3811,6 +4100,7 @@ function drawPlateFx(f, age) {   // false when finished
   return false;
 }
 function drawLoot(item) {
+  if (item.kind === "gear" || item.kind === "mat") return drawGearLoot(item);   // (Nov 17) boss gear + materials from a loot burst
   if (item.kind === "pyreplate") {   // a legendary drop: a pillar of light, the plate floating and turning in it, embers
     const now = gnow(), x = item.x, bob = Math.sin(now / 320 + item.x) * 4, y = item.y - 22 + bob, k = .7 + .3 * Math.sin(now / 200 + item.y);
     ctx.save(); ctx.globalCompositeOperation = "lighter";
@@ -5118,6 +5408,7 @@ function drawWorldObjects(extra) {
   drawPuddles();
   if (siennaAnim.size) drawIceFloors(gnow());   // (Nov 17) Sienna's Q ice floor
   drawGroundFx();
+  drawGearGround(gnow());   // boss gear: cold auras, rune circles, frost trails
   drawAstraGround();
   drawStompDust();
   drawHealRings();
@@ -5131,6 +5422,7 @@ function drawWorldObjects(extra) {
   if (siennaDecoys.size || sfxList.length || frozenZ.size) drawSiennaItems(items, gnow());   // (Nov 16) Sienna: decoys, ice bursts, shatters, the grenade in flight   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
+  if (gearFxList.length) { const d = ctxDepth; ctx.save(); try { drawGearAir(gnow()); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // boss gear specials going off
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
   for (const f of mechaLate.splice(0)) { const d = ctxDepth; ctx.save(); try { f(); } catch (e) { reportError(e, "draw"); } unwindTo(d); }     // a sprite that throws can't leave its save() open   // one broken sprite can't stop the rest
   ctx.fillStyle = '#e9d7b2'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillText('RADIO TOWER', cx, cy + 104);
@@ -5205,7 +5497,7 @@ function drawNight() {
     for (const [x, y] of pmN.beacons.slice(0, 1)) lightHole(x - cam.x, y + 200 - cam.y, 170, .7);   // the tower compound's floodlights
   }
   const me = V(me_()), view = V(viewTarget());
-  if (me) lightHole(me.x - cam.x, me.y - 10 - cam.y, me.alive ? NIGHT.playerR : NIGHT.playerR * .5, me.alive ? 1 : .8);   // only YOUR light (smaller while downed)
+  if (me) lightHole(me.x - cam.x, me.y - 10 - cam.y, (me.alive ? NIGHT.playerR : NIGHT.playerR * .5) * gearLightMult(), me.alive ? 1 : .8);   // (a Miner's / Foreman's Helmet: a bigger light)   // only YOUR light (smaller while downed)
   if (view && view !== me) lightHole(view.x - cam.x, view.y - 10 - cam.y, NIGHT.playerR, 1);   // spectating: see around the teammate you're watching
   for (const f of fx) if (f.type === "boom" && now - f.t < 400) lightHole(f.x - cam.x, f.y - cam.y, 220, .8 * (1 - (now - f.t) / 400));   // explosions light things up
   pyreLights(now);   // the Pyre Priest and his fires light the night
@@ -5410,7 +5702,7 @@ async function copyText(text, done) { try { await navigator.clipboard.writeText(
 
 function setSelectedClass(id, send = true) {
   if (!ROSTER.some(r => r.id === id)) id = "assault";
-  selectedClass = id; renderRoster(); renderHero(); renderSide();
+  selectedClass = id; renderRoster(); renderHero(); renderSide(); if (invOpen()) renderInv();
   if (send && room) room.send("chooseClass", { id });
 }
 function renderRoster() {
@@ -5464,7 +5756,7 @@ function renderPages() {
     <h4>LEVELLING & SHOP</h4><p>Kills give XP. Each level lets you pick an upgrade (press U). Between waves the shop opens: spend gold on guns, melee weapons and medkits.</p>`;
 }
 function setView(v) {
-  ls.view = v; document.querySelectorAll(".ls-nav button").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  ls.view = v; document.querySelectorAll(".ls-nav button[data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === v));
   document.querySelectorAll(".ls-view").forEach(s => s.hidden = s.dataset.view !== v);
   if (v !== "lobby") renderPages();
 }
@@ -5564,7 +5856,7 @@ addEventListener("pointermove", e => { if (!lsAnimOn || document.body.classList.
 { const im = new Image(); im.onload = () => { $("lsBgArt").src = im.src; $("lsBgArt").hidden = false; }; im.src = "assets/hero/background.webp"; }   // ChatGPT background over the drawn skyline
 
 // ---- wiring ----
-document.querySelectorAll(".ls-nav button").forEach(b => b.onclick = () => setView(b.dataset.view));
+document.querySelectorAll(".ls-nav button[data-view]").forEach(b => b.onclick = () => setView(b.dataset.view));
 document.querySelectorAll(".ls-filters button").forEach(b => b.onclick = () => { ls.cat = b.dataset.cat; document.querySelectorAll(".ls-filters button").forEach(x => x.classList.toggle("on", x === b)); renderRoster(); });
 document.querySelectorAll(".ls-tabs button").forEach(b => b.onclick = () => { ls.tab = b.dataset.tab; renderSide(); });
 $("characterGrid").addEventListener("click", e => { const t = e.target.closest(".ls-tile[data-class]"); if (t) setSelectedClass(t.dataset.class, true); });

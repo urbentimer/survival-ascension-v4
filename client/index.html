@@ -508,6 +508,112 @@ body.in-match #ls{display:none}
 .eq-row.plate-row{border-color:#ffb347;background:linear-gradient(90deg,rgba(255,150,40,.18),transparent);cursor:pointer}
 .eq-row.plate-row b{color:#ffd29a}
 @media (max-width:980px){.pm{align-items:flex-start}.pm-wrap{flex-direction:column;align-items:center;zoom:1}.pm-left{width:min(420px,100%)}.pm-dev,.pm-ctl{width:100%}.pm-boss{grid-template-columns:72px minmax(0,1fr)}.pm-face{width:72px;height:56px}.pm-face img{width:68px;height:52px}.pm-bb{grid-column:1/-1;flex-wrap:wrap;justify-content:flex-start}.pm-grid3,.pm-trow,.pm-t2,.pm-util{grid-template-columns:1fr 1fr}.pm-title{font-size:30px}.pm-tab{font-size:20px!important}}
+/* (Nov 17) BOSS GEAR: the inventory window (I) + pickup cards */
+.inv{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(3,6,10,.62);backdrop-filter:blur(3px);font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;color:#e9eef0}
+.inv.hidden,.inv .hidden{display:none!important}
+.inv-win{position:relative;width:min(1180px,100%);max-height:calc(100vh - 28px);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;background:linear-gradient(180deg,#151c21,#0d1317);border:1px solid #3b474e;border-radius:6px;box-shadow:0 30px 80px #000c,inset 0 0 0 1px #0007;overflow:hidden}
+.inv-win:before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:6px;box-shadow:inset 0 0 0 2px #f28b3622;background:linear-gradient(135deg,#f28b3640 0,transparent 14%) top left/100% 100% no-repeat}
+.inv-head{display:flex;align-items:center;gap:18px;padding:12px 18px 10px;border-bottom:2px solid #f28b36}
+.inv-head h2{margin:0;font:italic 800 40px/1 "Barlow Condensed",sans-serif;color:#f28b36;letter-spacing:.02em;text-shadow:0 2px 0 #0008}
+.inv-tabs{display:flex;gap:8px}.inv-tabs button,.inv-btabs button{font:italic 800 21px/1 "Barlow Condensed",sans-serif;letter-spacing:.04em;padding:9px 26px;border:1px solid #4c595f;background:linear-gradient(180deg,#2c363c,#1e262b);color:#e2e8ea;transform:skewX(-12deg);cursor:pointer;border-radius:3px}
+.inv-tabs button.on,.inv-btabs button.on{background:linear-gradient(180deg,#ff9c42,#e0701b);border-color:#ffb46e;color:#1d1006}
+.inv-sp{flex:1}.inv-key{font:800 18px/1 ui-monospace,monospace;border:1.5px solid #8b989d;border-radius:5px;padding:5px 11px;color:#dfe6e8}
+.inv-x{background:none;border:0;color:#eef2f3;font-size:30px;line-height:1;cursor:pointer;padding:0 4px}.inv-x:hover{color:#f28b36}
+.inv-body{padding:14px 18px;overflow:auto;min-height:0}
+.inv-box{background:#0f161a;border:1px solid #2e3a40;border-radius:6px;padding:12px;min-width:0}
+.inv h3{margin:0 0 10px;font:italic 800 25px/1 "Barlow Condensed",sans-serif;letter-spacing:.03em;color:#f2f5f6;display:flex;align-items:center;gap:8px}
+.inv-sl{display:inline-block;width:42px;height:10px;background:repeating-linear-gradient(115deg,#f28b36 0 4px,transparent 4px 9px)}
+.inv-eq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:14px}
+.inv-char{display:grid;gap:10px;align-content:start}
+.inv-doll{display:grid;grid-template-columns:104px minmax(0,1fr) 104px;align-items:center;gap:8px;min-height:400px}
+.inv-hero{position:relative;height:430px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.inv-hero:before{content:"";position:absolute;left:12%;right:12%;bottom:0;height:40%;background:radial-gradient(ellipse at 50% 100%,#3a8fd855,transparent 70%)}
+.inv-hero img{position:relative;height:100%;width:100%;object-fit:cover;object-position:50% 12%;-webkit-mask-image:linear-gradient(180deg,#000 82%,transparent);mask-image:linear-gradient(180deg,#000 82%,transparent)}
+.inv-col{display:grid;gap:22px}.inv-slot{position:relative;display:grid;justify-items:center;gap:5px}
+.inv-slot span{font:700 17px/1 "Barlow Condensed",sans-serif;letter-spacing:.05em;color:#e3e9eb}
+.inv-col.l .inv-slot:after,.inv-col.r .inv-slot:after{content:"";position:absolute;top:43px;width:22px;border-top:1px solid #9aa7ac66}.inv-col.l .inv-slot:after{right:-16px}.inv-col.r .inv-slot:after{left:-16px}
+.ic-cell{position:relative;display:grid;place-items:center;width:86px;height:86px;padding:0;border-radius:8px;border:2px solid var(--bc,#4b5a60);background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--bc,#4b5a60) 26%,transparent),#0a1013 72%);cursor:pointer;transition:transform .08s}
+.ic-cell:hover{transform:translateY(-1px);box-shadow:0 0 0 1px #fff3,0 0 14px color-mix(in srgb,var(--bc) 50%,transparent)}
+.ic-cell.leg{box-shadow:0 0 12px color-mix(in srgb,var(--bc) 55%,transparent)}
+.ic-cell.sel{outline:2px solid #fff;outline-offset:2px}
+.ic-cell svg{width:52%;height:52%}.ic-cell em{position:absolute;top:3px;right:5px;font:800 17px/1 "Barlow Condensed",sans-serif;font-style:normal;color:#fff;text-shadow:0 1px 2px #000,0 0 6px #000}
+.ic-cell.empty{border:2px dashed #4f5e64;background:#0b1114;cursor:default}.ic-cell.empty small{position:absolute;bottom:6px;font:700 11px/1 "Barlow Condensed",sans-serif;color:#6d7c82;letter-spacing:.05em}
+.ic-cell.blank{border:1px solid #27333a;background:#0c1215;cursor:default;pointer-events:none}
+.inv-name{justify-self:center;font:italic 800 30px/1 "Barlow Condensed",sans-serif;letter-spacing:.03em;padding:7px 34px;background:linear-gradient(90deg,transparent,#0b1013 12%,#0b1013 88%,transparent);border-top:2px solid #f28b36;border-bottom:2px solid #f28b36;transform:skewX(-10deg);white-space:nowrap}
+.inv-name em{color:#f28b36;font-style:inherit}
+.inv-tot{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#0b1114;border:1px solid #2e3a40;border-radius:6px;padding:10px 6px}
+.inv-tot div{display:grid;grid-template-columns:auto 1fr;column-gap:7px;padding:0 9px;border-left:1px solid #2e3a40;align-items:center}.inv-tot div:first-child{border-left:0}
+.inv-tot i{grid-row:span 2;width:28px;height:28px}.inv-tot i svg{width:100%;height:100%}
+.inv-tot span{font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.03em;color:#dfe5e7;white-space:nowrap}.inv-tot b{font:800 30px/1.05 "Barlow Condensed",sans-serif;color:#fff}
+.inv-right{display:grid;gap:14px;grid-template-rows:minmax(0,1fr) auto;min-width:0}
+.inv-sub{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}.inv-sub h3{margin:0}
+.inv-btabs{display:flex;gap:6px}.inv-btabs button{font-size:18px;padding:7px 18px}
+.inv-count{font:700 14px/1 "Barlow Condensed",sans-serif;color:#7f8f95;letter-spacing:.06em;margin-left:auto}
+#invSort{font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.04em;background:#0b1114;color:#eef2f3;border:1px solid #5b686e;border-radius:4px;padding:7px 10px}
+.inv-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;max-height:332px;overflow-y:auto;padding:2px 4px 2px 2px}
+.inv-grid .ic-cell{width:100%;height:auto;aspect-ratio:1}.inv-grid .ic-cell svg{width:58%;height:58%}
+.inv-grid.mats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mat-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;background:#0b1114;border:1px solid #27333a;border-radius:6px;padding:6px 10px}
+.mat-row img{width:44px;height:44px}.mat-row b{display:block;font:800 18px/1.1 "Barlow Condensed",sans-serif}.mat-row small{font:500 13px/1.2 Barlow,Inter,sans-serif;color:#8d9ca2}.mat-row em{font:800 24px/1 "Barlow Condensed",sans-serif;font-style:normal}
+.mat-row.none{opacity:.45}
+.inv-pouch{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#0b1114;border:1px solid #2e3a40;border-radius:6px;padding:10px 4px}
+.inv-pouch div{display:grid;justify-items:center;gap:3px;border-left:1px solid #2e3a40;padding:0 6px}.inv-pouch div:first-child{border-left:0}
+.inv-pouch img{width:46px;height:46px}.inv-pouch span{font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.05em;color:#dfe5e7;text-align:center}.inv-pouch b{font:800 24px/1 "Barlow Condensed",sans-serif}
+.inv-pouch .ess6{display:grid;grid-template-columns:repeat(3,15px);gap:1px;height:46px;align-content:center}.inv-pouch .ess6 img{width:15px;height:15px}.inv-pouch .ess6 img.dim{opacity:.3}
+.inv-foot{display:flex;align-items:center;gap:10px;padding:10px 18px 14px;border-top:1px solid #2a353b;min-width:0}
+.inv-hint svg{flex:none}.inv-hint{display:flex;align-items:center;gap:8px;font:700 15px/1 "Barlow Condensed",sans-serif;letter-spacing:.05em;color:#a7b3b8;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.inv-btn{font:800 23px/1 "Barlow Condensed",sans-serif;letter-spacing:.04em;padding:10px 28px;white-space:nowrap;flex:none;border:1px solid #ffb06a;border-radius:4px;background:linear-gradient(180deg,#ff9b40,#df6f19);color:#1d1006;cursor:pointer;box-shadow:0 3px 0 #8a3f0b}
+.inv-btn:disabled{background:linear-gradient(180deg,#3a4449,#2a3237);border-color:#566369;color:#9aa6ab;box-shadow:0 3px 0 #161c1f;cursor:default}
+.inv-btn.ghost{background:transparent;color:#e3e9eb;border-color:#5b686e;box-shadow:none}
+.inv-st{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.45fr) minmax(0,1fr);gap:14px}
+.inv-me{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;justify-items:center;align-content:start}.inv-me .inv-name{font-size:23px;padding:6px 18px;max-width:100%;overflow:hidden;text-overflow:ellipsis}.inv-me img{width:100%;height:230px;object-fit:cover;object-position:50% 8%;border-radius:4px}
+.inv-filled{margin:0;font:700 19px/1 "Barlow Condensed",sans-serif;letter-spacing:.05em}
+.inv-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;border-top:1px solid #2e3a40;padding-top:10px}.inv-mini .ic-cell{width:100%;height:auto;aspect-ratio:1}.inv-mini .ic-cell svg{width:55%;height:55%}
+.inv-stats{display:grid;gap:9px}
+.sr{display:grid;grid-template-columns:32px minmax(0,1fr) 50px 50px 84px;align-items:center;column-gap:8px;background:#0b1114;border:1px solid #27333a;border-radius:6px;padding:8px 12px 9px}
+.sr i{grid-row:span 2;width:30px;height:30px}.sr i svg{width:100%;height:100%}
+.sr span{font:800 20px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;min-width:0}.sr span small{display:block;font:600 13px/1.2 Barlow,Inter,sans-serif;color:#8d9ca2;letter-spacing:0}
+.sr em{font:700 21px/1 "Barlow Condensed",sans-serif;font-style:normal;color:#a9b4b9;text-align:right}.sr strong{font:800 21px/1 "Barlow Condensed",sans-serif;color:#7fe07a;text-align:right}
+.sr b{font:800 28px/1 "Barlow Condensed",sans-serif;text-align:right;border-left:1px solid #3a474d;padding-left:8px;white-space:nowrap}
+.sr .bar{grid-column:2/-1;height:9px;margin-top:6px;background:#1c252a;border-radius:5px;overflow:hidden;display:flex}.sr .bar i{grid-row:auto;width:auto;height:100%;background:#a8b3b8}.sr .bar i.g{background:#6fe05a}
+.inv-side{display:grid;gap:14px;align-content:start}
+.inv-specials{display:grid;gap:8px}.spc{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:center;border:2px solid var(--bc);border-radius:6px;padding:7px 10px;background:linear-gradient(90deg,color-mix(in srgb,var(--bc) 14%,#0b1114),#0b1114)}
+.spc i{width:44px;height:44px;display:grid;place-items:center;border:1px solid #3a474d;border-radius:5px;background:#090e10}.spc b{display:block;font:800 19px/1.05 "Barlow Condensed",sans-serif;color:var(--bc)}.spc small{font:700 13px/1.1 "Barlow Condensed",sans-serif;letter-spacing:.05em;color:#c7d0d4;text-transform:uppercase}
+.spc.soon{opacity:.55;border-style:dashed}.inv-none{margin:0;color:#8d9ca2;font:500 14px/1.4 Barlow,Inter,sans-serif}
+.inv-coll{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px}.co{display:grid;justify-items:center;gap:5px}
+.co img{width:70px;height:70px;border-radius:50%;object-fit:cover;object-position:50% 25%;border:2px solid #4c595f;background:#0b1114}.co .bar{width:68px;height:7px;background:#1c252a;border-radius:4px;overflow:hidden}.co .bar i{display:block;height:100%;background:#6fe05a}.co b{font:800 18px/1 "Barlow Condensed",sans-serif}
+.inv-enhbox{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;background:rgba(3,6,10,.62)}
+.enh{width:min(420px,92%);background:linear-gradient(180deg,#182127,#0e1418);border:1px solid #3b474e;border-top:3px solid var(--bc);border-radius:6px;padding:16px;display:grid;gap:12px;box-shadow:0 20px 60px #000b}
+.enh h3{margin:0}.enh-it{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:center}.enh-it .ic-cell{width:72px;height:72px}
+.enh-it b{display:block;font:800 24px/1.05 "Barlow Condensed",sans-serif;color:var(--bc)}.enh-it small{font:600 14px/1.3 Barlow,Inter,sans-serif;color:#a9b4b9}.enh-it small em{color:#fff;font-style:normal;font-weight:800}
+.enh-chance{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #2e3a40;border-bottom:1px solid #2e3a40;padding:8px 0}.enh-chance span{font:700 16px/1 "Barlow Condensed",sans-serif;letter-spacing:.06em;color:#a9b4b9}.enh-chance b{font:800 34px/1 "Barlow Condensed",sans-serif;color:#ffb05a}
+.enh-cost{list-style:none;margin:0;padding:0;display:grid;gap:6px}.enh-cost li{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;font:700 18px/1 "Barlow Condensed",sans-serif}.enh-cost img{width:34px;height:34px}
+.enh-cost li.ok b{color:#7fe07a}.enh-cost li.no b{color:#ff7a6b}
+.enh-msg{margin:0;font:800 19px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.03em}.enh-msg.ok{color:#7fe07a}.enh-msg.no{color:#ff9a8c}
+.enh-note{margin:0;font:500 13px/1.35 Barlow,Inter,sans-serif;color:#8d9ca2}.enh-btns{display:flex;gap:10px;justify-content:flex-end}.enh-btns .inv-btn{font-size:20px;padding:9px 20px}
+.inv-tip{position:fixed;z-index:80;width:300px;pointer-events:none;font-family:Barlow,Inter,sans-serif}
+.inv-tip .tt{background:linear-gradient(180deg,#161f23,#0f171a);border:1px solid #33464c;border-top:3px solid var(--bc);border-radius:6px;padding:11px 12px;display:grid;gap:8px;box-shadow:0 12px 30px #000c;color:#e8eef0}
+.tt-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.tt-top .tb{font:800 12px/1 "Barlow Condensed",sans-serif;letter-spacing:.06em;padding:4px 7px;border-radius:3px;color:#0b1113;background:var(--bc)}
+.pips{display:flex;gap:3px}.pips i{width:7px;height:7px;transform:rotate(45deg);border:1px solid #4a5f66}.pips i.on{background:var(--bc);border-color:var(--bc);box-shadow:0 0 5px var(--bc)}
+.tt h4{margin:0;font:800 25px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;color:var(--bc)}.tt h4 span{color:#fff;text-shadow:0 0 8px var(--bc)}
+.tt-meta{font:700 12px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.08em;color:#8fa1a6;text-transform:uppercase;margin-top:-3px}
+.tt-mid{display:grid;grid-template-columns:56px minmax(0,1fr);gap:10px;align-items:start}
+.tt-ic{width:56px;height:56px;display:grid;place-items:center;border:1px solid #3a4c52;border-radius:5px;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--bc) 22%,transparent),#0a1113 70%)}
+.tt-vs small{display:block;font-size:12px;color:#8fa1a6;margin-bottom:3px}.tt-vs ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}.tt-vs li{font:700 15px/1.2 "Barlow Condensed",sans-serif;letter-spacing:.02em}
+.tt-vs li.up{color:#7fe07a}.tt-vs li.dn{color:#ff7a6b}.tt-vs li.eq{color:#a9b4b9}
+.tt-st{border-top:1px solid #26363b;padding-top:7px;display:grid;gap:3px}.tt-s{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;align-items:baseline}.tt-s span{font-size:13px}.tt-s b{font:800 18px/1 "Barlow Condensed",sans-serif;color:#fff;text-align:right}
+.tt-s small{grid-column:2;text-align:right;font:600 12px/1.2 "Barlow Condensed",sans-serif;color:#8fa1a6}.tt-s small em{font-style:normal;color:#7fe07a}
+.tt-sp{border:1px solid #ffc94d55;background:#2a221033;border-radius:4px;padding:6px 8px;font-size:13px;line-height:1.35;color:#ffe2a0}.tt-sp b{display:block;font:800 11px/1 "Barlow Condensed",sans-serif;letter-spacing:.12em;color:#ffc94d;margin-bottom:3px}.tt-sp.soon{opacity:.7;border-style:dashed}
+.tt-en{border-top:1px dashed #2c3f45;padding-top:7px;display:grid;gap:3px}.tt-en div{display:flex;gap:8px;align-items:baseline}.tt-en b{font:800 11px/1 "Barlow Condensed",sans-serif;letter-spacing:.12em;color:#f28b36}
+.tt-en span{font:800 16px/1 "Barlow Condensed",sans-serif}.tt-en em{font-style:normal;margin-left:auto;font:800 15px/1 "Barlow Condensed",sans-serif;color:#9fd0ff}.tt-en small{font-size:12px;color:#8fa1a6}
+.loot-pop{position:fixed;top:86px;right:16px;z-index:65;display:grid;gap:6px;pointer-events:none;font-family:"Barlow Condensed",sans-serif}
+.lp{display:flex;align-items:center;gap:10px;min-width:250px;background:#0f161aee;border:1px solid #2f3b41;border-left:4px solid var(--bc);border-radius:5px;padding:7px 12px 7px 9px;box-shadow:0 8px 20px #0009;animation:lpIn .25s ease-out;transition:opacity .45s,transform .45s}
+.lp.out{opacity:0;transform:translateX(20px)}.lp.leg{box-shadow:0 0 18px color-mix(in srgb,var(--bc) 50%,transparent),0 8px 20px #0009}
+.lp-ic{width:38px;height:38px;display:grid;place-items:center;border:1px solid #3a474d;border-radius:5px;background:#090e10}.lp-ic img{width:34px;height:34px}
+.lp small{display:block;font:800 12px/1 "Barlow Condensed",sans-serif;letter-spacing:.1em;color:var(--bc)}.lp small em{font-style:normal;color:#fff;background:#d33;padding:0 4px;border-radius:2px}.lp b{font:800 19px/1.1 "Barlow Condensed",sans-serif;color:#f2f5f6}
+@keyframes lpIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@media (max-width:1000px){.inv-eq,.inv-st{grid-template-columns:minmax(0,1fr)}.inv-hero{height:320px}.inv-head h2{font-size:30px}.inv-hint{display:none}}
+.ls-inv kbd{font:800 10px/1 ui-monospace,monospace;border:1px solid currentColor;border-radius:3px;padding:2px 4px;margin-left:6px;opacity:.75}
 </style>
 </head>
 <body><main class="wrap">
@@ -540,6 +646,7 @@ body.in-match #ls{display:none}
    <button data-view="loadout" role="tab"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M4 12h16M10 12v3h4v-3"/></svg>LOADOUT</button>
    <button data-view="skills" role="tab"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>SKILLS</button>
    <button data-view="manual" role="tab"><svg viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5zM8 9h8M8 13h8M8 17h5"/></svg>FIELD MANUAL</button>
+   <button id="lsInvBtn" class="ls-inv" type="button" title="Your boss gear (press I)"><svg viewBox="0 0 24 24"><path d="M4 9h16v11H4zM4 9l2-5h12l2 5M10 13h4"/></svg>INVENTORY <kbd>I</kbd></button>
   </nav>
   <div class="ls-icons">
    <button id="lsFriends" title="Invite friends (copy invite link)"><svg viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21c0-4 3-7 7-7s7 3 7 7M19 8v6M16 11h6"/></svg></button>
@@ -655,7 +762,7 @@ body.in-match #ls{display:none}
  </div>
  <div class="hud hud-br">
   <div id="resources" class="resources"></div>
-  <div class="hints"><kbd>E</kbd> skill · <kbd>Q</kbd> ultimate · Hold <kbd>Right-click</kbd> build · <kbd>T</kbd> equipment · <kbd>Esc</kbd> menu</div>
+  <div class="hints"><kbd>E</kbd> skill · <kbd>Q</kbd> ultimate · Hold <kbd>Right-click</kbd> build · <kbd>T</kbd> equipment · <kbd>I</kbd> inventory · <kbd>Esc</kbd> menu</div>
  </div>
  <aside id="scoreboard" class="scoreboard hidden" aria-live="polite"></aside>
  <div id="levelUp" class="panel levelup hidden" aria-live="polite">
@@ -707,7 +814,7 @@ body.in-match #ls{display:none}
    <div><kbd>3</kbd><span>Secondary gun</span></div><div><kbd>E</kbd><span>Class skill (Viktor: hold to pick robots)</span></div><div><kbd>Q</kbd><span>Ultimate</span></div>
    <div><kbd>5</kbd><span>Quick item (medkit)</span></div><div><kbd>Mouse wheel</kbd><span>Cycle 1 · 2 · 3 · 5</span></div>
    <div><kbd>R</kbd><span>3rd skill</span></div><div><kbd>C</kbd><span>Reload early (automatic when empty)</span></div><div><kbd>F</kbd><span>Revive a downed teammate</span></div>
-   <div><kbd>T</kbd><span>Equipment</span></div><div><kbd>Hold right-click</kbd><span>Build wheel (release on an option)</span></div>
+   <div><kbd>T</kbd><span>Equipment</span></div><div><kbd>I</kbd><span>Inventory (boss gear)</span></div><div><kbd>Hold right-click</kbd><span>Build wheel (release on an option)</span></div>
    <div><kbd>U</kbd><span>Level-up picker</span></div><div><kbd>Space</kbd><span>Dash</span></div>
    <div><kbd>Tab</kbd><span>Scoreboard</span></div><div><kbd>Esc</kbd><span>This menu</span></div>
   </div><button class="cf pm-out pm-full" id="pmCtlBack">BACK</button></section>
@@ -737,5 +844,36 @@ body.in-match #ls{display:none}
 <div id="spectate" class="spectate hidden" aria-live="polite"><b id="specTitle"></b><span><span id="specWho"></span><small id="specHint"> · Space / ← → / click to switch</small></span></div>
  <div id="overlay" class="overlay hidden"><div class="modal"><div style="font-size:42px">☣️</div><h2 id="overlayTitle"></h2><p class="muted" id="overlayText"></p><div id="shop" class="shop hidden" aria-label="Shop"></div><div id="breakBtns" class="break-btns hidden"><button class="button primary" id="breakReady">READY</button><button class="button" id="breakMin">▾ MINIMIZE · BUILD FIRST</button><button class="button hidden" id="nextStage">START NOW</button></div><button class="button primary hidden" id="restartGame">PLAY AGAIN</button></div></div>
 </section>
-<script type="module" src="./client.js?v=20261115g"></script>
+ <!-- (Nov 17) BOSS GEAR: the inventory (I), outside the game area so it opens in the lobby too. Equipment + Stats tabs, from the user's ChatGPT designs (tools/art/equipment) -->
+ <div id="inv" class="inv hidden" role="dialog" aria-label="Inventory">
+  <div class="inv-win">
+   <header class="inv-head"><h2>INVENTORY</h2><nav class="inv-tabs"><button data-tab="equip" class="on">EQUIPMENT</button><button data-tab="stats">STATS</button></nav><span class="inv-sp"></span><kbd class="inv-key" title="I opens and closes this">I</kbd><button class="inv-x" aria-label="Close">✕</button></header>
+   <div class="inv-body">
+    <section class="inv-pane inv-eq" data-pane="equip">
+     <div class="inv-box inv-char">
+      <div class="inv-doll"><div class="inv-col l" id="invSlotsL"></div><div class="inv-hero"><img id="invHero" alt=""></div><div class="inv-col r" id="invSlotsR"></div></div>
+      <div class="inv-name" id="invName"></div>
+      <div class="inv-tot" id="invTot"></div>
+     </div>
+     <div class="inv-right">
+      <div class="inv-box inv-bag"><div class="inv-sub"><h3>BAG <i class="inv-sl"></i></h3><nav class="inv-btabs"><button data-btab="gear" class="on">GEAR</button><button data-btab="mats">MATERIALS</button></nav><span class="inv-count" id="invCount"></span>
+        <select id="invSort" aria-label="Sort the bag"><option value="rarity">SORT: RARITY</option><option value="slot">SORT: SLOT</option><option value="boss">SORT: BOSS</option><option value="new">SORT: NEWEST</option></select></div>
+       <div class="inv-grid" id="invGrid"></div></div>
+      <div class="inv-box inv-pouchbox"><h3>POUCH <i class="inv-sl"></i></h3><div class="inv-pouch" id="invPouch"></div></div>
+     </div>
+    </section>
+    <section class="inv-pane inv-st hidden" data-pane="stats">
+     <div class="inv-box inv-me"><img id="invHero2" alt=""><div class="inv-name" id="invName2"></div><p class="inv-filled" id="invFilled"></p><div class="inv-mini" id="invMini"></div></div>
+     <div class="inv-box"><h3>STATS <i class="inv-sl"></i></h3><div class="inv-stats" id="invStats"></div></div>
+     <div class="inv-side"><div class="inv-box"><h3>ACTIVE SPECIALS <i class="inv-sl"></i></h3><div id="invSpecials" class="inv-specials"></div></div><div class="inv-box"><h3>COLLECTION <i class="inv-sl"></i></h3><div id="invColl" class="inv-coll"></div></div></div>
+    </section>
+   </div>
+   <footer class="inv-foot"><span class="inv-hint"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg>CLICK TO SELECT · DOUBLE-CLICK TO EQUIP · HOVER TO COMPARE</span>
+    <button class="inv-btn" id="invEquip" disabled>EQUIP</button><button class="inv-btn" id="invEnh" disabled>ENHANCE</button><button class="inv-btn" disabled title="Trading with friends is coming later">TRADE (SOON)</button></footer>
+   <div id="invEnhBox" class="inv-enhbox hidden"></div>
+  </div>
+ </div>
+ <div id="invTip" class="inv-tip hidden" aria-hidden="true"></div>
+ <div id="lootPop" class="loot-pop" aria-live="polite"></div>
+<script type="module" src="./client.js?v=20261117a"></script>
 </body></html>

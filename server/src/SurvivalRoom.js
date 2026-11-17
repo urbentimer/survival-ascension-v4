@@ -3,6 +3,7 @@ import { MapSchema } from "@colyseus/schema";
 import { GameState, PlayerState, ZombieState, StructureState, LootState, PuddleState, RobotState, VehicleState } from "./schema.js";
 import { buildMapLayout, buildDynastyLayout, buildWhiteoutLayout, buildRefineryLayout, buildCarnivalLayout, buildMineLayout, buildCrucibleLayout, KC_SPOT, mineTrack, mineCordon, MN_SPOT, coasterTrack, coasterAt, coasterSeat, COASTER, mapBoxes, statueBodyBoxes, trackNearest, packLayout, paintedOf, paintedLayout } from "./mapLayout.js";
 import { log } from "./logbook.js";
+import { ITEM, BAND, BOSSES, rollBurst, gearTotals, armourCut, LOOT_LIFE } from "./gearData.js";   // (Nov 17) boss gear: the shared item table (client/gearData.js is a copy)
 
 // The world: about 9x the area of one screen. The camera follows each player around it.
 const ARENA = { width: 3600, height: 2280 };
@@ -398,14 +399,20 @@ function applyLoadout(p) {
   const w = WEAPONS[p.weapon] || WEAPONS.rifle;
   // bonusDamage / buffDamage are percentages (+20 = +20% damage)
   p.damage = Math.round(w.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * 10) / 10;
-  p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1) * (p.buffRate || 1));
+  p.fireRate = Math.min(14, w.rate * c.rateMult * (p.rateMult || 1) * (p.buffRate || 1) * (1 + (p.gearSt?.rate || 0) / 100));   // boss gear: + fire rate
   if (p.perch) p.fireRate = 1 / SIENNA.perch.gap;   // Sienna up on her Glacier Perch: one laser every 1.5s (the client paces its clicks by this)
 }
 function applyClassBase(p) {
   const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
-  p.maxHp = c.hp; p.hp = c.hp; p.speed = c.speed; p.defence = c.defence;
+  const gs = p.gearSt || {}; p.gHp = gs.hp || 0; p.gSpd = 1 + (gs.spd || 0) / 100; p.gearMem = {};   // boss gear: + max HP, + move speed (one loadout, whoever you play)
+  p.maxHp = c.hp + p.gHp; p.hp = p.maxHp; p.speed = c.speed * p.gSpd; p.defence = c.defence;
   applyLoadout(p);
 }
+// BOSS GEAR (Nov 17, gearData.js): what the specials do. Damage numbers grow with the wave like the skills (x1 + 8% a wave).
+const GEARX = { pick: 36,
+  poison: { frac: .25, len: 2 }, burn: { len: 3 }, chill: { f: .85, boss: .93, t: 1 }, chain: { r: 170, n: 2 }, molten: { r: 95, frac: .5 }, hornStun: 1,
+  shout: { r: 190, stun: 1 }, aura: { r: 170, f: .8, boss: .9, t: .35 }, trail: { every: .15, life: 2, r: 46, f: .8, boss: .9, t: .45 }, runes: { r: 160 },
+  bleed: { dmg: 10, len: 2 }, ring: { r: 130, dmg: 40 }, phoenix: { chance: .25, r: 85, dmg: 30 }, heart: .5, crownPer: 20 };
 // Shop (open during the break between waves). Gold is earned per match from kills and gold pickups.
 const STARTER_WEAPONS = "pistol,rifle";
 const SHOP = {
@@ -535,7 +542,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set(); this.zStuck = new Map(); this.away = new Set();   // away: survivors whose connection dropped (30s to reconnect)
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.gearLoot = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -656,6 +663,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugSpawn", (client, data) => {
       const p = this.state.players.get(client.sessionId), kind = String(data?.kind || "");
       if (!(this.solo || client.sessionId === this.state.hostId) || !p || this.state.phase !== "playing" || !["walker", "runner", "brute", "spitter", "mutant", "hivemind", "pyre", "screamer", "abomination"].includes(kind)) return;
+      if (["abomination", "screamer", "pyre", "hivemind"].includes(kind)) this.markTest();
       if (kind === "abomination") { this.spawnZombie(true, "abomination"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 520, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Abomination"; return; }
       if (kind === "screamer") { this.spawnZombie(true, "screamer"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 520, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Screamer"; return; }
       if (kind === "pyre") { this.spawnZombie(true, "pyre"); const z = [...this.state.zombies.values()].pop(); z.x = clamp(p.x + 450, 60, this.A.width - 60); z.y = p.y; this.solveZombie(z); this.state.message = "Test: the Pyre Priest"; return; }   // preview: the boss right away
@@ -682,7 +690,7 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugMorph", client => {   // test: the Abomination at the moment he tears into the Five (starts his boss wave if he isn't here)
       const p = this.state.players.get(client.sessionId); if ((!this.solo && client.sessionId !== this.state.hostId) || !p || !["playing", "cleared"].includes(this.state.phase)) return;
       let z = [...this.state.zombies.values()].find(o => o.kind === "abomination");
-      if (!z) { this.morphOnArrival = true; this.skipToBoss(24); return; }   /* (Nov 12: his wave is 24 now) */   // not here: his boss card first, then he arrives already tearing apart
+      if (!z) { this.morphOnArrival = true; this.skipToBoss(24); this.markTest(); return; } this.markTest();   /* (Nov 12: his wave is 24 now) */   // not here: his boss card first, then he arrives already tearing apart
       if (z.act === "sunder") return; z.hp = z.maxHp * ABOM.splitAt; z.act = ""; const m = this.bossMem.get(z.id); if (m) m.roll = null;
     });
     this.onMessage("deep", client => { const p = this.state.players.get(client.sessionId); if (this.mine && p?.alive && this.state.phase === "playing" && !(p.ride > 0)) this.mineUse(p); });   // F in the mine mission: take a rune / put it in the statue
@@ -690,7 +698,7 @@ export class SurvivalRoom extends Room {
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
       const k = data?.k, pct = Number(data?.pct) > 0 && Number(data?.pct) < 1 ? Number(data.pct) : 0;   // Nov 12 (the new Esc menu): {k: "boss", pct: .66 / .33} = the Beast at that HP (its shield run comes up); {k: "chase"} / {k: "escape"} = straight to the end of the mission
       if (!this.mine) { this.jumpToWave(this.state.stage > 20 ? Math.ceil((this.state.stage - 20) / 24) * 24 + 20 : 20); if (!this.solo) this.state.message = "Host skipped to the mine mission"; if (!this.mine || !["boss", "chase", "escape"].includes(k)) return; }
-      const m = this.mine;
+      const m = this.mine; this.markTest();
       if (k === "boss") { this.beastHpOnArrival = pct; if (m.step === "runes") this.mineAwaken(); else if (m.step === "fight" && pct) this.beastSetHp(pct); return; }
       if (k === "chase" || k === "escape") { if (m.step === "runes") this.mineAwaken(); if (m.step === "awake") this.mineFight(); if (m.step === "fight") { const z = this.state.zombies.get(m.beast); if (z) this.mineFlee(z); } if (m.step === "flee") this.mineChase(); if (k === "escape" && m.step === "chase") this.mineEscape(); return; }
       if (data?.k === "fuel") this.mine.fuel = DEEP.fuelMax; else if (data?.k === "rune" && this.mine.step === "runes") { const r = this.mine.runes.find(q => q.st !== 3); if (r) this.mineInsert(r); }
@@ -698,15 +706,15 @@ export class SurvivalRoom extends Room {
     this.onMessage("debugBoss", (client, data) => {   // {wave}: a boss wave (4, 8, ... 48); none = this wave's boss, else the Butcher
       if ((!this.solo && client.sessionId !== this.state.hostId) || !["playing", "cleared"].includes(this.state.phase)) return;
       const w = Math.round(Number(data?.wave)), pct = Number(data?.pct);   // Nov 12 (the new Esc menu): {pct: .66 / .33} = the boss arrives (or is set) at that much HP
-      const here = [...this.state.zombies.values()].find(q => q.boss); if (pct > 0 && pct < 1 && here && this.state.bossPhase === "fight" && this.state.stage === w) { here.hp = here.maxHp * pct; this.state.message = `Test: the boss at ${Math.round(pct * 100)}% HP`; return; }
-      this.bossHpOnArrival = pct > 0 && pct < 1 ? pct : 0; this.skipToBoss(w);
+      const here = [...this.state.zombies.values()].find(q => q.boss); if (pct > 0 && pct < 1 && here && this.state.bossPhase === "fight" && this.state.stage === w) { this.markTest(); here.hp = here.maxHp * pct; this.state.message = `Test: the boss at ${Math.round(pct * 100)}% HP`; return; }
+      this.bossHpOnArrival = pct > 0 && pct < 1 ? pct : 0; this.skipToBoss(w); if (this.bossHpOnArrival) this.markTest();
     });
 
     // Solo preview only: kill the boss (to watch it die) or knock it to 25% HP (to see it enrage).
     this.onMessage("debugBossHp", (client, data) => {
       const p = this.state.players.get(client.sessionId), z = [...this.state.zombies.values()].find(q => q.boss) || [...this.state.zombies.values()].find(q => q.kind === "hivemind");
       if (!(this.solo || client.sessionId === this.state.hostId) || !p || !z) return;
-      if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
+      this.markTest(); if (data?.kill) this.killZombie(z, p); else z.hp = Math.min(z.hp, z.maxHp * .25);
     });
     this.onMessage("clientError", (client, data) => {   // errors from players' browsers (drawing, UI, connection) -> the game log
       const n = (this.errCount = (this.errCount || 0) + 1); if (n > 300) return;
@@ -765,6 +773,7 @@ export class SurvivalRoom extends Room {
       if (typeof data.extraLoot === "boolean") this.state.extraLoot = data.extraLoot;
     });
     this.onMessage("reload", client => { const p = playing(client.sessionId); if (p) this.startReload(p); });
+    this.onMessage("bossGear", (client, data) => { const p = this.state.players.get(client.sessionId); if (p && !p.isBot) this.setGear(p, data?.items); });   // (Nov 17) boss gear: what this player has equipped (kept in their browser). ("gear" is the Pyre Plate's)
     this.onMessage("upgrade", (client, data) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !p.alive) return;
@@ -1052,6 +1061,7 @@ export class SurvivalRoom extends Room {
     p.alive = true; p.isHost = this.state.players.size === 0; p.ready = p.isHost;   // lobby READY UP (the host counts as ready)
     p.color = COLORS[this.state.players.size % COLORS.length]; p.lastShot = 0; p.reviveProgress = 0; p.reviveTargetId = "";
     this.state.players.set(client.sessionId, p);
+    if (options.gear) this.setGear(p, options.gear); else this.sendGearLooks();   // boss gear the browser sent with the join
     if (!this.state.hostId) this.state.hostId = client.sessionId;
     this.log("info", "join", `${p.name} joined (${this.state.players.size} in room${this.solo ? ", solo preview" : ""})`, client);
     this.state.message = `${p.name} joined (${this.state.players.size}/8).`;
@@ -1148,7 +1158,7 @@ export class SurvivalRoom extends Room {
       ? Array.from({ length: w.pellets }, (_, i) => aim + (i / (w.pellets - 1) - 0.5) * 2 * w.spread)
       : [aim + (w.jitter ? rand(-w.jitter, w.jitter) : 0)];
     for (const a of angles) {
-      const wall = this.wallDist(p.x, p.y, a, p.characterClass === "sniper" && p.weapon === "sniper" ? SIENNA.range : w.range);          // buildings, cars... stop bullets (Sienna's sniper reaches 4x as far)
+      const wall = this.wallDist(p.x, p.y, a, (p.characterClass === "sniper" && p.weapon === "sniper" ? SIENNA.range : w.range) * (1 + (p.gearSt?.rng || 0) / 100));   // boss gear: + range          // buildings, cars... stop bullets (Sienna's sniper reaches 4x as far)
       const along = this.rayHits(p, a, wall);
       let end = wall;
       if (w.splash) {   // rocket: flies straight to the aimed spot (or max range / a wall), then explodes there
@@ -1157,7 +1167,7 @@ export class SurvivalRoom extends Room {
         const bx = p.x + Math.cos(a) * end, by = p.y + Math.sin(a) * end;
         this.ripples.push({ kind: "rocket", owner: p.sessionId, x: bx, y: by, t: now, at: end / DANTE.rocketSpeed, dmg: p.damage, r: w.splash, flat: 1, push: 10, wallSafe: true });
       } else {
-        const hits = along.slice(0, w.pierce || 1);
+        const hits = along.slice(0, (w.pierce || 1) + (p.gearSp?.prc || 0));   // boss gear: shots go through more zombies
         for (const h of hits) {
           if (p.characterClass === "juggernaut" && p.weapon === "shotgun" && this.state.zombies.has(h.z.id)) {   // Briggs: Forceful Blast
             const B = BRIGGS.blast, k = (1 - 0.5 * Math.min(1, h.t / w.range)) * (h.z.boss ? B.bossMult : 1);
@@ -1252,12 +1262,13 @@ export class SurvivalRoom extends Room {
     }
     if (!this.recentlyMoved(p.sessionId)) p.facing = Math.cos(aim) < 0 ? -1 : 1;
     const c = CLASS_STATS[p.characterClass] || CLASS_STATS.assault;
-    let dmg = Math.round(m.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult);
+    let dmg = Math.round(m.dmg * (1 + ((p.bonusDamage || 0) + (p.buffDamage || 0)) / 100) * c.dmgMult * (1 + (p.gearSt?.mel || 0) / 100));   // boss gear: + melee damage
     let crit = false;
     if (raven && (p.katanaTier || 0) >= 5) { const n = (this.slashCount.get(p.sessionId) || 0) + 1; this.slashCount.set(p.sessionId, n); if (n % RAVEN.critEvery === 0) { dmg = Math.round(dmg * RAVEN.crit); crit = true; } }
     let left = raven ? m.targets : (m.targets || Infinity);
     const inRange = [...this.state.zombies.values()].map(z => [z, distance(p, z)]).sort((a, b) => a[1] - b[1]);
-    for (const [z, d] of inRange) {
+    this.gearMelee = p;   // boss gear: kills from this swing are melee kills
+    try { for (const [z, d] of inRange) {
       if (d > m.range + z.radius || left <= 0) continue;
       if (m.walls && !this.lineClear(p, z)) continue;   // the chain-axe doesn't swing through walls
       let diff = Math.atan2(z.y - p.y, z.x - p.x) - aim; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -1268,7 +1279,7 @@ export class SurvivalRoom extends Room {
         }
         if (raven) { left--; this.katanaHit(z, p, dmg); } else { if (m.targets) left--; this.hitZombie(z, p, dmg); }
       }
-    }
+    } } finally { this.gearMelee = null; }
     this.broadcast("swing", { id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y - 4), a: aim, r: m.range, arc: m.arc, m: p.melee, heavy, fire: raven && p.fire > 0, crit });
   }
   useQuickItem(p) {
@@ -1737,7 +1748,7 @@ export class SurvivalRoom extends Room {
   // Sofea's mecha (mechaReady), Astra's safehouse (safeReady).
   tickCdr(dt, now) {
     for (const p of this.state.players.values()) {
-      const k = 1 - (p.cdr || 0); let m = this.cdrMem.get(p.sessionId); if (!m) { m = {}; this.cdrMem.set(p.sessionId, m); }
+      const k = (1 - (p.cdr || 0)) * (1 - Math.min(.5, (p.gearSt?.cdr || 0) / 100)); let m = this.cdrMem.get(p.sessionId); if (!m) { m = {}; this.cdrMem.set(p.sessionId, m); }   // (boss gear: skills recharge faster)
       if (p.abilityCooldown > (m.e ?? 0) + 1e-6 && k < 1) p.abilityCooldown *= k;
       m.e = p.abilityCooldown;
       if (p.characterClass === "engineer") { if (p.chargeCd > (m.c ?? 0) + 1e-6 && k < 1) p.chargeCd *= k; m.c = p.chargeCd; }
@@ -2487,7 +2498,7 @@ export class SurvivalRoom extends Room {
       if (d.bleed && now < d.bleedUntil) dmg += d.bleed * dt; else d.bleed = 0;
       z.burn = d.burn;
       if (!d.burn && !d.bleed) { this.dots.delete(id); continue; }
-      if (dmg > 0) this.hitZombie(z, owner, dmg);
+      if (dmg > 0) { const was = this.inDot; this.inDot = true; try { this.hitZombie(z, owner, dmg); } finally { this.inDot = was; } }   // (boss gear: damage over time doesn't trigger gear effects)
     }
   }
   summonRobot(p, kind) {
@@ -2650,7 +2661,9 @@ export class SurvivalRoom extends Room {
     this.broadcast("hive", { k: "arrive", id: z.id, x: Math.round(z.x), y: Math.round(z.y), a: alpha ? 1 : 0 });
     return z;
   }
-  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, raw); return 0; } return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
+  armorHit(p, raw, z) { if (z && !z.boss) raw = Math.min(raw, p.maxHp * HIT_CAP); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, raw); return 0; }
+    if (p.gearSp && this.gearHurt(p, z)) return 0;   // boss gear: a blocked hit (The Beast's Hide); thorns, bleeds and fire rings happen here too
+    return Math.max(1, Math.round(raw * (1 - (p.armorPct || 0)) * (p.armor === 2 ? 1 - PLATE.dr : 1) * (1 - armourCut(p.gearSt?.arm)) - (p.defence || 0))); }   // percent armour first, then flat defence; z given = an ordinary zombie's hit is capped (HIT_CAP)
   hiveHurt(p, dmg) { if (!p.alive || this.untouchable(p)) return; const dealt = this.armorHit(p, dmg); p.hp -= dealt; p.damageTaken += dealt; if (p.hp <= 0) this.downPlayer(p); }
   hiveThink(z, dt, now, players) {
     const H = HIVE, m = this.hiveMem.get(z.id) || { biteReady: 0, slamReady: 0, jumpReady: 0, spawnAt: now + 5000, brood: 0 }; this.hiveMem.set(z.id, m);
@@ -2835,7 +2848,7 @@ export class SurvivalRoom extends Room {
       if (now >= q.until) return false;
       for (const p of this.state.players.values()) {
         if (!p.alive || this.untouchable(p) || this.state.vehicles.get(p.sessionId)?.kind === "heli" || hyp(p.x - q.x, (p.y + 14 - q.y) / .7) > q.r) continue;
-        if (now < (q.hit.get(p.sessionId) || 0)) continue; q.hit.set(p.sessionId, now + S.pevery * 1000); this.hiveHurt(p, q.dmg); p.slowed = Math.max(p.slowed || 0, .6);
+        if (now < (q.hit.get(p.sessionId) || 0)) continue; q.hit.set(p.sessionId, now + S.pevery * 1000); const lr = p.gearSp?.lavaRes || 0; if (lr < 1) { this.hiveHurt(p, q.dmg * (1 - lr)); p.slowed = Math.max(p.slowed || 0, .6); }   // boss gear: lava hurts less / not at all
       }
       return true;
     });
@@ -2918,7 +2931,7 @@ export class SurvivalRoom extends Room {
         const hit = [];
         for (const p of this.state.players.values()) {
           if (!p.alive || this.untouchable(p) || distance(z, p) > S.wail.maxD || this.wailCover(z, p)) continue;
-          this.hiveHurt(p, z.damage * S.wail.mult); p.stunned = Math.max(p.stunned || 0, S.wail.stun); p.charging = false; hit.push(p.sessionId);
+          this.hiveHurt(p, z.damage * S.wail.mult); if (!p.gearSp?.scream) p.stunned = Math.max(p.stunned || 0, S.wail.stun); p.charging = false; hit.push(p.sessionId);
         }
         this.broadcast("scream", { k: "wail", id: z.id, x: Math.round(z.x), y: Math.round(z.y), hit, stun: S.wail.stun });
       }
@@ -2982,10 +2995,10 @@ export class SurvivalRoom extends Room {
   ignite(p, z) {   // set a survivor on fire (or keep them burning)
     if (!p.alive || this.untouchable(p)) return;
     const was = this.pBurn.get(p.sessionId);
-    if (p.armor !== 2) this.pBurn.set(p.sessionId, { until: Date.now() + PYRE.burn.len * 1000, dps: z.damage * PYRE.burn.dps });   // (the Pyre Plate can't catch fire)
+    if (p.armor !== 2 && !p.gearSp?.fireproof) this.pBurn.set(p.sessionId, { until: Date.now() + PYRE.burn.len * 1000, dps: z.damage * PYRE.burn.dps });   // (the Pyre Plate can't catch fire)
     if (!was || was.until < Date.now()) this.broadcast("pyre", { k: "ignite", id: p.sessionId, len: PYRE.burn.len });
   }
-  pyreHit(p, z, mult) { if (!p.alive || this.untouchable(p)) return false; this.hiveHurt(p, z.damage * mult); this.ignite(p, z); return true; }
+  pyreHit(p, z, mult) { if (!p.alive || this.untouchable(p)) return false; this.hiveHurt(p, z.damage * mult * (1 - (p.gearSp?.fireRes || 0))); this.ignite(p, z); return true; }
   pyreThink(z, dt, now, taunted) {
     const P = PYRE, m = this.pmem(z, now), cdk = z.enraged ? P.enrageCd : 1;
     if (!z.enraged && z.hp / z.maxHp < P.enrageAt) {
@@ -3174,7 +3187,7 @@ export class SurvivalRoom extends Room {
     });
     if (F.patches.length) {
       F.patches = F.patches.filter(h => h.until > now);
-      for (const p of this.state.players.values()) if (p.alive && F.patches.some(h => h.owner === z.id && hyp(p.x - h.x, (p.y + 16 - h.y) / .7) < P.walk.r + BODY_R * .6)) this.ignite(p, z);
+      for (const p of this.state.players.values()) if (p.alive && !p.gearSp?.groundFire && F.patches.some(h => h.owner === z.id && hyp(p.x - h.x, (p.y + 16 - h.y) / .7) < P.walk.r + BODY_R * .6)) this.ignite(p, z);
     }
   }
   tickBurn(dt, now) {   // survivors on fire (Pyre Priest)
@@ -3183,8 +3196,8 @@ export class SurvivalRoom extends Room {
       const p = this.state.players.get(sid);
       if (!p || !p.alive || now >= b.until) { this.pBurn.delete(sid); continue; }
       if (this.untouchable(p)) continue;
-      if (p.armor === 2) { this.pBurn.delete(sid); continue; }   // the Pyre Plate: fireproof
-      const dealt = b.dps * dt * (1 - (p.armorPct || 0)); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, dealt); continue; } p.hp -= dealt; p.damageTaken += dealt;
+      if (p.armor === 2 || p.gearSp?.fireproof) { this.pBurn.delete(sid); continue; }   // the Pyre Plate: fireproof (and the boss-gear one)
+      const dealt = b.dps * dt * (1 - (p.armorPct || 0)) * (1 - (p.gearSp?.fireRes || 0)); if (p.characterClass === "sniper" && this.perchOn(p)) { this.perchHit(p, dealt); continue; } p.hp -= dealt; p.damageTaken += dealt;
       if (p.hp <= 0) { this.pBurn.delete(sid); this.downPlayer(p); }
     }
   }
@@ -3381,6 +3394,7 @@ export class SurvivalRoom extends Room {
   mineFlee(z) {   // its bar is empty: it drops to a knee. Everyone gets to the carts (F at the boss stop); then it comes after them
     const m = this.mine; if (m.step !== "fight") return; this.dismountAll(); m.step = "flee"; m.t = BEAST.fleeWait; m.haz = []; m.boulders = []; m.shield = null; this.dropShieldStop(); z.boss = false; z.hp = 1; this.startAct(z, "stagger", BEAST.fleeWait + 2);
     this.state.message = "IT WON'T STAY DOWN: GET IN THE CARTS!"; this.broadcast("deep", { k: "flee", len: BEAST.fleeWait }); this.mineSync();
+    this.gearBurst(z, "minebeast");   // (Nov 17) its boss gear bursts out where it dropped: grab it on the way to the carts
   }
   beastSetHp(pct) {   // (test menu) the Beast at 66% / 33%: the matching shield run comes up next
     const m = this.mine, z = m && this.state.zombies.get(m.beast); if (!z || z.kind !== "minebeast" || m.step !== "fight") return;
@@ -3946,6 +3960,9 @@ export class SurvivalRoom extends Room {
   downPlayer(target) {
     if (!target.alive) { target.hp = 0; return; }
     if (this.state.beta) { const before = target._bhp > 0 ? target._bhp : target.maxHp; target.hp = Math.max(1, before - Math.max(0, before - target.hp) / BETA_HP); return; }   // BETA MODE: a hit that would down you takes 1/100 of it instead
+    if (target.gearSp?.heart && !target.gearMem?.heartUsed && this.state.phase === "playing") {   // boss gear: The Abomination's Heart, once a match: back up at 50%
+      (target.gearMem || (target.gearMem = {})).heartUsed = true; target.hp = Math.round(target.maxHp * GEARX.heart);
+      this.broadcast("gearFx", { k: "heart", id: target.sessionId, x: Math.round(target.x), y: Math.round(target.y) }); this.state.message = `${target.name} got back up (The Abomination's Heart)!`; return; }
     if (target.ride > 0) this.coasterOff(target.sessionId);   // knocked off the coaster   // already down (several zombies bit them in the same tick): one down, not five shorter bleed-outs
     this.log("info", "player", `${target.name} went down (wave ${this.state.stage})`, target.sessionId);
     this.downHp.set(target.sessionId, target.hp); target.hp = 0; target.alive = false;
@@ -3958,6 +3975,7 @@ export class SurvivalRoom extends Room {
   hitZombie(z, p, dmg) {
     if (!this.state.zombies.has(z.id)) return;
     if (p?.sessionId) dmg *= this.supportBuff(p) * this.cryBuff(p);
+    if (p?.gearSt) dmg *= this.gearDmgMult(z, p);   // boss gear: + damage (crits, burning bonus)
     if (z.kind === "minebeast") { const bm = this.bossMem.get(z.id); if (z.act === "under") return; if (this.mine?.shield) { const t = Date.now(); if (bm && t - (bm.shHit || 0) > 160) { bm.shHit = t; this.broadcast("deep", { k: "shieldHit", x: Math.round(z.x), y: Math.round(z.y) }); } return; }   /* shielded: nothing gets through */ if (z.act === "stagger") dmg *= BEAST.staggerMult; dmg = this.beastCrystalHit(z, p, dmg, bm); if (bm && z.act === "wind") bm.windDmg = (bm.windDmg || 0) + dmg; }   // underground: can't be hurt; staggered: takes more; winding up a charge: the damage counts toward breaking it
     if (z.kind === "abomination") {
       if (z.act === "sunder") return;   // tearing apart: can't be hurt
@@ -3983,7 +4001,8 @@ export class SurvivalRoom extends Room {
     z.hp -= dmg;
     p.damageDealt += dmg;
     if (z.boss) p.bossDamage += dmg;
-    if (z.hp <= 0) this.killZombie(z, p);
+    if (p?.gearSp && !this.inDot) this.gearOnHit(z, p, dmg);   // boss gear: poison, burns, slows, chain hits, splashes, stun spikes
+    if (z.hp <= 0 && this.state.zombies.has(z.id)) this.killZombie(z, p);
   }
 
   // Stuck watchdog (sims: 3 zombies wedged in a corner held a boss wave open forever). A walking zombie that hasn't moved 24px in 4s
@@ -4051,7 +4070,8 @@ export class SurvivalRoom extends Room {
       killer.killLeadSince = Date.now();
       const gain = z.boss ? 35 : z.kind === "brute" ? 9 : 5;   // shared XP: the whole team gets it
       for (const q of this.state.players.values()) if ((q.level || 1) < MAX_LEVEL) q.xp += gain;
-      killer.currency += z.boss ? 25 : (KILL_GOLD[z.kind] || 1);
+      { const g0 = z.boss ? 25 : (KILL_GOLD[z.kind] || 1), gx = g0 * (killer.gearSp?.gold || 0); killer.currency += g0 + (gx > 0 ? Math.floor(gx) + (Math.random() < gx % 1 ? 1 : 0) : 0); }   // boss gear: + gold from kills
+      if (killer.gearSp) this.gearOnKill(z, killer);
       killer.hp = Math.min(killer.maxHp, killer.hp + (z.boss ? 25 : 1));
     }
     this.state.totalKills++;
@@ -4063,9 +4083,145 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) p.currency += 40;   // everyone gets paid for a boss
       this.broadcast("bossDead", { kind: z.kind, x: Math.round(z.x), y: Math.round(z.y) });
       if (z.kind === "pyre") this.dropPlates(z);   // (Nov 12) his armour, one piece per survivor
+      this.gearBurst(z);   // (Nov 17) boss gear: 10-12 items burst out (1 legendary always)
       // let everyone watch it die for a few seconds before the wave ends
       this.bossOverAt = Date.now() + 4500;
       this.state.message = this.state.stage === 50 ? "THE APOCALYPSE HAS FALLEN!" : z.kind === "abomSpawn" ? "THE ABOMINATION IS DEAD!" : z.kind === "hivemind" ? "THE ALPHA HIVEMIND IS DEAD!" : `${String(z.kind).replace(/[A-Z]/g, m => " " + m).toUpperCase()} IS DEAD!`;
+    }
+  }
+
+  // ---------- BOSS GEAR (Nov 17: gearData.js, the user's plan tools/boss-gear-plan.md) ----------
+  // The gear itself lives in each player's browser (one loadout for whoever they play). The browser sends what's equipped ("gear"); the server
+  // checks it against the item table and applies it: max HP, speed and fire rate straight onto the player, the rest where the damage happens.
+  setGear(p, items) {
+    const T = gearTotals(items); p.gearList = T.items; p.gearSt = T.st; p.gearSp = T.sp; p.gearMem = p.gearMem || {};
+    this.gearHpSync(p, this.state.phase !== "playing");   // (equipping mid-fight raises max HP but doesn't heal: no swap-to-heal)
+    const f = 1 + (T.st.spd || 0) / 100; p.speed = p.speed / (p.gSpd || 1) * f; p.gSpd = f;
+    applyLoadout(p);
+    this.sendGearLooks();
+  }
+  crownHp(p) { const c = p.gearSp?.crown; return c ? Math.min(c, Math.floor((p.kills || 0) / GEARX.crownPer)) : 0; }   // The Flesh Crown: +1 max HP per 20 kills
+  gearHpSync(p, heal) {
+    const want = (p.gearSt?.hp || 0) + this.crownHp(p), d = want - (p.gHp || 0); if (!d) return;
+    p.gHp = want; p.maxHp = Math.max(1, p.maxHp + d);
+    p.hp = p.alive ? Math.max(1, Math.min(p.maxHp, p.hp + (heal || d < 0 ? Math.max(0, d) : 0))) : Math.min(p.hp, p.maxHp);
+  }
+  sendGearLooks() {   // what teammates' gear looks like on the map (cold aura, frost trail, runes)
+    const list = []; for (const p of this.state.players.values()) { const sp = p.gearSp; if (!sp) continue; const fx = ["aura", "trail", "runes", "light"].filter(k => sp[k]); if (fx.length) list.push([p.sessionId, fx]); }
+    if (!list.length && !this.gearLooksOn) return; this.gearLooksOn = list.length > 0;   // (nobody's gear shows: nothing to send)
+    this.broadcast("gearLooks", { list });
+  }
+  markTest() { if (!this.solo) this.noGearStage = this.state.stage; }   // a host test command (skip to the boss at 33%, kill it...) online: no boss gear from that wave
+  gearBurst(z, key) {   // a boss is down: 10-12 items burst out round it (1 legendary, 1-2 epics, gear + materials)
+    key = key || (z.kind === "abomSpawn" ? "abomination" : z.kind);
+    if (!BOSSES[key]) return;
+    if (!this.solo && (this.state.beta || this.noGearStage === this.state.stage)) { this.broadcast("gearBurst", { x: Math.round(z.x), y: Math.round(z.y), boss: key, n: 0, test: true }); return; }
+    const list = rollBurst(key), now = Date.now();
+    list.forEach((d, i) => {
+      let x = z.x, y = z.y;
+      for (let k = 0; k < 12; k++) {
+        const a = (i / list.length) * Math.PI * 2 + rand(-.35, .35), r = rand(70, 190) + k * 6;
+        x = clamp(z.x + Math.cos(a) * r, 40, this.A.width - 40); y = clamp(z.y + Math.sin(a) * r * .8, 40, this.A.height - 40);
+        if (!this.flow || !this.blockedByMap(x, y, 18)) break;
+      }
+      const item = new LootState(); item.id = `l${++this.lootSequence}`; item.x = x; item.y = y;
+      if (d.g) { item.kind = "gear"; item.ref = d.g; item.amount = 1; item.rarity = BAND(ITEM[d.g].t); }
+      else { item.kind = "mat"; item.ref = d.m; item.amount = d.n; item.rarity = "Common"; }
+      this.state.loot.set(item.id, item); this.gearLoot.set(item.id, now);
+    });
+    this.broadcast("gearBurst", { x: Math.round(z.x), y: Math.round(z.y), boss: key, n: list.length });
+    this.log("info", "gear", `${key} gear burst: ${list.map(d => d.g || `${d.m} x${d.n}`).join(", ")}`);
+  }
+  gearPickup(now) {   // first come, first served (no bots); the item goes to that player's browser
+    if (!this.gearLoot.size) return;
+    for (const [id, born] of this.gearLoot) {
+      const it = this.state.loot.get(id); if (!it) { this.gearLoot.delete(id); continue; }
+      if (now - born > LOOT_LIFE * 1000) { this.state.loot.delete(id); this.gearLoot.delete(id); continue; }
+      if (now - born < 600) continue;   // still flying out of the burst
+      let who = null, bd = GEARX.pick;
+      for (const p of this.state.players.values()) { if (!p.alive || p.isBot) continue; const d = distance(p, it); if (d < bd) { bd = d; who = p; } }
+      if (!who) continue;
+      this.state.loot.delete(id); this.gearLoot.delete(id);
+      this.broadcast("gearGet", { to: who.sessionId, name: who.name, k: it.kind, ref: it.ref, n: it.amount, r: it.rarity, x: Math.round(it.x), y: Math.round(it.y) });
+    }
+  }
+  gearDmgMult(z, p) {
+    const sp = p.gearSp || {}; let k = 1 + (p.gearSt.dmg || 0) / 100;
+    if (!this.inDot && sp.crit && Math.random() < sp.crit) k *= 2;   // The Butcher's Cleaver: 1 hit in 10 does double
+    if (sp.flame && z.burn > 0) k *= 1 + sp.flame;   // The Eternal Flame: burning zombies take more
+    return k;
+  }
+  gearDot(z, p, burn, bleed, len) {   // burns (stacks of RAVEN.burn.dps) / bleeds and poison (damage a second) through the shared damage-over-time list
+    const now = Date.now(), d = this.dots.get(z.id) || { owner: p.sessionId, burn: 0, burnUntil: 0, bleed: 0, bleedUntil: 0 }; d.owner = p.sessionId;
+    if (burn) { d.burn = Math.max(now < d.burnUntil ? d.burn : 0, burn); d.burnUntil = Math.max(d.burnUntil, now + GEARX.burn.len * 1000); }
+    if (bleed) { d.bleed = Math.max(now < d.bleedUntil ? d.bleed : 0, bleed); d.bleedUntil = Math.max(d.bleedUntil, now + len * 1000); }
+    this.dots.set(z.id, d); z.burn = now < d.burnUntil ? d.burn : 0;
+  }
+  gearOnHit(z, p, dmg) {
+    const sp = p.gearSp, m = p.gearMem || (p.gearMem = {}), now = Date.now(), alive = this.state.zombies.has(z.id) && z.hp > 0; m.hits = (m.hits || 0) + 1;
+    if (alive && (sp.poison || sp.burn)) this.gearDot(z, p, sp.burn ? 1 : 0, sp.poison ? dmg * GEARX.poison.frac / GEARX.poison.len : 0, GEARX.poison.len);
+    if (alive && sp.chillHit) this.chillZombie(z, GEARX.chill, now);
+    if (alive && sp.horn && now >= (m.horn || 0)) { m.horn = now + sp.horn * 1000; if (!z.boss) this.stunZombie(z, GEARX.hornStun, now); this.broadcast("gearFx", { k: "spike", x: Math.round(z.x), y: Math.round(z.y) }); }
+    if (!(sp.chain && m.hits % sp.chain === 0) && !(sp.molten && m.hits % sp.molten === 0)) return;
+    const was = this.inDot; this.inDot = true;
+    try {
+      if (sp.chain && m.hits % sp.chain === 0) {   // Jade Emperor Gauntlets: jumps to the 2 closest zombies
+        const near = [...this.state.zombies.values()].filter(o => o.id !== z.id).map(o => [o, hyp(o.x - z.x, o.y - z.y)]).filter(q => q[1] < GEARX.chain.r).sort((a, b) => a[1] - b[1]).slice(0, GEARX.chain.n);
+        if (near.length) { this.broadcast("gearFx", { k: "chain", pts: [[Math.round(z.x), Math.round(z.y)], ...near.map(([o]) => [Math.round(o.x), Math.round(o.y)])] }); for (const [o] of near) this.hitZombie(o, p, dmg); }
+      }
+      if (sp.molten && m.hits % sp.molten === 0) {   // Molten Core Barrel: a splash
+        for (const o of [...this.state.zombies.values()]) if (o.id !== z.id && hyp(o.x - z.x, o.y - z.y) < GEARX.molten.r + o.radius) this.hitZombie(o, p, dmg * GEARX.molten.frac);
+        this.broadcast("gearFx", { k: "molten", x: Math.round(z.x), y: Math.round(z.y), r: GEARX.molten.r });
+      }
+    } finally { this.inDot = was; }
+  }
+  gearOnKill(z, p) {
+    const sp = p.gearSp;
+    if (sp.mheal && this.gearMelee === p && p.alive) p.hp = Math.min(p.maxHp, p.hp + sp.mheal);   // melee kills heal
+    if (sp.phoenix && !this.inDot && Math.random() < GEARX.phoenix.chance) {   // Phoenix Gloves: the kill bursts into flame
+      const F = GEARX.phoenix, scale = 1 + (this.state.stage - 1) * .08, was = this.inDot; this.inDot = true;
+      try { for (const o of [...this.state.zombies.values()]) if (hyp(o.x - z.x, o.y - z.y) < F.r + o.radius) { this.gearDot(o, p, 1, 0, 0); this.hitZombie(o, p, F.dmg * scale); } } finally { this.inDot = was; }
+      this.broadcast("gearFx", { k: "phoenix", x: Math.round(z.x), y: Math.round(z.y), r: F.r });
+    }
+  }
+  gearRing(p, now) {   // The Pyre Crown (when hit) / The Priest's Censer (when a skill is used): a ring of fire round you
+    const R = GEARX.ring, scale = 1 + (this.state.stage - 1) * .08, was = this.inDot; this.inDot = true;
+    try { for (const z of [...this.state.zombies.values()]) if (distance(p, z) < R.r + z.radius) { this.gearDot(z, p, 1, 0, 0); this.hitZombie(z, p, R.dmg * scale); } } finally { this.inDot = was; }
+    this.broadcast("gearFx", { k: "ring", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: R.r });
+  }
+  gearHurt(p, z) {   // from armorHit: true = this hit is blocked
+    const sp = p.gearSp, m = p.gearMem || (p.gearMem = {}), now = Date.now();
+    if (sp.block && now >= (m.block || 0)) { m.block = now + sp.block * 1000; this.broadcast("gearFx", { k: "block", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y) }); return true; }   // The Beast's Hide
+    if (z && this.state.zombies.has(z.id)) {
+      if (sp.bleed) this.gearDot(z, p, 0, GEARX.bleed.dmg / GEARX.bleed.len, GEARX.bleed.len);   // The Butcher's Apron: the biter bleeds
+      if (sp.thorns) { const was = this.inDot; this.inDot = true; try { this.hitZombie(z, p, sp.thorns); } finally { this.inDot = was; } }   // Alpha Crown: bites hurt back
+    }
+    if (sp.pyreRing && now >= (m.ring || 0)) { m.ring = now + sp.pyreRing * 1000; this.gearRing(p, now); }
+    return false;
+  }
+  gearTick(dt, now, playing) {
+    this.gearPickup(now);
+    if (!playing) return;
+    for (const p of this.state.players.values()) {
+      const sp = p.gearSp; if (!sp) continue; const m = p.gearMem || (p.gearMem = {});
+      // stuns / slows on you are shorter: whatever was added since the last tick is cut down
+      if (sp.stunRes) { const exp = Math.max(0, (m.stun || 0) - dt); if ((p.stunned || 0) > exp + .02) p.stunned = exp + (p.stunned - exp) * (1 - sp.stunRes); m.stun = p.stunned || 0; }
+      if (sp.slowRes) { const exp = Math.max(0, (m.slow || 0) - dt); if ((p.slowed || 0) > exp + .02) p.slowed = exp + (p.slowed - exp) * (1 - sp.slowRes); m.slow = p.slowed || 0; }
+      if (sp.crown) this.gearHpSync(p, true);
+      if (sp.censer) { const cd = p.abilityCooldown || 0, ua = p.ultActive || 0; if ((cd > (m.cd || 0) + .5 || ua > (m.ua || 0) + .5) && p.alive) this.gearRing(p, now); m.cd = cd; m.ua = ua; }
+      if (!p.alive) continue;
+      if (sp.reg && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + sp.reg * dt);
+      if (sp.runes) for (const q of this.state.players.values()) if (q !== p && q.alive && q.hp < q.maxHp && distance(p, q) < GEARX.runes.r) q.hp = Math.min(q.maxHp, q.hp + sp.runes * dt);
+      if (sp.aura) for (const z of this.state.zombies.values()) if (distance(p, z) < GEARX.aura.r + z.radius) this.chillZombie(z, GEARX.aura, now);
+      if (sp.trail) {   // Glacier Boots: frost left where you walked (2s)
+        const T = GEARX.trail; m.trail = (m.trail || []).filter(q => now - q.t < T.life * 1000);
+        if (!m.trailAt || now - m.trailAt > T.every * 1000) { const last = m.trail[m.trail.length - 1]; if (!last || hyp(last.x - p.x, last.y - p.y) > 12) m.trail.push({ x: p.x, y: p.y + 10, t: now }); m.trailAt = now; }
+        if (m.trail.length) for (const z of this.state.zombies.values()) if (m.trail.some(q => hyp(z.x - q.x, z.y - q.y) < T.r + z.radius * .5)) this.chillZombie(z, T, now);
+      }
+      if (sp.shout && now >= (m.shout || 0)) {   // The Screamer's Vocal Cord: every 20s, ordinary zombies round you are stunned for 1s
+        if (m.shout) { for (const z of this.state.zombies.values()) if (!z.boss && distance(p, z) < GEARX.shout.r + z.radius) this.stunZombie(z, GEARX.shout.stun, now); this.broadcast("gearFx", { k: "shout", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: GEARX.shout.r }); }
+        m.shout = now + sp.shout * 1000;
+      }
     }
   }
 
@@ -4155,6 +4311,8 @@ export class SurvivalRoom extends Room {
       if (Array.isArray(o)) { for (const v of o) bump(v, d + 1); return; }
       for (const k in o) { const v = o[k]; if (typeof v === "number") { if (v > T) o[k] = v + ms; } else if (v && typeof v === "object" && (v.constructor === Object || Array.isArray(v) || v instanceof Map)) bump(v, d + 1); } };   // plain data only (never a synced schema object)
     for (const k of ["introUntil", "bossOverAt"]) if (this[k] > T) this[k] += ms;
+    for (const [k, v] of this.gearLoot) this.gearLoot.set(k, v + ms);   // boss gear on the ground: its 30s
+    for (const p of this.state.players.values()) { const m = p.gearMem; if (m) for (const k of ["block", "ring", "shout", "horn"]) if (m[k] > T) m[k] += ms; }
     for (const o of [this.bossMem, this.unitMem, this.hiveMem, this.pyreFx, this.scrFx, this.abFx, this.mine?.haz, this.mine?.shield]) bump(o);
   }
   tickInner() {
@@ -4170,6 +4328,7 @@ export class SurvivalRoom extends Room {
     if (this.cordon) this.cordonCheck();
     if (this.state.phase !== "playing") for (const st of this.state.structures.values()) if (st.fire) st.fire = false;   // the wave is over (zombies wiped): turrets stop shooting at where their last target was
     if (this.state.phase === "cleared") {
+      this.gearTick(dt, now, false);   // boss gear left on the ground can still be picked up in the break
       if (!this.inBreak) this.beginBreak();
       if (this.state.countdown > BREAK_GO && [...this.state.players.values()].every(p => p.isBot || p.ready)) this.state.countdown = BREAK_GO;   // everyone's ready
       this.state.countdown = Math.max(0, this.state.countdown - dt);
@@ -4204,6 +4363,7 @@ export class SurvivalRoom extends Room {
     this.updateDante(dt, now);
     this.updateSofea(dt, now);
     this.updateMarcus(dt); this.updateBriggs(dt, now); this.updateSienna(dt, now);
+    this.gearTick(dt, now, true);   // boss gear: regen, auras, trails, screams, resistances, pickups
     this.updateArshan(dt, now);
     this.updateAstra(dt, now);
     this.separateZombies();
@@ -4216,6 +4376,7 @@ export class SurvivalRoom extends Room {
     }
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0&&!this.sheltered(p)){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
+      if(item.kind==="gear"||item.kind==="mat")continue;   // boss gear: gearPickup() (no bots, first come first served)
       if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){ if(p.characterClass==="sniper")continue;   // (Nov 16) Sienna uses only her own gun: she leaves drops for the others. Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);

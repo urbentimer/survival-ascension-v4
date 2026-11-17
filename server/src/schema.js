@@ -32,7 +32,8 @@ defineTypes(ZombieState, {
   chill: "number" });   // (Nov 16) chill: % slower right now (Sienna's Cold Precision / Cryo Grenade), 0 = not slowed; the client tints it icy
 
 export class LootState extends Schema {}
-defineTypes(LootState, { id: "string", kind: "string", x: "number", y: "number", amount: "number", rarity: "string" });
+defineTypes(LootState, { id: "string", kind: "string", x: "number", y: "number", amount: "number", rarity: "string",
+  ref: "string" });   // (Nov 17) boss gear: kind "gear" = the item id (gearData.js), kind "mat" = the material (gold, iron, silver, titanium, ess:<boss>)
 
 export class StructureState extends Schema {}
 defineTypes(StructureState, {

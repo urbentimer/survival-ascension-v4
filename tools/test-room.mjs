@@ -1791,4 +1791,50 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "settings", { startWave: 20 }); send(A, "start", {}); ok(room.state.stage === 20 && room.state.mapSite === 6 && !!room.state.mission, "wave 20 starts the Deep Mine mission");
   room.state.phase = "victory"; send(A, "restart"); send(A, "settings", { startWave: 1 }); send(A, "start", {}); ok(room.state.stage === 1 && room.state.mapSite === 0 && !room.state.mission, "back to wave 1: Ascension, normal start");
   room._dispose(); }
+// 71b. (Nov 17) BOSS GEAR: the loot burst (1 legendary, 1-2 epics, 10-12 items), first come first served (no bots), the loadout's stats + specials
+{ const { readFileSync } = await import("node:fs"); const G = await import(join(root, "server/src/gearData.js"));
+  ok(readFileSync(join(root, "server/src/gearData.js"), "utf8") === readFileSync(join(root, "client/gearData.js"), "utf8"), "client/gearData.js is identical to server/src/gearData.js");
+  ok(G.ITEMS.length === 90 && Object.keys(G.BOSSES).every(b => { const l = G.ITEMS.filter(i => i.boss === b); return l.length === 15 && l.filter(i => i.t === 10).length === 3 && l.filter(i => i.t === 8 || i.t === 9).length === 5; }), "90 items: 15 per boss (3 legendary, 5 epic, 7 lower)");
+  let okRolls = true; for (let i = 0; i < 300; i++) { const r = G.rollBurst("pyre"), g = r.filter(d => d.g).map(d => G.ITEM[d.g]); if (r.length < 10 || r.length > 12 || g.filter(it => it.t === 10).length !== 1 || ![1, 2].includes(g.filter(it => it.t === 8 || it.t === 9).length) || g.some(it => it.boss !== "pyre") || r.some(d => d.m && !(d.n >= 1))) okRolls = false; }
+  ok(okRolls, "every burst: 10-12 items, exactly 1 legendary, 1-2 epics, all from that boss");
+  const { room, events, A, B, send, P } = makeRoom(); const a = P(A), b = P(B); room.state.phase = "playing";
+  const hp0 = a.maxHp, sp0 = a.speed, fr0 = a.fireRate;
+  send(A, "bossGear", { items: [{ id: "bu-apron", l: 7 }, { id: "bu-blood-hood", l: 4 }, { id: "bu-cleaver", l: 0 }, { id: "bu-rubber-boots", l: 10 }, { id: "nope", l: 3 }, { id: "bu-chain-apron", l: 2 }, { id: "bu-pig-mask", l: 99 }] });
+  ok(a.gearList.length === 4, `bad ids, impossible levels and a second outfit are dropped (${a.gearList.map(g => g.id).join(", ")})`);
+  ok(a.maxHp === hp0 + 54 + 30, `+ max HP: Apron +7 = 54, Hood +4 = 30 (${hp0} -> ${a.maxHp})`);
+  ok(a.hp <= hp0, "equipping mid-fight doesn't heal (no swap-to-heal)");
+  ok(Math.abs(a.speed - sp0 * 1.05) < .01, `+ move speed: Rubber Boots +10 = +5% (${sp0} -> ${Math.round(a.speed * 10) / 10})`);
+  send(A, "bossGear", { items: [{ id: "hv-jade-gauntlets", l: 0 }] });
+  ok(a.maxHp === hp0 && Math.abs(a.speed - sp0) < .01, "taking gear off takes its HP and speed away");
+  ok(Math.abs(a.fireRate - Math.min(14, fr0 * 1.18)) < .01, `+ fire rate: +18% (${Math.round(fr0 * 100) / 100} -> ${Math.round(a.fireRate * 100) / 100})`);
+  send(A, "bossGear", { items: [{ id: "bu-apron", l: 0 }] }); a.armorPct = 0; a.defence = 0; a.armor = 0;
+  ok(room.armorHit(a, 100) === 91, `armour: +6 = 9% less damage (${room.armorHit(a, 100)})`);
+  room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true; room.state.zombies.clear(); room.spawnClock = 1e9; a.x = 1000; a.y = 1000; b.x = 3000; b.y = 2000;
+  const mk = (kind, x, y = 1000, boss = false, hp = 9999) => { room.spawnZombie(boss, kind); const z = [...room.state.zombies.values()].pop(); z.x = x; z.y = y; z.hp = z.maxHp = hp; z.speed = 0; z.damage = 0; return z; };
+  const biter = mk("walker", 1030); room.armorHit(a, 10, biter); ok(room.dots.get(biter.id)?.bleed > 0, "The Butcher's Apron: a zombie that bites you bleeds");
+  send(A, "bossGear", { items: [{ id: "hv-alpha-crown", l: 0 }] }); const hp1 = biter.hp; room.armorHit(a, 10, biter); ok(Math.abs(hp1 - biter.hp - 15) < .01, `Alpha Crown: biters take 15 back (${Math.round(hp1 - biter.hp)})`);
+  send(A, "bossGear", { items: [{ id: "mb-beast-hide", l: 0 }] }); ok(room.armorHit(a, 50) === 0 && room.armorHit(a, 50) > 0, "The Beast's Hide: the next hit is blocked, then 10s to wait");
+  send(A, "bossGear", { items: [{ id: "py-sun-idol", l: 0 }] }); const t1 = mk("walker", 1100); room.hitZombie(t1, a, 100); ok(Math.abs(9999 - t1.hp - 112) < .01, `+ damage: Sun Idol +12% (${Math.round(9999 - t1.hp)})`);
+  send(A, "bossGear", { items: [{ id: "hv-stinger", l: 0 }] }); const t2 = mk("walker", 1100); room.hitZombie(t2, a, 100); send(A, "bossGear", { items: [{ id: "py-incendiary", l: 0 }] }); const t3 = mk("walker", 1100); room.hitZombie(t3, a, 100);
+  ok(room.dots.get(t2.id)?.bleed > 0 && room.dots.get(t3.id)?.burn > 0 && t3.burn > 0, "Stinger Rounds poison, Incendiary Rounds burn");
+  send(A, "bossGear", { items: [{ id: "hv-jade-gauntlets", l: 0 }] }); room.state.zombies.clear(); a.gearMem.hits = 0; const c0 = mk("walker", 1100), c1 = mk("walker", 1160), c2 = mk("walker", 1100, 1080), c3 = mk("walker", 1500);
+  for (let i = 0; i < 5; i++) room.hitZombie(c0, a, 10); ok(9999 - c1.hp === 10 && 9999 - c2.hp === 10 && c3.hp === 9999, "Jade Emperor Gauntlets: every 5th hit jumps to the 2 closest zombies");
+  send(A, "bossGear", { items: [{ id: "sc-whiteout-coat", l: 0 }, { id: "ab-heart", l: 0 }] }); room.state.zombies.clear(); const ca = mk("walker", 1120); a.hp = 50; room.gearTick(1, Date.now(), true);
+  ok(ca.chill >= 20, `The Whiteout Coat: zombies near you are 20% slower (${ca.chill}%)`); ok(a.hp >= 51.99 && a.hp <= 52.01, `The Abomination's Heart: heal 2 HP a second (${a.hp})`);
+  send(A, "bossGear", { items: [{ id: "ab-heart", l: 0 }] }); a.hp = 10; room.downPlayer(a); ok(a.alive && a.hp === Math.round(a.maxHp * .5), "The Abomination's Heart: back up at 50% instead of going down"); room.downPlayer(a); ok(!a.alive, "... once a match"); a.alive = true; a.hp = a.maxHp;
+  send(A, "bossGear", { items: [{ id: "ab-iron-maw", l: 0 }] }); room.state.zombies.clear(); const mz = mk("walker", 1030, 1000, false, 5); a.hp = 40; a.melee = "knife"; room.lastMelee.clear(); room.meleeAttack(a, 0); ok(!room.state.zombies.has(mz.id) && a.hp === 49, `The Iron Maw: melee kills heal 8 HP (+1 for any kill: ${a.hp})`);
+  send(A, "bossGear", { items: [{ id: "sc-banshee-veil", l: 0 }] }); a.gearMem.stun = 0; a.stunned = 2; room.gearTick(.02, Date.now(), true); ok(a.stunned < .01, "The Banshee Veil: stuns can't touch you");
+  // the burst
+  send(A, "bossGear", { items: [] }); room.state.zombies.clear(); room.state.loot.clear(); events.length = 0;
+  const boss = mk("butcher", 1400, 1000, true, 10); boss.boss = true; room.killZombie(boss, a);
+  const burst = [...room.state.loot.values()].filter(l => l.kind === "gear" || l.kind === "mat"), gg = burst.filter(l => l.kind === "gear").map(l => G.ITEM[l.ref]);
+  ok(burst.length >= 10 && burst.length <= 12 && gg.filter(it => it.t === 10).length === 1 && gg.every(it => it.boss === "butcher") && events.some(e => e.type === "gearBurst" && e.n === burst.length), `a Butcher kill bursts into ${burst.length} items (1 legendary)`);
+  const leg = burst.find(l => G.ITEM[l.ref]?.t === 10); const bot = P(B); bot.isBot = true; bot.x = leg.x; bot.y = leg.y; room.gearLoot.set(leg.id, Date.now() - 1000); room.gearTick(.02, Date.now(), false);
+  ok(room.state.loot.has(leg.id), "bots don't pick boss gear up"); bot.isBot = false; bot.x = 3000;
+  a.x = leg.x; a.y = leg.y; room.gearTick(.02, Date.now(), false); const got = events.find(e => e.type === "gearGet");
+  ok(!room.state.loot.has(leg.id) && got?.to === "A" && got.ref === leg.ref && got.k === "gear", "walking over it picks it up (also in the break): the item goes to that player");
+  const left = burst.find(l => room.state.loot.has(l.id)); room.gearLoot.set(left.id, Date.now() - 31000); room.gearTick(.02, Date.now(), false); ok(!room.state.loot.has(left.id), "burst items fade after 30s");
+  room.state.loot.clear(); events.length = 0; const tb = mk("screamer", 1400, 1000, true, 10); tb.boss = true; send(A, "debugBossHp", { kill: true });
+  ok(![...room.state.loot.values()].some(l => l.kind === "gear") && events.some(e => e.type === "gearBurst" && e.test), "online, a boss killed with a host test command drops no gear");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);
