@@ -489,7 +489,7 @@ function renderHotbar(me) {
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
     { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : "", name: sie ? "Cryo Grenade: an ice bomb thrown where you aim: bursts in a circle, damage + 50% slower for 2s (bosses 25%). 3.5s cooldown" : skill.name, sub: sie ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s · Q: down` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -942,7 +942,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && (me.shadow > 0 || me.fire > 0)) { feed.unshift({ text: me.shadow > 0 ? "You're hidden: attack to strike with a burning katana" : `Katana burning: ${Math.ceil(me.fire)}s left`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
-  else if (k === "q") { const me = me_(); if (me?.characterClass === "demolitionist" && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
+  else if (k === "q") { const me = me_(); if ((me?.characterClass === "demolitionist" || me?.characterClass === "sniper") && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); /* Sienna: Q again = jump down from the perch */ else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
   else if (k === "r") { const me = me_(); if (["dispatcher", "operator", "juggernaut", "sniper"].includes(me?.characterClass) && !e.repeat) room.send("skill2", { a: aimAngle(me) }); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
@@ -3266,8 +3266,9 @@ function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.
 // breaking, rubble), sienna-shatter (6: the ice block = her decoy, glowing cracks, bursting, shards, patch, fading), sienna-grenade (the canister).
 // Code-made: the cyan sniper tracer (TRACER), the map-length laser, the frost tint on slowed zombies, the decoy (her own sprite frozen pale inside
 // the ice block), the hidden shimmer, the dash streak.
-const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
-const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 } };   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
+const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp", floor: "assets/sprites/fx/sienna-floor.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
+const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 },
+  floor: { cw: 275, ch: 434, mx: 137, my: 217, R: 300, spread: 500 } };   // (Nov 17) the Q ice floor: 5 frozen patches 230px across (middle at mx,my); R = the server's SIENNA.floor.r   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
 const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
 const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
 const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam
@@ -3278,8 +3279,8 @@ function onSienna(m) {
   else if (m.k === "decoy") { a.dashAt = now; a.dashA = m.a; siennaDecoys.set(m.id, { x: m.x, y: m.y, t0: now, until: now + m.t * 1000, a: m.a }); sfxList.push({ ...m, k: "dash", t: now }); playSfx("zap", m.x, m.y, .5); }
   else if (m.k === "reveal") sfxList.push({ ...m, t: now });
   else if (m.k === "shatter") { siennaDecoys.delete(m.id); sfxList.push({ ...m, t: now }); playSfx("zhit", m.x, m.y, .6); }
-  else if (m.k === "perch") { a.perchAt = now; playSfx("build", m.x, m.y, .8); if (mine) shake(4, 200); }
-  else if (m.k === "perchEnd") { a.perchAt = 0; sfxList.push({ ...m, k: "towerEnd", t: now }); playSfx("zhit", m.x, m.y, .8); }
+  else if (m.k === "perch") { a.perchAt = now; a.floor = { seed: m.seed || 1, t0: now, x: m.x, y: m.y, list: iceFloorLayout(m.seed || 1) }; playSfx("build", m.x, m.y, .8); if (mine) shake(4, 200); }
+  else if (m.k === "perchEnd") { a.perchAt = 0; if (a.floor) sfxList.push({ k: "floorEnd", x: a.floor.x, y: a.floor.y, list: a.floor.list, t: now }); a.floor = null; sfxList.push({ ...m, k: "towerEnd", t: now }); playSfx("zhit", m.x, m.y, .8); }
   else if (m.k === "beam") { a.beamAt = now; sfxList.push({ ...m, t: now }); playSfx("zap", m.x, m.y, 1); playSfx("rifle", m.x, m.y, .8); if (mine) shake(5, 180); }
 }
 function sienFrame(im, G, k, x, y, alpha = 1, sc = 1) {   // frame k of a one-row atlas, its ground point at (x, y)
@@ -3294,6 +3295,7 @@ function drawPerchTower(p, now) {   // the ice tower under her feet: it grows (f
 }
 function siennaCast(p, now, row) {   // the skill poses: { blk, col, row? } or null
   const a = siennaAnim.get(p.sessionId) || {}, B = DIR8.sniper.blocks;
+  const ta0 = now - (a.throwAt || -1e9); if (ta0 < 440) return { blk: B.indexOf("throw"), col: ta0 < 90 ? 0 : ta0 < 200 ? 1 : ta0 < 320 ? 2 : 3 };   // (Nov 17) she can throw up on the tower too
   if (p.ultActive > 0) {   // up on the perch: aim / FIRE / smoke (straight up or down: her sniper block's own frames)
     const sa = now - (a.beamAt || -1e9), c = sa < 120 ? 1 : sa < 560 ? 2 : 0;
     return row === 0 || row === 4 ? { blk: B.indexOf("sniper"), col: [0, 4, 5][c] } : { blk: B.indexOf("perch"), col: c };
@@ -3368,6 +3370,46 @@ function drawSiennaBeams(now) {   // Glacier Perch: the ice-cyan laser across th
     for (let j = 0; j < 46; j++) { const u = ((j * 0.618 + f.t * 0.0007) % 1) * 0.6, px_ = xq + (x1 - xq) * u, py_ = yq + (y1 - yq) * u, off = Math.sin(j * 7.3 + age / 50) * (4 + 12 * k); ctx.fillRect(Math.round(px_ - s * off), Math.round(py_ + c * off), 2, 2); }
     if (age < 160) { const g = ctx.createRadialGradient(x0, y0, 2, x0, y0, 46); g.addColorStop(0, `rgba(255,255,255,${1 - age / 160})`); g.addColorStop(1, "rgba(120,220,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x0, y0, 46, 0, 7); ctx.fill(); }
     ctx.restore();
+  }
+}
+function iceFloorLayout(seed) {   // (Nov 17) a fresh shuffle every cast: frozen patches packed in staggered rows over the 300px circle (flipped,
+  // 0.8-1.15x, random piece), small ones round the rim, drawn back to front; the radial-crack patch last, under her tower. d = how far out (0-1)
+  let t = seed >>> 0; const rnd = () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+  const R = SIEN.floor.R, out = [], pick = () => { const u = rnd(); return u < .15 ? 1 : u < .5 ? 2 : u < .65 ? 3 : 4; };   // mostly the flat patches (it should read as a floor), now and then crystals / chunks
+  for (let y = -R + 50, row = 0; y <= R - 40; y += 54, row++) {
+    const half = Math.sqrt(Math.max(0, (R - 70) ** 2 - y * y));
+    for (let x = -half + (row & 1) * 70; x <= half + 1; x += 140) { if (Math.hypot(x, y) < 95) continue; out.push({ x: x + (rnd() - .5) * 50, y: y + (rnd() - .5) * 18, k: pick(), s: .8 + rnd() * .35, f: rnd() < .5 ? -1 : 1 }); }
+  }
+  for (let i = 0; i < 18; i++) { const a = (i + rnd() * .6) / 18 * Math.PI * 2, rr = R - 34 - rnd() * 14; out.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, k: 1 + Math.floor(rnd() * 4), s: .4 + rnd() * .16, f: rnd() < .5 ? -1 : 1 }); }
+  out.sort((a, b) => a.y - b.y); out.push({ x: 0, y: 0, k: 0, s: 1.15, f: rnd() < .5 ? -1 : 1 });
+  for (const q of out) q.d = Math.min(1, Math.hypot(q.x, q.y) / R);
+  return out;
+}
+function floorPiece(q, cx, cy, sc, al) {
+  const im = sienImgs.floor, F = SIEN.floor; if (!im?.naturalWidth || al <= 0) return;
+  ctx.save(); ctx.globalAlpha *= al; ctx.translate(Math.round(cx + q.x), Math.round(cy + q.y)); ctx.scale(q.s * sc * q.f, q.s * sc);
+  ctx.drawImage(im, q.k * F.cw, 0, F.cw, F.ch, -F.mx, -F.my, F.cw, F.ch); ctx.restore();
+}
+function drawIceFloors(now) {   // under everything: the floor spreads out from her tower (middle first) in 0.5s, then is drawn from a cached picture
+  const F = SIEN.floor;
+  for (const p0 of state.players.values()) {
+    if (p0.characterClass !== "sniper" || !(p0.ultActive > 0) || !p0.alive) continue;
+    const a = sAnim(p0.sessionId); if (!a.floor) { const pv = V(p0), sd = [...p0.sessionId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7); a.floor = { seed: sd, t0: now - 2000, x: pv.x, y: pv.y, list: iceFloorLayout(sd) }; }   // (joined mid-perch)
+    const fl = a.floor, cx = fl.x, cy = fl.y + SPR.feet - 3, age = now - fl.t0; if (!inView(cx, cy, F.R + 160)) continue;
+    if (age > F.spread + 200 && sienImgs.floor.naturalWidth) {   // spread done: one cached picture of the whole floor
+      if (!fl.cache) { const W = 2 * F.R + 340, c = document.createElement("canvas"); c.width = W; c.height = W; const g = c.getContext("2d"), keep = ctx;
+        ctx = g; try { for (const q of fl.list) floorPiece(q, W / 2, W / 2, 1, 1); } finally { ctx = keep; } fl.cache = c; }
+      ctx.save(); ctx.globalAlpha = .9; ctx.drawImage(fl.cache, Math.round(cx - fl.cache.width / 2), Math.round(cy - fl.cache.height / 2)); ctx.restore();   // a touch see-through: the ground shows a little
+    } else for (const q of fl.list) { const u = (age - q.d * F.spread) / 160; if (u > 0) floorPiece(q, cx, cy, .6 + .4 * Math.min(1, u), .9 * Math.min(1, u)); }
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = "#e6fbff";   // a few frost twinkles across it
+    for (let i = 0; i < 14; i++) { const ph = now / 700 + i * 2.39, tw = (Math.sin(ph * 1.7) + 1) / 2, rr = F.R * Math.sqrt(((i * 0.618) % 1)) * .92, an = i * 2.4;
+      ctx.globalAlpha = .7 * tw * Math.min(1, age / F.spread); ctx.fillRect(Math.round(cx + Math.cos(an) * rr) - 1, Math.round(cy + Math.sin(an) * rr), 3, 1); ctx.fillRect(Math.round(cx + Math.cos(an) * rr), Math.round(cy + Math.sin(an) * rr) - 1, 1, 3); }
+    ctx.restore();
+  }
+  for (let i = sfxList.length - 1; i >= 0; i--) {   // she came down: the floor melts from the rim inward
+    const f = sfxList[i]; if (f.k !== "floorEnd") continue; const age = now - f.t; if (age > 750) { sfxList.splice(i, 1); continue; }
+    const cx = f.x, cy = f.y + SPR.feet - 3; if (!inView(cx, cy, F.R + 160)) continue;
+    for (const q of f.list) { const u = (age - (1 - q.d) * 400) / 300; floorPiece(q, cx, cy, 1 - .15 * Math.max(0, Math.min(1, u)), .9 * (1 - Math.max(0, Math.min(1, u)))); }
   }
 }
 function frostOverlay(z, z0, now) {   // a slowed zombie (Cold Precision / Cryo Grenade): frost at its feet and twinkling ice on it; stronger for the grenade
@@ -5065,6 +5107,7 @@ function drawWorldObjects(extra) {
   for (const st of state.structures.values()) if (st.kind === "safehouse") { if (inView(st.x, st.y, 260)) safePieces(st.x, st.y, safeFrame(st), safeAlpha(st), st).forEach(pc => items.push(pc)); } else if (inView(st.x, st.y)) items.push({ y: st.y + (st.kind === "mine" || st.kind === "flameTrap" ? -40 : 10), draw: () => drawStructure(st) });
   drawStains();
   drawPuddles();
+  if (siennaAnim.size) drawIceFloors(gnow());   // (Nov 17) Sienna's Q ice floor
   drawGroundFx();
   drawAstraGround();
   drawStompDust();
@@ -5316,7 +5359,7 @@ const ROSTER = [
     trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, isNew: true, desc: "Ice-cold sharpshooter. One shot every 2 seconds from far across the map: it goes through three zombies and freezes them in their tracks.",
     skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: it bursts in a circle, damaging every zombie in it and making them 50% slower for 2s (bosses 25%)." },
-             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage. Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo." },
+             { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage, and an ice floor spreads out round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
              { k: "R", n: "Ice Decoy", cd: 30, card: "iceDecoy", t: "Dash toward your aim and leave an ice copy of yourself that the zombies around it go after. You're hidden and nothing can hurt you for up to 10s; shooting or using a skill shows you again. The cooldown starts when you're seen." }],
     trait: { n: "Cold Precision", card: "coldPrecision", t: "+43% damage. Her sniper does +50% to bosses and brutes, and every sniper hit chills: 30% slower for 1.5s (bosses 15%)." }, gear: ["sniper", "knife"] },
   { id: "dispatcher", name: "ASTRA", role: "EMERGENCY CMDR", cat: "support", hp: 120, dmg: 15, spd: 180, def: 0, isNew: true, desc: "Calm field leader who always has backup on the way: medics, police and a safehouse.",

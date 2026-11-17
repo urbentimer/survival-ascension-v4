@@ -373,7 +373,8 @@ const SIENNA = {
   chill: { f: 0.7, boss: 0.85, t: 1.5 },   // every sniper hit (the perch laser too): 30% slower for 1.5s (bosses 15%)
   nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.5, boss: 0.75, t: 2 },   // E: lands where she aims (60-450px), 120px burst, 80 (x wave scaling), 50% slower for 2s (bosses 25%)
   decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
-  perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q
+  perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there)
+  floor: { r: 300, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 300px round her tower, spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
 };
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
@@ -1441,6 +1442,7 @@ export class SurvivalRoom extends Room {
     }
     if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher", "sniper"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
     if (p.characterClass === "sniper") {   // Sienna: Glacier Perch (the cooldown starts when she comes down)
+      if (this.perchOn(p)) { this.endPerch(p, Date.now()); return; }   // (Nov 17) Q again while up there: she jumps down (cooldown from now)
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !p.alive || this.sienna.get(p.sessionId)?.dash) return;
       if (p.shadow > 0) this.iceReveal(p, now);
       info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startPerch(p, now); return;
@@ -3064,7 +3066,8 @@ export class SurvivalRoom extends Room {
   }
   iceDecoy(p) {   // R: dash toward the aim, an ice copy left behind, hidden + untouchable up to 10s (cooldown from the reveal)
     const S = SIENNA.decoy, m = this.siennaMem(p), now = Date.now();
-    if (!p.alive || p.stunned > 0 || m.rReady > now || m.hideUntil > now || m.dash || this.perchOn(p) || this.state.vehicles.has(p.sessionId) || p.ride > 0) return false;
+    if (!p.alive || p.stunned > 0 || m.rReady > now || m.hideUntil > now || m.dash || this.state.vehicles.has(p.sessionId) || p.ride > 0) return false;
+    if (this.perchOn(p)) this.endPerch(p, now);   // (Nov 17) R up on the perch: she leaps off the tower into the decoy dash
     const a = p.aim || 0;
     m.decoy = { x: p.x, y: p.y, until: now + S.hide * 1000, decoy: true, id: p.sessionId };
     m.dash = { a, left: S.dash, t0: now }; m.hideUntil = now + S.hide * 1000; p.shadow = S.hide;
@@ -3081,7 +3084,7 @@ export class SurvivalRoom extends Room {
     const m = this.siennaMem(p); m.perchUntil = now + SIENNA.perch.life * 1000; m.beamAt = 0;
     if (p.activeSlot !== 2 && p.primary) this.setSlot(p, 2);
     p.reloadLeft = 0; p.mag = Math.max(p.mag, 1); p.perch = true; applyLoadout(p);
-    this.broadcast("sienna", { k: "perch", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), t: SIENNA.perch.life });
+    this.broadcast("sienna", { k: "perch", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), t: SIENNA.perch.life, seed: 1 + Math.floor(Math.random() * 1e9) });   // seed: the ice floor's shuffle (the same on every screen)
     this.state.message = `${p.name}: GLACIER PERCH!`;
   }
   endPerch(p, now) {
@@ -3112,6 +3115,10 @@ export class SurvivalRoom extends Room {
         if (m.hideUntil) { if (!p.alive || now >= m.hideUntil) this.iceReveal(p, now); else p.shadow = Math.ceil((m.hideUntil - now) / 100) / 10; }
         if (m.decoy && now >= m.decoy.until) { this.broadcast("sienna", { k: "shatter", id: p.sessionId, x: Math.round(m.decoy.x), y: Math.round(m.decoy.y) }); m.decoy = null; }
         if (m.perchUntil && (now >= m.perchUntil || !p.alive)) this.endPerch(p, now);
+        if (m.perchUntil > now) {   // the ice floor round her tower: every zombie on it crawls (re-applied each tick, wears off 0.3s after it steps off)
+          const F = SIENNA.floor, r = F.r * Math.min(1, (now - (m.perchUntil - SIENNA.perch.life * 1000)) / (F.grow * 1000)), r2 = r * r, C = { f: F.f, boss: F.boss, t: 0.3 };
+          for (const z of this.state.zombies.values()) { const dx = z.x - p.x, dy = z.y - p.y; if (dx * dx + dy * dy <= r2) this.chillZombie(z, C, now); }
+        }
       }
       if (p.perch && !this.perchOn(p)) { p.perch = false; applyLoadout(p); }
       p.skillT = m && m.hideUntil > now ? Math.ceil((m.hideUntil - now) / 100) / 10 : 0;   // HUD: R hidden time left

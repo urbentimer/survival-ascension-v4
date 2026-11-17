@@ -1439,8 +1439,16 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   send(A, "shoot", { a: 0 });
   ok(Math.abs((9999 - far.hp) - p.damage * 3) < 1 && Math.abs((9999 - boss.hp) - p.damage * 3) < 1 && side.hp === 9999 && p.mag === mag0 && far.chill === 30, `laser: through the boss to the far side of the map (${Math.round(9999 - far.hp)} = 3x ${p.damage}), chills, no ammo`);
   far.hp = 9999; send(A, "shoot", { a: 0 }); ok(far.hp === 9999, "the next laser needs 1.5s");
+  { const ms = room.sienna.get("A"); ms.perchUntil = Date.now() + 19400; room.state.zombies.clear(); room.zSlow.clear();   // (as if cast 0.6s ago: the floor has spread)
+    const on = mk("walker", p.x + 250, p.y + 100), off = mk("walker", p.x + 330, p.y), bb = mk("butcher", p.x - 200, p.y, true); tick();
+    ok(on.chill === 80 && !(off.chill > 0) && bb.chill === 20, `ice floor: a zombie on it is 80% slower (${on.chill}), 330px away isn't (${off.chill || 0}), a boss 20% (${bb.chill})`);
+    room.state.zombies.clear(); p.abilityCooldown = 0; room.ripples = []; send(A, "ability", { a: 0, d: 300 }); ok(room.ripples.some(r => r.kind === "cryo") && room.perchOn(p), "E: she throws a grenade from the tower"); }
   const info = room.ultInfo.get("A"); room.sienna.get("A").perchUntil = Date.now() - 1; tick();
   ok(!room.perchOn(p) && !p.perch && Math.abs(1000 / p.fireRate - 2000) < 1 && Math.abs(p.ultCd - 60) < .2 && Math.abs(room.armorHit(p, 100) - 100) <= 1, `down after 20s: normal sniper again, Q cooldown ${p.ultCd}s from now, full damage taken`);
+  room.ultInfo.get("A").readyAt = 0; tick(); send(A, "ult", { a: 0 }); tick(); const up2 = room.perchOn(p);
+  send(A, "ult", { a: 0 }); tick(); ok(up2 && !room.perchOn(p) && Math.abs(p.ultCd - 60) < .2, `Q again: she jumps down, cooldown ${p.ultCd}s from now`);
+  room.ultInfo.get("A").readyAt = 0; tick(); send(A, "ult", { a: 0 }); tick(); { const ms2 = room.sienna.get("A"); ms2.rReady = 0; ms2.hideUntil = 0; } const px0 = p.x, up3 = room.perchOn(p);
+  send(A, "skill2", { a: 0 }); for (let i = 0; i < 6; i++) tick(); ok(up3 && !room.perchOn(p) && p.shadow > 0 && p.x > px0 + 200, `R up on the perch: she leaps off into the decoy dash (x +${Math.round(p.x - px0)})`);
   // no other guns: the shop won't sell her one and she leaves weapon drops for the others
   room.state.phase = "cleared"; p.currency = 999; send(A, "buy", { id: "shotgun" }); ok(p.owned === "sniper" && p.currency === 999, "the shop won't sell her another gun");
   room.state.phase = "playing"; room.state.loot.clear(); room.state.zombies.clear(); const zl = mk("walker", p.x + 5, p.y);

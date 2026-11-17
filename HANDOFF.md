@@ -985,3 +985,11 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 16 — VEX planned (next character; build tomorrow)
 - Kit locked with the user: project doc claude/vex-kit.md. Toxin stacks (max 5, damage over time); gun TOXIN DART RIFLE only (+ knife, one-gun rule); trait CHAIN REACTION (poisoned deaths burst: 2 stacks around); E TOXIC VIAL (~4s, poison cloud); R ANTIDOTE MIST (~25s, team heal 30% max HP over 3s within ~350px + clears slows / stuns); Q PANDEMIC (20s toxic aura, ends in a Catalyst pop: remaining poison x2).
 - Next: numbers, design sheet prompt (simple chibi military), sprite / effect / card prompts.
+
+## Nov 17 — Sienna's Q: ICE FLOOR + jump down early (cache 20261115d)
+- User: a large ice floor under / around the perch slows zombies coming at her 80% (bosses 20%, only zombies); made by LAYERING several of their ice circles (not one stretched); spreads out on cast; a fresh shuffle every cast; 300px; Q again lets her come down and run; E and R work while perched.
+- Server: SIENNA.floor { r 300, grow 0.5s, f 0.2, boss 0.8 }: updateSienna re-applies chillZombie (t 0.3s) to every zombie within the grown radius of a perched Sienna each tick (strongest slow wins, so the floor beats the grenade on normal zombies). useUlt while perched = endPerch (cooldown from then). iceDecoy while perched = endPerch then the dash (decoy at the tower). "perch" message carries a seed.
+- Art: extract-sienna-fx.py section 4 -> fx/sienna-floor.webp: 5 ground patches (tower 1 radial cracks = the middle, burst 5 crystals, burst 6 thin, shatter 5 chunks, shatter 6 faint), each 230px across, middle at 137,217 of a 275x434 cell.
+- Client: iceFloorLayout(seed) (mulberry32): staggered rows of patches over the circle (flat ones 70%), 18 small ones round the rim, back to front, the radial patch last; spreads by distance over 0.5s (pop-in), then one cached canvas at 90% alpha; frost twinkles; melts rim-first in 0.75s on "perchEnd". Drawn right after the puddles (ground layer). Throw pose shows on the tower; Q key sends "ult" while perched; HUD "PERCH 14s · Q: down".
+- Tests 54d +4: floor slows 80 / boss 20 / not at 330px; E from the tower; Q again jumps down; R on the perch leaps off.
+- Cache `20261115d`; next `20261115e`.

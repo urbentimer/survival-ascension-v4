@@ -101,3 +101,21 @@ print(f'  tower top: {round((gT[4][1] - top_y) * SCT)} game px above the ground 
 Sh = frames('8-shatter.png', 6)
 b0 = box(Sh[0][0]); SCS = 62 / (b0[3] - b0[2])
 atlas('sienna-shatter.webp', Sh, [ground(f, x0, y0, 25) for f, (x0, y0) in Sh], SCS)
+
+# 4. (Nov 17) The Q ICE FLOOR's pieces (user: "layer and combine a few of the ice circles to make a big circle"): the flat frozen patches of the
+#    three sheets, each cut to its ground band (flying shards above it dropped), every piece 230 game px across, its oval's middle at the
+#    middle of its cell. The client lays 30-40 of them out in a fresh shuffle every cast (flipped, 0.8-1.15x) to fill the 300px circle.
+#    Pieces: 0 the radial cracks (tower frame 1: the middle), 1 crystals + cracks (burst 5), 2 thin cracked patch (burst 6), 3 patch with
+#    chunks (shatter 5), 4 faint patch (shatter 6).
+def patch(f, band=.42):
+    bx0, bx1, by0, by1 = box(f, 40); f = f.copy(); h = int((bx1 - bx0) * band); f[:max(0, by1 - h), :, 3] = 0
+    m = f[..., 3] > 6; ys, xs = np.where(m); f = f[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    bx0, bx1, by0, by1 = box(f, 40); return f, ((bx0 + bx1) / 2, by1 - (bx1 - bx0) * .17)   # the oval's middle: up from its solid bottom
+src = [(T[0][0], .8), (B[4][0], .5), (B[5][0], .45), (Sh[4][0], .45), (Sh[5][0], .45)]; pieces = []   # (the radial patch is a rounder oval: a taller band)
+for f, band in src:
+    pf, (cx, cy) = patch(f, band); bx0, bx1, _, _ = box(pf, 40); sc = 230 / (bx1 - bx0); pieces.append((shrink(pf, sc), cx * sc, cy * sc))
+CWf = max(int(np.ceil(2 * max(cx, s.width - cx))) for s, cx, cy in pieces) + 4; CHf = max(int(np.ceil(2 * max(cy, s.height - cy))) for s, cx, cy in pieces) + 4
+im = Image.new('RGBA', (CWf * len(pieces), CHf))
+for k, (s, cx, cy) in enumerate(pieces): im.alpha_composite(s, (k * CWf + CWf // 2 - round(cx), CHf // 2 - round(cy)))
+im.save(os.path.join(FX, 'sienna-floor.webp'), quality=92, alpha_quality=100, method=6)
+print(f'sienna-floor.webp: {im.size[0]}x{im.size[1]}, {len(pieces)} pieces, cell {CWf}x{CHf}, middle at {CWf // 2},{CHf // 2}')
