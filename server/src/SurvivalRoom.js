@@ -174,7 +174,7 @@ const CDR = { step: 0.10, max: 0.60 };
 const HANDS = { reload: 0.15, mag: 0.20, max: 5 };
 // Body Armour (level-up upgrade, Nov 6): PERCENT damage reduction by weight class, 8 picks to the cap. Heroes' built-in flat
 // defence (Briggs 5, Viktor 1) still comes off after the percent. The shop no longer sells armour.
-const ARMOR_CLASS = { juggernaut: "heavy", slasher: "heavy", dispatcher: "medium", operator: "medium", assault: "medium", engineer: "medium", demolitionist: "light", sniper: "light", scout: "light" };
+const ARMOR_CLASS = { juggernaut: "heavy", slasher: "heavy", dispatcher: "medium", operator: "medium", assault: "medium", engineer: "medium", demolitionist: "light", sniper: "light", toxicologist: "light", scout: "light" };
 const ARMOR = { heavy: .08, medium: .06, light: .04, picks: 8 };
 const armorStep = p => ARMOR[ARMOR_CLASS[p.characterClass] || "medium"], armorCap = p => armorStep(p) * ARMOR.picks;
 const magCap = (p, w) => Math.round(w.mag * (1 + HANDS.mag * (p.hands || 0)));   // XP from level L to L+1: 30, 102, 174 ... 2046 (29 -> 30); 30,006 in total
@@ -195,6 +195,7 @@ const CLASS_STATS = {
   scout:         { hp:  90, speed: 225, defence: 0, dmgMult: 1.03, rateMult: 1.20 },
   demolitionist: { hp: 105, speed: 175, defence: 0, dmgMult: 1.17, rateMult: 0.85 },
   sniper:        { hp:  95, speed: 165, defence: 0, dmgMult: 1.43, rateMult: 0.625 },   // (Nov 16) 0.8 x 0.625 = one sniper shot every 2.0s (the user's pick)
+  toxicologist:  { hp: 105, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 },   // (Nov 17) VEX: low hit damage, his poison does the work (VEX)
   operator:      { hp: 115, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   slasher:       { hp: 135, speed: 175, defence: 0, dmgMult: 1.00, rateMult: 1.00 },
   dispatcher:    { hp: 120, speed: 180, defence: 0, dmgMult: 1.00, rateMult: 1.00 }
@@ -211,7 +212,8 @@ const WEAPONS = {
             // 100px, falling to half at max range (the old damage): devastating point blank, same as before far away
   sniper:   { slot: "primary",   dmg: 80, rate: 0.8, range: 760, mag: 5,  reload: 1.1, pierce: 3, bigMult: 1.5 },  // bolt-action, goes through up to 3 zombies.
             // Nov 9: dmg 55 -> 80 (one-shots walkers till ~wave 10, runners all run) + bigMult: x1.5 on bosses and brutes (the big-target gun)
-  launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 1.3, splash: 80 } // explodes on first hit
+  launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 1.3, splash: 80 }, // explodes on first hit
+  dartrifle: { slot: "primary",  dmg:  9, rate: 4.5, range: 560, mag: 20, reload: 0.9, auto: true }   // (Nov 17) VEX's Toxin Dart Rifle (his only gun): light darts, each adds 1 Toxin stack
 };
 // Melee (key 1): swing in an arc toward the mouse. cd = seconds between swings, arc = half-angle in radians.
 const MELEE = {
@@ -300,7 +302,7 @@ const chapterOf = stage => CHAPTERS[Math.floor((Math.max(1, stage) - 1) / 4) % C
 const SITES = [{ seed: 1337 }, { seed: 4242 }, { seed: 90210 }, { style: "dynasty", seed: 8888, w: 4400, h: 2800 }, { style: "whiteout", seed: 2040, w: 4400, h: 2800 }, { style: "refinery", seed: 7070, w: 4400, h: 2800 }, { style: "mine", seed: 6060, w: 6000, h: 4000 }, { style: "crucible", seed: 2424, w: 6000, h: 4000 }];   // crucible: The Crucible (Nov 12), the lava map for the Abomination (waves 21-24)   // mine: The Deep Mine (Nov 11), a big underground map ridden on mine carts, with the boss dungeon and the portal;   // (Nov 11) Midnight Carnival removed from the lobby (user). Its ride engine (this.coaster, coasterTrack...) stays for the mine-cart map;   // carnival: Midnight Carnival, a bigger map with a rideable coaster;   // refinery: Scorched Refinery, open desert, bosses walk out of the pyramid;   // whiteout: Whiteout Station, a tight maze of Antarctic lab buildings (buildWhiteoutLayout);   // dynasty: Fallen Dynasty, a bigger map built from Chinese-city pieces (mapLayout.js buildDynastyLayout)
 const DIFFICULTY = { easy: { hp: 0.75, dmg: 0.7 }, normal: { hp: 1, dmg: 1 }, hard: { hp: 1.35, dmg: 1.3 } };
 const FRIENDLY_FIRE = 0.35;   // with friendly fire on, bullets that cross a teammate hurt them (35%)
-const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
+const PICKABLE = ["assault", "juggernaut", "operator", "engineer", "scout", "demolitionist", "sniper", "dispatcher", "toxicologist"];   // Elena (medic) and Hayes (commander) were removed; Arshan (slasher) not pickable yet
 const ASTRA = {
   call: 0.45,   // the shared radio call before anyone arrives
   medic: { n: 1, life: 20, cd: 30, hp: 100, speed: 165, heal: 5, range: 70, stuck: 2, session: 6,   // session: longest single treatment (s)
@@ -335,6 +337,7 @@ const DANTE = {
 };
 function danteLoadout(p) { p.owned = "launcher,pistol"; p.primary = "launcher"; p.secondary = "pistol"; p.weapon = "launcher"; p.activeSlot = 2; }
 function siennaLoadout(p) { p.owned = "sniper"; p.primary = "sniper"; p.secondary = ""; p.weapon = "sniper"; p.melee = "knife"; p.activeSlot = 2; p.perch = false; }   // (Nov 16) her own gun ONLY + knife (user: "each character will have a unique gun, no more picking up of guns")
+function vexLoadout(p) { p.owned = "dartrifle"; p.primary = "dartrifle"; p.secondary = ""; p.weapon = "dartrifle"; p.melee = "knife"; p.activeSlot = 2; }   // (Nov 17) his own dart rifle ONLY + knife (one unique gun per character)
 function sofeaLoadout(p) { p.owned = "smg,pistol"; p.primary = ""; p.secondary = "smg"; p.weapon = "smg"; p.activeSlot = 3; }   // Nov 9: SMG instead of the rifle (the shop still sells primaries)
 function ravenLoadout(p) { p.owned = ""; p.primary = ""; p.secondary = ""; p.weapon = ""; p.melee = "katana"; p.activeSlot = 1; p.mag = 0; p.magSize = 0; }
 function ravenReset(p) { p.shadow = 0; p.fire = 0; p.storm = 0; p.dashT = 0; p.katanaKills = 0; p.katanaTier = 0; }
@@ -379,6 +382,20 @@ const SIENNA = {
   perch: { life: 20, gap: 1.5, mult: 3, cd: 60, hp: 600 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there).
   // (Nov 17, user) up there SHE takes no damage: every hit goes into the TOWER (hp 600, +8% a wave like the other scaled numbers); at 0 it breaks and the perch ends
   floor: { r: 200, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 200px round her tower (was 300: "the ice is massive"), spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
+};
+// VEX (Nov 17, the user's kit: project doc claude/vex-kit.md). The toxicologist: TOXIN DART RIFLE only (+ knife; no pistol, no shop guns, he
+// leaves weapon drops for the others). TOXIN: every poison hit adds a stack to the zombie (max 5); each stack does damage over time (refreshed
+// by every new stack, gone 4s after the last) and the zombie glows green. CHAIN REACTION (trait): a poisoned zombie that dies bursts into a
+// puff: 2 stacks on every zombie round it. E TOXIC VIAL: thrown where he aims, a poison cloud for 4s (2 stacks when it bursts, +1 every 0.5s
+// inside). R ANTIDOTE MIST: a green-gold mist round him: every teammate in it (him too) heals 30% of their max HP over 3s and stuns, slows and
+// burning are cleared (works while stunned). Q PANDEMIC (100 kills, 60s cooldown from when it ends): gas mask on, a 20s toxic aura follows him
+// (+1 stack every 0.5s on everything in it); when it ends, CATALYST: every poisoned zombie pops for all its poison left x2 (stacks used up).
+const VEX = {
+  tox: { max: 5, dps: 4, len: 4 },   // per stack: 4 damage a second (x the wave scaling, like the skills): 5 stacks = 20/s
+  chain: { r: 100, stacks: 2 },
+  vial: { cd: 4, range: 420, min: 60, flight: 0.45, r: 110, life: 4, every: 0.5, burst: 2 },
+  mist: { cd: 25, r: 350, heal: 0.3, time: 3 },
+  pan: { life: 20, cd: 60, r: 220, every: 0.5, catalyst: 2 },
 };
 const STATION_R = { tower: 125, gen: 90 };
 const STATION_STEP = { tower: { amt: 250, cost: 10 }, gen: { amt: 300, cost: 15 }, fuel: { amt: 25, cost: 10 } };   // per F press (scrap / scrap / fuel)   // Nov 9: repair / refuel only standing next to it (the client shows an F prompt there)
@@ -542,7 +559,7 @@ export class SurvivalRoom extends Room {
     this.zombieSequence = 0;
     this.lastInputs = new Map();
     this.enraged = new Set(); this.zStuck = new Map(); this.away = new Set();   // away: survivors whose connection dropped (30s to reconnect)
-    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.gearLoot = new Map(); this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
+    this.lastMoveAt = new Map(); this.lastAimAt = new Map(); this.downs = new Map(); this.lastDashAt = new Map(); this.dodgeUntil = new Map(); this.inBreak = false; this.botBrain = new Map(); this.mags = new Map(); this.lastMelee = new Map(); this.fragHops = new Map(); this.cdrMem = new Map(); this.pyreFx = { patches: [], pillars: [], wheel: null }; this.scrFx = { rings: [], marks: [], frenzy: new Map() }; this.abFx = { puddles: [] }; this.pBurn = new Map(); this.gearLoot = new Map(); this.tox = new Map(); this.vex = new Map(); this.vexClouds = []; this.vexHeals = []; this.lastItem = new Map(); this.chargeAt = new Map(); this.slamReady = new Map(); this.puddleDps = new Map(); this.acidTouch = new Map(); this.lungeAng = new Map(); this.bossMem = new Map(); this.introAcks = new Set();
     this.lastTick = Date.now();
     this.setSimulationInterval(() => this.tick(), 50);
 
@@ -557,6 +574,7 @@ export class SurvivalRoom extends Room {
       for (const p of this.state.players.values()) if (p.characterClass === "slasher") { arshanLoadout(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "juggernaut") { briggsLoadout(p); this.mags.delete(p.sessionId + ":shotgun"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "sniper") { siennaLoadout(p); this.mags.delete(p.sessionId + ":sniper"); this.loadMag(p); applyLoadout(p); }
+      for (const p of this.state.players.values()) if (p.characterClass === "toxicologist") { vexLoadout(p); this.mags.delete(p.sessionId + ":dartrifle"); this.loadMag(p); applyLoadout(p); this.vex.delete(p.sessionId); }
       for (const p of this.state.players.values()) if (p.characterClass === "operator") { sofeaLoadout(p); this.mags.delete(p.sessionId + ":smg"); this.loadMag(p); applyLoadout(p); }
       for (const p of this.state.players.values()) if (p.characterClass === "demolitionist") { danteLoadout(p); this.mags.delete(p.sessionId + ":launcher"); this.loadMag(p); applyLoadout(p); }
       this.state.phase = "playing";
@@ -749,7 +767,8 @@ export class SurvivalRoom extends Room {
       if (p.characterClass === "dispatcher") this.astraCast(p, "R");   // Astra's R: safehouse
       else if (p.characterClass === "operator") this.mechaKey(p);   // Sofea's R: get in / out of the mecha
       else if (p.characterClass === "juggernaut") this.bareKnuckle(p);   // (Nov 13) Briggs's R: Bare Knuckle
-      else if (p.characterClass === "sniper") this.iceDecoy(p); });   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
+      else if (p.characterClass === "sniper") this.iceDecoy(p);   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
+      else if (p.characterClass === "toxicologist") this.antidoteMist(p); });   // (Nov 17) Vex's R: Antidote Mist (the team heal)   // (Nov 16) Sienna's R: Ice Decoy (dashes toward the aim the client sends with it)
     // Sofea's mecha: right click = lightsaber swing
     this.onMessage("mechaSlash", (client, data) => { const p = this.state.players.get(client.sessionId), a = Number(data?.a);
       if (p?.alive && this.state.phase === "playing" && data?.a != null && Number.isFinite(a)) this.mechaSlash(p, a); });
@@ -849,7 +868,8 @@ export class SurvivalRoom extends Room {
       const id = String(data?.id || ""), item = SHOP[id];
       if (!p || !item || this.state.phase !== "cleared") return;
       if (item.type === "weapon" && p.owned.split(",").includes(id)) return;
-      if (item.type === "weapon" && p.characterClass === "sniper") { this.state.message = `${p.name} only uses her own sniper.`; return; }   // (Nov 16) one unique gun per character (Sienna first)
+      if (item.type === "weapon" && p.characterClass === "sniper") { this.state.message = `${p.name} only uses her own sniper.`; return; }
+      if (item.type === "weapon" && p.characterClass === "toxicologist") { this.state.message = `${p.name} only uses his own dart rifle.`; return; }   // (Nov 16) one unique gun per character (Sienna first)
       if (item.max && p.armor >= item.max) return;
       if (id === "medkit" && p.medkits >= MAX_MEDKITS) return;
       if (p.currency < item.price) { this.state.message = `${p.name} needs ${item.price - p.currency} more gold for ${item.label}.`; return; }
@@ -1144,6 +1164,7 @@ export class SurvivalRoom extends Room {
     if (p.mag <= 0 && !rage) {
       if (!w.infinite && p.ammo <= 0) { // out of spare ammo: fall back to the pistol (Sienna has none: her knife)
         if (p.characterClass === "sniper") { this.setSlot(p, 1); this.event(`${p.name} is out of sniper ammo: knife out!`); }
+        else if (p.characterClass === "toxicologist") { this.setSlot(p, 1); this.event(`${p.name} is out of darts: knife out!`); }
         else { p.secondary = "pistol"; this.setSlot(p, 3); this.event(`${p.name} is out of ammo, switching to pistol.`); }
       } else this.startReload(p);
       return;
@@ -1176,6 +1197,7 @@ export class SurvivalRoom extends Room {
           const fo = w.falloff ? 1 - (1 - w.falloff.min) * Math.max(0, Math.min(1, (h.t - w.falloff.near) / (w.range - w.falloff.near))) : 1;   // shotgun: full up close
           const big = w.bigMult && (h.z.boss || h.z.kind === "brute") ? w.bigMult : 1;   // sniper: bosses + brutes take more
           if (p.characterClass === "sniper" && p.weapon === "sniper") this.chillZombie(h.z, SIENNA.chill, now);   // Cold Precision
+          if (p.weapon === "dartrifle") this.addTox(h.z, p, 1, now);   // (Nov 17) Vex: every dart adds a Toxin stack
           this.hitZombie(h.z, p, p.damage * (w.pelletMult || 1) * fo * big);
         }
         if (hits.length) end = hits[hits.length - 1].t;
@@ -1310,12 +1332,14 @@ export class SurvivalRoom extends Room {
       if (cls === "scout") { if (p.shadow > 0 || p.fire > 0 || p.storm > 0 || this.shadowDash.has(p.sessionId)) return; this.startShadowPass(p); return; }   // cooldown starts when the flaming katana ends
       if (cls === "sniper") { if (p.stunned > 0 || this.sienna.get(p.sessionId)?.dash) return; if (p.shadow > 0) this.iceReveal(p); }   // a skill reveals her (the throw happens below)
       if (cls === "engineer") { if ((p.robotCharges ?? ROBOT_CHARGES) < 1) return; p.robotCharges = (p.robotCharges ?? ROBOT_CHARGES) - 1; if (!(p.chargeCd > 0)) p.chargeCd = ROBOT_CD; }
-      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?SIENNA.nade.cd:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
+      if (cls === "toxicologist" && p.stunned > 0) return;
+      const cooldown=cls==="engineer"?ROBOT_GAP:cls==="scout"?18:cls==="demolitionist"?32:cls==="sniper"?SIENNA.nade.cd:cls==="toxicologist"?VEX.vial.cd:cls==="juggernaut"?28:cls==="assault"?MARCUS.rush.cd:25;
     p.abilityCooldown=cooldown;
     if(cls==="engineer") this.summonRobot(p, data?.kind);
     else if(cls==="scout"){p.speed+=75;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.speed=Math.max(150,p.speed-75);},3500);}
     else if(cls==="demolitionist"){for(const z of [...this.state.zombies.values()])if(distance(p,z)<175){z.hp-=260;if(z.hp<=0)this.killZombie(z,p);}}
     else if(cls==="sniper") this.cryoGrenade(p, Number(data?.d));
+    else if(cls==="toxicologist") this.toxicVial(p, Number(data?.d));
     else if(cls==="juggernaut"){p.defence+=8;setTimeout(()=>{if(this.state.players.has(p.sessionId))p.defence=Math.max(0,p.defence-8);},5000);}
     else {p.buffDamage=MARCUS.rush.dmg;p.buffRate=MARCUS.rush.rate;p.skillT=MARCUS.rush.t;applyLoadout(p);this.broadcast("rush",{id:p.sessionId});}   // ends in updateMarcus
     this.state.message=`${p.name} used ${cls.toUpperCase()} ability!`;
@@ -1436,6 +1460,7 @@ export class SurvivalRoom extends Room {
     const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0, readyAt: 0 };
     if (p.characterClass === "dispatcher") { const m = this.amemOf(p), alive = this.unitsOf(p.sessionId, "police").length > 0 || m.cast?.k === "Q", active = alive ? Math.max(0, (m.polUntil || now + ASTRA.police.life * 1000) - now) : 0; return { info, alive, active, left: Math.max(0, (info.readyAt || 0) - now) }; }   // Q cooldown counts from the press (Nov 6)
     if (p.characterClass === "assault") return { info, alive: false, active: 0, left: Math.max(0, info.readyAt - now) };
+    if (p.characterClass === "toxicologist") { const m = this.vex.get(p.sessionId), active = m ? Math.max(0, m.panUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + VEX.pan.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // Pandemic: the cooldown starts when it ends
     if (p.characterClass === "sniper") { const m = this.sienna.get(p.sessionId), active = m ? Math.max(0, m.perchUntil - now) : 0, alive = active > 0; return { info, alive, active, left: alive ? active + SIENNA.perch.cd * 1000 : Math.max(0, info.readyAt - now) }; }   // the perch: Q blocked while up; 60s cooldown from when she comes down
     if (p.characterClass === "slasher") { const sp = this.spins.get(p.sessionId), alive = !!sp, active = alive ? Math.max(0, sp.until - now) : 0; return { info, alive, active, left: alive ? active + ARSHAN.spin.cd * 1000 : Math.max(0, info.readyAt - now) }; }
     if (p.characterClass === "juggernaut") { const active = Math.max(0, info.summonedAt + BRIGGS.fort.life * 1000 - now), alive = active > 0; return { info, alive, active, left: alive ? active + BRIGGS.cry.cd * 1000 : Math.max(0, info.readyAt - now) }; }
@@ -1454,7 +1479,11 @@ export class SurvivalRoom extends Room {
       const now = Date.now(), { info, left } = this.ultState(p, now); if ((p.ultKills || 0) < ULT_KILLS || left > 0 || p.stunned > 0 || !p.alive) return;
       info.summonedAt = now; info.readyAt = now + MARCUS.frag.cd * 1000; this.ultInfo.set(p.sessionId, info); this.fragBarrage(p, Number(data?.d)); return;
     }
-    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher", "sniper"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (!["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "dispatcher", "sniper", "toxicologist"].includes(p.characterClass) || (p.ultKills || 0) < ULT_KILLS) return;
+    if (p.characterClass === "toxicologist") {   // Vex: Pandemic (20s aura, then the Catalyst; the cooldown starts when it ends)
+      const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !p.alive) return;
+      info.summonedAt = now; info.readyAt = 0; this.ultInfo.set(p.sessionId, info); this.startPandemic(p, now); return;
+    }
     if (p.characterClass === "sniper") {   // Sienna: Glacier Perch (the cooldown starts when she comes down)
       if (this.perchOn(p)) { this.endPerch(p, Date.now()); return; }   // (Nov 17) Q again while up there: she jumps down (cooldown from now)
       const now = Date.now(), { info, left } = this.ultState(p, now); if (left > 0 || p.stunned > 0 || !p.alive || this.sienna.get(p.sessionId)?.dash) return;
@@ -3154,6 +3183,89 @@ export class SurvivalRoom extends Room {
       p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
     }
   }
+  // ---------- VEX (Nov 17): Toxin stacks, Chain Reaction, Toxic Vial (E), Antidote Mist (R), Pandemic + Catalyst (Q). Numbers: VEX ----------
+  vexMem(p) { let m = this.vex.get(p.sessionId); if (!m) { m = { rReady: 0, panUntil: 0, panNext: 0 }; this.vex.set(p.sessionId, m); } return m; }
+  addTox(z, p, n, now = Date.now()) {   // n Toxin stacks on a zombie (max 5); every new stack refreshes them all for 4s; the last poisoner gets the credit
+    if (!p || !this.state.zombies.has(z.id) || z.kind === "minebeast" && z.act === "under") return;
+    let t = this.tox.get(z.id); if (!t || t.until <= now) { t = { n: 0, until: 0, owner: p.sessionId }; this.tox.set(z.id, t); }
+    t.n = Math.min(VEX.tox.max, t.n + n); t.until = now + VEX.tox.len * 1000; t.owner = p.sessionId; z.tox = t.n;
+  }
+  vexChain(z, t) {   // CHAIN REACTION: a poisoned zombie that dies bursts: 2 stacks on every zombie round it
+    const p = this.state.players.get(t.owner); if (!p) return; const C = VEX.chain, now = Date.now();
+    for (const o of this.state.zombies.values()) if (hyp(o.x - z.x, o.y - z.y) < C.r + (o.radius || 14)) this.addTox(o, p, C.stacks, now);
+    if ((this.vexPuffN = now - (this.vexPuffAt || 0) > 250 ? 1 : (this.vexPuffN || 0) + 1) === 1) this.vexPuffAt = now;
+    if (this.vexPuffN <= 10) this.broadcast("vex", { k: "puff", x: Math.round(z.x), y: Math.round(z.y) });   // (at most 10 puffs a quarter second on screen)
+  }
+  toxicVial(p, dist) {   // E: lobbed to the aimed spot (over walls); after the flight a poison cloud sits there for 4s
+    const V = VEX.vial, a = p.aim || 0, now = Date.now(), d = clamp(Number.isFinite(dist) && dist > 0 ? dist : V.range * .7, V.min, V.range);
+    const x = clamp(p.x + Math.cos(a) * d, 20, this.A.width - 20), y = clamp(p.y + Math.sin(a) * d, 20, this.A.height - 20), start = now + V.flight * 1000;
+    this.vexClouds.push({ x, y, r: V.r, start, until: start + V.life * 1000, next: start, first: true, owner: p.sessionId });
+    this.broadcast("vex", { k: "vial", id: p.sessionId, x0: Math.round(p.x), y0: Math.round(p.y), x: Math.round(x), y: Math.round(y), fl: V.flight, life: V.life, r: V.r });
+  }
+  antidoteMist(p) {   // R: the team heal. Works while stunned (it clears the stun)
+    const M = VEX.mist, m = this.vexMem(p), now = Date.now(); if (!p.alive || m.rReady > now || this.state.vehicles.has(p.sessionId)) return false;
+    m.rReady = now + M.cd * (1 - (p.cdr || 0)) * (1 - Math.min(.5, (p.gearSt?.cdr || 0) / 100)) * 1000;
+    let n = 0;
+    for (const q of this.state.players.values()) {
+      if (!q.alive || distance(p, q) > M.r) continue;
+      this.vexHeals = this.vexHeals.filter(h => h.sid !== q.sessionId); this.vexHeals.push({ sid: q.sessionId, per: q.maxHp * M.heal / M.time, until: now + M.time * 1000 });
+      q.stunned = 0; q.slowed = 0; this.pBurn.delete(q.sessionId); n++;
+      this.broadcast("heal", { id: q.sessionId });
+    }
+    this.broadcast("vex", { k: "mist", id: p.sessionId, x: Math.round(p.x), y: Math.round(p.y), r: M.r });
+    this.state.message = `${p.name}: ANTIDOTE MIST! (${n} healed)`;
+    return true;
+  }
+  startPandemic(p, now) {
+    const m = this.vexMem(p); m.panUntil = now + VEX.pan.life * 1000; m.panNext = now;
+    this.broadcast("vex", { k: "pandemic", id: p.sessionId, t: VEX.pan.life, r: VEX.pan.r });
+    this.state.message = `${p.name}: PANDEMIC!`;
+  }
+  endPandemic(p, now) {   // CATALYST: every poisoned zombie pops for all the poison it has left x2; the stacks are used up
+    const m = this.vexMem(p); m.panUntil = 0;
+    const info = this.ultInfo.get(p.sessionId) || { summonedAt: 0 }; info.readyAt = now + VEX.pan.cd * 1000; this.ultInfo.set(p.sessionId, info);
+    const scale = 1 + (this.state.stage - 1) * .08, pops = [];
+    for (const [id, t] of [...this.tox]) {
+      const z = this.state.zombies.get(id); this.tox.delete(id); if (!z) continue; z.tox = 0; if (now >= t.until) continue;
+      pops.push([z, t.n * VEX.tox.dps * scale * (t.until - now) / 1000 * VEX.pan.catalyst]);
+    }
+    const was = this.inDot; this.inDot = true;
+    try { for (const [z, dmg] of pops) if (this.state.zombies.has(z.id)) this.hitZombie(z, p, dmg); } finally { this.inDot = was; }
+    this.broadcast("vex", { k: "catalyst", id: p.sessionId, pts: pops.slice(0, 40).map(([z]) => [Math.round(z.x), Math.round(z.y)]) });
+    if (pops.length) this.state.message = `CATALYST! ${pops.length} poisoned zombies popped`;
+  }
+  updateVex(dt, now) {
+    const scale = 1 + (this.state.stage - 1) * .08;
+    for (const [id, t] of this.tox) {   // Toxin: each stack hurts (no gear effects from it: this.inDot)
+      const z = this.state.zombies.get(id); if (!z) { this.tox.delete(id); continue; }
+      const owner = this.state.players.get(t.owner); if (now >= t.until || !owner) { this.tox.delete(id); z.tox = 0; continue; }
+      if (z.tox !== t.n) z.tox = t.n;
+      const was = this.inDot; this.inDot = true; try { this.hitZombie(z, owner, t.n * VEX.tox.dps * scale * dt); } finally { this.inDot = was; }
+    }
+    if (this.vexClouds.length) this.vexClouds = this.vexClouds.filter(c => {   // the vials' clouds: 2 stacks when one bursts, +1 every 0.5s on everything inside
+      if (now >= c.until) return false; if (now < c.start || now < c.next) return true;
+      const p = this.state.players.get(c.owner); if (!p) return false;
+      for (const z of [...this.state.zombies.values()]) if (hyp(z.x - c.x, z.y - c.y) < c.r + (z.radius || 14) * .5) this.addTox(z, p, c.first ? VEX.vial.burst : 1, now);
+      c.first = false; c.next = now + VEX.vial.every * 1000; return true;
+    });
+    if (this.vexHeals.length) this.vexHeals = this.vexHeals.filter(h => { const q = this.state.players.get(h.sid); if (!q || now >= h.until) return false; if (q.alive) q.hp = Math.min(q.maxHp, q.hp + h.per * dt); return true; });
+    for (const p of this.state.players.values()) {
+      if (p.characterClass !== "toxicologist") continue;
+      if (this.solo && (p.ultKills || 0) < ULT_KILLS) p.ultKills = ULT_KILLS;   // preview: ultimate unlocked for testing
+      const m = this.vex.get(p.sessionId);
+      if (m?.panUntil) {
+        if (now >= m.panUntil || !p.alive) this.endPandemic(p, now);
+        else if (now >= m.panNext) {   // the aura round him: +1 stack every 0.5s
+          const r = VEX.pan.r; for (const z of [...this.state.zombies.values()]) if (hyp(z.x - p.x, z.y - p.y) < r + (z.radius || 14) * .5) this.addTox(z, p, 1, now);
+          m.panNext = now + VEX.pan.every * 1000;
+        }
+      }
+      p.chargeCd = m && m.rReady > now ? Math.ceil((m.rReady - now) / 100) / 10 : 0;   // HUD: R cooldown
+      const { left, active, alive } = this.ultState(p, now);
+      p.ultCd = alive ? VEX.pan.cd : Math.ceil(left / 100) / 10; p.ultActive = alive ? Math.max(0.1, Math.ceil(active / 100) / 10) : 0;
+      p.ultReady = (p.ultKills || 0) >= ULT_KILLS && left <= 0;
+    }
+  }
   nearGen(p) { return hyp(p.x - (this.A.cx + GEN_OFF.x), p.y - (this.A.cy + GEN_OFF.y)) <= STATION_R.gen; }
   // WHEEL OF FLAME: 4 lines from a fixed centre turning clockwise (screen y points down, so a growing angle = clockwise)
   wheelAngle(wh, now) { return wh.a + wh.w * (now - wh.t0) / 1000; }
@@ -3878,12 +3990,18 @@ export class SurvivalRoom extends Room {
       else if (b.abilityCooldown <= 0 && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .7)) this.useAbility(b);
       else if (!this.safeOf(b) && (Date.now() >= m.safeReady) && b.hp < b.maxHp * .5 && zs.filter(z => distance(b, z) < 250).length >= 4) this.astraCast(b, "R");
     }
+    if (b.characterClass === "toxicologist") {   // Vex bot: Pandemic in a crowd, the mist when someone near him is hurt, vials at whatever's coming
+      const crowd = zs.filter(z => distance(b, z) < 250).length, m = this.vexMem(b);
+      if (b.ultReady && crowd >= 6) this.useUlt(b);
+      else if (m.rReady <= Date.now() && [...this.state.players.values()].some(q => q.alive && q.hp < q.maxHp * .5 && distance(b, q) < VEX.mist.r)) this.antidoteMist(b);
+      else if (near && b.abilityCooldown <= 0 && nearD < VEX.vial.range && nearD > 70) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
+    }
     if (b.characterClass === "operator") {   // Sofea bot: tank when they get close, helicopter when there's a crowd
       if (b.ultReady && nearD < 400 && zs.filter(z => distance(b, z) < 450).length >= 6) this.useUlt(b);
       else if (b.abilityCooldown <= 0 && nearD < 260) this.useAbility(b);
       else if (!this.state.vehicles.has(b.sessionId) && this.mechaReadyIn(b) <= 0 && nearD < 220 && zs.filter(z => distance(b, z) < 300).length >= 4) this.mechaKey(b);
     }
-    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && b.characterClass !== "sniper" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
+    if (b.abilityCooldown <= 0 && nearD < 200 && b.characterClass !== "demolitionist" && b.characterClass !== "operator" && b.characterClass !== "juggernaut" && b.characterClass !== "slasher" && b.characterClass !== "dispatcher" && b.characterClass !== "sniper" && b.characterClass !== "toxicologist" && (b.characterClass !== "engineer" || (b.robotCharges ?? 3) >= 1)) this.useAbility(b);
     if (b.characterClass === "engineer" && b.ultReady && nearD < 400) this.useUlt(b);
     if (b.characterClass === "demolitionist") {   // Dante bot: blast when they get close; plant the charge in a crowd and blow it when they swarm it
       if (near && nearD < 450 && nearD > 90 && b.abilityCooldown <= 0) { b.aim = Math.atan2(near.y - b.y, near.x - b.x); this.useAbility(b, { d: nearD }); }
@@ -4038,16 +4156,17 @@ export class SurvivalRoom extends Room {
     return q;
   }
   forgetZombie(id) {   // per-zombie bookkeeping that would otherwise pile up for the life of the room (7,000+ kills a match)
-    this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);
+    this.steer.delete(id); this.slamReady.delete(id); this.lungeAng.delete(id); this.enraged.delete(id); this.bossMem.delete(id); this.tox?.delete(id); this.bossPath?.delete(id); this.zStuck?.delete(id); this.hiveMem.delete(id);
   }
   sweepZombieMemory() {   // after zombies.clear(): drop every id that's gone
-    for (const m of [this.steer, this.slamReady, this.lungeAng, this.bossMem, this.bossPath, this.zStuck, this.hiveMem, this.dots, this.taunt]) if (m) for (const k of m.keys()) if (typeof k === "string" && k[0] === "z" && !this.state.zombies.has(k)) m.delete(k);
+    for (const m of [this.steer, this.slamReady, this.lungeAng, this.bossMem, this.bossPath, this.zStuck, this.hiveMem, this.dots, this.taunt, this.tox]) if (m) for (const k of m.keys()) if (typeof k === "string" && k[0] === "z" && !this.state.zombies.has(k)) m.delete(k);
     for (const k of this.enraged) if (!this.state.zombies.has(k)) this.enraged.delete(k);
   }
   killZombie(z, killer) {
     if (z.kind === "minebeast") { z.hp = 1; return; }   // it can't be killed: at 1 HP the fight ends and it drops to a knee (beastThink)
     if (z.kind === "abomination") { z.hp = Math.max(1, Math.min(z.maxHp * ABOM.splitAt * .98, z.hp > 0 ? z.hp : Infinity)); return; }   // damage that skipped hitZombie (traps, blasts): he never dies as one, the Sundering always plays first (abomThink starts it)
     this.state.zombies.delete(z.id);
+    { const tx = this.tox.get(z.id); if (tx) { this.tox.delete(z.id); if (tx.n > 0 && Date.now() < tx.until) this.vexChain(z, tx); } }   // (Nov 17) Vex's Chain Reaction
     const bossKill = z.boss && !(z.kind === "abomSpawn" && [...this.state.zombies.values()].some(o => o.kind === "abomSpawn"));   // the Five: only the last one is the boss kill
     if (z.kind === "abomSpawn" && !bossKill) { const left = [...this.state.zombies.values()].filter(o => o.kind === "abomSpawn"); for (const o of left) o.speed *= 1 + ABOM.spawn.rage; if (left.length === 1) left[0].enraged = true; this.state.message = `${left.length} of the Five left${left.length === 1 ? ": it's ENRAGED" : ": they're getting faster"}!`; } this.dots.delete(z.id); this.taunt.delete(z.id); this.forgetZombie(z.id);
     if (this.pyreFx.wheel?.owner === z.id) this.pyreFx.wheel = null;   // the Wheel of Flame dies with him
@@ -4062,7 +4181,7 @@ export class SurvivalRoom extends Room {
     }   // every death shows a body (even one-shot kills)
     if (killer) {
       killer.kills++;
-      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "sniper"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
+      if (!z.boss && ["engineer", "scout", "demolitionist", "operator", "juggernaut", "slasher", "sniper", "toxicologist"].includes(killer.characterClass) && Number.isFinite(killer.ultKills)) { killer.ultKills = Math.min(ULT_KILLS, (killer.ultKills || 0) + 1); }
       if (killer.characterClass === "scout" && this.katanaMark.has(z.id)) {   // katana kills level up Raven's katana
         killer.katanaKills = (killer.katanaKills || 0) + 1; const t = Math.min(5, Math.floor(killer.katanaKills / RAVEN.tierKills));
         if (t > (killer.katanaTier || 0)) { killer.katanaTier = t; this.state.message = `${killer.name}'s katana: ${RAVEN.tiers[t].toUpperCase()} unlocked!`; this.broadcast("katanaTier", { id: killer.sessionId, t }); }
@@ -4364,6 +4483,7 @@ export class SurvivalRoom extends Room {
     this.updateSofea(dt, now);
     this.updateMarcus(dt); this.updateBriggs(dt, now); this.updateSienna(dt, now);
     this.gearTick(dt, now, true);   // boss gear: regen, auras, trails, screams, resistances, pickups
+    this.updateVex(dt, now);   // (Nov 17) Vex: Toxin stacks, vial clouds, the mist's heals, Pandemic
     this.updateArshan(dt, now);
     this.updateAstra(dt, now);
     this.separateZombies();
@@ -4377,7 +4497,7 @@ export class SurvivalRoom extends Room {
     for(const p of this.state.players.values()) if(!p.alive&&!p.bledOut&&p.bleedout>0&&!this.sheltered(p)){p.bleedout=Math.max(0,p.bleedout-dt);if(p.bleedout===0){p.bledOut=true;p.reviveProgress=0;this.state.message=`${p.name} bled out and sits out until the next wave.`;this.log("info","player",`${p.name} bled out`,p.sessionId);}}
     for(const p of this.state.players.values()) if(p.alive) for(const item of [...this.state.loot.values()]) if(distance(p,item)<30){
       if(item.kind==="gear"||item.kind==="mat")continue;   // boss gear: gearPickup() (no bots, first come first served)
-      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){ if(p.characterClass==="sniper")continue;   // (Nov 16) Sienna uses only her own gun: she leaves drops for the others. Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
+      if(item.kind==="ammo")p.ammo+=item.amount;else if(item.kind==="medkit"){if(p.medkits<MAX_MEDKITS)p.medkits++;else p.hp=Math.min(p.maxHp,p.hp+item.amount);}else if(item.kind==="scrap")this.state.scrap+=item.amount;else if(item.kind==="gold")p.currency+=item.amount;else if(item.kind==="shard"){if(this.mine)this.mine.fuel=Math.min(DEEP.fuelMax,this.mine.fuel+1);}else if(item.kind==="pyreplate"){if(p.armor)continue;this.givePlate(p,true);}else if(item.kind==="weapon"){ if(p.characterClass==="sniper"||p.characterClass==="toxicologist")continue;   // (Nov 16) Sienna uses only her own gun: she leaves drops for the others. Nov 9: never switches the gun in your HANDS. Not holding that slot: it goes into the slot (one press of 2 / 3
         // equips it); holding a gun of that slot: it waits in your bag (press 2 / 3 again to swap).
         const found=item.rarity==="Legendary"?"launcher":item.rarity==="Epic"?"sniper":"shotgun", slot=WEAPONS[found].slot, had=p.owned.split(",").includes(found);
         p.ammo+=30; this.unlockWeapon(p,found); const slotN=slot==="primary"?2:3; if(!had&&p.activeSlot!==slotN) p[slot]=found;

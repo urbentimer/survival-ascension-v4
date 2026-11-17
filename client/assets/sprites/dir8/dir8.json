@@ -355,5 +355,36 @@
    "attack1/windup",
    "attack2/hit"
   ]
+ },
+ "toxicologist": {
+  "cellW": 176,
+  "cellH": 88,
+  "anchorX": 88,
+  "feetY": 80,
+  "blocks": [
+   "dartrifle",
+   "knife",
+   "throw",
+   "mist",
+   "pandemic"
+  ],
+  "rows": [
+   "down",
+   "downRight",
+   "right",
+   "upRight",
+   "up",
+   "upLeft",
+   "left",
+   "downLeft"
+  ],
+  "cols": [
+   "idle",
+   "walk1",
+   "walk2",
+   "walk3",
+   "attack1/windup",
+   "attack2/hit"
+  ]
  }
 }

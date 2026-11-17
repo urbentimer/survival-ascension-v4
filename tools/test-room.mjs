@@ -1837,4 +1837,36 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   room.state.loot.clear(); events.length = 0; const tb = mk("screamer", 1400, 1000, true, 10); tb.boss = true; send(A, "debugBossHp", { kill: true });
   ok(![...room.state.loot.values()].some(l => l.kind === "gear") && events.some(e => e.type === "gearBurst" && e.test), "online, a boss killed with a host test command drops no gear");
   room._dispose(); }
+// 54g. (Nov 17) VEX (toxicologist): dart rifle only, Toxin stacks, Chain Reaction, Toxic Vial (E), Antidote Mist (R), Pandemic + Catalyst (Q)
+{ const { room, A, B, send, P, events } = makeRoom(); const p = P(A), q = P(B); room.state.phase = "lobby"; send(A, "chooseClass", { id: "toxicologist" }); send(A, "start", {}); room.state.phase = "playing";
+  ok(p.weapon === "dartrifle" && p.activeSlot === 2 && p.owned === "dartrifle" && p.secondary === "" && p.melee === "knife" && p.maxHp === 105, `Vex: his dart rifle + knife only, 105 HP (${p.owned} / "${p.secondary}", ${p.maxHp} HP)`);
+  room.mapBoxesNear = () => []; room.mapGrid = new Map(); room.lineClear = () => true; room.state.zombies.clear(); room.spawnClock = 1e9; p.x = 1000; p.y = 1000; q.x = 1100; q.y = 1000;
+  const mk = (kind, x, y = 1000, boss = false, hp = 9999) => { room.spawnZombie(boss, kind); const z = [...room.state.zombies.values()].pop(); z.x = x; z.y = y; z.hp = z.maxHp = hp; z.speed = 0; z.damage = 0; return z; };
+  const tick = (n = 1, ms = 50) => { for (let i = 0; i < n; i++) { room.lastTick = Date.now() - ms; room.tick(); } };
+  const w = mk("walker", 1200); p.lastShot = 0; send(A, "shoot", { a: 0 }); ok(w.tox === 1 && 9999 - w.hp > 0, `a dart hits (${Math.round(9999 - w.hp)}) and adds 1 Toxin stack (${w.tox})`);
+  for (let i = 0; i < 7; i++) { p.lastShot = 0; p.mag = 20; send(A, "shoot", { a: 0 }); } ok(w.tox === 5, `stacks top out at 5 (${w.tox})`);
+  const h0 = w.hp; tick(20); ok(h0 - w.hp > 15, `5 stacks keep hurting it (${Math.round(h0 - w.hp)} in 1s)`);
+  room.tox.get(w.id).until = Date.now() - 1; tick(1); ok(!w.tox && !room.tox.has(w.id), "the stacks wear off 4s after the last one");
+  room.state.zombies.clear(); const c0 = mk("walker", 1300, 1000, false, 1), c1 = mk("walker", 1360), c2 = mk("walker", 1700);
+  room.addTox(c0, p, 3); room.hitZombie(c0, p, 50); ok(!room.state.zombies.has(c0.id) && c1.tox === 2 && !c2.tox && events.some(e => e.type === "vex" && e.k === "puff"), "CHAIN REACTION: a poisoned zombie that dies puffs 2 stacks onto the ones round it");
+  // E
+  room.state.zombies.clear(); const v = mk("walker", 1250); p.abilityCooldown = 0; send(A, "ability", { a: 0, d: 250 });
+  const cl = room.vexClouds[0]; ok(cl && Math.abs(cl.x - 1250) < 2 && p.abilityCooldown === 4 && events.some(e => e.type === "vex" && e.k === "vial"), `E: a Toxic Vial lands where he aims (cooldown ${p.abilityCooldown}s)`);
+  cl.start = cl.next = Date.now() - 1; tick(1); ok(v.tox === 2, `its cloud bursts: 2 stacks (${v.tox})`); cl.next = Date.now() - 1; tick(1); ok(v.tox === 3, `...+1 every 0.5s inside (${v.tox})`);
+  cl.until = Date.now() - 1; tick(1); ok(!room.vexClouds.length, "the cloud is gone after 4s");
+  // R
+  q.hp = 20; q.stunned = 2; q.slowed = 2; p.hp = 50; send(A, "skill2", {}); ok(q.stunned === 0 && q.slowed === 0 && events.some(e => e.type === "vex" && e.k === "mist"), "R: ANTIDOTE MIST clears stuns and slows on teammates in it");
+  tick(60); ok(Math.abs(q.hp - (20 + q.maxHp * .3)) < 2 && p.hp > 50 + p.maxHp * .28, `...and heals 30% of max HP over 3s (friend ${Math.round(q.hp)}, Vex ${Math.round(p.hp)})`);
+  ok(p.chargeCd > 20 && !room.antidoteMist(p), `...25s cooldown (${p.chargeCd}s)`);
+  q.x = 1500; q.hp = 20; room.vexHeals = []; room.vexMem(p).rReady = 0; send(A, "skill2", {}); tick(60); ok(q.hp === 20, "a teammate outside the 350px mist gets nothing");
+  // Q
+  room.state.zombies.clear(); const pz = mk("walker", 1150); p.ultKills = 100; tick(1); send(A, "ult", {}); tick(1); ok(p.ultActive > 19 && events.some(e => e.type === "vex" && e.k === "pandemic"), `Q: PANDEMIC for 20s (${p.ultActive}s)`);
+  room.vexMem(p).panNext = 0; tick(1); ok(pz.tox >= 1, `the aura poisons zombies round him (${pz.tox})`); send(A, "ult", {}); ok(room.vexMem(p).panUntil > Date.now(), "...Q again does nothing while it's on");
+  room.addTox(pz, p, 5); const hp1 = pz.hp; room.vexMem(p).panUntil = Date.now() - 1; tick(1);
+  ok(hp1 - pz.hp > 100 && !pz.tox && events.some(e => e.type === "vex" && e.k === "catalyst"), `CATALYST: when it ends every poisoned zombie pops (${Math.round(hp1 - pz.hp)}) and its stacks are used up`);
+  ok(p.ultActive === 0 && p.ultCd > 58, `...then the 60s cooldown (${p.ultCd}s)`);
+  // one gun
+  room.state.phase = "cleared"; p.currency = 999; send(A, "buy", { id: "shotgun" }); ok(p.owned === "dartrifle", "he can't buy other guns"); room.state.phase = "playing";
+  p.ammo = 0; p.mag = 0; p.lastShot = 0; send(A, "shoot", { a: 0 }); ok(p.activeSlot === 1, "out of darts: knife out");
+  room._dispose(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0);

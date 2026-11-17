@@ -35,7 +35,7 @@ function loadProfile(){try{return JSON.parse(localStorage.getItem(GAME_CONFIG.pr
 let lastProfileSave=0;
 function saveProfile(me){if(!me||Date.now()-lastProfileSave<3000)return;lastProfileSave=Date.now();try{localStorage.setItem(GAME_CONFIG.profileStorageKey,JSON.stringify({level:me.level,xp:me.xp,xpNext:me.xpNext,maxHp:me.maxHp,damage:me.damage,fireRate:me.fireRate,speed:me.speed,defence:me.defence,currency:me.currency,characterClass:me.characterClass,weapon:me.weapon,melee:me.melee,highestWave:Math.max(Number(loadProfile().highestWave)||1,state?.stage||1)}));}catch{}}
 const upgrades = [ ["damage","Heavy weapon","+20% weapon damage"], ["fireRate","Rapid fire","+20% firing speed"], ["health","Vitality","+20 maximum HP and heal"], ["defence","Body armour","ARMOR_TEXT"], ["speed","Adrenaline","+10% movement speed"], ["cooldown","Quick recovery","-10% skill cooldowns (max -60%)"], ["hands","Fast Hands","+15% reload speed, +20% magazine size (max 5)"] ];
-const ARMOR_STEP = { juggernaut: .08, slasher: .08, dispatcher: .06, operator: .06, assault: .06, engineer: .06, demolitionist: .04, sniper: .04, scout: .04 };   // matches the server (Body Armour by weight class)
+const ARMOR_STEP = { juggernaut: .08, slasher: .08, dispatcher: .06, operator: .06, assault: .06, engineer: .06, demolitionist: .04, sniper: .04, scout: .04, toxicologist: .04 };   // matches the server (Body Armour by weight class)
 const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me?.cdr || 0) < .6 - 1e-9) && (id !== "hands" || (me?.hands || 0) < 5) && (id !== "defence" || (me?.armorPct || 0) < (ARMOR_STEP[me?.characterClass] || .06) * 8 - 1e-9))
   .map(u => { if (u[0] !== "defence") return u; const st = ARMOR_STEP[me?.characterClass] || .06, cls = st > .07 ? "heavy" : st < .05 ? "light" : "medium";
     return [u[0], u[1], `−${Math.round(st * 100)}% damage taken (${cls} hero, max −${Math.round(st * 800)}%)`]; });   // capped upgrades leave the list
@@ -47,6 +47,7 @@ const WEAPON_INFO = {
   shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 1.0 },
   sniper:   { name: "Sniper",   slot: 2, mag: 5,  reload: 1.1 },
   launcher: { name: "Launcher", slot: 2, mag: 3,  reload: 1.3 },
+  dartrifle: { name: "Dart Rifle", slot: 2, mag: 20, reload: 0.9, auto: true },   // (Nov 17) VEX's toxin dart gun
 };
 const MELEE_INFO = { knife: { name: "Knife", cd: 0.35 }, bat: { name: "Bat", cd: 0.6 }, axe: { name: "Fire axe", cd: 0.9 }, katana: { name: "Katana", cd: 0.5 } };
 const SKILLS = {
@@ -54,6 +55,7 @@ const SKILLS = {
   engineer: { name: "Robot Squad", cd: 25, icon: "robotSquad" }, scout: { name: "Shadow Pass", cd: 25, icon: "shadowPass" }, demolitionist: { name: "Sky Barrage", cd: 8, icon: "skyBarrage" },
   sniper: { name: "Cryo Grenade", cd: 3.5, icon: "cryoGrenade" }, juggernaut: { name: "Steel Boomerang", cd: 4, icon: "steelBoomerang" }, operator: { name: "Steel Convoy", cd: 30, icon: "steelConvoy" },
   dispatcher: { name: "Emergency Medics", cd: 30, icon: "medicTeam" },
+  toxicologist: { name: "Toxic Vial", cd: 4, icon: "toxicVial" },
 };
 const BUILD_CAP = { barricade: 10, turret: 3, mine: 8, fence: 4, flameTrap: 4 };   // per player, per type (matches the server); Viktor +1 turret. One more replaces your oldest.
 const buildCap = (me, kind) => (BUILD_CAP[kind] || 0) + (kind === "turret" && me?.characterClass === "engineer" ? 1 : 0);
@@ -68,7 +70,7 @@ const BUILD_WHEEL = [
 // picture shown in the build wheel for each option
 const WHEEL_PIC = { barricade: { obj: "barricade" }, turret: { obj: "turret" }, mine: { obj: "mine" }, fence: { obj: "fence" }, flameTrap: { obj: "flameTrap" } };
 // icon for any item id (CSS classes .ic-<id> in index.html; ammo uses the rifle)
-const ICON_ID = { heavyTurret: 1, robotSquad: 1, knife: 1, bat: 1, axe: 1, katana: 1, pistol: 1, smg: 1, rifle: 1, shotgun: 1, sniper: 1, launcher: 1, medkit: 1, grenade: 1, armor: 1, scrap: 1, electronics: 1, explosives: 1, fuel: 1, gold: 1, ammo: "rifle" };
+const ICON_ID = { heavyTurret: 1, robotSquad: 1, knife: 1, bat: 1, axe: 1, katana: 1, pistol: 1, smg: 1, rifle: 1, shotgun: 1, sniper: 1, launcher: 1, dartrifle: 1, medkit: 1, grenade: 1, armor: 1, scrap: 1, electronics: 1, explosives: 1, fuel: 1, gold: 1, ammo: "rifle" };
 const icon = id => { const k = ICON_ID[id] === 1 ? id : ICON_ID[id]; return k ? `<i class="ic ic-${k}" aria-hidden="true"></i>` : ""; };
 // same icons as images for drawing on the canvas
 const ICON_IMG = {};
@@ -131,6 +133,7 @@ function connected() {
   room.onStateChange(s => { state = s; lastStateAt = gnow(); try { recordSnapshots(); reconcile(); renderState(); audioWatch(); } catch (e) { reportError(e, "ui"); } });
   awayIds.clear(); room.onMessage("away", m => { if (m.on) awayIds.add(m.id); else awayIds.delete(m.id); });   // a teammate's connection dropped / came back
   room.onMessage("sienna", m => onSienna(m));
+  room.onMessage("vex", m => { try { onVex(m); } catch (e) { reportError(e, "vex"); } });
   room.onMessage("gearGet", m => { try { onGearGet(m); } catch (e) { reportError(e, "gear"); } }); room.onMessage("gearBurst", m => onGearBurst(m)); room.onMessage("gearFx", m => onGearFx(m)); room.onMessage("gearLooks", m => onGearLooks(m)); gearSend();   // (Nov 17) boss gear   // (Nov 16) Sienna's grenade / decoy / perch / laser
   room.onMessage("shot", m => { if (m.id === myId && PRED.ok) { const me = me_(); if (me) { m.x += PRED.x + PRED.ex - me.x; m.y += PRED.y + PRED.ey - me.y; } } fx.push(m.w === "launcher" ? { ...m, type: "dante", k: "rocket", t: gnow() } : { type: m.w === "shotgun" ? "shotgun" : "shot", t: gnow(), seed: Math.random() * 100, ...m }); const a = anim.get(m.id); if (a) a.shotAt = gnow(); if (m.id && m.id[0] !== "p" && !state?.players?.has(m.id)) machineShotAt.set(m.id, gnow()); shotSound(m); });
   room.onMessage("wreck", m => fx.push({ type: "wreck", t: gnow(), ...m }));
@@ -481,18 +484,18 @@ let hotbarHtml = "";
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
-  const skill = SKILLS[me.characterClass] || SKILLS.assault, sie = me.characterClass === "sniper", eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
+  const skill = SKILLS[me.characterClass] || SKILLS.assault, sie = me.characterClass === "sniper", eng = me.characterClass === "engineer", rav = me.characterClass === "scout", dan = me.characterClass === "demolitionist", jug = me.characterClass === "juggernaut", op = me.characterClass === "operator", ast = me.characterClass === "dispatcher", vex = me.characterClass === "toxicologist", myV = op ? state.vehicles?.get(myId) : null, ch = me.robotCharges ?? 3;
   const kk = me.katanaKills || 0, tier = Math.min(5, Math.floor(kk / 50));
   const cd = eng ? Math.ceil(ch < 1 ? me.chargeCd || 0 : me.abilityCooldown || 0) : Math.ceil(me.abilityCooldown || 0);
   const reloadPct = me.reloadLeft > 0 && w ? (1 - me.reloadLeft / (me.reloadTotal || w.reload)) * 100 : 0;
   const slots = [
     { n: 1, name: (MELEE_INFO[me.melee] || MELEE_INFO.knife).name, sub: rav && me.melee === "katana" ? (tier >= 5 ? "T5 MAX" : `T${tier} · ${kk % 50}/50`) : "melee", ic: icon(me.melee || "knife") },
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
-    ...(sie && !me.secondary ? [] : [{ n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) }]),   // (Nov 16) Sienna: no second gun, no empty slot
+    ...((sie || vex) && !me.secondary ? [] : [{ n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) }]),   // (Nov 16) Sienna: no second gun, no empty slot
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : "", name: sie ? "Cryo Grenade: an ice bomb thrown where you aim: zombies in the burst freeze solid for 2s, bosses are 25% slower. No damage, except to the fire bosses (Abomination, Pyre Priest). 3.5s cooldown" : skill.name, sub: sie ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : vex ? "toxicVial" : "", name: vex ? "Toxic Vial: throw a glass vial where you aim: it smashes into a toxic cloud (110px) for 4s. Zombies inside pick up a Toxin stack every 0.5s (2 on the smash). 4s cooldown" : sie ? "Cryo Grenade: an ice bomb thrown where you aim: zombies in the burst freeze solid for 2s, bosses are 25% slower. No damage, except to the fire bosses (Abomination, Pyre Priest). 3.5s cooldown" : skill.name, sub: sie || vex ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
-        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s · Q: down` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
+        sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s · Q: down` : vex ? `PANDEMIC ${Math.ceil(me.ultActive)}s` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
   ];
   slots.unshift(slots.pop(), slots.pop());   // Q and E sit on the left, before 1 (knife)
@@ -501,6 +504,7 @@ function renderHotbar(me) {
   if (eng) eS.frac = ch < 1 ? (me.chargeCd || 0) / 25 : (me.abilityCooldown || 0) / 3;
   if (dan) eS.frac = (me.abilityCooldown || 0) / 8;
   if (sie) { eS.frac = (me.abilityCooldown || 0) / 3.5; eS.cd = Math.ceil(me.abilityCooldown || 0); }
+  if (vex) { eS.frac = (me.abilityCooldown || 0) / 4; eS.cd = Math.ceil(me.abilityCooldown || 0); }
   if (jug) { eS.active = me.skillT > 0 ? me.skillT / 15 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (ast) { eS.active = me.skillT > 0 ? me.skillT / 20 : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
   if (op) { eS.active = myV?.kind === "tank" ? (myV.phase === "call" ? 1 : myV.left / 30) : 0; eS.frac = eS.active ? 0 : (me.abilityCooldown || 0) / 30; if (eS.active) eS.cd = 0; }
@@ -524,13 +528,18 @@ function renderHotbar(me) {
     slots.splice(2, 0, { n: 9, key: "R", card: "iceDecoy", name: "Ice Decoy: dash toward your aim and leave an ice copy of you that zombies go for. You're hidden and nothing can hurt you for up to 10s; shooting or a skill shows you again. The 30s cooldown starts when you're seen", sub: hid ? `HIDDEN ${Math.ceil(me.skillT)}s` : rc > 0 ? "cooldown" : "READY", active: hid ? me.skillT / 10 : 0, frac: !hid && rc > 0 ? rc / 30 : 0, cd: !hid && rc > 0 ? Math.ceil(rc) : 0 });
     slots.splice(3, 0, { n: 8, key: "TRAIT", card: "coldPrecision", name: "Cold Precision: +43% damage; her sniper does +50% to bosses and brutes, and every sniper hit chills (30% slower for 1.5s)", sub: "ON" });
   }
+  if (vex) {   // (Nov 17) R: Antidote Mist, beside E; then her trait (Q - E - R - TRAIT)
+    const rc = me.chargeCd || 0;
+    slots.splice(2, 0, { n: 9, key: "R", card: "antidoteMist", name: "Antidote Mist: a green healing mist bursts round you (350px): you and every teammate in it heal 30% of max HP over 3s, and stuns, slows and burns come off. 25s cooldown", sub: rc > 0 ? "cooldown" : "READY", frac: rc > 0 ? rc / 25 : 0, cd: rc > 0 ? Math.ceil(rc) : 0 });
+    slots.splice(3, 0, { n: 8, key: "TRAIT", card: "chainReaction", name: "Chain Reaction: every dart hit adds a Toxin stack (up to 5; each stack 4 damage a second for 4s). A poisoned zombie that dies bursts and gives 2 stacks to every zombie within 100px", sub: "ON" });
+  }
   if (jug) slots.splice(3, 0, { n: 8, key: "TRAIT", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // (Nov 16, user) after R: the bar reads Q - E - R - TRAIT
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
   const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { html("hotbar", hb); hotbarHtml = hb; }
   const dashLeft = Math.max(0, dashReadyAt - gnow()) / 1000;
   txt("dashChip", dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"); $("dashChip").classList.toggle("ready", dashLeft <= 0);
-  txt("ammoLine", me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && briggsRage(me) > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? (ast ? "  ·  press C" : "  ·  press R") : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "");
+  txt("ammoLine", me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && briggsRage(me) > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? "  ·  press C" : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "");
 }
 
 function renderScoreboard(players) {
@@ -574,7 +583,7 @@ function renderShop(me) {
   shopBought = "";
   box.innerHTML = `<div class="shop-top"><div class="wallet${goldChanged ? " bump" : ""}">${icon("gold")}<div><small>YOUR GOLD</small><b>${gold}</b></div></div>
     <div class="shop-timer"><b id="shopSecs">${secs}</b><small>seconds at most<br>until wave ${state.stage + 1}</small></div></div>` +
-    SHOP_ITEMS.filter(([group]) => !(group === "Weapons" && me.characterClass === "sniper")).map(([group, items]) => `<div class="shop-group"><span>${group.toUpperCase()}</span><div class="shop-items">${items.map(it => card(it, group)).join("")}</div></div>`).join("");   // (Nov 16) Sienna: her own sniper only
+    SHOP_ITEMS.filter(([group]) => !(group === "Weapons" && ["sniper", "toxicologist"].includes(me.characterClass))).map(([group, items]) => `<div class="shop-group"><span>${group.toUpperCase()}</span><div class="shop-items">${items.map(it => card(it, group)).join("")}</div></div>`).join("");   // (Nov 16) Sienna: her own sniper only
 }
 $("shop").addEventListener("click", e => { const b = e.target.closest("button[data-buy]"); if (b && !b.disabled) { shopBought = b.dataset.buy; room?.send("buy", { id: b.dataset.buy }); } });
 
@@ -741,7 +750,7 @@ try { const s = JSON.parse(localStorage.getItem("sa-inv") || "{}"); if (["rarity
 const invOpen = () => !$("inv").classList.contains("hidden");
 function invToggle(force) { const open = force ?? !invOpen(); if (open && inMatch()) { togglePanel("inv"); return; } if (!open) { $("inv").classList.add("hidden"); invHideTip(); return; } $("inv").classList.remove("hidden"); renderInv(); }
 function invClass() { const me = me_(); return (inMatch() && me?.characterClass) || selectedClass || "assault"; }
-const INV_HERO = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", operator: "assets/hero/operator.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp", demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", slasher: "assets/portraits/slasher.webp" };
+const INV_HERO = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", operator: "assets/hero/operator.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp", demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", toxicologist: "assets/hero/toxicologist.webp", slasher: "assets/portraits/slasher.webp" };
 function invHero(cls) { return INV_HERO[cls] || INV_HERO.assault; }
 const INV_BOSS_FACE = { butcher: "assets/portraits/butcher.webp", hivemind: "assets/portraits/hivemind.webp", screamer: "assets/portraits/screamer.webp", pyre: "assets/portraits/pyre.webp", minebeast: "assets/portraits/minebeast.webp", abomination: "assets/portraits/abomination.webp" };
 function sortBag(list) {
@@ -1164,7 +1173,7 @@ function stopLostHeliLoops() {   // every frame: landed / left -> stop; off scre
 function shotSound(m) {
   if (m.w === "launcher") return;   // the rocket's explosion makes the noise
   if (m.w === "minigun") return turretSound(m.id, m.x, m.y);
-  const name = m.w === "shotgun" ? "shotgun" : m.w === "pistol" ? "pistol" : "rifle";
+  const name = m.w === "shotgun" ? "shotgun" : m.w === "pistol" || m.w === "dartrifle" ? "pistol" : "rifle";   // Vex's dart rifle: a light pop
   playSfx(name, m.x, m.y, m.id === myId ? 1 : state?.players?.has(m.id) ? .6 : .45);
 }
 let scoreboardOpen = false, firing = false, wheel = null, placing = null, lastWheelScroll = 0;   // placing: { id } a picked deployable following the mouse
@@ -1233,7 +1242,7 @@ window.addEventListener("keydown", e => {
     else if (me?.characterClass === "scout" && me.abilityCooldown > 0) { feed.unshift({ text: `Shadow Pass ready in ${Math.ceil(me.abilityCooldown)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); }
     else room.send("ability", { a: aimAngle(me), d: aimDist(me) }); }
   else if (k === "q") { const me = me_(); if ((me?.characterClass === "demolitionist" || me?.characterClass === "sniper") && me.ultActive > 0) room.send("ult", { a: aimAngle(me) }); /* Sienna: Q again = jump down from the perch */ else if (ULT[me?.characterClass]) { if ((me.ultKills || 0) < 100) { feed.unshift({ text: `${ULT[me.characterClass].name} unlocks at 100 kills (${me.ultKills || 0}/100)`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else if (!me.ultReady) { feed.unshift({ text: me.ultActive > 0 ? `${ULT[me.characterClass].name} is active (${Math.ceil(me.ultActive)}s left)` : `${ULT[me.characterClass].name} ready in ${Math.ceil(me.ultCd || 0)}s`, t: Date.now() }); feed.length = Math.min(feed.length, 5); } else room.send("ult", { a: aimAngle(me), d: aimDist(me) }); } }
-  else if (k === "r") { const me = me_(); if (["dispatcher", "operator", "juggernaut", "sniper"].includes(me?.characterClass) && !e.repeat) room.send("skill2", { a: aimAngle(me) }); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
+  else if (k === "r") { const me = me_(); if (["dispatcher", "operator", "juggernaut", "sniper", "toxicologist"].includes(me?.characterClass) && !e.repeat) room.send("skill2", { a: aimAngle(me) }); }   // R = 3rd skill (Astra: Safehouse, Sofea: Crimson Aegis mecha; others get theirs later). Reloading is automatic
   else if (k === "c") room.send("reload");   // C: reload early (top up a half-empty magazine)
   else if (k === "b" && !e.repeat && state?.phase === "cleared") breakMin = !breakMin;   // shop window <-> minimized bar
   else if (k === "f" && !e.repeat) { if (!tryRevive() && !deepUse() && !coasterUse()) stationUse(); }   // F: revive a downed teammate first, else repair / refuel what you're next to
@@ -1452,7 +1461,7 @@ function sendControls(t) {
 function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(w)),Math.max(1,Math.round(h)));}
 function block(x,y,w,h,base,shade,light){px(x,y,w,h,base);px(x,y,w,3,light);px(x,y+h-3,w,3,shade);px(x,y,3,h,light);px(x+w-3,y,3,h,shade);}
 // ---------- VIKTOR: Heavy Turret (E) + Robot Squad (Q) ----------
-const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "unbreakable", life: 30, cd: 60, rage: 10 }, sniper: { name: "Glacier Perch", icon: "glacierPerch", life: 20, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 } };
+const ULT = { assault: { name: "Frag Barrage", icon: "grenade", noCard: true, life: 1, cd: 20 }, engineer: { name: "Heavy Turret", icon: "heavyTurret", life: 40, cd: 60 }, scout: { name: "Blade Storm", icon: "bladeStorm", life: 10, cd: 60 }, demolitionist: { name: "Demo Ripple", icon: "demoRipple", life: 30, cd: 60 }, operator: { name: "Sky Reign", icon: "skyReign", life: 30, cd: 60 }, juggernaut: { name: "Unbreakable", icon: "unbreakable", life: 30, cd: 60, rage: 10 }, sniper: { name: "Glacier Perch", icon: "glacierPerch", life: 20, cd: 60 }, dispatcher: { name: "Police Backup", icon: "policeBackup", life: 30, cd: 60 }, toxicologist: { name: "Pandemic", icon: "pandemic", life: 20, cd: 60 } };
 const vImgs = {};
 for (const [k, url] of Object.entries({ turret: "assets/sprites/zombies/dir8/viktor-turret.png", assault: "assets/sprites/zombies/dir8/robot-assault.png",
   support: "assets/sprites/zombies/dir8/robot-support.png", hunter: "assets/sprites/zombies/dir8/robot-hunter.png", deploy: "assets/sprites/fx/turret-deploy.png",
@@ -3168,6 +3177,7 @@ const DASH_FX = {
   demolitionist: { c: [255, 166, 31], core: [255, 241, 196], style: "solar" },    // Dante: Solar Gold
   sniper:        { c: [168, 237, 255], core: [255, 255, 255], style: "glacier" }, // Sienna: Glacier Shard
   dispatcher:    { c: [107, 255, 74], core: [235, 255, 224], style: "hex" },      // Astra: Toxic Hex (his medics' green)
+  toxicologist:  { c: [157, 255, 58], core: [240, 255, 210], style: "hex" },      // Vex: Toxic Hex in his dart lime
   slasher:       { c: [240, 236, 222], core: [255, 255, 255], style: "nova" },    // Arshan: Nova White
 };
 const DASH_MS = 520, dashBeams = [], dodgeAt = new Map();   // dodgeAt: when each player last dashed (0.25s untouchable)
@@ -3758,8 +3768,102 @@ function drawShotgunFx(f, age) {   // false when finished
   }
   ctx.restore(); return true;
 }
+// ---------- VEX (Nov 17, class "toxicologist"): Toxic Vial (E), Antidote Mist (R), Pandemic (Q), Chain Reaction (his trait) ----------
+// Art: tools/cut-vex.sh (his atlas: dartrifle / knife / throw / mist / pandemic) and tools/extract-vex-fx.py: vex-cloud (6 frames: the vial lands,
+// shatters, the cloud billows, biggest, thins, last wisps), vex-mist (6: the vial shatters, flash, the ring rolls out, sparkles, fading), vex-pop
+// (6: a bubble swells, pops, splash ring, puddle, fading). Code-made: the vial in flight, the green dart tracer (TRACER), the poison on zombies
+// (drawToxic), the Pandemic aura and the mist's reach ring (drawVexGround). Numbers: the server's VEX.
+const vexImgs = {}; for (const [k, url] of Object.entries({ cloud: "assets/sprites/fx/vex-cloud.webp", mist: "assets/sprites/fx/vex-mist.webp", pop: "assets/sprites/fx/vex-pop.webp" })) { const im = new Image(); im.src = url; vexImgs[k] = im; }   // (whole strings: the preview build finds them)
+const VEXFX = { cloud: { cw: 240, ch: 428, gx: 115, gy: 271 }, mist: { cw: 365, ch: 628, gx: 170, gy: 395 }, pop: { cw: 162, ch: 290, gx: 83, gy: 182 } };   // cells + ground points printed by tools/extract-vex-fx.py
+const vexAnim = new Map();   // player id -> { throwAt, mistAt, panAt }
+const vexFx = [];            // in the world: vial (flight, then its cloud), mist, pop (Chain Reaction puffs, Catalyst pops)
+const vAnim = id => { let a = vexAnim.get(id); if (!a) { a = {}; vexAnim.set(id, a); } return a; };
+let vexPuffSfx = 0;
+function onVex(m) {
+  const now = gnow(), mine = m.id === myId, p = m.id ? state?.players?.get(m.id) : null;
+  if (m.k === "vial") { vAnim(m.id).throwAt = now; const fl = (m.fl || .45) * 1000; vexFx.push({ k: "vial", x0: m.x0, y0: m.y0, x: m.x, y: m.y, r: m.r || 110, t: now, land: now + fl, end: now + fl + (m.life || 4) * 1000 }); playSfx("pistol", m.x0, m.y0, .3); }
+  else if (m.k === "mist") { vAnim(m.id).mistAt = now; vexFx.push({ k: "mist", x: m.x, y: m.y, r: m.r || 350, t: now + 220 }); playSfx("revive", m.x, m.y, .8); if (mine) shake(2, 140); }   // the burst lines up with his smash frame
+  else if (m.k === "pandemic") { vAnim(m.id).panAt = now; if (p) { playSfx("zap", p.x, p.y, .7); playSfx("groan", p.x, p.y, .5); } if (mine) shake(3, 200); }
+  else if (m.k === "puff") { vexFx.push({ k: "pop", x: m.x, y: m.y, t: now, sc: .75 }); if (now - vexPuffSfx > 140) { vexPuffSfx = now; playSfx("zhit", m.x, m.y, .35); } }
+  else if (m.k === "catalyst") { for (const [x, y] of m.pts || []) vexFx.push({ k: "pop", x, y, t: now + Math.random() * 180, sc: 1 }); if (m.pts?.length) { playSfx("boom", m.pts[0][0], m.pts[0][1], .55); if (mine) shake(5, 240); } }
+  if (vexFx.length > 160) vexFx.splice(0, vexFx.length - 160);
+}
+function vexCast(p, now, col, melee) {   // the skill poses: { blk, col } or null
+  const a = vexAnim.get(p.sessionId) || {}, B = DIR8.toxicologist.blocks;
+  const ta = now - (a.throwAt || -1e9); if (ta < 440) return { blk: B.indexOf("throw"), col: ta < 90 ? 0 : ta < 200 ? 1 : ta < 320 ? 2 : 3 };   // vial in hand, wind-up, release, follow-through
+  const ma = now - (a.mistAt || -1e9); if (ma < 640) return { blk: B.indexOf("mist"), col: ma < 120 ? 0 : ma < 240 ? 1 : ma < 460 ? 2 : 3 };   // pulls the gold vial, raises it, smashes it, back up
+  if (p.ultActive > 0 && !melee) { const pa = now - (a.panAt || -1e9); return { blk: B.indexOf("pandemic"), col: pa < 380 ? 0 : col >= 4 ? 5 : col >= 1 ? col + 1 : 1 }; }   // the gas mask goes on, then mask-on idle / walk / FIRE
+  return null;
+}
+function drawToxic(z, z0, now) {   // a poisoned zombie (Toxin stacks): green at its feet and bubbles rising off it (more stacks, more bubbles)
+  const n = Math.min(5, z0.tox || 0), r = z.radius || 14, off = (z.id?.charCodeAt?.(z.id.length - 1) || 0) * 53;
+  ctx.save();
+  ctx.fillStyle = `rgba(120,255,60,${(.14 + .06 * n).toFixed(2)})`; ctx.beginPath(); ctx.ellipse(z.x, z.y + r * .8, r * 1.15, 5, 0, 0, 7); ctx.fill();
+  ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = "#a8ff4a"; ctx.lineWidth = 1.4;
+  for (let i = 0; i <= n; i++) { const ph = ((now + off) / 900 + i / (n + 1)) % 1; ctx.globalAlpha = .8 * (1 - ph); ctx.beginPath(); ctx.arc(z.x + Math.sin(i * 2.7 + off) * r * .6, z.y + r * .3 - ph * r * 2.2, 1.6 + 1.8 * ph, 0, 7); ctx.stroke(); }
+  ctx.restore();
+}
+function drawVial(x, y, rot) {   // the glass vial in flight: green toxin, a cork
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(rot);
+  ctx.fillStyle = "rgba(225,255,225,.6)"; ctx.strokeStyle = "#1c2619"; ctx.lineWidth = 1.5; roundRectPath(-4.5, -8, 9, 16, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#7dff3a"; ctx.fillRect(-3, -1, 6, 7.5); ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(-2.5, -6, 1.5, 4);
+  ctx.fillStyle = "#8a5a3a"; ctx.fillRect(-2.5, -11.5, 5, 4);
+  ctx.restore();
+}
+function drawVexItems(items, now) {   // depth-sorted: the vial in flight, its cloud, the mist burst, the pops
+  for (let i = vexFx.length - 1; i >= 0; i--) {
+    const f = vexFx[i];
+    if (f.k === "vial") {
+      if (now >= f.end) { vexFx.splice(i, 1); continue; }
+      if (now < f.land) {   // in the air: an arc from his hand (leaves it on the release frame)
+        const t1 = f.t + 150, u = Math.max(0, Math.min(1, (now - t1) / Math.max(1, f.land - t1))); if (now < t1) continue;
+        const gx = f.x0 + (f.x - f.x0) * u, gy = f.y0 + (f.y - f.y0) * u, h = Math.sin(Math.PI * u) * Math.min(130, Math.hypot(f.x - f.x0, f.y - f.y0) * .4) + 14 * (1 - u);
+        if (inView(gx, gy, 160)) items.push({ y: 1e6 + gy, draw: () => { ctx.save(); ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(gx, gy + SPR.feet, 6, 2.5, 0, 0, 7); ctx.fill(); ctx.restore(); drawVial(gx, gy - h, now / 70); } });
+        continue;
+      }
+      if (!f.hit) { f.hit = true; playSfx("zhit", f.x, f.y, .5); }
+      const age = now - f.land, left = f.end - now;
+      const k = age < 70 ? 0 : age < 160 ? 1 : age < 300 ? 2 : left > 700 ? 3 : left > 300 ? 4 : 5, al = left < 300 ? left / 300 : 1;
+      const sc = k === 3 ? 1 + .03 * Math.sin(now / 260 + f.x) : 1;   // the held cloud breathes a little
+      if (inView(f.x, f.y, 260)) items.push({ y: f.y - 24, draw: () => sienFrame(vexImgs.cloud, VEXFX.cloud, k, f.x, f.y + 12, al * (k >= 3 ? .82 : 1), sc) });   // behind the zombies in it (and see-through): they stay easy to see
+    } else if (f.k === "mist") {
+      const age = now - f.t; if (age > 900) { vexFx.splice(i, 1); continue; } if (age < 0) continue;
+      if (inView(f.x, f.y, 400)) items.push({ y: f.y + 4, draw: () => sienFrame(vexImgs.mist, VEXFX.mist, Math.min(5, Math.floor(age / 150)), f.x, f.y + SPR.feet - 2, age > 750 ? (900 - age) / 150 : 1) });
+    } else if (f.k === "pop") {
+      const age = now - f.t; if (age > 560) { vexFx.splice(i, 1); continue; } if (age < 0) continue;
+      if (inView(f.x, f.y, 140)) items.push({ y: f.y + 12, draw: () => sienFrame(vexImgs.pop, VEXFX.pop, Math.min(5, Math.floor(age / 90)), f.x, f.y + 12, age > 470 ? (560 - age) / 90 : 1, f.sc || 1) });
+    }
+  }
+}
+function drawVexGround(now) {   // under everything: the clouds' reach, the mist's ring rolling out, the Pandemic aura round him
+  ctx.save();
+  for (const f of vexFx) {
+    if (f.k === "vial" && now >= f.land && inView(f.x, f.y, f.r + 40)) {   // the cloud's reach (the server's VEX.vial.r)
+      const age = now - f.land, left = f.end - now, al = Math.min(1, age / 200, left / 400), cy = f.y + 12;
+      ctx.globalAlpha = al; ctx.fillStyle = "rgba(110,230,50,.1)"; ctx.beginPath(); ctx.arc(f.x, cy, f.r, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(160,255,80,.32)"; ctx.lineWidth = 2; ctx.stroke();
+    } else if (f.k === "mist" && now >= f.t && now - f.t < 650 && inView(f.x, f.y, f.r + 40)) {   // the heal's reach (VEX.mist.r)
+      const k = (now - f.t) / 650, r = f.r * (.15 + .85 * Math.sqrt(k)), cy = f.y + SPR.feet - 3;
+      ctx.globalAlpha = .75 * (1 - k); ctx.strokeStyle = "#c9ff6a"; ctx.lineWidth = 10 * (1 - k) + 2; ctx.beginPath(); ctx.arc(f.x, cy, r, 0, 7); ctx.stroke();
+      ctx.strokeStyle = "#ffe08a"; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  for (const p0 of state.players.values()) {   // PANDEMIC: the green ring of his aura (VEX.pan.r); it flickers in the last 3s (the Catalyst is coming)
+    if (p0.characterClass !== "toxicologist" || !(p0.ultActive > 0) || !p0.alive) continue;
+    const p = V(p0), R = 220, cx = p.x, cy = p.y + SPR.feet - 3; if (!inView(cx, cy, R + 40)) continue;
+    const a = vexAnim.get(p0.sessionId), r = R * (.3 + .7 * Math.min(1, (now - (a?.panAt ?? -1e9)) / 400)), warn = p0.ultActive < 3 ? .5 + .5 * Math.sin(now / 70) : 1;
+    const g = ctx.createRadialGradient(cx, cy, r * .2, cx, cy, r); g.addColorStop(0, "rgba(120,255,60,.04)"); g.addColorStop(.75, "rgba(110,230,50,.11)"); g.addColorStop(1, "rgba(150,255,70,.26)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+    ctx.setLineDash([14, 10]); ctx.lineDashOffset = -now / 40; ctx.globalAlpha = warn; ctx.strokeStyle = "rgba(170,255,90,.8)"; ctx.lineWidth = 3; ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = "#b8ff5a";
+    for (let i = 0; i < 14; i++) { const ph = (now / 2600 + i / 14) % 1, ang = i * 2.4 + now / 3000, d = r * (.25 + .7 * ((i * .618) % 1)); ctx.globalAlpha = .6 * Math.sin(Math.PI * ph); ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * d, cy + Math.sin(ang) * d - ph * 26, 2.2, 0, 7); ctx.fill(); }
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
 // Bullet tracers, muzzle flashes and launcher blasts (sent by the server for every player's shots).
-const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d'};
+const TRACER={pistol:'#ffe7a3',smg:'#ffd27a',rifle:'#ffcf66',shotgun:'#ffb05a',sniper:'#bff3ff',launcher:'#ff8a3d',dartrifle:'#9dff3a'};
 function drawShotFx(){
   const now=gnow();
   drawPyreBurning();
@@ -3787,7 +3891,7 @@ function drawShotFx(){
     ctx.beginPath();for(let j=0;j<f.a.length;j++){const a=f.a[j];ctx.moveTo(f.x+Math.cos(a)*16,f.y+Math.sin(a)*16);ctx.lineTo(f.x+Math.cos(a)*f.len[j],f.y+Math.sin(a)*f.len[j]);}
     ctx.globalAlpha=k*.35;ctx.strokeStyle=col;ctx.lineWidth=lw+5;ctx.stroke();   // the glow: a wide soft pass (no shadowBlur: that was a blur per bullet, every frame)
     ctx.globalAlpha=k;ctx.lineWidth=lw;ctx.stroke();
-    if(age<60){ctx.fillStyle='#fff3c4';ctx.beginPath();ctx.arc(f.x+Math.cos(f.a[0])*20,f.y+Math.sin(f.a[0])*20,5,0,7);ctx.fill();}}
+    if(age<60){ctx.fillStyle=f.w==='dartrifle'?'#d9ffb0':'#fff3c4';ctx.beginPath();ctx.arc(f.x+Math.cos(f.a[0])*20,f.y+Math.sin(f.a[0])*20,f.w==='dartrifle'?3.5:5,0,7);ctx.fill();}}
    else if(f.type==='swing'&&f.m==='katana'&&ravenSlashImg.naturalWidth){if(!drawRavenSlash(f,age)){ctx.restore();fx.splice(i,1);continue;}}
    else if(f.type==='swing'){const life=f.heavy?280:160;if(age>life){ctx.restore();fx.splice(i,1);continue;}const k=age/life,lw=f.heavy?9:4;ctx.lineCap='round';ctx.beginPath();ctx.arc(f.x,f.y,f.r*(.75+.25*k),f.a-f.arc*(1-k*.4),f.a+f.arc*(1-k*.4));
     ctx.globalAlpha=.3*(1-k);ctx.strokeStyle='#ffffff';ctx.lineWidth=lw+8;ctx.stroke();ctx.globalAlpha=.8*(1-k);ctx.strokeStyle=f.heavy?'#ffd9a0':'#f3f6f2';ctx.lineWidth=lw;ctx.stroke();}
@@ -3889,6 +3993,8 @@ const DIR8 = {
     walk: [1, 2, 3, 2], flashCol: 4 },   // his sheets: walk = left foot, passing, right foot, passing (no hitch); col 4 = muzzle flash, col 5 = pump. (A bigger character can add cell: {...} and lift.)   // Briggs: "bastion" / "warcry" = his E / Q cast poses (4 frames)
   sniper: { url: "assets/sprites/dir8/sniper.webp", blocks: ["sniper", "knife", "throw", "dash", "perch"],   // SIENNA (Nov 16, tools/cut-sienna.sh): a wider cell (the perch's ice blast fits aiming left too);
     cell: { cellW: 176, cellH: 88, anchorX: 88, feetY: 80 }, walk: [1, 2, 3, 2], flashCol: 4 },   // walk: left foot, passing, right foot, passing; col 4 = the cyan muzzle flash, 5 = smoke
+  toxicologist: { url: "assets/sprites/dir8/toxicologist.webp", blocks: ["dartrifle", "knife", "throw", "mist", "pandemic"],   // VEX (Nov 17, tools/cut-vex.sh): Sienna's wide cell;
+    cell: { cellW: 176, cellH: 88, anchorX: 88, feetY: 80 }, walk: [1, 2, 3, 2], flashCol: 4 },   // col 4 = FIRE with the green puff, 5 = recoil; "throw" / "mist" = E / R (4 frames), "pandemic" = the gas mask (vexCast)
   operator: { url: "assets/sprites/dir8/operator.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Sofea: "radio" = her call for the tank / helicopter (4 frames)
     fix: { all: { 2: [6, 1] } } },   // (Nov 12) her right-facing walk barely moves its feet: facing right = her left row, mirrored
   dispatcher: { url: "assets/sprites/dir8/dispatcher.png", blocks: ["gun", "knife", "bat", "axe", "radio"],   // Astra: "radio" = his call for medics / police / workers (3 frames)
@@ -3929,7 +4035,7 @@ function drawSurvivorDir8(p, pose, img) {
   if (p.characterClass === "operator" && p.alive && drawSofea(p, img, now)) return true;
   const oct = ((Math.round(pose.aim / (Math.PI / 4)) % 8) + 8) % 8; let row = ROW_OF_OCT[oct];
   const holdingGun = p.activeSlot === 2 || p.activeSlot === 3, shotAge = now - a.shotAt;
-  const block = Math.max(0, dir8Block(p)), melee = p.activeSlot === 1 && !["gun", "launcher", "rifle", "shotgun", "sniper"].includes(DIR8[p.characterClass].blocks[block]), swingAge = now - (a.swingAt || 0);
+  const block = Math.max(0, dir8Block(p)), melee = p.activeSlot === 1 && !["gun", "launcher", "rifle", "shotgun", "sniper", "dartrifle"].includes(DIR8[p.characterClass].blocks[block]), swingAge = now - (a.swingAt || 0);
   let col = 0;                                                                   // idle
   if (melee && a.heavy && swingAge < 420) col = 5;                              // axe heavy swing: hold the hit frame longer
   else if (melee && swingAge < 300) col = swingAge < 120 ? 4 : 5;               // stab / wind-up, then slash / hit
@@ -3948,6 +4054,7 @@ function drawSurvivorDir8(p, pose, img) {
   }
   let lift = 0;
   if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
+  if (p.characterClass === "toxicologist" && p.alive) { const c = vexCast(p, now, col, melee); if (c) { blk = c.blk; col = c.col; } }   // (Nov 17) Vex's E / R poses, the gas mask in Pandemic
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
   let flip = 0; const fix = DIR8[p.characterClass].fix, rowFix = fix && (fix[DIR8[p.characterClass].blocks[blk]] || fix.all);
@@ -5407,19 +5514,21 @@ function drawWorldObjects(extra) {
   drawStains();
   drawPuddles();
   if (siennaAnim.size) drawIceFloors(gnow());   // (Nov 17) Sienna's Q ice floor
+  if (vexAnim.size || vexFx.length) drawVexGround(gnow());   // (Nov 17) Vex: cloud reach, mist ring, Pandemic aura
   drawGroundFx();
   drawGearGround(gnow());   // boss gear: cold auras, rune circles, frost trails
   drawAstraGround();
   drawStompDust();
   drawHealRings();
   drawCorpses();
-  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { if (z0.chill > 0) { ctx.filter = z0.chill >= 90 ? "saturate(.12) brightness(1.45)" : z0.chill >= 40 ? "saturate(.3) brightness(1.3)" : "saturate(.55) brightness(1.15)"; } drawZombieAny(z); ctx.filter = "none"; if (z0.chill > 0) frostOverlay(z, z0, gnow()); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
+  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { if (z0.chill > 0) { ctx.filter = z0.chill >= 90 ? "saturate(.12) brightness(1.45)" : z0.chill >= 40 ? "saturate(.3) brightness(1.3)" : "saturate(.55) brightness(1.15)"; } drawZombieAny(z); ctx.filter = "none"; if (z0.chill > 0) frostOverlay(z, z0, gnow()); if (z0.burn > 0) drawBurning(z, z0.burn); if (z0.tox > 0) drawToxic(z, z0, gnow()); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   if (briggsCovers.size) drawBriggsCovers(items, gnow());
   if (siennaDecoys.size || sfxList.length || frozenZ.size) drawSiennaItems(items, gnow());   // (Nov 16) Sienna: decoys, ice bursts, shatters, the grenade in flight   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
+  if (vexFx.length) drawVexItems(items, gnow());   // (Nov 17) Vex: the vial, its cloud, the mist, the pops
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   if (gearFxList.length) { const d = ctxDepth; ctx.save(); try { drawGearAir(gnow()); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // boss gear specials going off
@@ -5668,12 +5777,17 @@ const ROSTER = [
              { k: "Q", n: "Police Backup", card: "policeBackup", cd: 60, t: "Armed officers for 30s: 2 guard you, 1 guards each living teammate. 5-round bursts every 2s. Each Heavy Weapon pick: +15% officer damage." },
              { k: "R", n: "Safehouse", card: "safehouse", cd: 90, t: "Workers build 4 walls around you in 5s (you can't be hurt meanwhile), then stay to repair (6 hits break it). Zombies can't get in for 45s." }],
     trait: { n: "Field Commander", t: "Trained for emergencies: she revives downed teammates twice as fast (2.5s instead of 5s)." }, gear: ["rifle", "pistol", "knife"] },
+  { id: "toxicologist", name: "VEX", role: "TOXICOLOGIST", cat: "support", hp: 105, dmg: 14, spd: 175, def: 0, isNew: true, desc: "Mad-scientist poisoner. His darts stack toxin on everything they hit, his vials gas whole crowds, and his gold antidote patches up the team.",
+    skills: [{ k: "E", n: "Toxic Vial", cd: 4, card: "toxicVial", t: "Throws a glass vial where you aim (over walls): it smashes into a toxic cloud 110px round for 4s. Zombies in it pick up 2 Toxin stacks at once, then 1 more every 0.5s." },
+             { k: "Q", n: "Pandemic", cd: 60, card: "pandemic", t: "20s with the gas mask on: every zombie within 220px of you picks up a Toxin stack every 0.5s. When it ends: CATALYST! Every poisoned zombie on the map pops for double the poison it had left." },
+             { k: "R", n: "Antidote Mist", cd: 25, card: "antidoteMist", t: "Smashes a gold antidote: you and every teammate within 350px heal 30% of max HP over 3s, and stuns, slows and burns come off. Works while you're stunned." }],
+    trait: { n: "Chain Reaction", card: "chainReaction", t: "Every dart adds a Toxin stack (max 5; each stack does 4 damage a second for 4s, new stacks refresh the timer). A poisoned zombie that dies bursts: 2 stacks on every zombie within 100px." }, gear: ["dartrifle", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
-const GEAR = { rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, one shot every 2s, very long range (4x), pierces 3, +50% vs bosses & brutes, chills", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
+const GEAR = { dartrifle: "Toxin dart rifle · full auto, 20 darts, every hit adds a Toxin stack", rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, one shot every 2s, very long range (4x), pierces 3, +50% vs bosses & brutes, chills", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
-  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp" };
+  demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp", toxicologist: "assets/hero/toxicologist.webp" };
 const SITE_NAMES = [["ASCENSION SITE 01", "Research Outpost"], ["ASCENSION SITE 02", "Old Town Streets"], ["ASCENSION SITE 03", "Crossroads Ruins"], ["FALLEN DYNASTY", "China · Walled City"], ["WHITEOUT STATION", "Antarctica · Research Base"], ["SCORCHED REFINERY", "Desert · Oil Field & Pyramid"], ["THE DEEP MINE", "Underground · Mine Carts & a Sealed Portal"], ["THE CRUCIBLE", "Volcano · a ruined iron foundry"]];
 // (Nov 12, user) THE MAP ORDER (as on the server, CHAPTERS): 4 waves per map, its boss on the 4th; beat it and the team moves on.
 const MAP_ORDER = [
