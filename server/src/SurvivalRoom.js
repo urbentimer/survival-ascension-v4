@@ -371,7 +371,9 @@ const GEN_OFF = { x: 118, y: 6, h: 20 };   // the generator sits beside the towe
 const SIENNA = {
   range: 3040,   // (Nov 16, user: "at least 3-4 times the range") her sniper shot reaches 4x the sniper's 760 (walls still stop it)
   chill: { f: 0.7, boss: 0.85, t: 1.5 },   // every sniper hit (the perch laser too): 30% slower for 1.5s (bosses 15%)
-  nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.5, boss: 0.75, t: 2 },   // E: lands where she aims (60-450px), 120px burst, 80 (x wave scaling), 50% slower for 2s (bosses 25%)
+  nade: { cd: 3.5, range: 450, min: 60, flight: 0.5, r: 120, dmg: 80, f: 0.05, boss: 0.75, t: 2, burns: ["abomination", "pyre"] },   // E: lands where she aims (60-450px), 120px burst.
+  // (Nov 17, user) NO damage: ordinary zombies FREEZE solid for 2s (stunned; f 0.05 = the client's "frozen" look), bosses 25% slower for 2s;
+  // only the fire bosses (burns: the Abomination, the Pyre Priest) take damage from it: 80 x wave scaling. "She is ice and they are fire."
   decoy: { dash: 250, time: 0.2, hide: 10, cd: 30, pull: 480 },   // R: dash 250px in 0.2s; hidden up to 10s; the decoy pulls ordinary zombies within 480px for 10s
   perch: { life: 20, gap: 1.5, mult: 3, cd: 60, taken: 0.5 },   // Q (Nov 17: Q again, or R, jumps her down early; E works up there)
   floor: { r: 200, grow: 0.5, f: 0.2, boss: 0.8 },   // (Nov 17, user) the perch's ICE FLOOR: 200px round her tower (was 300: "the ice is massive"), spreads out in 0.5s; zombies on it 80% slower (bosses 20%); only zombies
@@ -1528,7 +1530,10 @@ export class SurvivalRoom extends Room {
           const d = hyp(z.x - e.x, (z.y - e.y) / flat); if (d > e.r + z.radius) continue;
           if (e.wallSafe && !this.lineClear(ep, z)) continue;   // rocket blasts don't go through walls
           if (!z.boss && d > 0.1 && e.push) this.steerMove(z, z.id, Math.atan2(z.y - e.y, z.x - e.x), e.push, q => this.solveZombie(q));
-          if (e.frost) this.chillZombie(z, e.frost, now);   // Sienna's Cryo Grenade
+          if (e.frost) {   // Sienna's Cryo Grenade: freezes ordinary zombies, slows bosses, hurts only the fire bosses
+            if (z.boss || z.kind === "minebeast") this.chillZombie(z, e.frost, now); else { this.stunZombie(z, e.frost.t, now); this.chillZombie(z, e.frost, now); }
+            if (!e.frost.burns.includes(z.kind)) continue;
+          }
           const dmg = (e.fall != null ? e.dmg - (e.dmg - e.fall) * Math.min(1, d / e.r) : e.dmg) * (e.scaled ? scale : 1) * (z.boss ? e.bossMult || 1 : 1);   // fall: damage at the edge
           if (owner) this.hitZombie(z, owner, dmg); else { z.hp -= dmg; if (z.hp <= 0) this.killZombie(z, null); }
         }

@@ -997,3 +997,10 @@ Jump to wave, spawn 5 of each zombie, spawn Hivemind, boss intro now, boss to 25
 ## Nov 17 — Sienna's ice floor 300 -> 200px (cache 20261115e)
 - User: "the ice is massive. maybe 200px". SIENNA.floor.r 200 (server) + SIEN.floor.R 200 (client). iceFloorLayout now scales everything by k = R / 300 (row / column spacing, jitter, patch size, centre hole) and packs denser (columns every 115k, 24 rim patches at 0.5-0.66k) so the patches' edges end about at R. Test 54d floor check moved to 160 / 230px.
 - Cache `20261115e`; next `20261115f`.
+
+## Nov 17 — Sienna's Cryo Grenade: freeze, no damage; ice beats fire (cache 20261115f)
+- User: E does no damage; it freezes zombies, slows bosses; only the Abomination and the Pyre Priest take damage from it ("she is ice and they are fire").
+- Server: SIENNA.nade { f 0.05, boss 0.75, t 2, burns ["abomination", "pyre"], dmg 80 }. The cryo ripple: ordinary zombies -> stunZombie 2s (no move, no attack) + chill (k 0.05 -> z.chill 95 = frozen look); bosses (and the Mine Beast) -> 25% slower 2s; damage (80 x wave scaling) only if z.kind is in burns. (k is never 0: the zombie loop divides its speed back by it.)
+- Client: chill >= 90 on a non-boss = frozen: paler filter + the decoy's ice block (shatter frame 0, scaled to the zombie) over it; frozenZ tracks them and plays the shatter when the ice goes or it dies. Hotbar / roster text updated.
+- Tests 54d: walker + brute frozen, no damage; Butcher 25% slower, no damage, not frozen; Abomination + Pyre Priest take 80 + 25% slower.
+- Cache `20261115f`; next `20261115g`.

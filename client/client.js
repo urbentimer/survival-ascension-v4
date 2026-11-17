@@ -487,7 +487,7 @@ function renderHotbar(me) {
     { n: 2, name: WEAPON_INFO[me.primary]?.name || "—", sub: gunSub(me.primary), ic: icon(me.primary) },
     ...(sie && !me.secondary ? [] : [{ n: 3, name: WEAPON_INFO[me.secondary]?.name || "—", sub: gunSub(me.secondary), ic: icon(me.secondary) }]),   // (Nov 16) Sienna: no second gun, no empty slot
     { n: 5, key: "4", name: "Medkit", sub: "×" + (me.medkits || 0), empty: !me.medkits, ic: icon("medkit") },
-    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : "", name: sie ? "Cryo Grenade: an ice bomb thrown where you aim: bursts in a circle, damage + 50% slower for 2s (bosses 25%). 3.5s cooldown" : skill.name, sub: sie ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
+    { n: 6, key: "E", card: eng ? "robotSquad" : rav ? "shadowPass" : dan ? "skyBarrage" : op ? "steelConvoy" : jug ? "steelBoomerang" : ast ? "medicTeam" : sie ? "cryoGrenade" : "", name: sie ? "Cryo Grenade: an ice bomb thrown where you aim: zombies in the burst freeze solid for 2s, bosses are 25% slower. No damage, except to the fire bosses (Abomination, Pyre Priest). 3.5s cooldown" : skill.name, sub: sie ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : ast ? (me.skillT > 0 ? `MEDICS ${Math.ceil(me.skillT)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : jug ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : op ? (myV?.kind === "tank" ? (myV.phase === "call" ? "CALLING…" : `TANK ${Math.ceil(myV.left)}s`) : myV ? (myV.kind === "mecha" ? "in mecha" : "in helicopter") : me.abilityCooldown > 0 ? "cooldown" : "READY") : dan ? (me.abilityCooldown > 0 ? "cooldown" : "READY") : rav ? (me.shadow > 0 ? `HIDDEN ${Math.ceil(me.shadow)}s` : me.fire > 0 ? `FIRE ${Math.ceil(me.fire)}s` : me.abilityCooldown > 0 ? "cooldown" : "READY") : eng ? `${"●".repeat(ch)}${"○".repeat(Math.max(0, 3 - ch))}${ch < 3 ? " " + Math.ceil(me.chargeCd || 0) + "s" : ""}` : me.characterClass === "assault" && me.skillT > 0 ? `RUSH ${Math.ceil(me.skillT)}s` : "skill", cd: me.characterClass === "assault" && me.skillT > 0 ? 0 : cd, ic: skill.icon ? icon(skill.icon) : `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
     ULT[me.characterClass] ? { n: 7, key: "Q", card: ULT[me.characterClass].noCard ? "" : ULT[me.characterClass].icon, name: ULT[me.characterClass].name, ic: icon(ULT[me.characterClass].icon),
         sub: (me.ultKills || 0) < 100 ? `${me.ultKills || 0}/100 kills` : me.ultReady ? "READY" : me.ultActive > 0 ? (dan ? "PRESS Q: BOOM" : op ? (myV?.phase === "call" ? "CALLING…" : `HELI ${Math.ceil(me.ultActive)}s`) : jug ? (briggsRage(me) > 0 ? `RAGE ${Math.ceil(briggsRage(me))}s` : `SHIELD ${Math.ceil(me.ultActive)}s`) + ((briggsStore.get(me.sessionId) || 0) > 0 ? ` · ${briggsStore.get(me.sessionId)}` : "") : ast ? `POLICE ${Math.ceil(me.ultActive)}s` : sie ? `PERCH ${Math.ceil(me.ultActive)}s · Q: down` : `ON ${Math.ceil(me.ultActive)}s`) : "ultimate", empty: (me.ultKills || 0) < 100, cd: (me.ultKills || 0) >= 100 && !me.ultReady ? Math.ceil(me.ultCd || 0) : 0, ready: me.ultReady }
       : { n: 7, key: "Q", name: "Ultimate", sub: "coming soon", empty: true, ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` },
@@ -3322,6 +3322,7 @@ function drawDecoy(d, id, now) {   // her standing frame frozen pale inside the 
   ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .25 + .15 * Math.sin(now / 240); ctx.fillStyle = "#bff3ff"; ctx.fillRect(Math.round(d.x) - 9, Math.round(fy) - 50, 3, 34); ctx.restore();   // a glint down the ice
 }
 function drawSiennaItems(items, now) {   // depth-sorted pieces: decoys, bursts, shatters, the tower breaking, the flying grenade, dash streaks
+  for (const [id, f] of frozenZ) { const z0 = state.zombies.get(id); if (z0 && z0.chill >= 90) continue; frozenZ.delete(id); sfxList.push({ k: "shatter", x: f.x, y: f.y + f.r * .9 - SPR.feet - 2, sc: Math.max(.6, f.r * 2.7 / 62), t: now }); }   // thawed / died: the ice bursts
   for (const [id, d] of siennaDecoys) { if (now > d.until + 1500) { siennaDecoys.delete(id); continue; } if (inView(d.x, d.y, 80)) items.push({ y: d.y + 12, draw: () => drawDecoy(d, id, now) }); }
   for (let i = sfxList.length - 1; i >= 0; i--) {
     const f = sfxList[i], age = now - f.t;
@@ -3332,7 +3333,7 @@ function drawSiennaItems(items, now) {   // depth-sorted pieces: decoys, bursts,
     } else if (f.k === "shatter") {
       if (age > 900) { sfxList.splice(i, 1); continue; }
       const k = Math.min(5, 2 + Math.floor(age / 150)), al = age < 600 ? 1 : 1 - (age - 600) / 300;
-      items.push({ y: f.y + 12, draw: () => sienFrame(sienImgs.shatter, SIEN.shatter, k, f.x, f.y + SPR.feet + 2, al) });
+      items.push({ y: f.y + 12, draw: () => sienFrame(sienImgs.shatter, SIEN.shatter, k, f.x, f.y + SPR.feet + 2, al, f.sc || 1) });
     } else if (f.k === "towerEnd") {   // she hops down: the tower cracks, breaks, the rubble fades
       if (age > 1300) { sfxList.splice(i, 1); continue; }
       const k = age < 160 ? 5 : age < 360 ? 6 : 7, al = age < 800 ? 1 : 1 - (age - 800) / 500;
@@ -3412,8 +3413,11 @@ function drawIceFloors(now) {   // under everything: the floor spreads out from 
     for (const q of f.list) { const u = (age - (1 - q.d) * 400) / 300; floorPiece(q, cx, cy, 1 - .15 * Math.max(0, Math.min(1, u)), .9 * (1 - Math.max(0, Math.min(1, u)))); }
   }
 }
-function frostOverlay(z, z0, now) {   // a slowed zombie (Cold Precision / Cryo Grenade): frost at its feet and twinkling ice on it; stronger for the grenade
-  const big = (z0.chill || 0) >= 40, r = z.radius || 14; ctx.save();
+const frozenZ = new Map();   // (Nov 17) zombie id -> where it was while frozen solid (Cryo Grenade): it shatters free when the ice goes (or it dies in it)
+function frostOverlay(z, z0, now) {   // a slowed zombie (Cold Precision / ice floor): frost at its feet and twinkling ice on it; FROZEN (chill 90+): inside an ice block
+  const big = (z0.chill || 0) >= 40, r = z.radius || 14;
+  if (z0.chill >= 90 && !z0.boss) { frozenZ.set(z0.id, { x: z.x, y: z.y, r }); sienFrame(sienImgs.shatter, SIEN.shatter, 0, z.x, z.y + r * .9, .6, Math.max(.6, r * 2.7 / 62)); }
+  ctx.save();
   ctx.fillStyle = big ? "rgba(190,240,255,.45)" : "rgba(170,230,255,.28)"; ctx.beginPath(); ctx.ellipse(z.x, z.y + r * .8, r * 1.1, 4.5, 0, 0, 7); ctx.fill();
   ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = "rgba(200,245,255,.9)";
   for (let i = 0; i < (big ? 4 : 2); i++) { const ph = now / 300 + i * 2.1 + (z.x % 7), tw = (Math.sin(ph) + 1) / 2; ctx.globalAlpha = .35 + .65 * tw; const x = z.x + Math.sin(i * 2.4 + z.y) * r * .7, y = z.y - r * (.2 + .5 * ((i * .37 + z.x * .01) % 1)); ctx.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); }
@@ -5113,13 +5117,13 @@ function drawWorldObjects(extra) {
   drawStompDust();
   drawHealRings();
   drawCorpses();
-  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { if (z0.chill > 0) { ctx.filter = z0.chill >= 40 ? "saturate(.3) brightness(1.3)" : "saturate(.55) brightness(1.15)"; } drawZombieAny(z); ctx.filter = "none"; if (z0.chill > 0) frostOverlay(z, z0, gnow()); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
+  for (const z0 of state.zombies.values()) { const z = V(z0); if (inView(z.x, z.y, z0.boss || z0.kind === "minebeast" ? 620 : 220)) items.push({ y: z.y + 10, draw: () => { if (z0.chill > 0) { ctx.filter = z0.chill >= 90 ? "saturate(.12) brightness(1.45)" : z0.chill >= 40 ? "saturate(.3) brightness(1.3)" : "saturate(.55) brightness(1.15)"; } drawZombieAny(z); ctx.filter = "none"; if (z0.chill > 0) frostOverlay(z, z0, gnow()); if (z0.burn > 0) drawBurning(z, z0.burn); if (zStunFx.size) stunStars(z, z0); } }); }
   if (state.robots) for (const r0 of state.robots.values()) { const r = r0; if (inView(r.x, r.y, 80)) items.push({ y: r.y + 6, draw: () => drawRobot(r) }); }
   for (const c of bossCorpses) if (inView(c.x, c.y, 200)) items.push({ y: c.y - 20, draw: () => drawBossCorpse(c) });
   for (const p0 of state.players.values()) { const p = V(p0); if (p0.characterClass === "juggernaut" && p0.ultActive > 0 && p0.alive && inView(p.x, p.y, BS.R + 140)) briggsShields(p0, p, items, gnow());   // (Nov 13) Unbreakable's shields: depth-sorted items
     if (inView(p.x, p.y, 120)) { const air = state.vehicles?.get(p0.sessionId)?.kind === "heli"; if (p0.ride > 0 && coast) {} else items.push({ y: air ? 1e7 + p.y : p.y + 12, draw: () => drawSurvivor(p) }); } }   // the helicopter flies above everything
   if (briggsCovers.size) drawBriggsCovers(items, gnow());
-  if (siennaDecoys.size || sfxList.length) drawSiennaItems(items, gnow());   // (Nov 16) Sienna: decoys, ice bursts, shatters, the grenade in flight   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
+  if (siennaDecoys.size || sfxList.length || frozenZ.size) drawSiennaItems(items, gnow());   // (Nov 16) Sienna: decoys, ice bursts, shatters, the grenade in flight   // Briggs's Steel Boomerang (Nov 15; was the Manhole Frisbee)
   healOverlays(items);
   items.sort((a, b) => a.y - b.y).forEach(it => { const d = ctxDepth; ctx.save(); try { it.draw(); } catch (e) { reportError(e, "draw"); } unwindTo(d); });
   const pmOver = paintedMap()?.fires || (dynastyMap() ? dynFires : null); if (pmOver) { const d = ctxDepth; ctx.save(); try { drawPaintedOverlay(pmOver); } catch (e) { reportError(e, "draw"); } unwindTo(d); }   // rain, petals, embers over everything
@@ -5358,7 +5362,7 @@ const ROSTER = [
              { k: "Q", n: "Demo Ripple", card: "demoRipple", cd: 60, t: "Plant the crate, press Q again: rings of grenades." }],
     trait: { n: "Demolitions Expert", t: "Everything he fires hits harder: +17% damage. Big guns are slow: ×0.85 fire rate." }, gear: ["launcher", "pistol", "knife"] },
   { id: "sniper", name: "SIENNA", role: "SNIPER", cat: "specialist", hp: 95, dmg: 21, spd: 165, def: 0, isNew: true, desc: "Ice-cold sharpshooter. One shot every 2 seconds from far across the map: it goes through three zombies and freezes them in their tracks.",
-    skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: it bursts in a circle, damaging every zombie in it and making them 50% slower for 2s (bosses 25%)." },
+    skills: [{ k: "E", n: "Cryo Grenade", cd: 3.5, card: "cryoGrenade", t: "Throws an ice bomb where you aim: every zombie in the burst freezes solid for 2s and bosses are 25% slower. It does no damage, except to the fire bosses (the Abomination and the Pyre Priest): ice beats fire." },
              { k: "Q", n: "Glacier Perch", cd: 60, card: "glacierPerch", t: "20s up on an ice tower: you can't move and take half damage, and an ice floor spreads out 200px round it (zombies on it 80% slower, bosses 20%). Click or hold to fire an ice-cyan laser across the WHOLE map every 1.5s: it goes through every zombie and boss on the line for 3x a sniper hit, no ammo. Q again to jump down; R leaps off into your decoy dash; E still throws." },
              { k: "R", n: "Ice Decoy", cd: 30, card: "iceDecoy", t: "Dash toward your aim and leave an ice copy of yourself that the zombies around it go after. You're hidden and nothing can hurt you for up to 10s; shooting or using a skill shows you again. The cooldown starts when you're seen." }],
     trait: { n: "Cold Precision", card: "coldPrecision", t: "+43% damage. Her sniper does +50% to bosses and brutes, and every sniper hit chills: 30% slower for 1.5s (bosses 15%)." }, gear: ["sniper", "knife"] },

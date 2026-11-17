@@ -1408,13 +1408,15 @@ for (const weapon of ["axe", "bat", "rifle"]) {
   for (let i = 0; i < 4; i++) tick();
   const m1 = d0[0] - Math.hypot(f1.x - room.A.cx, f1.y - room.A.cy), m2 = d0[1] - Math.hypot(f2.x - room.A.cx, f2.y - room.A.cy);
   ok(m2 > 5 && Math.abs(m1 / m2 - .5) < .12 && f1.speed === 100 && f1.chill === 50, `frosted: it covers half the ground (${m1.toFixed(1)} vs ${m2.toFixed(1)}px), speed still ${f1.speed}`);
-  // E: Cryo Grenade where she aims: 80 damage + 50% slow (bosses 25%) in 120px, after its flight
-  room.state.zombies.clear(); room.zSlow.clear(); room.ripples = []; p.x = 1000; p.y = 1000;
-  const g1 = mk("walker", 1300, 1000), g2 = mk("walker", 1300, 1100), g3 = mk("walker", 1300, 1200), gb = mk("butcher", 1260, 1000, true);
+  // E: Cryo Grenade where she aims (Nov 17): NO damage; zombies in 120px freeze solid 2s, bosses 25% slower; only the fire bosses (Abomination, Pyre Priest) take damage
+  room.state.zombies.clear(); room.zSlow.clear(); room.zStun.clear(); room.ripples = []; p.x = 1000; p.y = 1000;
+  const g1 = mk("walker", 1300, 1000), g2 = mk("brute", 1300, 1100), g3 = mk("walker", 1300, 1200), gb = mk("butcher", 1260, 1000, true), ga = mk("abomination", 1340, 1000, true), gp = mk("pyre", 1300, 960, true);
   p.abilityCooldown = 0; send(A, "ability", { a: 0, d: 300 });
   ok(Math.abs(p.abilityCooldown - 3.5) < .01 && room.ripples.some(r => r.kind === "cryo") && g1.hp === 9999 && events.some(e => e.type === "sienna" && e.k === "nade" && e.x === 1300), `E: grenade thrown to the aimed spot (cooldown ${p.abilityCooldown}s), bursts after its flight`);
-  room.ripples.forEach(r => r.t -= 2000); room.updateDante(.05, Date.now());
-  ok(Math.abs((9999 - g1.hp) - 80) < 1 && g2.hp < 9999 && g3.hp === 9999 && g1.chill === 50 && gb.chill === 25 && !(g3.chill > 0), `burst: ${Math.round(9999 - g1.hp)} damage in 120px, 50% slower (boss ${gb.chill}%), the zombie 200px away is fine`);
+  room.ripples.forEach(r => r.t -= 2000); room.updateDante(.05, Date.now()); const fz = id => (room.zStun.get(id) || 0) > Date.now() + 1500;
+  ok(g1.hp === 9999 && g2.hp === 9999 && fz(g1.id) && fz(g2.id) && g1.chill === 95 && !(g3.chill > 0) && !fz(g3.id), `burst: no damage; the walker and the brute freeze solid for 2s (chill ${g1.chill}), the zombie 200px away is fine`);
+  ok(gb.hp === 9999 && gb.chill === 25 && !fz(gb.id), `a boss (Butcher): no damage, 25% slower (${gb.chill}), not frozen`);
+  ok(9999 - ga.hp > 70 && 9999 - gp.hp > 70 && ga.chill === 25 && gp.chill === 25, `ice beats fire: the Abomination takes ${Math.round(9999 - ga.hp)}, the Pyre Priest ${Math.round(9999 - gp.hp)} (+ 25% slower)`);
   // R: Ice Decoy: dash 250px, hidden + untouchable, the decoy pulls zombies, a shot reveals her, the 30s cooldown starts then
   room.state.zombies.clear(); room.zSlow.clear(); p.x = 1000; p.y = 1000; p.aim = 0; p.hp = p.maxHp; p.abilityCooldown = 0;
   send(A, "skill2"); for (let i = 0; i < 6; i++) tick();
