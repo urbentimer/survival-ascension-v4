@@ -4097,7 +4097,7 @@ const awayIds = new Set();   // survivors whose connection dropped (server "away
 // Columns: idle, walk 1-3, attack 1 (stab / wind-up / shoot), attack 2 (slash / hit / muzzle flash).
 // Add a line here when a new survivor's sheets are ready. Melee weapons without art use the knife.
 const DIR8 = {
-  assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe"] },
+  assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe", "frag"] },   // (Nov 18) "frag" = his Q pose (4 frames: grab, pin, THROW, hop back)
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "slam", "throw", "fists", "power"],   // IRON (v3, Nov 16): no bat / axe art (bat / axe use the knife block)
@@ -4165,6 +4165,7 @@ function drawSurvivorDir8(p, pose, img) {
   }
   let lift = 0;
   if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
+  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 460) { blk = DIR8.assault.blocks.indexOf("frag"); col = fa < 50 ? 0 : fa < 110 ? 1 : fa < 240 ? 2 : 3; if (col === 3) lift = Math.sin(Math.PI * Math.min(1, (fa - 240) / 220)) * 9; } }   // (Nov 18) Frag Barrage: grab, pin, THROW, the hop back (lifted a little)
   if (p.characterClass === "toxicologist" && p.alive) { const c = vexCast(p, now, col, melee); if (c) { blk = c.blk; col = c.col; } }   // (Nov 17) Vex's E / R poses, the gas mask in Pandemic
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
