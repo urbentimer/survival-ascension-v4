@@ -480,7 +480,38 @@ function renderHud(me, players) {
   renderHotbar(me);
 }
 
-let hotbarHtml = "";
+let hotbarHtml = "", hbTipData = [];
+// (Nov 18, user) HOVER A SLOT ON THE BAR: a card with what it does. The HUD lets the mouse through (pointer-events: none, so aiming and
+// shooting near the bar still work), so the mouse is checked against the slots' boxes instead (updateSkillTip, from mousemove + every HUD frame).
+// The words come from the lobby roster (ROSTER: skills + trait), so every survivor is covered; weapons use GEAR / WEAPON_INFO.
+function slotTip(s, me, R0) {
+  const st = s.locked ? ["locked", `LOCKED · ${me.ultKills || 0}/100 kills`] : s.active ? ["live", s.sub || "ACTIVE"] : s.frac > 0 || s.cd ? ["wait", s.cd ? `COOLDOWN · ${s.cd}s` : s.sub] : ["ready", s.sub];
+  if (s.key === "E" || s.key === "Q" || s.key === "R") {
+    const sk = R0?.skills?.find(k => k.k === s.key), nm = String(s.name || ""), cut = nm.indexOf(": ");
+    return { type: s.key === "Q" ? "Ultimate" : "Skill", key: s.key, title: sk?.n || (cut > 0 ? nm.slice(0, cut) : nm), cd: sk?.cd, text: sk?.t || (cut > 0 ? nm.slice(cut + 2) : ""), card: s.card, ic: s.ic, st, extra: s.key === "Q" ? "Unlocks at 100 kills." : "" };
+  }
+  if (s.key === "TRAIT") { const tr = R0?.trait, nm = String(s.name || ""), cut = nm.indexOf(": "); return { type: "Trait", key: "Passive", title: tr?.n || (cut > 0 ? nm.slice(0, cut) : nm), text: tr?.t || (cut > 0 ? nm.slice(cut + 2) : ""), card: s.card, ic: s.ic, st: ["ready", "ALWAYS ON"] }; }
+  if (s.n === 5) return { type: "Item", key: "4", title: "Medkit", text: "Heals 60% of your max HP at once. Buy more in the shop between waves.", ic: s.ic, st: [me.medkits ? "ready" : "wait", `${me.medkits || 0} left`] };
+  const id = s.n === 1 ? me.melee || "knife" : s.n === 2 ? me.primary : me.secondary, w = WEAPON_INFO[id], m = MELEE_INFO[id];
+  if (!w && !m) return null;
+  const g = GEAR[id] ? GEAR[id].split(" · ").slice(1).join(" · ") : "";
+  return { type: m ? "Melee" : "Gun", key: String(s.n), title: (w || m).name, text: (g ? g.charAt(0).toUpperCase() + g.slice(1) + ". " : "") + (w ? `${w.infinite ? (/infinite/i.test(g) ? "" : "Infinite ammo, ") : w.mag + " per magazine, "}${w.reload}s reload${w.auto ? ", hold to fire" : ""}.` : `A swing every ${m.cd}s.`), ic: s.ic, st: ["ready", s.sub] };
+}
+function skillTipHtml(d) {
+  const pic = d.card ? `<i class="st-card card-${d.card}" aria-hidden="true"></i>` : `<span class="st-ic">${d.ic || ""}</span>`;
+  return `${pic}<div class="st-head"><b>${escapeHtml(d.title)}</b><div class="st-chips"><span class="st-key">${escapeHtml(d.key)}</span><span>${d.type}</span>${d.cd ? `<span>${d.cd}s cooldown</span>` : ""}</div></div>
+    <p>${escapeHtml(d.text)}${d.extra ? ` <em>${d.extra}</em>` : ""}</p><div class="st-st st-${d.st[0]}">${escapeHtml(String(d.st[1] || ""))}</div>`;
+}
+function updateSkillTip() {
+  const tip = $("skillTip"); if (!tip) return;
+  let hit = null;
+  if (mouse.cx != null && !anyPanelOpen()) { const els = $("hotbar").children; for (let i = 0; i < els.length; i++) { const r = els[i].getBoundingClientRect(); if (r.width && mouse.cx >= r.left && mouse.cx <= r.right && mouse.cy >= r.top && mouse.cy <= r.bottom) { hit = [i, r]; break; } } }
+  const d = hit && hbTipData[hit[0]];
+  if (!d) { if (!tip.hidden) tip.hidden = true; return; }
+  const h = skillTipHtml(d); if (h !== tip._h) { tip.innerHTML = h; tip._h = h; }
+  tip.hidden = false; const r = hit[1], w = tip.offsetWidth, hh = tip.offsetHeight;
+  tip.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))) + "px"; tip.style.top = Math.round(Math.max(8, r.top - hh - 10)) + "px";
+}
 function renderHotbar(me) {
   const w = WEAPON_INFO[me.weapon], gunActive = me.activeSlot === 2 || me.activeSlot === 3;
   const gunSub = id => { const info = WEAPON_INFO[id]; if (!info) return ""; if (me.weapon === id && gunActive) return `${me.mag}/${info.infinite ? "∞" : me.ammo}`; return info.infinite ? "∞" : me.ammo + " spare"; };
@@ -534,9 +565,13 @@ function renderHotbar(me) {
     slots.splice(3, 0, { n: 8, key: "TRAIT", card: "chainReaction", name: "Chain Reaction: every dart hit adds a Toxin stack (each stack 3 damage a second for 4s; up to 3 stacks, 4 from level 4, 5 from level 7). A zombie you poisoned that dies bursts: 1 stack on every zombie within 100px", sub: "ON" });
   }
   if (jug) slots.splice(3, 0, { n: 8, key: "TRAIT", card: "forcefulBlast", name: "Forceful Blast: shotgun hits knock zombies back (bosses too)", sub: "ON" });   // (Nov 16, user) after R: the bar reads Q - E - R - TRAIT
+  const R0 = ROSTER.find(r => r.id === me.characterClass);   // (Nov 18) every survivor shows their trait on the bar (hover it to read it)
+  if (R0?.trait && !slots.some(s => s.key === "TRAIT")) { const at = slots.findIndex(s => s.n === 1); slots.splice(at < 0 ? slots.length : at, 0, R0.trait.card ? { n: 8, key: "TRAIT", card: R0.trait.card, name: R0.trait.n, sub: "ON" } : { n: 8, key: "TRAIT", name: R0.trait.n, sub: "passive", ic: `<i class="ic portrait p-${me.characterClass}" aria-hidden="true"></i>` }); }
+  hbTipData = slots.map(s => slotTip(s, me, R0));
   const LOCK = `<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="4.5" y="10" width="15" height="11" rx="2" fill="currentColor"/><rect x="11" y="13.5" width="2" height="4" rx="1" fill="#000"/></svg>`;
-  const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}" title="${escapeHtml(s.name)}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
+  const hb = slots.map(s => s.card ? `<div class="slot skillcard card-${s.card}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}"><small>${s.key} · ${s.sub}</small>${s.locked ? `<div class="locked">${LOCK}</div>` : s.active ? `<div class="live" style="--p:${s.active.toFixed(2)}"></div>` : s.frac > 0 ? `<div class="clock" style="--p:${s.frac.toFixed(2)}"><span>${s.cd || ""}</span></div>` : ""}</div>` : `<div class="slot${s.n === me.activeSlot ? " active" : ""}${s.empty ? " empty" : ""}${s.ready ? " ult-ready" : ""}">${s.ic}<kbd>${s.key || s.n}</kbd><b>${escapeHtml(s.name)}</b><small>${s.sub}</small>${s.cd ? `<div class="cd">${s.cd}</div>` : ""}${s.n === me.activeSlot && reloadPct ? `<div class="reload" style="width:${reloadPct}%"></div>` : ""}</div>`).join("");
   if (hb !== hotbarHtml) { html("hotbar", hb); hotbarHtml = hb; }
+  if (!$("skillTip").hidden) updateSkillTip();   // keep a shown tooltip's READY / cooldown line live
   const dashLeft = Math.max(0, dashReadyAt - gnow()) / 1000;
   txt("dashChip", dashLeft > 0 ? `DASH ${dashLeft.toFixed(1)}s` : "DASH READY · Space"); $("dashChip").classList.toggle("ready", dashLeft <= 0);
   txt("ammoLine", me.stunned > 0 ? `STUNNED! ${me.stunned.toFixed(1)}s` : me.slowed > 0 ? `SLOWED ${me.slowed.toFixed(1)}s` : jug && me.weapon === "shotgun" && briggsRage(me) > 0 && gunActive ? "RAGE: SHOTGUN SPAM · NO AMMO · hold click" : me.reloadLeft > 0 ? "RELOADING…" : gunActive && w ? `${me.mag} / ${w.infinite ? "∞" : me.ammo}${me.mag === 0 ? "  ·  press C" : ""}` : me.activeSlot === 5 ? "Click to use a medkit" : me.activeSlot === 1 && me.melee === "axe" ? "Hold click 1s, release: HEAVY SWING" : "");
@@ -1206,7 +1241,7 @@ window.addEventListener("blur", () => { firing = false; wheel = null; if (axeCha
 $("gameArea").addEventListener("contextmenu", e => e.preventDefault());
 window.addEventListener("mousemove", e => {
   const r = canvas.getBoundingClientRect(); if (!r.width) return;
-  mouse.sx = (e.clientX - r.left) * W / r.width; mouse.sy = (e.clientY - r.top) * H / r.height;
+  mouse.sx = (e.clientX - r.left) * W / r.width; mouse.sy = (e.clientY - r.top) * H / r.height; mouse.cx = e.clientX; mouse.cy = e.clientY; updateSkillTip();
   mouse.x = mouse.sx + cam.x; mouse.y = mouse.sy + cam.y;
   if (wheel) wheel.pick = wheelPick();
 });

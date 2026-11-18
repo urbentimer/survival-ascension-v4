@@ -614,6 +614,15 @@ body.in-match #ls{display:none}
 @keyframes lpIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 @media (max-width:1000px){.inv-eq,.inv-st{grid-template-columns:minmax(0,1fr)}.inv-hero{height:320px}.inv-head h2{font-size:30px}.inv-hint{display:none}}
 .ls-inv kbd{font:800 10px/1 ui-monospace,monospace;border:1px solid currentColor;border-radius:3px;padding:2px 4px;margin-left:6px;opacity:.75}
+.skill-tip{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 16px);pointer-events:none;display:grid;grid-template-columns:52px minmax(0,1fr);gap:6px 10px;padding:10px 12px 9px;background:#0b1013f5;border:1px solid #f28b3670;border-radius:8px;box-shadow:0 10px 30px #000c;color:#eef2f0;font:12px/1.45 Inter,system-ui,sans-serif}
+.skill-tip[hidden]{display:none}.skill-tip .st-card{width:52px;height:52px;border-radius:5px;background:#000 center/cover no-repeat;border:1px solid #f28b3655;display:block}
+.skill-tip .st-ic{width:52px;height:52px;border-radius:5px;background:#141c1f;border:1px solid #ffffff1f;display:grid;place-items:center;position:relative}.skill-tip .st-ic .ic{position:static!important;transform:none!important;width:40px!important;height:40px!important}
+.skill-tip .st-head{align-self:center;min-width:0}.skill-tip .st-head b{display:block;font:800 15px/1.2 Inter,system-ui,sans-serif;color:#ffd9b0;text-wrap:balance}
+.skill-tip .st-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.skill-tip .st-chips span{font:700 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:#c9d3cf;background:#ffffff12;border-radius:3px;padding:3px 5px}
+.skill-tip .st-chips .st-key{color:#1a0f06;background:#f2a15b}
+.skill-tip p{grid-column:1/-1;margin:2px 0 0;color:#dfe6e3}.skill-tip p em{font-style:normal;color:#9aa6a2}
+.skill-tip .st-st{grid-column:1/-1;font:800 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;padding-top:6px;border-top:1px solid #ffffff14}
+.skill-tip .st-ready{color:#9fe36a}.skill-tip .st-live{color:#ffd75e}.skill-tip .st-wait{color:#aab4b1}.skill-tip .st-locked{color:#ff8a7a}
 </style>
 </head>
 <body><main class="wrap">
@@ -875,5 +884,6 @@ body.in-match #ls{display:none}
  </div>
  <div id="invTip" class="inv-tip hidden" aria-hidden="true"></div>
  <div id="lootPop" class="loot-pop" aria-live="polite"></div>
-<script type="module" src="./client.js?v=20261118a"></script>
+<div id="skillTip" class="skill-tip" role="tooltip" hidden></div>
+<script type="module" src="./client.js?v=20261118b"></script>
 </body></html>

@@ -1,4 +1,4 @@
-# The planned BOSS GEAR system (Nov 17, user): data + the "Equipment" view of the progress board (imported by build.py)
+# The BOSS GEAR system (Nov 17, user; in the game since Nov 17): data + the "Equipment" view of the progress board (imported by build.py)
 import html, base64, io, os
 from PIL import Image
 E = html.escape
@@ -221,14 +221,14 @@ def view(boss_img, sample_por):
           {grp('g-epic', 'Epic', '1–2 of these 5 in every burst', epics)}
           {grp('g-low', 'Rare · Uncommon · Common', 'mixed in with gold and ores in the other 7–10 drops', low)}</section>'''
     return f'''
-<section class="sec-head"><h2>Boss Gear</h2><span class="chip c-plan">PLANNED · A PROJECT FOR LATER</span></section>
+<section class="sec-head"><h2>Boss Gear</h2><span class="chip c-done" style="color:var(--done)">IN THE GAME · PRESS I</span></section>
 <section class="stats" aria-label="Gear numbers">
   <div class="stat"><b>6</b><span>bosses, each with its own themed gear</span></div>
   <div class="stat"><b>15</b><span>items per boss: 3 legendary, 5 epic, 7 lower (90 in all)</span></div>
   <div class="stat"><b>10–12</b><span>items burst out of every boss kill, gold and ores included</span></div>
   <div class="stat good"><b>1</b><span>legendary every kill, but which of the 3 is random</span></div>
   <div class="stat"><b>1–2</b><span>epics per burst, from the boss's 5</span></div>
-  <div class="stat good"><b>Forever</b><span>gear is kept; trading and enhancing later</span></div>
+  <div class="stat good"><b>+10</b><span>enhancing in; gear kept between matches (trading later)</span></div>
 </section>
 <section class="eq-how">
   <div class="box"><h2>How drops work</h2>
@@ -237,7 +237,7 @@ def view(boss_img, sample_por):
       <li><span><b>1 legendary, always</b><small>Every burst has exactly 1 legendary, picked at random from the boss's 3, so each one turns up about 1 kill in 3. Seeing all 3 takes about {COLLECT3:.1f} kills on average.</small></span></li>
       <li><span><b>1–2 epics, then gear and materials</b><small>Then 1 or 2 epics from its 5. The other 7–10 are a mix: about half are rare, uncommon and common gear (each tier 3/4 as likely as the one below), half are materials: gold and ores for enhancing later.</small></span></li>
       <li><span><b>First come, first served</b><small>Run over and grab them before they fade (about 30s). With 4 players everyone usually gets a few, but the legendary goes to whoever reaches it first. Just luck and fun.</small></span></li>
-      <li><span><b>Pick what suits your survivor</b><small>Defence pieces (HP, armour, healing) make squishy survivors like Sienna, Raven or Dante tankier; attack pieces suit tanks. Duplicates stay in your bag for trading or enhancing later.</small></span></li>
+      <li><span><b>Pick what suits your survivor</b><small>Defence pieces (HP, armour, healing) make squishy survivors like Sienna, Raven or Dante tankier; attack pieces suit tanks. Duplicates stay in your bag (for trading later).</small></span></li>
     </ol>
   </div>
   <div class="box"><h2>Every burst</h2>{burst}<div class="od-head"><span></span><span></span><b>each item</b><small>how often it's in the burst</small></div>{odds_rows}<div class="bands">{bands}</div></div>
@@ -252,7 +252,7 @@ def view(boss_img, sample_por):
     <li><span><b>Equipment tab</b><small>Your survivor in the middle with the 6 slots round them, the bag (Gear / Materials tabs) and a pouch for gold, ores and essences. Hover an item for its card. Gear changes stats only: characters look the same in game.</small></span></li>
     <li><span><b>Stats tab</b><small>Every stat as base + gear = total with a bar, the specials your gear gives you, and a collection: how many of each boss's 15 items you've found.</small></span></li>
     <li><span><b>When we build it</b><small>Collection uses the real boss portraits; the pouch shows all 6 essences (the design shows one); open with I in a match or the lobby.</small></span></li>
-    <li><span><b>Kept forever, and later</b><small>Gear stays with you between matches (first in the browser, properly with logins + a database). Later: trading with friends, and enhancing +1 to +10 with ores, gold and essence.</small></span></li>
+    <li><span><b>Kept, and enhanced</b><small>Gear stays with you between matches (saved in your browser for now; logins + a database later). Enhancing +1 to +10 with ores, gold and essence is in; trading with friends comes later. 3 specials still say "coming soon".</small></span></li>
   </ul>
 </section>
 <section class="box ttbox"><div class="grp-h"><h2>Item card (on hover)</h2><small>our own take on the hover card: hover an item in your bag, or one on the ground after a burst</small></div>

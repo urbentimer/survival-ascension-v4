@@ -1,4 +1,4 @@
-# Builds the Survival Ascension progress board (Nov 17 update) -> progress.html (images embedded as small WebP data URIs)
+# Builds the Survival Ascension progress board (Nov 18 update) -> progress.html (images embedded as small WebP data URIs)
 import base64, io, json, os, html, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import equip
 from PIL import Image
@@ -27,6 +27,8 @@ CHARS = [
       E=('Steel Convoy', '30s', 'steelConvoy'), Q=('Sky Reign', '60s', 'skyReign'), R=('Crimson Aegis', '100s', 'crimsonAegis'), T=('Mechanic', '', True)),
  dict(id='dispatcher', name='ASTRA', role='Emergency commander · support', color='#9fd86b', state='full', gun='Rifle + pistol', art='Older art',
       E=('Emergency Medics', '30s', 'medicTeam'), Q=('Police Backup', '60s', 'policeBackup'), R=('Safehouse', '90s', 'safehouse'), T=('Field Commander', '', True)),
+ dict(id='toxicologist', name='VEX', role='Toxicologist · poison + trail heal', color='#8fe36a', state='full', gun='Dart rifle ONLY (one-gun rule)', art='New chibi art (Nov 17)',
+      E=('Mutagen Syringe', '10s', 'mutagenSyringe'), Q=('Patient Zero', '60s', 'patientZero'), R=('Poison Trail', '30s', 'poisonTrail'), T=('Chain Reaction', '', 'chainReaction')),
  dict(id='assault', name='MARCUS', role='Assault · all-rounder', color='#ffd75e', state='needR', gun='Rifle + pistol', art='Older art (the style everyone matches)',
       E=('Combat Rush', '15s', True), Q=('Frag Barrage', '20s', True), R=None, T=('Veteran', '', True)),
  dict(id='engineer', name='VIKTOR', role='Engineer · robots', color='#c9b36a', state='needR', gun='Rifle + pistol', art='Older art',
@@ -37,8 +39,6 @@ CHARS = [
       E=('Sky Barrage', '8s', 'skyBarrage'), Q=('Demo Ripple', '60s', 'demoRipple'), R=None, T=('Demolitions Expert', '', True)),
  dict(id='slasher', name='ARSHAN', role='Slasher · chain-axe', color='#f0ecde', state='locked', gun='Chain-axe only', art='Art done · not pickable yet',
       E=("Reaper's Reach", '12s', 'reapersReach'), Q=('Crimson Cyclone', '60s', 'crimsonCyclone'), R=None, T=None),
- dict(id='vex', name='VEX', role='Toxicologist · poison + team heal', color='#8fe36a', state='planned', gun='Toxin Dart Rifle only', art='Kit locked · no art yet',
-      E=('Toxic Vial', '~4s', True), Q=('Pandemic', '~60s', True), R=('Antidote Mist', '~25s', True), T=('Chain Reaction', '', True)),
  dict(id='angel', name='ANGEL', role='Guardian medic · protection', color='#e8eef0', state='planned', gun='MP5', art='Draft · no art yet',
       E=('Protective Injection', '~8s', True), Q=('Guardian Angel', '~60s', True), R=('Guardian Shield', '~25s', True), T=None),
 ]
@@ -74,10 +74,10 @@ SKILLTEXT = {
  'Demolitions Expert': '+17% damage, slower fire rate.',
  "Reaper's Reach": 'Throws the hook up to 1100px and pulls himself to an enemy or a wall.',
  'Crimson Cyclone': '12s of the red-hot axe circling him (260px).',
- 'Toxic Vial': 'A poison cloud where he aims that keeps adding toxin stacks.',
- 'Pandemic': 'A toxic aura for 20s; when it ends, every poisoned zombie pops for x2.',
- 'Antidote Mist': 'Team heal: everyone within ~350px heals 30% over 3s, slows / stuns cleared.',
- 'Chain Reaction': 'A poisoned zombie that dies bursts and poisons the ones around it.',
+ 'Mutagen Syringe': 'Into the first zombie in line: it swells 2s, then bursts (3 toxin stacks within 150px). Bosses take a big hit.',
+ 'Patient Zero': '20s: poisoned zombies that die get back up infected and fight the horde for 8s (0.7x the zombie they were).',
+ 'Poison Trail': '15s of toxic smoke behind him (like Singed): poisons zombies, teammates in it heal 2%/s.',
+ 'Chain Reaction': 'Darts stack toxin (max 3, 4 at level 4, 5 at level 7); zombies he poisoned burst on death (1 stack round them).',
  'Protective Injection': 'Heals the teammate at your aim 25% and they take 30% less damage for 5s.',
  'Guardian Angel': 'Links nearby teammates: 40% less damage; the first who would go down stays at 1 HP.',
  'Guardian Shield': 'Teammates within ~300px get a 40 HP shield (white bar) for 20s.',
@@ -88,19 +88,19 @@ MAPS = [('ASCENSION', 'Research Outpost', 'waves 1-4', 'THE BUTCHER', 'butcher')
         ('THE DEEP MINE', 'Mine carts + the rune mission', 'waves 17-20', 'THE MINE BEAST', 'minebeast'), ('THE CRUCIBLE', 'Volcano · ruined iron foundry', 'waves 21-24', 'THE ABOMINATION', 'abomination')]
 PLANNED_MAPS = [('NEON HEIGHTS', 'Cyberpunk rooftops at night', 'map 7 · boss OVERCLOCK', 'prompts written'), ('SHIPWRECK COVE', 'Beach map', 'boss not picked yet', 'prompts written')]
 RECENT = [
- ('Iron', 'Replaced Briggs: new chibi military art sized to Marcus, steel boomerang, shields, gauntlets.'),
- ('Sienna rebuilt', 'New art + ice kit, sniper only (first character on the one-gun rule), sniper range x4.'),
- ('Ice effects', 'Your "ultra realistic" grenade burst, ice tower and shatter, keyed to ice-blue (no purple).'),
- ('Cryo Grenade', 'Now freezes zombies instead of hurting them; only the Abomination and Pyre Priest take damage.'),
- ('Glacier Perch', 'Layered 200px ice floor (80% slow), the tower has 600 HP and breaks, Q again / R to jump down.'),
- ('Music + sound', 'Character-select music on every non-boss level; sound fixed live.'),
+ ('Boss gear is in', '90 items from the 6 bosses: loot bursts, the inventory (press I), Equipment + Stats tabs, enhancing +1 to +10.'),
+ ('VEX joins', 'The toxicologist: dart rifle only (one-gun rule), toxin stacks on everything he hits, Chain Reaction.'),
+ ('Vex kit v2', 'Poison Trail (like Singed, heals the team), Mutagen Syringe (zombie bombs), Patient Zero (the dead fight for you).'),
+ ('Realistic smoke', 'Your smoke kit animated in code as particles, plus the burst + rise sheets and your painted syringe / badge.'),
+ ('Vex balanced', 'Weaker early: stacks grow with his level, no chain of chains, smaller syringe, 15s trail, infected at 0.7x.'),
+ ('Iron + Sienna', 'Nov 16: Iron replaced Briggs; Sienna rebuilt with the ice kit and the first one-gun rule.'),
 ]
 NEXT = [
- ('Build VEX', 'Kit locked (toxin stacks, Chain Reaction, Toxic Vial, Antidote Mist team heal, Pandemic). Next: numbers, design sheet, ChatGPT prompts.'),
- ('Finish ANGEL', 'Pick her trait (Mercy Rounds / Field Surgeon / 7 more ideas) and confirm the shield range and cooldown.'),
- ('R skills for 4 survivors', 'Marcus, Viktor, Raven and Dante only have E + Q.'),
+ ('Finish ANGEL', 'The last planned survivor: pick her trait (Mercy Rounds / Field Surgeon / more ideas), then numbers and art prompts.'),
+ ('R skills for 4 survivors', 'Marcus, Viktor, Raven and Dante still only have E + Q.'),
  ('Unlock ARSHAN', 'Needs an R and a trait, then he can join the roster.'),
- ('One-gun rule', 'Sienna done; every other survivor gets one unique gun, one at a time.'),
+ ('3 boss gear specials', 'Meat Hook, Brood Mother\'s Sac and Antenna Headset still say "coming soon".'),
+ ('One-gun rule', 'Sienna and Vex done; 7 survivors still to get their one unique gun.'),
  ('New maps', 'Neon Heights (map 7) and Shipwreck Cove are written up; art still to make.'),
 ]
 
@@ -119,10 +119,10 @@ def cell(c, k):
     return f'<td class="m-ok{" m-plan" if c["state"] == "planned" else ""}">{ic}<span>{E(name)}{f"<small>{cd}</small>" if cd else ""}</span></td>'
 
 por = {c['id']: (thumb(f'{SA}/portraits/{c["id"]}.webp', 128) if os.path.exists(f'{SA}/portraits/{c["id"]}.webp') else None) for c in CHARS}
-spr = {c['id']: sprite(c['id']) for c in CHARS if c['id'] not in ('vex', 'angel')}
+spr = {c['id']: sprite(c['id']) for c in CHARS if c['id'] not in ('angel',)}
 boss = {b: thumb(f'{SA}/portraits/{b}.webp', 112) for *_, b in MAPS}
-shots = [shot('f-full-c.png', (0, 0, 600, 440)), shot('s-beam.png', (0, 0, 940, 360)), shot('z-frozen.png', (0, 0, 520, 300)), shot('lobby-juggernaut.png', (0, 60, 600, 640))]
-caps = ['<b>Glacier Perch</b> · the layered ice floor round Sienna\'s tower', '<b>The perch laser</b> · across the whole map, through everything', '<b>Cryo Grenade</b> · zombies frozen in ice blocks', '<b>Lobby</b> · Iron\'s new art']
+shots = [shot('v2-trail.png', (400, 230, 940, 560)), shot('v3-burst.png', (430, 210, 1010, 560)), shot('v3-inf.png', (330, 270, 870, 600)), shot('v2-lobby.png', (0, 40, 1280, 800))]
+caps = ['<b>Poison Trail</b> · your realistic smoke, animated as particles behind Vex', '<b>Mutagen Syringe</b> · the swollen zombie bursts over the pack', '<b>Patient Zero</b> · the infected (biohazard badges) turn on the horde', '<b>Lobby</b> · Vex joins the roster']
 
 nFull = sum(c['state'] == 'full' for c in CHARS); play = [c for c in CHARS if c['state'] in ('full', 'needR')]
 missR = [c['name'].title() for c in CHARS if c['R'] is None]
@@ -248,21 +248,21 @@ footer {{ color:var(--muted); font-size:12px; border-top:1px solid var(--line); 
 </style>
 <div class="wrap">
 <header>
-  <div><div class="kicker">Field report · updated 17 Nov 2026</div><h1>Survival Ascension</h1>
+  <div><div class="kicker">Field report · updated 18 Nov 2026</div><h1>Survival Ascension</h1>
   <p>Online co-op zombie survival. Where every survivor stands, which skills are still missing, the maps in rotation and what's next.</p></div>
   <div class="hero-sprite" aria-hidden="true">{hero_sprites}</div>
 </header>
-<nav class="tabs" aria-label="Pages"><a href="#board" aria-current="page">Progress board</a><a href="#equipment">Boss gear (planned)</a></nav>
+<nav class="tabs" aria-label="Pages"><a href="#board" aria-current="page">Progress board</a><a href="#equipment">Boss gear</a></nav>
 <div class="view" id="v-board">
 <section class="stats" aria-label="Key numbers">
-  <div class="stat"><b>8</b><span>playable survivors (+ Arshan locked)</span></div>
-  <div class="stat good"><b>{nFull} / 8</b><span>with a full kit: E + Q + R + trait</span></div>
-  <div class="stat bad"><b>{len(missR)}</b><span>survivors without an R skill</span></div>
-  <div class="stat"><b>2</b><span>new survivors planned (Vex, Angel)</span></div>
-  <div class="stat"><b>6</b><span>maps in rotation, a boss on every 4th wave</span></div>
-  <div class="stat"><b>1 / 8</b><span>on the one-gun rule (Sienna)</span></div>
+  <div class="stat"><b>{len(play)}</b><span>playable survivors (+ Arshan locked)</span></div>
+  <div class="stat good"><b>{nFull} / {len(play)}</b><span>with a full kit: E + Q + R + trait</span></div>
+  <div class="stat bad"><b>{len(missR)}</b><span>survivors without an R skill (Arshan too)</span></div>
+  <div class="stat"><b>1</b><span>new survivor planned (Angel)</span></div>
+  <div class="stat good"><b>90</b><span>boss gear items in the game (press I)</span></div>
+  <div class="stat"><b>2 / {len(play)}</b><span>on the one-gun rule (Sienna, Vex)</span></div>
 </section>
-<div class="alert"><b>Missing R skills</b><div><div class="names">{''.join(f'<span>{n}</span>' for n in missR)}</div><div style="margin-top:6px;color:var(--muted)">Arshan also needs a trait before he can be unlocked. Vex is fully planned; Angel still needs her trait.</div></div></div>
+<div class="alert"><b>Missing R skills</b><div><div class="names">{''.join(f'<span>{n}</span>' for n in missR)}</div><div style="margin-top:6px;color:var(--muted)">Arshan also needs a trait before he can be unlocked. Angel (planned) still needs her trait.</div></div></div>
 
 <section class="sec-head"><h2>Skill check</h2><span>Every survivor at a glance · Q is the ultimate, E the quick skill, R the third</span></section>
 <div class="legend"><span><i class="sw" style="background:#9fd86b33;border:1px solid #9fd86b"></i>Done (with its card art)</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,#1d2b30 0 4px,#223238 4px 8px);border:1px solid #2c3f45"></i>Done or planned, no card art yet</span><span><i class="sw" style="border:1px dashed #ff7a6b;background:#ff7a6b14"></i>Missing</span></div>
@@ -285,6 +285,6 @@ footer {{ color:var(--muted); font-size:12px; border-top:1px solid var(--line); 
 </section>
 </div>
 <div class="view" id="v-equip" hidden>{equip_html}</div>
-<footer>Survival Ascension · progress board · numbers marked ~ are planned, not final. Boss gear is a plan: names and numbers are first ideas.</footer>
+<footer>Survival Ascension · progress board · numbers marked ~ are planned, not final.</footer>
 </div>{equip.JS}'''
 open(OUT, 'w').write(page); print(OUT, round(len(page) / 1024), 'KB')
