@@ -44,7 +44,7 @@ const WEAPON_INFO = {
   pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 0.5, infinite: true },
   smg:      { name: "SMG",      slot: 3, mag: 30, reload: 0.7, auto: true },
   rifle:    { name: "Rifle",    slot: 2, mag: 30, reload: 0.8, auto: true },
-  shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 1.0 },
+  shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 1.0, auto: true },   // (Nov 18, user) hold to keep firing (the server still sets the pace: 1.1 shots/s)
   sniper:   { name: "Sniper",   slot: 2, mag: 5,  reload: 1.1 },
   launcher: { name: "Launcher", slot: 2, mag: 3,  reload: 1.3 },
   dartrifle: { name: "Dart Rifle", slot: 2, mag: 20, reload: 0.9, auto: true },   // (Nov 17) VEX's toxin dart gun
