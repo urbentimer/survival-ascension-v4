@@ -2893,14 +2893,15 @@ function drawDanteFx(f, age) {   // false when finished
   }
   if (f.k === "frag") {   // Marcus: concussion ring around him, then 3 grenades arc out to their spots (the blasts come as "boom")
     const total = (f.pts.length - 1) * f.gap + f.fl; if (s > Math.max(total, .5)) return false;
-    if (s < .5) {   // shock ring + dust where he stood
-      const k = s / .5, R = (f.br || 150) * (.25 + .75 * Math.sqrt(k));
-      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 8 * (1 - k) + 1.5; ctx.strokeStyle = `rgba(255,190,120,${.9 * (1 - k)})`;
-      ctx.beginPath(); ctx.ellipse(f.x, f.y + 14, R, R * .42, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = 3 * (1 - k) + .5; ctx.strokeStyle = `rgba(255,255,255,${.8 * (1 - k)})`; ctx.beginPath(); ctx.ellipse(f.x, f.y + 14, R * .82, R * .34, 0, 0, Math.PI * 2); ctx.stroke();
-      if (s < .12) { ctx.fillStyle = `rgba(255,220,170,${.6 * (1 - s / .12)})`; ctx.beginPath(); ctx.arc(f.x, f.y, 34, 0, Math.PI * 2); ctx.fill(); }
+    if (s < .42) {   // (Nov 18, user: the old glowing double ellipse looked off) the push: a small blast at his feet + a dusty shock ring (a circle, like the push itself)
+      const k = s / .42, R = (f.br || 150) * (.2 + .8 * Math.sqrt(k)), cy = f.y + 14;
+      ctx.save();
+      const g = ctx.createRadialGradient(f.x, cy, R * .55, f.x, cy, R); g.addColorStop(0, "rgba(120,96,70,0)"); g.addColorStop(.8, `rgba(150,120,88,${(.32 * (1 - k)).toFixed(3)})`); g.addColorStop(1, "rgba(150,120,88,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x, cy, R, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 3 * (1 - k) + 1; ctx.strokeStyle = `rgba(235,215,185,${(.45 * (1 - k)).toFixed(3)})`; ctx.beginPath(); ctx.arc(f.x, cy, R * .92, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
-      demoFrame(5, Math.min(3, Math.floor(s / .13)), f.x, f.y + 22, .55 * (1 - k), .8);
+      if (s < .36) demoFrame(3, Math.min(5, Math.floor(s / .06)), f.x, f.y + 12, 1, .75);   // the blast sprite (Dante's) at his feet
+      demoFrame(5, Math.min(3, Math.floor(s / .1)), f.x, f.y + 22, .5 * (1 - k), .8);   // dust
     }
     f.pts.forEach(([tx, ty], i) => {
       const u = (s - i * f.gap) / f.fl; if (u < 0 || u >= 1) return;
@@ -4165,7 +4166,7 @@ function drawSurvivorDir8(p, pose, img) {
   }
   let lift = 0;
   if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
-  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 460) { blk = DIR8.assault.blocks.indexOf("frag"); col = fa < 50 ? 0 : fa < 110 ? 1 : fa < 240 ? 2 : 3; if (col === 3) lift = Math.sin(Math.PI * Math.min(1, (fa - 240) / 220)) * 9; } }   // (Nov 18) Frag Barrage: grab, pin, THROW, the hop back (lifted a little)
+  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 340) { blk = DIR8.assault.blocks.indexOf("frag"); col = 3; lift = Math.sin(Math.PI * Math.min(1, fa / 300)) * 10; } }   // (Nov 18, user: no delay) Frag Barrage: straight into the hop back (the server hops him at once), lifted in an arc
   if (p.characterClass === "toxicologist" && p.alive) { const c = vexCast(p, now, col, melee); if (c) { blk = c.blk; col = c.col; } }   // (Nov 17) Vex's E / R poses, the gas mask in Pandemic
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
