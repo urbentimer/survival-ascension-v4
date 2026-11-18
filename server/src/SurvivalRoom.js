@@ -213,7 +213,7 @@ const WEAPONS = {
   sniper:   { slot: "primary",   dmg: 80, rate: 0.8, range: 760, mag: 5,  reload: 1.1, pierce: 3, bigMult: 1.5 },  // bolt-action, goes through up to 3 zombies.
             // Nov 9: dmg 55 -> 80 (one-shots walkers till ~wave 10, runners all run) + bigMult: x1.5 on bosses and brutes (the big-target gun)
   launcher: { slot: "primary",   dmg: 35, rate: 0.6, range: 560, mag: 3,  reload: 1.3, splash: 80 }, // explodes on first hit
-  dartrifle: { slot: "primary",  dmg:  9, rate: 4.5, range: 560, mag: 20, reload: 0.9, auto: true }   // (Nov 17) VEX's Toxin Dart Rifle (his only gun): light darts, each adds 1 Toxin stack
+  dartrifle: { slot: "primary",  dmg:  7, rate: 4.5, range: 560, mag: 20, reload: 0.9, auto: true }   // (Nov 17) VEX's Toxin Dart Rifle (his only gun): light darts, each adds 1 Toxin stack
 };
 // Melee (key 1): swing in an arc toward the mouse. cd = seconds between swings, arc = half-angle in radians.
 const MELEE = {
@@ -386,18 +386,21 @@ const SIENNA = {
 // VEX (Nov 17; kit v2 the same evening, project doc claude/vex-kit.md). The toxicologist: TOXIN DART RIFLE only (+ knife; no pistol, no shop
 // guns, he leaves weapon drops for the others). TOXIN: every poison hit adds a stack to the zombie (max 5); each stack does damage over time
 // (refreshed by every new stack, gone 4s after the last) and the zombie glows green. CHAIN REACTION (trait): a poisoned zombie that dies bursts:
-// 2 stacks on every zombie round it. R POISON TRAIL (like Singed): for 30s he leaves toxic smoke behind him (a puff every 25px he walks, or every
+// 1 stack on every zombie round it (Nov 18 numbers below). R POISON TRAIL (like Singed): for 15s he leaves toxic smoke behind him (a puff every 25px he walks, or every
 // 0.6s standing still; each lasts 3s): zombies in it +1 stack every 0.5s, teammates in it heal 2% max HP a second; 30s cooldown from when it ends.
-// E MUTAGEN SYRINGE: into the first zombie on his aim line: it swells (can't move) 2s then BURSTS: 5 stacks on everything within 150px (it dies
+// E MUTAGEN SYRINGE: into the first zombie on his aim line: it swells (can't move) 2s then BURSTS: 3 stacks on everything within 150px (it dies
 // early = it bursts early); a boss takes a big hit + the burst instead. A miss only costs 1.5s. Q PATIENT ZERO (100 kills, 60s cooldown from when
 // it ends): for 20s every poisoned zombie that dies gets back up INFECTED (0.7s later): 0.7x the zombie it was (HP and damage), it hunts and
 // bites the horde (damage + a stack) for 8s,
 // at most 10 per Vex, never a boss. The infected are robots (kind "infected", look = the zombie kind they were); zombies attack them.
 const VEX = {
-  tox: { max: 5, dps: 4, len: 4 },   // per stack: 4 damage a second (x the wave scaling, like the skills): 5 stacks = 20/s
-  chain: { r: 100, stacks: 2 },
-  trail: { life: 30, cd: 30, step: 25, still: 0.6, puff: 3, r: 45, every: 0.5, heal: 0.02 },
-  syr: { cd: 8, miss: 1.5, range: 450, swell: 2, r: 150, stacks: 5, boss: 250 },
+  // (Nov 18, user: "too strong at level 1": all 7 of these) a stack 4 -> 3 dmg/s; the most stacks on a zombie grows with HIS level
+  // (3, 4 at level 4, 5 at level 7); Chain Reaction 2 -> 1 stack and only zombies he poisoned himself (darts, syringe, trail) burst (a zombie
+  // poisoned only by bursts / bites doesn't: no chain of chains); syringe 5 -> 3 stacks, cooldown 8 -> 10s; trail 30 -> 15s; darts 9 -> 7.
+  tox: { max: 5, dps: 3, len: 4, lv: [[7, 5], [4, 4], [1, 3]] },   // per stack: 3 damage a second (x the wave scaling, like the skills)
+  chain: { r: 100, stacks: 1 },
+  trail: { life: 15, cd: 30, step: 25, still: 0.6, puff: 3, r: 45, every: 0.5, heal: 0.02 },
+  syr: { cd: 10, miss: 1.5, range: 450, swell: 2, r: 150, stacks: 3, boss: 250 },
   pz: { life: 20, cd: 60, inf: 8, max: 10, rise: 0.7, mult: 0.7, rate: 1.0, reach: 34 },   // (user) an infected is 0.7x the zombie it was: HP and bite damage (same speed, a bite a second like theirs)
 };
 const STATION_R = { tower: 125, gen: 90 };
@@ -3192,14 +3195,15 @@ export class SurvivalRoom extends Room {
   // ---------- VEX (Nov 17, kit v2): Toxin stacks, Chain Reaction, Poison Trail (R), Mutagen Syringe (E), Patient Zero (Q). Numbers: VEX ----------
   vexMem(p) { let m = this.vex.get(p.sessionId); if (!m) { m = { trailUntil: 0, trailReady: 0, drop: null, pzUntil: 0 }; this.vex.set(p.sessionId, m); } return m; }
   vexCdr(p) { return (1 - (p.cdr || 0)) * (1 - Math.min(.5, (p.gearSt?.cdr || 0) / 100)); }
-  addTox(z, p, n, now = Date.now()) {   // n Toxin stacks on a zombie (max 5); every new stack refreshes them all for 4s; the last poisoner gets the credit
-    if (!p || !this.state.zombies.has(z.id) || z.kind === "minebeast" && z.act === "under") return;
-    let t = this.tox.get(z.id); if (!t || t.until <= now) { t = { n: 0, until: 0, owner: p.sessionId }; this.tox.set(z.id, t); }
-    t.n = Math.min(VEX.tox.max, t.n + n); t.until = now + VEX.tox.len * 1000; t.owner = p.sessionId; z.tox = t.n;
+  vexMaxTox(p) { return (VEX.tox.lv.find(([lv]) => (p.level || 1) >= lv) || [0, VEX.tox.max])[1]; }   // 3 / 4 at level 4 / 5 at level 7
+  addTox(z, p, n, now = Date.now(), direct = true) {   // n Toxin stacks on a zombie (max by the poisoner's level); every new stack refreshes them all for 4s; the last poisoner gets the credit
+    if (!p || !this.state.zombies.has(z.id) || z.kind === "minebeast" && z.act === "under") return;   // direct = from his darts / syringe / trail (only those zombies burst: Chain Reaction)
+    let t = this.tox.get(z.id); if (!t || t.until <= now) { t = { n: 0, until: 0, owner: p.sessionId, direct: false }; this.tox.set(z.id, t); }
+    t.n = Math.max(t.n, Math.min(this.vexMaxTox(p), t.n + n)); t.until = now + VEX.tox.len * 1000; t.owner = p.sessionId; if (direct) t.direct = true; z.tox = t.n;
   }
-  vexChain(z, t) {   // CHAIN REACTION: a poisoned zombie that dies bursts: 2 stacks on every zombie round it
-    const p = this.state.players.get(t.owner); if (!p) return; const C = VEX.chain, now = Date.now();
-    for (const o of this.state.zombies.values()) if (hyp(o.x - z.x, o.y - z.y) < C.r + (o.radius || 14)) this.addTox(o, p, C.stacks, now);
+  vexChain(z, t) {   // CHAIN REACTION: a zombie he poisoned himself bursts when it dies: 1 stack on every zombie round it (those don't burst again)
+    const p = this.state.players.get(t.owner); if (!p || !t.direct) return; const C = VEX.chain, now = Date.now();
+    for (const o of this.state.zombies.values()) if (hyp(o.x - z.x, o.y - z.y) < C.r + (o.radius || 14)) this.addTox(o, p, C.stacks, now, false);
     if ((this.vexPuffN = now - (this.vexPuffAt || 0) > 250 ? 1 : (this.vexPuffN || 0) + 1) === 1) this.vexPuffAt = now;
     if (this.vexPuffN <= 10) this.broadcast("vex", { k: "puff", x: Math.round(z.x), y: Math.round(z.y) });   // (at most 10 puffs a quarter second on screen)
   }
@@ -3256,7 +3260,7 @@ export class SurvivalRoom extends Room {
     if (d > reach) { r.act = "walk"; this.steerMove(r, r.id, a, Math.min(d - reach * .8, m.speed * dt), e => this.solveRobot(e)); }
     else if (now >= m.next) {
       m.next = now + VEX.pz.rate * 1000; r.act = "bite"; r.uses = (r.uses || 0) + 1;   // (uses: the client plays a bite each time it changes)
-      if (m.dmg > 0) this.hitZombie(z, p, m.dmg); if (this.state.zombies.has(z.id)) this.addTox(z, p, 1, now);
+      if (m.dmg > 0) this.hitZombie(z, p, m.dmg); if (this.state.zombies.has(z.id)) this.addTox(z, p, 1, now, false);   // (a bite's poison doesn't make it burst)
     }
   }
   updateVex(dt, now) {

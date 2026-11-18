@@ -1048,3 +1048,11 @@ User: the first skill effects felt flat (a cloud held on one frame); new kit: R 
 ## Vex: painted props + Patient Zero at 0.7x (2026-11-17, cache 20261117d)
 - The user's props sheet (tools/art/vex/v2-props.png, pixel art on magenta) -> client/assets/sprites/fx/vex-props.webp (extract-vex-v2.py, 2x size, drawn at half, smoothed; VEXFX.props): the syringe in flight + stuck on a swelling zombie (drawSyringe), stuck in the ground on a MISS (vexFx "stuck", 1.5s), the biohazard badge over the infected (drawBio, 19px), glass shards flying out of a burst (vexFx "shards"). The code-drawn versions stay as fallbacks (until the image loads; the ground biohazard is still code).
 - User: the infected are 0.7x the zombie they were: VEX.pz.mult 0.7 on its max HP and its damage (a bite a second, like a zombie; same speed; still +1 Toxin stack a bite). Was 60% HP (60-600) and a flat 18 x wave scaling every 0.8s at 1.15x speed. Test 54g checks 200 HP -> 140, 10 damage -> 7.
+
+## Vex weaker early (2026-11-18, cache 20261118a)
+User: "too strong at level 1" -> picked all 7 options (VEX + WEAPONS.dartrifle):
+- a Toxin stack 4 -> 3 dmg/s; the most stacks on a zombie grows with the poisoner's LEVEL: 3, 4 from level 4, 5 from level 7 (VEX.tox.lv, vexMaxTox; a lower-level Vex never lowers stacks someone else put on).
+- Chain Reaction 2 -> 1 stack, and only zombies he poisoned himself burst: addTox(..., direct) marks darts / syringe burst / trail as direct; Chain Reaction stacks and the infected's bites aren't (t.direct), so a zombie poisoned only by bursts doesn't burst again (no chain of chains). Patient Zero still raises any poisoned zombie.
+- Mutagen Syringe 5 -> 3 stacks, cooldown 8 -> 10s. Poison Trail 30 -> 15s (cooldown still 30s from the end). Darts 9 -> 7 damage.
+- Tests 54g updated (+ the level caps, + no chain of chains).
+- Note: the full suite can fail Astra's safehouse block (38) and then hang on the FIRST run in a freshly started container (seen twice; timing). A second run passes (853 PASS here). If it fails, run it again before hunting.
