@@ -4438,8 +4438,8 @@ export class SurvivalRoom extends Room {
     const now = Date.now();
     if (now - (this.lastDashAt.get(sid) || 0) < DASH_COOLDOWN * 1000) return;
     let dx = Math.max(-1, Math.min(1, Number(data?.dx) || 0)), dy = Math.max(-1, Math.min(1, Number(data?.dy) || 0));
-    if (!dx && !dy) dx = p.facing || 1;
-    const mag = hyp(dx, dy);
+    if (!dx && !dy) { const a = Number.isFinite(p.aim) ? p.aim : (p.facing < 0 ? Math.PI : 0); dx = Math.cos(a); dy = Math.sin(a); }   // (Nov 18) no direction sent: toward where he aims (the client sends the cursor direction when standing still)
+    const mag = hyp(dx, dy) || 1;
     this.lastDashAt.set(sid, now); this.dodgeUntil.set(sid, now + DASH_IFRAMES * 1000);   // 0.25s nothing can hurt you
     const x0 = p.x, y0 = p.y;
     this.moveWithCollision(p, dx / mag * DASH_DISTANCE, dy / mag * DASH_DISTANCE);

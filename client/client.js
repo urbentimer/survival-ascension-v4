@@ -1487,7 +1487,8 @@ function sendControls(t) {
   if (dashQueued && dashReady) {
     dashQueued = false;
     dashReady = false; dashReadyAt = gnow() + DASH_CD_MS; setTimeout(() => dashReady = true, DASH_CD_MS);
-    const dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+    let dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+    if (!dx && !dy) { const a = aimAngle(me); dx = Math.round(Math.cos(a) * 1000) / 1000; dy = Math.round(Math.sin(a) * 1000) / 1000; }   // (Nov 18, user) standing still: dash toward the mouse cursor
     const seq = ++PRED.seq, from = V(me); room.send("dash", { dx, dy, s: seq }); predictInput(me, { seq, dx, dy, dash: true });
     if (from && PRED.ok) dashBeam(myId, from.x, from.y, PRED.x, PRED.y);
   }

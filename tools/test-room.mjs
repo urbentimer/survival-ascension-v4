@@ -92,7 +92,9 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   p.x = 300; p.y = 600; send(A, "dash", { dx: 1, dy: 0 }); ok(Math.round(p.x - 300) === 140, `dash moves 140px (${Math.round(p.x - 300)})`); const x = p.x;
   send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "dash has a cooldown");
   room.lastDashAt.set("A", Date.now() - 2500); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x === x, "still on cooldown after 2.5s");
-  room.lastDashAt.set("A", Date.now() - 3100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 3s"); room._dispose(); }
+  room.lastDashAt.set("A", Date.now() - 3100); send(A, "dash", { dx: 1, dy: 0 }); ok(p.x > x, "ready again after 3s");
+  p.x = 300; p.y = 600; room.lastDashAt.clear(); send(A, "dash", { dx: 0.6, dy: 0.8 }); ok(Math.abs(p.x - 384) < 2 && Math.abs(p.y - 712) < 2, `standing still: the dash goes toward the cursor (${Math.round(p.x)}, ${Math.round(p.y)})`);
+  p.x = 300; p.y = 600; p.aim = Math.PI / 2; room.lastDashAt.clear(); send(A, "dash", {}); ok(Math.abs(p.x - 300) < 2 && Math.abs(p.y - 740) < 2, `...no direction sent: toward where he aims (${Math.round(p.x)}, ${Math.round(p.y)})`); room._dispose(); }
 
 // 4. countdown between waves
 { const { room, A, send, P } = makeRoom(); for (let i = 0; i < 4; i++) room.spawnZombie(false, "walker"); room.state.elapsed = 90; room.lastTick = Date.now() - 50; room.tick();
