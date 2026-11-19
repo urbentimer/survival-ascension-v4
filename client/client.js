@@ -4099,7 +4099,7 @@ const awayIds = new Set();   // survivors whose connection dropped (server "away
 // Columns: idle, walk 1-3, attack 1 (stab / wind-up / shoot), attack 2 (slash / hit / muzzle flash).
 // Add a line here when a new survivor's sheets are ready. Melee weapons without art use the knife.
 const DIR8 = {
-  assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe", "frag"] },   // (Nov 18) "frag" = his Q pose (4 frames: grab, pin, THROW, hop back)
+  assault: { url: "assets/sprites/dir8/assault.png", blocks: ["gun", "knife", "bat", "axe", "frag"] },   // (Nov 18) "frag" = his Q pose (6 frames: grab, pin, THROW, hop back, touchdown, recover)
   engineer: { url: "assets/sprites/dir8/engineer.png", blocks: ["gun", "knife"] },
   scout: { url: "assets/sprites/dir8/scout.png", blocks: ["gun", "katana", "fire"] },
   juggernaut: { url: "assets/sprites/dir8/juggernaut.webp", blocks: ["shotgun", "knife", "slam", "throw", "fists", "power"],   // IRON (v3, Nov 16): no bat / axe art (bat / axe use the knife block)
@@ -4167,7 +4167,7 @@ function drawSurvivorDir8(p, pose, img) {
   }
   let lift = 0;
   if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
-  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 340) { blk = DIR8.assault.blocks.indexOf("frag"); col = fa < 150 ? 2 : 3; lift = Math.sin(Math.PI * Math.min(1, fa / 300)) * 10; } }   // (Nov 19, user: option 2) Frag Barrage: the hop starts at once (lifted in an arc): the THROW pose in the air, then the hop pose as he lands
+  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 560) { blk = DIR8.assault.blocks.indexOf("frag"); col = fa < 150 ? 2 : fa < 300 ? 3 : fa < 420 ? 4 : 5; if (fa < 300) lift = Math.sin(Math.PI * fa / 300) * 10; } }   // (Nov 19, user) Frag Barrage: in the air (lifted in an arc) the THROW pose then the hop, then TOUCHDOWN (dust) and RECOVER
   if (p.characterClass === "toxicologist" && p.alive) { const c = vexCast(p, now, col, melee); if (c) { blk = c.blk; col = c.col; } }   // (Nov 17) Vex's E / R poses, the gas mask in Pandemic
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);
