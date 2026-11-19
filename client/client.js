@@ -3613,7 +3613,7 @@ const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/spri
 const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 },
   floor: { cw: 275, ch: 434, mx: 137, my: 217, R: 200, spread: 500 } };   // (Nov 17) the Q ice floor: 5 frozen patches 230px across (middle at mx,my); R = the server's SIENNA.floor.r   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
 const marcImgs = {}; for (const [k, url] of Object.entries({ grenade: "assets/sprites/fx/marcus-grenade.webp", blast: "assets/sprites/fx/marcus-blast.webp" })) { const im = new Image(); im.src = url; marcImgs[k] = im; }   // (Nov 19) Marcus's smoke-frag
-const MBLAST = { cw: 210, ch: 280, gx: 98, gy: 116 };   // printed by tools/extract-marcus-grenade.py
+const MBLAST = { cw: 191, ch: 159, gx: 96, gy: 112 };   // printed by tools/extract-marcus-grenade.py (Nov 19: the realistic fire + smoke set, 6 frames)
 const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
 const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
 const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam
@@ -3673,9 +3673,9 @@ function drawSiennaItems(items, now) {   // depth-sorted pieces: decoys, bursts,
   for (const [id, d] of siennaDecoys) { if (now > d.until + 1500) { siennaDecoys.delete(id); continue; } if (inView(d.x, d.y, 80)) items.push({ y: d.y + 12, draw: () => drawDecoy(d, id, now) }); }
   for (let i = sfxList.length - 1; i >= 0; i--) {
     const f = sfxList[i], age = now - f.t;
-    if (f.k === "mfrag") {   // (Nov 19) Marcus's grenade landing (tools/extract-marcus-grenade.py): flash, blast, the smoke cloud (held), thinning, wisps
+    if (f.k === "mfrag") {   // (Nov 19) Marcus's grenade landing (tools/extract-marcus-grenade.py, the user's realistic fire + smoke on black)
       if (age > 1500) { sfxList.splice(i, 1); continue; }
-      const k = age < 70 ? 0 : age < 170 ? 1 : age < 700 ? 2 : age < 1050 ? 3 : 4, al = age < 1150 ? 1 : 1 - (age - 1150) / 350;
+      const k = age < 60 ? 0 : age < 160 ? 1 : age < 300 ? 2 : age < 700 ? 3 : age < 1050 ? 4 : 5, al = age < 1150 ? 1 : 1 - (age - 1150) / 350;   // flash, fireball, rolling into smoke, the smoke cloud, thinning, wisps
       if (inView(f.x, f.y, 160)) items.push({ y: f.y + 16, draw: () => sienFrame(marcImgs.blast, MBLAST, k, f.x, f.y + 8, al) });
       continue;
     }

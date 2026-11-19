@@ -22,3 +22,26 @@ ys, xs = np.where(lab == big); keep = ndimage.binary_dilation(lab == big, iterat
 can = can[max(0, ys.min() - 2):ys.max() + 3, max(0, xs.min() - 2):xs.max() + 3]
 g = shrink(can, 22 / max(can.shape[:2])); cell = Image.new('RGBA', (26, 26)); cell.alpha_composite(g, ((26 - g.width) // 2, (26 - g.height) // 2))
 cell.save(os.path.join(FX, 'marcus-grenade.webp'), quality=94, alpha_quality=100, method=6); print('marcus-grenade.webp: 26x26 (the canister, centred)')
+
+# (Nov 19, user: "ultra realistic like Vex") the BLAST is replaced by tools/art/marcus-blast-real.png: realistic fire + smoke on PURE BLACK,
+# 6 frames (flash, fireball, fireball rolling into smoke, the big smoke cloud lit from below, thinning, wisps). Black is unmixed (opacity =
+# brightness, x1.4 so the grey smoke stays thick); every frame is cut round its own middle (they're drawn centred on one point). The canister above
+# stays the pixel one. Overwrites marcus-blast.webp (6 frames now) and prints MBLAST.
+a = np.array(Image.open(os.path.join(R, 'marcus-blast-real.png')).convert('RGB')).astype(np.float32)
+mx = a.max(axis=2); al = np.clip((mx - 8) / 247 * 1.4, 0, 1); rgb = np.where(al[..., None] > 1e-3, np.clip((a - 8 * (1 - al[..., None])) / np.maximum(al[..., None], 1e-3), 0, 255), 0)
+F = np.dstack([rgb, al * 255]); H, W = al.shape; col = ndimage.gaussian_filter(al, 3).sum(axis=0)
+cuts = [0] + [valley(col, W * k / 6, W / 6 * .3) for k in range(1, 6)] + [W]
+fr = []
+for i in range(6):
+    seg = F[:, cuts[i]:cuts[i + 1]]; m = seg[..., 3] > 10; ys, xs = np.where(m); fr.append((seg, (xs.min(), xs.max() + 1, ys.min(), ys.max() + 1), cuts[i]))
+k3 = fr[2][1]; SCR = 170 / (k3[1] - k3[0])
+cx = [(b[0] + b[1]) / 2 for _, b, _ in fr]; half = max(max(cx[i] - fr[i][1][0], fr[i][1][1] - cx[i]) for i in range(6)) + 4
+top = min(b[2] for _, b, _ in fr) - 4; bot = max(b[3] for _, b, _ in fr) + 4; b4 = fr[3][1]; gyS = (b4[2] + b4[3]) / 2 + (b4[3] - b4[2]) * .18
+cells = []
+for i, (seg, b, off) in enumerate(fr):
+    c0 = int(round(cx[i] - half)); cell = np.zeros((bot - top, int(2 * half), 4)); s0 = max(0, c0); s1 = min(seg.shape[1], c0 + int(2 * half))
+    cell[:, s0 - c0:s1 - c0] = seg[top:bot, s0:s1]; cells.append(shrink(cell, SCR))
+CW = max(c.width for c in cells); CH = max(c.height for c in cells); out = Image.new('RGBA', (CW * 6, CH))
+for i, c in enumerate(cells): out.alpha_composite(c, (i * CW, 0))
+out.save(os.path.join(FX, 'marcus-blast.webp'), quality=92, alpha_quality=95, method=6)
+print('marcus-blast.webp (realistic): MBLAST =', {'cw': CW, 'ch': CH, 'gx': round(half * SCR), 'gy': round((gyS - top) * SCR)})
