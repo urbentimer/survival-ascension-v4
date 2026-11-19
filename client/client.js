@@ -4167,7 +4167,7 @@ function drawSurvivorDir8(p, pose, img) {
   }
   let lift = 0;
   if (p.characterClass === "sniper" && p.alive) { const c = siennaCast(p, now, row); if (c) { blk = c.blk; col = c.col; if (c.row != null) row = c.row; } lift = perchLift(p, now); if (lift) drawPerchTower(p, now); }   // (Nov 16) Sienna's skill poses / up on her ice tower
-  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 340) { blk = DIR8.assault.blocks.indexOf("frag"); col = 3; lift = Math.sin(Math.PI * Math.min(1, fa / 300)) * 10; } }   // (Nov 18, user: no delay) Frag Barrage: straight into the hop back (the server hops him at once), lifted in an arc
+  if (p.characterClass === "assault" && p.alive) { const fa = now - (fragHop.get(p.sessionId) ?? -1e9); if (fa < 340) { blk = DIR8.assault.blocks.indexOf("frag"); col = fa < 150 ? 2 : 3; lift = Math.sin(Math.PI * Math.min(1, fa / 300)) * 10; } }   // (Nov 19, user: option 2) Frag Barrage: the hop starts at once (lifted in an arc): the THROW pose in the air, then the hop pose as he lands
   if (p.characterClass === "toxicologist" && p.alive) { const c = vexCast(p, now, col, melee); if (c) { blk = c.blk; col = c.col; } }   // (Nov 17) Vex's E / R poses, the gas mask in Pandemic
   if (p.characterClass === "dispatcher") { const s = now - (astraCall.get(p.sessionId) || -1e9); if (s < 450) { blk = 4; col = Math.min(3, Math.floor(s / 112.5)); } }   // radio call (E / Q / R): raise, talk, signal, lower
   const rush = p.characterClass === "assault" && p.skillT > 0 && p.alive; if (rush) marcusRush(p, now, false);

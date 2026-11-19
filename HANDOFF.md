@@ -1065,3 +1065,4 @@ The user's Frag Barrage sheet (tools/art/marcus-v3-frag.png, 5 rows x 4: grab, p
 - (Nov 18, user) Frag Barrage: the hop frame plays at once (0-340ms, lifted in an arc; grab/pin/throw frames unused for now); the old glowing double ellipse is replaced by a small blast sprite at his feet + a soft dusty shock ring (a circle matching the push). Cache 20261118d.
 - (Nov 18, user) Shotgun: hold the button to keep firing (client WEAPON_INFO.shotgun.auto; the server's fire rate still sets the pace). Cache 20261118e.
 - (Nov 18, user) Dash while standing still goes toward the mouse cursor (client sends the aim's unit vector; the server falls back to p.aim when no direction comes). Moving still dashes the way you move. Tests: block 3 (+2). Cache 20261118f.
+- (Nov 19, user: option 2) Marcus Q: the THROW frame for the first 150ms of the hop (in the air), then the hop frame as he lands. Cache 20261119a.
