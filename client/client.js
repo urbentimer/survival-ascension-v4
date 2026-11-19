@@ -178,7 +178,8 @@ function connected() {
     else if (m.k === "board" && m.kind === "mecha") { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: .6, t }); playSfx("stomp", m.x, m.y); if (m.id === myId) shake(4, 160); }
     else if (m.k === "board" || (m.k === "leave" && m.ok)) fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 14, s: m.kind === "tank" ? 1 : .8, t }); });
   room.onMessage("buildGone", m => { fx.push({ type: "sofea", k: "dust", x: m.x, y: m.y + 10, s: .8, t: gnow() }); playSfx("zap", m.x, m.y, .4); });   // your oldest deployable of a type was replaced (per-player cap)
-  room.onMessage("boom", m => { if (m.k === "cryo") { sfxList.push({ k: "burst", x: m.x, y: m.y, t: gnow() }); playSfx("boom", m.x, m.y, .45); playSfx("zhit", m.x, m.y, .8); shake(3, 160); return; }   // Sienna's Cryo Grenade: ice, no fire
+  room.onMessage("boom", m => { if (m.k === "frag") { sfxList.push({ k: "mfrag", x: m.x, y: m.y, t: gnow() }); scorch(m.x, m.y, .8); playSfx("boom", m.x, m.y, .85); shake(5, 200); return; }   // (Nov 19) Marcus's smoke-frag: flash, blast, the grey smoke cloud
+    if (m.k === "cryo") { sfxList.push({ k: "burst", x: m.x, y: m.y, t: gnow() }); playSfx("boom", m.x, m.y, .45); playSfx("zhit", m.x, m.y, .8); shake(3, 160); return; }   // Sienna's Cryo Grenade: ice, no fire
     playSfx("boom", m.x, m.y, m.k === "hrocket" ? .75 : 1); if (m.k === "shell" || m.k === "hrocket") { scorch(m.x, m.y, m.k === "shell" ? 1 : .85); fx.push({ ...m, type: "sofea", kind: m.k, k: "boom", t: gnow() }); shake(m.k === "shell" ? 8 : 6, 240); return; } scorch(m.x, m.y, m.k === "sky" ? 1.1 : .9); fx.push({ ...m, type: "dante", k: "boom", t: gnow() }); shake(m.k === "sky" ? 9 : m.k === "mine" ? 5 : 7, 260); });   // mine: the same fireball
   room.onMessage("swing", m => { fx.push({ type: "swing", t: gnow(), ...m }); if (m.fire || m.crit) fx.push({ ...m, type: "raven", k: m.fire ? "fireArc" : "crit", t: gnow() }); const a = anim.get(m.id); if (a) { a.swingAt = gnow(); a.heavy = !!m.heavy; } if (m.heavy) shake(m.id === myId ? 8 : 4, 220); });
   room.onLeave(code => {
@@ -2908,7 +2909,11 @@ function drawDanteFx(f, age) {   // false when finished
       const u = (s - i * f.gap) / f.fl; if (u < 0 || u >= 1) return;
       const dist = Math.hypot(tx - f.x, ty - f.y), gx = f.x + (tx - f.x) * u, gy = f.y - 18 + (ty - f.y + 18) * u - Math.sin(Math.PI * u) * (40 + dist * .25);
       demoFrame(2, Math.min(2, Math.floor(u * 3)), tx, ty + 6, .8, .7);   // landing marker
-      demoFrame(1, Math.floor(age / 70) % 4, gx, gy + 32, 1, .65, Math.atan2(ty - f.y, tx - f.x));   // the grenade, spinning
+      const gim = marcImgs.grenade;   // (Nov 19) his smoke-frag canister, spinning, with a grey smoke trail behind it
+      if (gim.naturalWidth) {
+        ctx.save(); for (let j = 1; j <= 5; j++) { const v = u - j * .045; if (v < 0) break; const px = f.x + (tx - f.x) * v, py = f.y - 18 + (ty - f.y + 18) * v - Math.sin(Math.PI * v) * (40 + dist * .25); ctx.globalAlpha = .5 * (1 - j / 6); ctx.fillStyle = "#c9c9c4"; ctx.beginPath(); ctx.arc(px, py + 10, 2.5 + j * 1.1, 0, 7); ctx.fill(); }
+        ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(gx), Math.round(gy + 10)); ctx.rotate(age / 55); ctx.drawImage(gim, -13, -13); ctx.restore();
+      } else demoFrame(1, Math.floor(age / 70) % 4, gx, gy + 32, 1, .65, Math.atan2(ty - f.y, tx - f.x));   // (until it loads: the old grenade)
     });
     return true;
   }
@@ -3607,6 +3612,8 @@ function drawHurt(){const now=gnow();if(now>feel.hurtUntil)return;const k=(feel.
 const sienImgs = {}; for (const [k, url] of Object.entries({ burst: "assets/sprites/fx/sienna-burst.webp", tower: "assets/sprites/fx/sienna-tower.webp", shatter: "assets/sprites/fx/sienna-shatter.webp", grenade: "assets/sprites/fx/sienna-grenade.webp", floor: "assets/sprites/fx/sienna-floor.webp" })) { const im = new Image(); im.src = url; sienImgs[k] = im; }   // (whole strings: the preview build looks them up)
 const SIEN = { burst: { cw: 254, ch: 440, gx: 129, gy: 255 }, tower: { cw: 73, ch: 142, gx: 33, gy: 92, top: 52, rise: 360 }, shatter: { cw: 70, ch: 124, gx: 34, gy: 89 },
   floor: { cw: 275, ch: 434, mx: 137, my: 217, R: 200, spread: 500 } };   // (Nov 17) the Q ice floor: 5 frozen patches 230px across (middle at mx,my); R = the server's SIENNA.floor.r   // (Nov 16 v2: the realistic set) cells + ground points printed by tools/extract-sienna-fx.py
+const marcImgs = {}; for (const [k, url] of Object.entries({ grenade: "assets/sprites/fx/marcus-grenade.webp", blast: "assets/sprites/fx/marcus-blast.webp" })) { const im = new Image(); im.src = url; marcImgs[k] = im; }   // (Nov 19) Marcus's smoke-frag
+const MBLAST = { cw: 210, ch: 280, gx: 98, gy: 116 };   // printed by tools/extract-marcus-grenade.py
 const siennaAnim = new Map();   // player id -> { throwAt, dashAt, dashA, beamAt, perchAt }
 const siennaDecoys = new Map();   // player id -> { x, y, t0, until, a }: her ice copy (shatters on the server's "shatter")
 const sfxList = [];   // Sienna's effects in the world: nade (flying grenade), burst, shatter, towerEnd, dash (streak), reveal, beam
@@ -3666,6 +3673,12 @@ function drawSiennaItems(items, now) {   // depth-sorted pieces: decoys, bursts,
   for (const [id, d] of siennaDecoys) { if (now > d.until + 1500) { siennaDecoys.delete(id); continue; } if (inView(d.x, d.y, 80)) items.push({ y: d.y + 12, draw: () => drawDecoy(d, id, now) }); }
   for (let i = sfxList.length - 1; i >= 0; i--) {
     const f = sfxList[i], age = now - f.t;
+    if (f.k === "mfrag") {   // (Nov 19) Marcus's grenade landing (tools/extract-marcus-grenade.py): flash, blast, the smoke cloud (held), thinning, wisps
+      if (age > 1500) { sfxList.splice(i, 1); continue; }
+      const k = age < 70 ? 0 : age < 170 ? 1 : age < 700 ? 2 : age < 1050 ? 3 : 4, al = age < 1150 ? 1 : 1 - (age - 1150) / 350;
+      if (inView(f.x, f.y, 160)) items.push({ y: f.y + 16, draw: () => sienFrame(marcImgs.blast, MBLAST, k, f.x, f.y + 8, al) });
+      continue;
+    }
     if (f.k === "burst") {   // flash, crystals, big burst, then the frozen patch stays for the slow (2s) and fades
       if (age > 2300) { sfxList.splice(i, 1); continue; }
       const k = age < 80 ? 0 : age < 200 ? 1 : age < 420 ? 2 : age < 1700 ? 3 : 4, al = age < 1700 ? 1 : 1 - (age - 1700) / 600;
