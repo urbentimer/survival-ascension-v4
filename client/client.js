@@ -43,7 +43,7 @@ const upgradeChoices = me => upgrades.filter(([id]) => (id !== "cooldown" || (me
 const WEAPON_INFO = {
   pistol:   { name: "Pistol",   slot: 3, mag: 12, reload: 0.5, infinite: true },
   smg:      { name: "SMG",      slot: 3, mag: 30, reload: 0.7, auto: true },
-  rifle:    { name: "Rifle",    slot: 2, mag: 30, reload: 0.8, auto: true },
+  rifle:    { name: "Rifle",    slot: 2, mag: 45, reload: 1.0, auto: true },   // (Nov 19) 9 shots/s at half damage
   shotgun:  { name: "Shotgun",  slot: 2, mag: 6,  reload: 1.0, auto: true },   // (Nov 18, user) hold to keep firing (the server still sets the pace: 1.1 shots/s)
   sniper:   { name: "Sniper",   slot: 2, mag: 5,  reload: 1.1 },
   launcher: { name: "Launcher", slot: 2, mag: 3,  reload: 1.3 },
@@ -5911,7 +5911,7 @@ const ROSTER = [
     trait: { n: "Chain Reaction", card: "chainReaction", t: "Every dart adds a Toxin stack (each does 3 damage a second for 4s, new stacks refresh the timer). Up to 3 stacks on a zombie: 4 from level 4, 5 from level 7. A zombie you poisoned yourself bursts when it dies: 1 stack on every zombie within 100px (those don't burst again)." }, gear: ["dartrifle", "knife"] },
 ];
 const ROLE_ICON = { assault: '<path d="M3 12h13l5-3v6l-5-3M7 12v4"/>', tank: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/>', support: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>', specialist: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/>' };
-const GEAR = { dartrifle: "Toxin dart rifle · full auto, 20 darts, every hit adds a Toxin stack", rifle: "Rifle · full auto, 30 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, one shot every 2s, very long range (4x), pierces 3, +50% vs bosses & brutes, chills", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
+const GEAR = { dartrifle: "Toxin dart rifle · full auto, 20 darts, every hit adds a Toxin stack", rifle: "Rifle · fast full auto, 45 rounds", pistol: "Pistol · infinite ammo", smg: "SMG · full-auto spray, 30 rounds", sniper: "Sniper · 5 rounds, one shot every 2s, very long range (4x), pierces 3, +50% vs bosses & brutes, chills", shotgun: "Shotgun · 6 shells, pellets pierce 2, full damage up close", launcher: "Launcher · rockets explode where you click", knife: "Knife · fast stabs", katana: "Katana · upgrades with kills", bat: "Bat", axe: "Fire axe · hold for a heavy swing" };
 // literal paths so the single-file preview build can embed them
 const HERO_ART = { assault: "assets/hero/assault.webp", juggernaut: "assets/hero/juggernaut.webp", engineer: "assets/hero/engineer.webp", scout: "assets/hero/scout.webp",
   demolitionist: "assets/hero/demolitionist.webp", sniper: "assets/hero/sniper.webp", dispatcher: "assets/hero/dispatcher.webp", operator: "assets/hero/operator.webp", toxicologist: "assets/hero/toxicologist.webp" };

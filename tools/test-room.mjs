@@ -185,7 +185,7 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 
 // 9. hotbar slots, magazines, reload, melee, quick item, build range
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
-  ok(p.activeSlot === 2 && p.weapon === "rifle" && p.mag === 30, "you start on slot 2 with a full rifle magazine (30)");
+  ok(p.activeSlot === 2 && p.weapon === "rifle" && p.mag === 45, "you start on slot 2 with a full rifle magazine (45)");
   send(A, "slot", { n: 3 }); ok(p.weapon === "pistol" && p.mag === 12, "key 3 switches to the pistol (12-round mag)");
   send(A, "slot", { n: 2 }); ok(p.weapon === "rifle", "key 2 switches back to the rifle");
   p.owned += ",shotgun,sniper"; send(A, "slot", { n: 2, cycle: true }); ok(p.weapon === "shotgun", "pressing 2 again cycles to your next owned primary");
@@ -194,14 +194,14 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
   send(A, "slot", { n: 1 }); send(A, "slot", { n: 1, cycle: true }); ok(p.activeSlot === 1 && p.melee === "bat", "pressing 1 again cycles melee weapons");
   // magazine + reload
   send(A, "slot", { n: 2 }); placeZombie(room, 760, 380, 99999);
-  for (let i = 0; i < 30; i++) { p.lastShot = 0; send(A, "attack", { a: 0 }); }
-  ok(p.mag === 0, "30 shots empty the rifle magazine");
-  ok(p.reloadLeft > .75 && p.reloadLeft <= .8, "...and the last shot starts a 0.8s reload by itself (no key needed)");
+  for (let i = 0; i < 45; i++) { p.lastShot = 0; send(A, "attack", { a: 0 }); }
+  ok(p.mag === 0, "45 shots empty the rifle magazine");
+  ok(p.reloadLeft > .95 && p.reloadLeft <= 1, "...and the last shot starts a 1s reload by itself (no key needed)");
   const reserve = p.ammo; for (let i = 0; i < 20; i++) { room.lastTick = Date.now() - 100; room.tick(); }
-  ok(p.mag === 30 && p.ammo === reserve - 30 && p.reloadLeft === 0, "reload refills the mag from spare ammo");
+  ok(p.mag === 45 && p.ammo === reserve - 45 && p.reloadLeft === 0, "reload refills the mag from spare ammo");
   for (let i = 0; i < 5; i++) { p.lastShot = 0; send(A, "attack", { a: 0 }); } send(A, "reload"); ok(p.reloadLeft > 0, "C reloads a part-empty magazine early");
   send(A, "slot", { n: 3 }); ok(p.reloadLeft === 0, "switching weapons cancels a reload");
-  send(A, "slot", { n: 2 }); ok(p.mag === 25, "each gun remembers its own magazine");
+  send(A, "slot", { n: 2 }); ok(p.mag === 40, "each gun remembers its own magazine");
   { p.reloadLeft = 0; room.mags.set("A:pistol", 0); send(A, "slot", { n: 3 }); ok(p.mag === 0 && p.reloadLeft > 0, "switching to an empty gun reloads it straight away"); p.reloadLeft = 0; send(A, "slot", { n: 2 }); }
   p.ammo = 0; p.mag = 0; p.lastShot = 0; send(A, "attack", { a: 0 }); ok(p.activeSlot === 3 && p.weapon === "pistol", "out of spare ammo: switches to the pistol");
   p.mag = 0; p.lastShot = 0; send(A, "attack", { a: 0 }); for (let i = 0; i < 12; i++) { room.lastTick = Date.now() - 100; room.tick(); } ok(p.mag === 12, "the pistol never runs out (infinite spare ammo)");
@@ -231,8 +231,8 @@ for (const w of ["pistol", "smg", "rifle", "shotgun", "sniper", "launcher"]) {
 
 // 10. full-auto rebalance, % upgrades, solid structures, human-like bots
 { const { room, A, send, P } = makeRoom(); const p = P(A); freeze(p);
-  ok(p.damage === 16.5 && p.fireRate > 4.5, `rifle is full-auto: ${p.damage} dmg x ${p.fireRate.toFixed(1)}/s (assault), more than the pistol`);
-  p.xp = 999; send(A, "upgrade", { id: "damage" }); ok(p.damage === 19.8, `damage upgrade is +20% (${p.damage})`);
+  ok(Math.abs(p.damage - 8.25) < .06 && p.fireRate > 9, `rifle is full-auto (Nov 19: 9/s at half damage): ${p.damage} dmg x ${p.fireRate.toFixed(1)}/s (assault), more than the pistol`);
+  p.xp = 999; send(A, "upgrade", { id: "damage" }); ok(Math.abs(p.damage - 9.9) < 1e-6, `damage upgrade is +20% (${p.damage})`);
   send(A, "slot", { n: 3 }); ok(p.weapon === "pistol" && p.damage === 14.5, `...and carries over to the pistol (${p.damage})`);
   ok(p.ammo === 240, "you start with 240 spare ammo");
   room._dispose(); }
